@@ -1,5 +1,44 @@
 # Séance ports and pin audits
 
+## Multi-window host shared with Planchette (2026-11-11)
+
+Poltergeist's workspace windows and Planchette's document windows are one
+design written twice. Poltergeist is the origin: `7ee26f551` ("Open more
+than one workspace window", 2026-09-25) introduced the host on the app's
+one engine, and Planchette's `fc37e762c` ("Add native multi-window
+support to the desktop app", 2026-10-02) followed it with the same wire
+and the same native structure under its own names. Nothing recorded the
+copy until this entry. No Séance source is involved.
+
+| Poltergeist (`app/poltergeist_app/`) | Planchette (`planchette/app/planchette_app/`) |
+|---|---|
+| `lib/services/workspace_windows/window_host.dart` | `lib/services/window_host.dart` |
+| `lib/services/workspace_windows/workspace_windows.dart` | `lib/services/document_windows.dart` |
+| `lib/services/semantics_view_routing.dart` | `lib/services/semantics_view_routing.dart` |
+| `windows/runner/workspace_windows.{h,cpp}` | `windows/runner/document_windows.{h,cpp}` |
+| `linux/runner/workspace_windows.{h,cc}` | `linux/runner/document_windows.{h,cc}` |
+| `macos/Runner/WorkspaceWindows.swift` | `macos/Runner/DocumentWindows.swift` |
+| `macos/Runner/PoltergeistMultiView.{h,m}` | `macos/Runner/PlanchetteMultiView.{h,m}` |
+
+- Same: the method channel protocol (create, destroy, activate, hide,
+  fullscreen, titles, window-owned file pickers), the per-OS runner
+  structure and the macOS engine multi-view switch. `PlanchetteMultiView.m`
+  equals `PoltergeistMultiView.m` after the product rename, and the two
+  headers differ in one doc comment. The two `semantics_view_routing.dart`
+  files differ only in how they reuse the binding.
+- Different: the Dart halves keep their own models (Poltergeist's
+  workspace seeds, scope and titlebar files; Planchette's document
+  deduplication, quit review and Save As rules), and the channel and
+  class names carry each product's word. Each runner file is a copy that
+  has since diverged, so a change to one is not a change to the other.
+- A shared home is deferred: the Dart host and binding would fit
+  `ghost_desktop`, and the native files a desktop plugin together with the
+  macOS controller review in `klabautermann/docs/SHARED.md` (D32). Window
+  lifecycle on three operating systems only gets device checks by hand,
+  so the extraction is its own change. Until then, fix a defect in one
+  copy and look at the other.
+- Port-back candidates: either side, per defect.
+
 ## Suite links, F5d (2026-10-21)
 
 The link grammar Poltergeist owned since "Cross-app deep links"
@@ -19,6 +58,10 @@ sections 4 to 8).
   link test files ran unchanged. Making `maxFileNameBytes` and
   `utf8ByteLength` public is the one API widening; the alternative was
   a private copy in each package.
+  The parser and display groups of `deep_links_test.dart` were removed
+  on 2026-11-11, once `seance_core/test/links/suite_links_test.dart`
+  held identical cases; the coordinator group and a re-export check
+  stay.
 - F5d-2 adds `parseSeanceConnect`, `buildSeanceConnect`,
   `buildPoltergeistBrowse`, the reserved `klabautermann` constants and
   the link contract corpus (`seance_core/test/fixtures/suite_link_corpus.json`),
@@ -1945,6 +1988,14 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   save that never uploads, and overwrite — and
   `test/ui/built_in_editor_capture_test.dart` produces the §-required
   PNGs (find bar, conflict dialog) under `POLTERGEIST_CAPTURE=1`.
+- Pruned (2026-11-11): the document-mechanics cases that
+  `built_in_text_document_test.dart` kept from the port are now
+  `planchette_core/test/text_document_test.dart`'s, and
+  `test/ui/editor_syntax_test.dart` no longer re-runs the syntax,
+  search and detection cases through the re-export; they live in
+  `planchette_core/test/editor_syntax_test.dart` and
+  `planchette_editor/test/editor_highlight_test.dart`. Each file keeps
+  the cases of what the app wires itself.
 - Port-back candidates: none.
 
 ## External editors (M7)

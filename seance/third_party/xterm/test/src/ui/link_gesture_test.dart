@@ -15,6 +15,7 @@ void main() {
     TerminalController controller,
     List<Uri> opened, {
     String? text,
+    List<Uri>? reviewed,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -25,6 +26,7 @@ void main() {
               terminal,
               controller: controller,
               onLinkTap: opened.add,
+              onHiddenLinkTap: reviewed?.add,
             ),
           ),
         ),
@@ -318,11 +320,13 @@ void main() {
     final controller = TerminalController();
     addTearDown(controller.dispose);
     final opened = <Uri>[];
+    final reviewed = <Uri>[];
     await pumpTerminal(
       tester,
       terminal,
       controller,
       opened,
+      reviewed: reviewed,
       // Two links in adjacent cells, so a slop-sized move crosses over.
       text: '\x1b]8;;https://one.test\x1b\\A\x1b]8;;\x1b\\'
           '\x1b]8;;https://two.test\x1b\\B\x1b]8;;\x1b\\',
@@ -347,7 +351,10 @@ void main() {
     await press.up();
     await tester.pump(gestureTimeout);
 
-    expect(opened, [Uri.parse('https://one.test')]);
+    // Labels that are not their targets go to the review, never straight
+    // to the browser.
+    expect(reviewed, [Uri.parse('https://one.test')]);
+    expect(opened, isEmpty);
   });
 
   // A claim whose press is cancelled (here: dragged past tap slop) opens
@@ -499,17 +506,21 @@ void main() {
     });
   }
 
-  testWidgets('OSC 8 link text opens its target, not its text', (tester) async {
+  testWidgets('OSC 8 link text hands its target to review, not its text', (
+    tester,
+  ) async {
     final terminal = Terminal();
     final controller = TerminalController();
     addTearDown(controller.dispose);
     final opened = <Uri>[];
+    final reviewed = <Uri>[];
     final target = Uri.parse('https://example.com/auth?token=abc');
     final point = await pumpTerminal(
       tester,
       terminal,
       controller,
       opened,
+      reviewed: reviewed,
       // A URL in the link text, so this pins the precedence and not just the
       // absence of anything else to open.
       text: '\x1b]8;;$target\x1b\\https://decoy.test/looks-fine\x1b]8;;\x1b\\',
@@ -519,7 +530,90 @@ void main() {
     await tester.tapAt(point, kind: PointerDeviceKind.mouse);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump(gestureTimeout);
-    expect(opened, [target]);
+    expect(reviewed, [target]);
+    expect(opened, isEmpty);
+
+    // A touch tap is no shortcut past the review.
+    await tester.tapAt(point);
+    await tester.pump(gestureTimeout);
+    expect(reviewed, [target, target]);
+    expect(opened, isEmpty);
+  });
+
+  testWidgets('without a review, a hidden OSC 8 target opens as before', (
+    tester,
+  ) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(
+      tester,
+      terminal,
+      controller,
+      opened,
+      // The tapped cell (5, 0) is a letter of the label, not a blank.
+      text: '\x1b]8;;https://real.test/\x1b\\Authenticate\x1b]8;;\x1b\\',
+    );
+
+    // A host that has not wired onHiddenLinkTap keeps opening labelled
+    // links on touch and on Ctrl-click.
+    await tester.tapAt(point);
+    await tester.pump(gestureTimeout);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tapAt(point, kind: PointerDeviceKind.mouse);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump(gestureTimeout);
+    final target = Uri.parse('https://real.test/');
+    expect(opened, [target, target]);
+  });
+
+  testWidgets('an OSC 8 link whose text is its target opens on touch', (
+    tester,
+  ) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final reviewed = <Uri>[];
+    final point = await pumpTerminal(
+      tester,
+      terminal,
+      controller,
+      opened,
+      reviewed: reviewed,
+      text: '\x1b]8;;$url\x1b\\$url\x1b]8;;\x1b\\',
+    );
+
+    await tester.tapAt(point);
+    await tester.pump(gestureTimeout);
+    expect(opened, [url]);
+    expect(reviewed, isEmpty);
+  });
+
+  testWidgets('a touch tap on the blank cells of a link opens nothing', (
+    tester,
+  ) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final reviewed = <Uri>[];
+    // The tapped cell (5, 0) is one of the spaces the remote printed while
+    // the link was open.
+    final point = await pumpTerminal(
+      tester,
+      terminal,
+      controller,
+      opened,
+      reviewed: reviewed,
+      text: '\x1b]8;;https://evil.test/\x1b\\${' ' * 40}\x1b]8;;\x1b\\',
+    );
+
+    await tester.tapAt(point);
+    await tester.pump(gestureTimeout);
+    expect(opened, isEmpty);
+    expect(reviewed, isEmpty);
   });
 
   testWidgets('hover signals links without opening them', (tester) async {

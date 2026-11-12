@@ -203,6 +203,8 @@ void main() {
         'nginx.service',
       ]);
       expect(step.elevated, isFalse);
+      // systemctl waits for the unit's stop and start.
+      expect(step.timeout, StepTimeout.unit);
       expect(preview.requiredLevel, RequiredLevel.login);
       expect(preview.impact?.kind, ImpactKind.interruptsTarget);
       expect(link.commands, isEmpty, reason: 'planning reads nothing');
@@ -412,6 +414,8 @@ void main() {
         '--',
         'backup.service',
       ]);
+      // A started oneshot unit holds systemctl until its job is done.
+      expect((preview.steps.single as ShellStep).timeout, StepTimeout.long);
       expect(preview.requiredTier, ConfirmationTier.acknowledge);
     });
 
@@ -448,6 +452,7 @@ void main() {
       final step = preview.steps.single as ShellStep;
       expect(step.argv, ['apt-get', '-q', 'update']);
       expect(step.elevated, isTrue);
+      expect(step.timeout, StepTimeout.long);
       expect(preview.requiredLevel, RequiredLevel.admin);
       expect(preview.hostWrites, contains(HostWriteRow.packageLists));
       expect(preview.requiredTier, ConfirmationTier.acknowledge);
@@ -639,6 +644,7 @@ void main() {
       final step = stepOf(attempt);
       expect(step.elevated, isFalse);
       expect(step.captureOutput, isTrue);
+      expect(step.timeout, StepTimeout.long);
       expect(step.argv, [
         'sh',
         '-c',
@@ -688,6 +694,7 @@ void main() {
       final step = stepOf(attempt);
       expect(step.elevated, isFalse);
       expect(step.captureOutput, isTrue);
+      expect(step.timeout, StepTimeout.long);
       expect(step.argv, [
         'sh',
         '-c',

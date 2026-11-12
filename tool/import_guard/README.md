@@ -19,6 +19,11 @@ Only the configured import areas may reference `package:dartssh2` — for
 example Poltergeist's core connection module and its M0 bench package, plus
 the files named in `import_exemptions`. Configured pure-Dart packages cannot
 reference `dart:ui`, `dart:ui_web`, Flutter packages, or plugins.
+A relative URI names no package, so it must not leave the importing
+package for another scanned package or leave the product; cross-package
+references go through `package:` URIs, which the rules above see.
+Product-level directories outside every package (Poltergeist's
+`test/integration` fixtures) remain reachable.
 
 Beyond imports, the guard enforces the product's `no_dart_io` directories
 (no `dart:io`, conditional imports included), the
@@ -47,7 +52,8 @@ directories (`.dart_tool`, `build`, `.symlinks`, `ephemeral`, `.git`) and
 known native build, Flutter cache, and Apple `Pods` locations are excluded.
 Directories with those names inside source trees remain covered, as does a
 package named `build`. Directories outside the configured scan areas
-(Poltergeist's `tool/`, which holds its tooling) are not scanned. The
+(product-level `test/` and `tool/` directories such as Poltergeist's
+tooling and integration fixtures, and `third_party/`) are not scanned. The
 sanctioned M0 harness is a configured standalone resolution. This checks
 package directives
 and dependency metadata; normal Dart analysis still validates library access

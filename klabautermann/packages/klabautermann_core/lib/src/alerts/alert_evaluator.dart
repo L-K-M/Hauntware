@@ -3,7 +3,13 @@
 // with threshold.dart's hysteresis, and reports each raise and clear.
 // Evaluated on this device while Klabautermann is open, and only then.
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show FsMount, RuleEvalScope, RuleScope, ThresholdState, evaluateThreshold;
+    show
+        FsMount,
+        RuleEvalScope,
+        RulePhase,
+        RuleScope,
+        ThresholdState,
+        evaluateThreshold;
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../engine/protocol.dart';
@@ -12,24 +18,30 @@ import '../engine/protocol.dart';
 /// percentage or ratio the samples already carry.
 enum AlertMetric {
   /// CPU busy percent, `100 - idle - iowait` (`overview`, `core`).
-  cpuBusy('cpu.busy'),
+  cpuBusy('cpu.busy', _cpuStreams),
 
   /// Used memory as a percentage of the total (`overview`, `core`).
-  memoryUsed('memory.used'),
+  memoryUsed('memory.used', _cpuStreams),
 
   /// The 1-minute load average per core (`overview`, `core`).
-  loadPerCore('load.perCore'),
+  loadPerCore('load.perCore', _cpuStreams),
 
   /// The fullest real filesystem's used space, in percent (`fs`).
-  diskUsed('disk.used'),
+  diskUsed('disk.used', _fsStreams),
 
   /// The fullest real filesystem's used inodes, in percent (`fs`).
-  diskInodes('disk.inodes');
+  diskInodes('disk.inodes', _fsStreams);
 
-  const AlertMetric(this.id);
+  const AlertMetric(this.id, this.streams);
 
   /// The id a rule's `metric` field carries.
   final String id;
+
+  /// The streams whose samples carry it ([alertValues]).
+  final Set<SampleStream> streams;
+
+  static const _cpuStreams = {SampleStream.overview, SampleStream.core};
+  static const _fsStreams = {SampleStream.fs};
 
   /// The metric [id] names, or null for one this version does not know,
   /// whose rules stay idle.
@@ -159,6 +171,24 @@ final class AlertEvaluator {
       changes.add(_change(synced, serverId, after, value, at));
     }
     return changes;
+  }
+
+  /// Follows a [Gap] in [serverId]'s [streams]: a rule whose metric they
+  /// carry saw nothing meanwhile, so a breach that was pending, or a clear
+  /// under way, starts over with the next reading instead of counting the
+  /// gap as held. A raised alert stays up and reports nothing.
+  void gap(String serverId, Set<SampleStream> streams) {
+    for (final MapEntry(key: key, value: state) in _states.entries.toList()) {
+      final (ruleId, server) = key;
+      if (server != serverId) continue;
+      final metric = AlertMetric.byId(_ruleFor(ruleId)?.rule.metric ?? '');
+      if (metric == null || !metric.streams.any(streams.contains)) continue;
+      _states[key] = switch (state.phase) {
+        RulePhase.pending => ThresholdState.idle,
+        RulePhase.resolving => ThresholdState(RulePhase.firing, state.since),
+        RulePhase.ok || RulePhase.firing => state,
+      };
+    }
   }
 
   /// Forgets the states [gone] names, reporting each raised one as

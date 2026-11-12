@@ -12,16 +12,23 @@ final class _Transport implements TerminalByteTransport {
   final written = <List<int>>[];
   final sizes = <(int, int)>[];
   var closes = 0;
+  var failWrites = false;
+  var failResizes = false;
 
   @override
   Stream<Uint8List> get output => far.stream;
 
   @override
-  void write(Uint8List bytes) => written.add(bytes);
+  void write(Uint8List bytes) {
+    if (failWrites) throw StateError('the far end refused input');
+    written.add(bytes);
+  }
 
   @override
-  void resize({required int columns, required int rows}) =>
-      sizes.add((columns, rows));
+  void resize({required int columns, required int rows}) {
+    if (failResizes) throw StateError('the far end refused a resize');
+    sizes.add((columns, rows));
+  }
 
   @override
   Future<void> close() async => closes++;
@@ -110,6 +117,34 @@ void main() {
     session.onClosed = () => closed++;
 
     transport.far.addError(StateError('the stream broke'));
+    await pumpEventQueue();
+
+    expect(closed, 1);
+    expect(session.isClosed, isTrue);
+    expect(transport.closes, 1);
+  });
+
+  test('a write the far end refuses tears down and fires onClosed', () async {
+    var closed = 0;
+    session.onClosed = () => closed++;
+    transport.failWrites = true;
+
+    engine.terminal.textInput('ls');
+    await pumpEventQueue();
+    engine.terminal.textInput('more');
+    await pumpEventQueue();
+
+    expect(closed, 1);
+    expect(session.isClosed, isTrue);
+    expect(transport.closes, 1);
+  });
+
+  test('a resize the far end refuses tears down and fires onClosed', () async {
+    var closed = 0;
+    session.onClosed = () => closed++;
+    transport.failResizes = true;
+
+    engine.terminal.resize(100, 30);
     await pumpEventQueue();
 
     expect(closed, 1);

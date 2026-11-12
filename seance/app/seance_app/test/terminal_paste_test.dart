@@ -89,6 +89,8 @@ void main() {
   testWidgets('a clean multi-line paste goes in line by line, and Cancel on '
       'a flagged one pastes nothing', (tester) async {
     final context = await pumpHost(tester);
+    // Bash turns bracketed paste on at its prompt.
+    engine.feed(Uint8List.fromList(utf8.encode('\x1b[?2004h')));
 
     clipboard = 'cd /tmp\nls';
     await tester.runAsync(() => terminalPaste(tab, context: context));
@@ -105,5 +107,21 @@ void main() {
     await tester.pumpAndSettle();
     await paste;
     expect(typed.toString(), before);
+  });
+
+  testWidgets('without bracketed paste a clean multi-line paste asks, since '
+      'each line would run as it arrives', (tester) async {
+    final context = await pumpHost(tester);
+    clipboard = 'cd build\nmake';
+
+    final paste = terminalPaste(tab, context: context);
+    await tester.pumpAndSettle();
+    expect(find.text('Paste 2 lines?'), findsOneWidget);
+    expect(typed.toString(), isEmpty);
+
+    await tester.tap(find.text('Paste all'));
+    await tester.pumpAndSettle();
+    await paste;
+    expect(typed.toString(), 'cd build\nmake');
   });
 }

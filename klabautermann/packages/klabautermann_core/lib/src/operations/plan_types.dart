@@ -9,7 +9,8 @@ import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show quoteShellWord;
 
-import '../engine/protocol.dart' show ActionFinished, RevalidationFailure;
+import '../engine/protocol.dart'
+    show ActionFailure, ActionFinished, RevalidationFailure;
 
 /// One step a plan runs: an exact shell command or an exact Docker API
 /// request. The preview renders these and the runner executes these; no
@@ -20,6 +21,26 @@ sealed class PlanStep {
 
   /// The step as the preview shows it, exactly as it runs.
   String get display;
+}
+
+/// How long the runner waits for a [ShellStep] before it gives up on it
+/// and reports [ActionFailure.timedOut]. A foreground step holds its
+/// channel until it ends, so each kind gets a deliberate limit rather
+/// than the link's 30 s default for quick reads.
+abstract final class StepTimeout {
+  /// Reads, edits, signals and other steps that finish at once: the
+  /// link's own default, stated.
+  static const quick = Duration(seconds: 30);
+
+  /// `systemctl` verbs, which wait for the unit's job: systemd allows a
+  /// start and a stop 90 s each by default (`DefaultTimeoutStartSec`,
+  /// `DefaultTimeoutStopSec`), and a restart runs both.
+  static const unit = Duration(minutes: 4);
+
+  /// Work that runs in the foreground until it is done: a host image
+  /// pull, a package-list refresh, a cron job's or a snippet's run.
+  /// Longer work belongs in a detached operation (03 §7.17).
+  static const long = Duration(minutes: 15);
 }
 
 /// A shell command, [argv] quoted word by word into [commandLine] under
@@ -38,6 +59,7 @@ final class ShellStep extends PlanStep {
     Iterable<String>? shownArgv,
     List<int>? input,
     Map<int, RevalidationFailure> exitMeanings = const {},
+    this.timeout = StepTimeout.quick,
   }) : argv = List.unmodifiable(argv),
        shownArgv = List.unmodifiable(shownArgv ?? argv),
        input = input == null ? null : List.unmodifiable(input),
@@ -88,6 +110,9 @@ final class ShellStep extends PlanStep {
   /// changed, such as the guarded kill's 4 for a reused PID: the run then
   /// fails as a re-validation, not as a failed step.
   final Map<int, RevalidationFailure> exitMeanings;
+
+  /// How long the runner waits for the step to end ([StepTimeout]).
+  final Duration timeout;
 
   @override
   String get display {
