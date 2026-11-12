@@ -16,7 +16,7 @@ const double _homeTintAlpha = FamilyPalette.discWashAlpha;
 /// Home sits on the page surface, like the browser it pushes; the rail
 /// keeps the sidebar's own fill.
 Color _homeBackground(BuildContext context) =>
-    PoltergeistChrome.of(context).paneBackground;
+    PoltergeistChrome.of(context, poltergeistThemeStyle).paneBackground;
 
 /// D32 §9's Home presentation of the sidebar: the same DEVICES,
 /// FAVORITES, and SERVERS rows in the kit's list layout (56 dp rows, a
@@ -149,7 +149,7 @@ class _HomeSearchFieldState extends State<_HomeSearchField> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final count = widget.countText;
     return SizedBox(
       height: MediaQuery.textScalerOf(context).scale(_homeSearchExtent),
@@ -212,7 +212,7 @@ class _HomeSyncFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final color = data.tone == SidebarSyncTone.error
         ? theme.colorScheme.error
         : chrome.secondaryText;
@@ -474,7 +474,7 @@ class _HomeEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 16),
       child: Row(

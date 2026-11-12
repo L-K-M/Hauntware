@@ -1352,7 +1352,7 @@ void main() {
         const ServerStatus(ServerConnectionState.connected),
       );
       await tester.pumpAndSettle();
-      return PoltergeistChrome.of(tester.element(find.byType(SidebarView)));
+      return PoltergeistChrome.of(tester.element(find.byType(SidebarView)), poltergeistThemeStyle);
     }
 
     testWidgets('a folded group shows the live server it hides', (
@@ -1487,7 +1487,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(row, findsOneWidget);
-      final chrome = PoltergeistChrome.of(tester.element(row));
+      final chrome = PoltergeistChrome.of(tester.element(row), poltergeistThemeStyle);
       expect(
         rowOf(tester, row).status,
         SidebarStatusDot(chrome.statusConnected),
@@ -2363,6 +2363,7 @@ void main() {
       await pumpSidebar(tester, withConnections: true);
       final chrome = PoltergeistChrome.of(
         tester.element(row('sidebar.favorite.r1')),
+        poltergeistThemeStyle,
       );
 
       lanes.watches['r1']!.add(
@@ -2684,7 +2685,7 @@ void main() {
       expect(rowOf(tester, savedRow).selected, isTrue);
       // …and the session's own connection: a solid connected dot (not the
       // probe's reachable ring), and Disconnect drops the live session.
-      final chrome = PoltergeistChrome.of(tester.element(savedRow));
+      final chrome = PoltergeistChrome.of(tester.element(savedRow), poltergeistThemeStyle);
       expect(
         rowOf(tester, savedRow).status,
         SidebarStatusDot(chrome.statusConnected),

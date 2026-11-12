@@ -619,6 +619,7 @@ void main() {
 
       final chrome = PoltergeistChrome.of(
         tester.element(find.byType(Scaffold)),
+        poltergeistThemeStyle,
       );
       Container line(String key) =>
           tester.widget<Container>(find.byKey(ValueKey(key)));

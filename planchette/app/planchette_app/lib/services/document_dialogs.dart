@@ -1,5 +1,6 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path/path.dart' as paths;
 
 import 'android_documents.dart';
@@ -107,65 +108,38 @@ final class AppDocumentDialogs implements DocumentDialogs {
     assert(names.length > 1, 'the bulk close question covers several files');
     final context = navigatorKey.currentContext;
     if (context == null) return BulkCloseChoice.cancel;
-    return await showDialog<BulkCloseChoice>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Save changes to ${names.length} documents?'),
-            content: Text(
-              '${_listed(names)}\n\n'
-              'Your changes will be lost if you close without saving them.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.pop(context, BulkCloseChoice.discardAll),
-                child: const Text('Don’t Save'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, BulkCloseChoice.cancel),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                autofocus: true,
-                onPressed: () =>
-                    Navigator.pop(context, BulkCloseChoice.saveAll),
-                child: const Text('Save All'),
-              ),
-            ],
-          ),
-        ) ??
-        BulkCloseChoice.cancel;
+    final choice = await showGhostCloseDialog(
+      context,
+      title: 'Save changes to ${names.length} documents?',
+      body:
+          '${_listed(names)}\n\n'
+          'Your changes will be lost if you close without saving them.',
+      saveLabel: 'Save All',
+    );
+    return switch (choice) {
+      GhostCloseChoice.save => BulkCloseChoice.saveAll,
+      GhostCloseChoice.dontSave => BulkCloseChoice.discardAll,
+      GhostCloseChoice.cancel => BulkCloseChoice.cancel,
+      null => BulkCloseChoice.cancel,
+    };
   }
 
   @override
   Future<CloseChoice> chooseClose(String name) async {
     final context = navigatorKey.currentContext;
     if (context == null) return CloseChoice.cancel;
-    return await showDialog<CloseChoice>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Save changes to “$name”?'),
-            content: const Text(
-              'Your changes will be lost if you close this document without saving.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, CloseChoice.discard),
-                child: const Text('Don’t Save'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, CloseChoice.cancel),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                autofocus: true,
-                onPressed: () => Navigator.pop(context, CloseChoice.save),
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        ) ??
-        CloseChoice.cancel;
+    final choice = await showGhostCloseDialog(
+      context,
+      title: 'Save changes to “$name”?',
+      body:
+          'Your changes will be lost if you close this document without saving.',
+    );
+    return switch (choice) {
+      GhostCloseChoice.save => CloseChoice.save,
+      GhostCloseChoice.dontSave => CloseChoice.discard,
+      GhostCloseChoice.cancel => CloseChoice.cancel,
+      null => CloseChoice.cancel,
+    };
   }
 
   @override

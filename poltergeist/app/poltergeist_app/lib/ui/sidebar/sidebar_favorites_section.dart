@@ -305,7 +305,7 @@ Widget _emptyFavorites(_SidebarData data) {
       decoration: BoxDecoration(
         color: indicator == SidebarDropIndicator.none
             ? null
-            : PoltergeistChrome.of(context).hoverFill,
+            : PoltergeistChrome.of(context, poltergeistThemeStyle).hoverFill,
       ),
       child: _SidebarHint(
         text: l10n.sidebarFavoritesEmpty,

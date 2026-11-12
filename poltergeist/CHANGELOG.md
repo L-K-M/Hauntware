@@ -2,12 +2,9 @@
 
 ## Unreleased
 
-- **Transfers keep running in the background on Android.** While the
-  queue has live work (transfers, sync runs, archive jobs), a
-  transfer keep-alive notification anchors the process so Android
-  cannot freeze it; the service stops when the queue drains. It comes
-  from the ghost_keepalive plugin shared with Séance's session
-  keep-alive.
+- **The account switch words its key choice like Settings.** The held-key
+  dialog's adopt button now reads Trust the new key, matching the enrolled
+  view and Séance.
 - **Host-key conflicts show both keys.** When a synced host key differs
   from the one this device trusts, Settings and the account switch now
   show both fingerprints, so you can check them against the server's own
@@ -19,6 +16,12 @@
   the queue drains get their own notice. On Android, Poltergeist is only
   offered for `poltergeist://browse`, the one link form its parser
   accepts.
+- **Transfers keep running in the background on Android.** While the
+  queue has live work (transfers, sync runs, archive jobs), a
+  transfer keep-alive notification anchors the process so Android
+  cannot freeze it; the service stops when the queue drains. It comes
+  from the ghost_keepalive plugin shared with Séance's session
+  keep-alive.
 - **File panels open again on macOS.** Open Folder, adding an editor
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it
@@ -27,6 +30,11 @@
   whole mode, so a hostile server could leave a setuid or world-writable
   file on your disk. Downloads now keep only the read, write and execute
   bits your umask allows, as `sftp get` and Séance do.
+- **Downloads are marked as untrusted.** Files Poltergeist writes from a
+  server, including Download To, sync downloads and managed checkouts,
+  now carry a Windows Mark-of-the-Web stream or a macOS quarantine
+  attribute, as Séance's downloads do. Marking is best effort and only
+  logged on failure.
 - **The keyboard follows a sidebar location.** Choosing a location or a
   saved workspace in the sidebar now moves the keyboard to its file list,
   so the arrow keys move through files instead of the sidebar. Page Up
@@ -45,6 +53,8 @@
   Text fields keep their own editing history.
 - Closing edited text offers Save, Don't save or Cancel. A failed save
   or upload keeps the editor open, including when you choose Save during Quit.
+- The editor's close dialog comes from the shared Ghost UI package, as in
+  Planchette and Séance; its labels are unchanged.
 - Leading controls stay clear of the full-screen traffic lights. AltGr
   types characters without triggering the Ctrl+Alt pane shortcuts.
 - **The header band lines up.** The inspector's tabs are as tall as the
@@ -223,6 +233,12 @@
 - **Sidebar failures notify at the top.** When a sidebar change such as
   a rename or a saved location can't be saved, its notice appears at the
   top of the window like the app's other notices, not at the bottom.
+- **The theme stack is shared.** The theme model, presets, builder and
+  Appearance editor now come from the shared `ghost_theme` package, as
+  Séance's and Klabautermann's do. Stored themes, preset names and the
+  JSON a copied theme carries are unchanged. A chosen accent with low
+  contrast now explains that links and indicators use an adjusted
+  colour, with a button to take the suggested accessible colour.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

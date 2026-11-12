@@ -75,7 +75,7 @@ class InspectorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final l10n = AppLocalizations.of(context);
     return Semantics(
       container: true,
@@ -150,7 +150,7 @@ class _TabSwitcher extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).colorScheme;
     final palette = FamilyPalette.of(context);
-    final separator = PoltergeistChrome.of(context).separator;
+    final separator = PoltergeistChrome.of(context, poltergeistThemeStyle).separator;
     // D34: each tab keeps its family hue (Info the places blue,
     // Transfers the motion cyan, Alerts the attention yellow), and the
     // selected one lights up in it, its glyph filled on a wash of its

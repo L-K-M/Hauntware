@@ -10070,6 +10070,18 @@ and Poltergeist. Séance built it first
 ([Séance #128](https://github.com/L-K-M/Seance/pull/128), merged as
 `8f15eeb`); this ports it so the two behave as one family. The decision is D38, "Device themes", in the decision log.
 
+- **Moved to `ghost_theme` (2026-11-10).** The palette model, presets,
+  builder and Appearance editor now live in
+  `planchette/packages/ghost_theme`, shared with Séance and
+  Klabautermann ([design](../../docs/design/ghost-theme.md)).
+  Poltergeist keeps its import paths as facades (`theme_palette.dart`,
+  `theme_presets.dart`, `app_appearance.dart`), its builder names
+  (`buildPoltergeistTheme*`, `PoltergeistChrome`) and its stored JSON
+  keys, preset names and reference preset values; the app-side editor
+  wrapper binds the shared section to Poltergeist's style, model and ARB
+  words. The accent-legibility notice for a low-contrast chosen accent is
+  new user-visible behaviour from the shared editor.
+
 - **What changed for the user.** Settings has an Appearance section: the
   tab after General in the Settings window, and the section after General
   in the Settings dialog the gear opens on phones and tablets (and on a
@@ -10094,7 +10106,9 @@ and Poltergeist. Séance built it first
   terminal block is not a theme. Preset names are stored in English, as
   Séance stores them, and shown through ARB (`themePreset*`); a palette
   that matches no preset is shown as "your own colours", never by its
-  stored `Custom`.
+  stored `Custom`. Since 2026-11-10 the model is `ghost_theme`'s, bound
+  to Poltergeist's style; `lib/theme/` keeps the import paths as
+  facades.
 - **Status colours.** The four slots keep Séance's keys and map onto what
   Poltergeist paints: `online` is `PoltergeistChrome.statusConnected`
   (the connected dot and ring, the probe's online dot, the connected
@@ -10126,7 +10140,9 @@ and Poltergeist. Séance built it first
   differ only in the header, the chrome import and `_chrome()`. The
   interface font is a family name handed to the platform (null for its
   own), in the text theme and the tooltips; the editor and code keep
-  their monospace stack.
+  their monospace stack. Since 2026-11-10 the builder is `ghost_theme`'s
+  `GhostTheme` behind these names, with `CompareDiffColors` appended
+  app-side and the dark elevation overlay restored.
 - **Persistence.** `AppPreferences.loadAppearance`/`saveAppearance`,
   under `theme.palette` (the palette's JSON object) and `theme.mode`.
   Device-local like the sidebar's density: in no sync or backup record.

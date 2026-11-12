@@ -188,7 +188,7 @@ class _SheetSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
     final colors = Theme.of(context).colorScheme;
     final workspace = inspector.workspace;
     return Semantics(
@@ -314,7 +314,7 @@ class _SheetTabs extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final chrome = PoltergeistChrome.of(context);
+    final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
 
     Widget tab(
       InspectorTab value,

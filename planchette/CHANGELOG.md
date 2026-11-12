@@ -36,6 +36,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   them.
 
 ### Changed
+- Closing an unsaved document, and the quit question that covers several,
+  use the shared Ghost close dialog: Save, Don't save or Cancel, with Save
+  as the default. The discard button reads "Don't save", as in Séance and
+  Poltergeist.
 - The Linux package build uses the suite's shared packager and fails early
   with a clear message when `objdump` is missing, instead of partway through.
   The built `.deb` and AppImage are unchanged.
@@ -92,6 +96,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   runs hands the file to the running Planchette, and launching it again
   raises its window, instead of starting a second copy that writes the
   same settings and window state.
+
+### Security
+- Files Planchette writes from a remote workspace, including remote
+  checkouts, a Save-a-Local-Copy of a remote document and an HTML export
+  of one, now carry a Windows Mark-of-the-Web stream or a macOS
+  quarantine attribute, as Séance's downloads do. Marking is best effort
+  and only logged on failure.
 
 ## [1.9.0] - 2026-10-04
 
