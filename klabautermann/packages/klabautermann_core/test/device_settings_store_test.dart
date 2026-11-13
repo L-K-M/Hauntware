@@ -13,6 +13,7 @@ const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
 const _alertNotificationsKey = 'klabautermann.alerts.notifications';
 const _appLockKey = 'klabautermann.appLock';
 const _syncSecretsKey = 'klabautermann.sync.secrets';
+const _updateCheckKey = 'klabautermann.updateCheck';
 const _deviceNameKey = 'klabautermann.audit.deviceName';
 const _thresholdsKey = 'klabautermann.overview.thresholds';
 const _cadenceKey = 'klabautermann.sampling.cadence';
@@ -530,6 +531,47 @@ void main() {
         isFalse,
         reason: 'a damaged value syncs nothing',
       );
+    });
+
+    test('checks for updates until turned off, across reloads', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.checkForUpdates, isTrue);
+      await store.setCheckForUpdates(false);
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.checkForUpdates, isFalse);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _updateCheckKey: false,
+      });
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _updateCheckKey: 'no',
+      });
+      expect(
+        (await DeviceSettingsStore.open(file)).checkForUpdates,
+        isTrue,
+        reason: 'a damaged value still checks',
+      );
+    });
+
+    test('an update-check opt-out a read-only session cannot save stays '
+        'in memory and throws', () async {
+      writeDocument({_versionKey: 2, _deviceIdKey: 'device-a'});
+      final store = await DeviceSettingsStore.open(file);
+      final before = file.readAsStringSync();
+
+      await expectLater(
+        store.setCheckForUpdates(false),
+        throwsA(isA<DeviceSettingsReadOnlyException>()),
+      );
+      expect(store.checkForUpdates, isFalse);
+      expect(file.readAsStringSync(), before);
     });
 
     test('keeps a device name across reloads, and none reads as the '

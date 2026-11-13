@@ -708,4 +708,6 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
   patch 22 — `unknown` takes the non-Apple, alt-sends-Meta path.
 - Hosts should pass `onHiddenLinkTap` to show an OSC 8 target and ask before
   opening it, and `onKeyboardPaste` to send a soft-keyboard paste through
-  their paste policy (patches 50 and 52).
+  their paste policy (patches 50 and 52). `seance_terminal`'s
+  `showTerminalLinkReview` is the shared review; Séance and Klabautermann
+  pass both callbacks.

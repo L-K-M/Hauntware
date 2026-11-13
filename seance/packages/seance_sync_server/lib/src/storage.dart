@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:seance_protocol/seance_protocol.dart';
 
 import 'legacy_migration_validation.dart';
+import 'record_quota.dart';
 
 /// A registered account. The server holds only a salted *hash* of the auth
 /// verifier plus the non-secret KDF salt/params a new device needs. It never
@@ -273,15 +274,26 @@ abstract class Storage {
   /// A rejected LWW write is a result; a storage failure commits nothing.
   /// Process entries in list order, including repeated ids. Later entries resolve
   /// against earlier staged writes. Empty batches return the current watermark.
+  ///
+  /// A batch that would exceed [quota] throws [AccountQuotaExceededException]
+  /// and commits nothing under [PushRefusalScope.batch]. Under
+  /// [PushRefusalScope.record] it is applied entry by entry instead, in the
+  /// same transaction: in list order, then the entries that did not fit once
+  /// more, so a deletion anywhere in the batch makes room for a new id. An
+  /// entry that still would grow a quota dimension past its cap is listed in
+  /// [PushResponse.refused] without a sequence; every other entry is applied
+  /// as usual. A batch that fits is stored whole in either scope.
   Future<PushResponse> pushRecords(
     String username,
     List<EncryptedRecord> records, {
     AccountQuota? quota,
+    PushRefusalScope refusalScope = PushRefusalScope.batch,
   });
   Future<PushResponse> pushRecordsFor(
     AuthPrincipal principal,
     List<EncryptedRecord> records, {
     AccountQuota? quota,
+    PushRefusalScope refusalScope = PushRefusalScope.batch,
   });
 
   /// Return records and their watermark from one consistent snapshot.
@@ -442,18 +454,13 @@ void enforceAccountQuota({
   required int afterBytes,
   required AccountQuota quota,
 }) {
-  // Existing deployments may already exceed a newly configured cap. Permit a
-  // transaction that does not increase an already-over-budget dimension;
-  // refusing a smaller replacement would make the account impossible to
-  // repair without editing SQLite. Editing existing records leaves the live
-  // count equal, which must stay legal for an account over the cap.
-  final countRefused =
-      afterCount > quota.maxRecords &&
-      (beforeCount <= quota.maxRecords || afterCount > beforeCount);
-  final bytesRefused =
-      afterBytes > quota.maxBytes &&
-      (beforeBytes <= quota.maxBytes || afterBytes > beforeBytes);
-  if (countRefused || bytesRefused) {
+  if (exceedsAccountQuota(
+    beforeCount: beforeCount,
+    beforeBytes: beforeBytes,
+    afterCount: afterCount,
+    afterBytes: afterBytes,
+    quota: quota,
+  )) {
     throw const AccountQuotaExceededException();
   }
 }
@@ -847,7 +854,21 @@ class InMemoryStorage implements Storage {
     String username,
     List<EncryptedRecord> records, {
     AccountQuota? quota,
+    PushRefusalScope refusalScope = PushRefusalScope.batch,
   }) async {
+    try {
+      return _pushBatch(username, records, quota: quota);
+    } on AccountQuotaExceededException {
+      if (refusalScope == PushRefusalScope.batch) rethrow;
+    }
+    return _pushEachRecord(username, records, quota: quota!);
+  }
+
+  PushResponse _pushBatch(
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+  }) {
     // Stage without awaits so failures and concurrent requests see no partial batch.
     final current = _records[username] ?? const <String, EncryptedRecord>{};
     final staged = Map<String, EncryptedRecord>.of(current);
@@ -885,14 +906,87 @@ class InMemoryStorage implements Storage {
     return PushResponse(results: results, latestSeq: seq);
   }
 
+  /// [Storage.pushRecords] under [PushRefusalScope.record] once the batch as
+  /// a whole did not fit. Staged as [_pushBatch] is, without awaits.
+  PushResponse _pushEachRecord(
+    String username,
+    List<EncryptedRecord> records, {
+    required AccountQuota quota,
+  }) {
+    final current = _records[username] ?? const <String, EncryptedRecord>{};
+    final staged = Map<String, EncryptedRecord>.of(current);
+    var seq = _seq[username] ?? 0;
+    RecordUsage usage = (
+      count: _liveCount(current.values),
+      bytes: _recordBytes(current.values),
+    );
+    final results = <PushResult>[];
+    var pending = records;
+    for (var pass = 0; pass < perRecordQuotaPasses; pass++) {
+      final deferred = <EncryptedRecord>[];
+      for (final incoming in pending) {
+        final existing = staged[incoming.id];
+        if (existing != null &&
+            !identical(Lww.resolve(existing, incoming), incoming)) {
+          results.add(
+            PushResult(
+              id: incoming.id,
+              seq: existing.seq ?? 0,
+              accepted: false,
+            ),
+          );
+          continue;
+        }
+
+        final candidate = incoming.withSeq(seq + 1);
+        final after = usageAfterReplacing(
+          usage,
+          existing: existing,
+          existingBytes: existing?.encodedJsonBytes() ?? 0,
+          replacement: candidate,
+        );
+        if (exceedsAccountQuota(
+          beforeCount: usage.count,
+          beforeBytes: usage.bytes,
+          afterCount: after.count,
+          afterBytes: after.bytes,
+          quota: quota,
+        )) {
+          deferred.add(incoming);
+          continue;
+        }
+
+        seq++;
+        staged[incoming.id] = candidate;
+        results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
+        usage = after;
+      }
+      pending = deferred;
+    }
+    final refused = [
+      for (final record in pending)
+        PushRefusal(id: record.id, reason: PushRefusalReason.accountQuota),
+    ];
+
+    _records[username] = staged;
+    _seq[username] = seq;
+    return PushResponse(results: results, refused: refused, latestSeq: seq);
+  }
+
   @override
   Future<PushResponse> pushRecordsFor(
     AuthPrincipal principal,
     List<EncryptedRecord> records, {
     AccountQuota? quota,
+    PushRefusalScope refusalScope = PushRefusalScope.batch,
   }) {
     _requireCurrent(principal);
-    return pushRecords(principal.username, records, quota: quota);
+    return pushRecords(
+      principal.username,
+      records,
+      quota: quota,
+      refusalScope: refusalScope,
+    );
   }
 
   @override

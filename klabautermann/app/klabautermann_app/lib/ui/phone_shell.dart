@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_update/ghost_update.dart';
 
 import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
@@ -42,6 +43,8 @@ class PhoneShell extends StatefulWidget {
     required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
+    this.updates,
+    this.openRelease,
     this.sync,
   });
 
@@ -53,6 +56,13 @@ class PhoneShell extends StatefulWidget {
   final CoverageController coverage;
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
+
+  /// The update check whose banner heads the fleet column; null in tests
+  /// that leave it out, where no banner shows.
+  final UpdateCheckController? updates;
+
+  /// Opens the release page the banner's View Release action names.
+  final Future<void> Function(Uri url)? openRelease;
 
   /// The sync account behind the app bar's sync button (03 §4.3): it signs
   /// in, or runs a round once signed in. Null hides the button.
@@ -210,6 +220,8 @@ class _PhoneShellState extends State<PhoneShell> {
         placement: CoveragePlacement.phoneFleetList,
         coverage: widget.coverage,
         fleet: fleet,
+        updates: widget.updates,
+        openRelease: widget.openRelease,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

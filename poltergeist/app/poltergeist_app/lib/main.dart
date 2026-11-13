@@ -9,8 +9,11 @@ import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
+import 'package:ghost_keepalive/ghost_keepalive.dart'
+    show BackgroundKeepAlive;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -59,6 +62,7 @@ import 'services/ssh_config_import_setup.dart';
 import 'services/sync_credentials.dart';
 import 'services/sync_environment.dart';
 import 'services/transfer_limits_controller.dart';
+import 'services/transfer_keep_alive.dart';
 import 'services/sync_queue_facade.dart';
 import 'services/sync_transport.dart';
 import 'services/sync_verdict_stores.dart';
@@ -66,7 +70,6 @@ import 'services/third_party_bookmark_import_setup.dart';
 import 'services/transfer_queue_session.dart';
 import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
-import 'services/update_check_controller.dart';
 import 'services/view_preferences_store.dart';
 import 'services/workspace_library.dart';
 import 'services/workspace_list_store.dart';
@@ -413,6 +416,19 @@ Future<void> main(List<String> args) async {
       ? null
       : CompositeAppTransferQueue(transferQueue, syncTasks, archiveTasks);
 
+  // The transfer keep-alive (D32's foreground service): while the
+  // composed queue has live work, anchor the process so backgrounding
+  // the app cannot freeze it and stall every transfer, sync run and
+  // archive job. Android only; the reporter lives for the process.
+  if (composedQueue != null && Platform.isAndroid) {
+    TransferKeepAliveReporter(
+      queue: composedQueue,
+      keepAlive: BackgroundKeepAlive(
+        strings: const PoltergeistKeepAliveStrings(),
+      ),
+    );
+  }
+
   // 06 §5.3's preview cache + produce seam (M7): an LRU store under
   // app-support `preview-cache/` seeded with the persisted cap, and a
   // QueuePreviewProducer over the same composed queue every other
@@ -564,7 +580,12 @@ Future<void> main(List<String> args) async {
   // Séance's UpdateChecker pinned to this repo. On Android the alert
   // can download the release APK once the user chooses Update (D23).
   final updateCheck = UpdateCheckController(
+    checker: UpdateChecker(
+      repo: poltergeistUpdateRepo,
+      userAgent: poltergeistUpdateUserAgent,
+    ),
     apkUpdater: Platform.isAndroid ? ApkUpdater() : null,
+    androidReleaseAsset: poltergeistAndroidReleaseAsset,
     enabled: await preferences.loadUpdateChecksEnabled(),
     onEnabledChanged: preferences.saveUpdateChecksEnabled,
   );

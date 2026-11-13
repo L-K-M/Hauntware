@@ -10,6 +10,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   write through symbolic links.
 
 ### Added
+- `ghost_keepalive` package: the Android background keep-alive (a
+  dataSync foreground service and its `ghost_keepalive` channel) shared
+  by Séance and Poltergeist, moved out of Séance's app-private
+  implementation. The apps pass the notification channel id and every
+  user-facing string.
 - The workspace server list offers Keep this device's key and Trust the new
   key when another device synced a different host key, so the conflict can be
   resolved instead of only warned about.

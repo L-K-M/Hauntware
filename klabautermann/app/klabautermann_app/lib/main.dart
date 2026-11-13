@@ -5,9 +5,11 @@ import 'dart:ui' show AppExitType, PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
+import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show CheckedPlatformMenuDelegate, GhostUndoHistory;
+import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:planchette_editor/planchette_editor.dart'
@@ -562,6 +564,22 @@ Future<void> main(List<String> args) async {
     dismissed: settings.rootEquivalenceNoticeDismissed,
     saveDismissal: settings.dismissRootEquivalenceNotice,
   );
+  // The update check (c3 §shells, D19/D23): one plain GET of GitHub's
+  // latest-release endpoint per launch, compared locally, opt-out via
+  // Settings > General. On Android the banner can download the release
+  // APK once the user chooses Update; every other platform links out.
+  final updates = UpdateCheckController(
+    checker: UpdateChecker(
+      repo: klabautermannUpdateRepo,
+      userAgent: klabautermannUpdateUserAgent,
+    ),
+    apkUpdater: defaultTargetPlatform == TargetPlatform.android
+        ? ApkUpdater()
+        : null,
+    androidReleaseAsset: klabautermannAndroidReleaseAsset,
+    enabled: settings.checkForUpdates,
+    onEnabledChanged: settings.setCheckForUpdates,
+  );
   // The About dialog's version (M16), read here once: the settings
   // window's engine has no plugins and gets it over the link.
   final appVersion = await readAppVersion();
@@ -595,6 +613,7 @@ Future<void> main(List<String> args) async {
     logDisplay: logDisplay,
     editorDisplay: editorDisplay,
     timeDisplay: timeDisplay,
+    updateChecks: updates,
   );
 
   runApp(
@@ -627,6 +646,7 @@ Future<void> main(List<String> args) async {
       alertNotifications: alertNotifications,
       operations: operations,
       dockerNotice: dockerNotice,
+      updates: updates,
       sync: sync,
       serverEditor: serverEditor,
       settingsIssue: settings.issue,
@@ -642,4 +662,22 @@ Future<void> main(List<String> args) async {
       undoHistory: undoHistory,
     ),
   );
+  // The launch-time check fires beside the window bring-up: the banner
+  // mounts whenever the answer lands, and a failure here (no package
+  // info, no network) simply leaves it absent.
+  unawaited(_checkForUpdate(updates, appVersion));
+}
+
+/// Ask the controller to compare the running version against GitHub's
+/// latest release tag. Best-effort; a failure must never affect startup.
+Future<void> _checkForUpdate(
+  UpdateCheckController updateCheck,
+  String? appVersion,
+) async {
+  if (appVersion == null) return;
+  try {
+    await updateCheck.checkForUpdate(appVersion);
+  } catch (_) {
+    // The update check is best-effort; a failure must never affect startup.
+  }
 }

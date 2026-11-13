@@ -606,6 +606,11 @@ final class RecordCoordinator {
   /// way. A 401 `unauthorized` is a dead or revoked
   /// account (tokens never expire server-side, so there is no refresh):
   /// the durable notice is raised and the round ends — local-only.
+  ///
+  /// Throws [SyncRecordsRefused] after everything else, applying the pull
+  /// included, when the server stored the rest of a push but refused records
+  /// for the account quota, as an older server's whole-push refusal of the
+  /// same shortfall is thrown.
   Future<SyncRoundResult> runRound(SyncApi api) async {
     if (!_pullOnly && !await _pushesHeld()) {
       try {
@@ -630,6 +635,9 @@ final class RecordCoordinator {
     var rounds = 0;
     var authFailed = false;
     final refused = <String>{};
+    // Records the server refused for the account quota: like [refused], each
+    // is offered once per call and stays dirty for the next one.
+    final awaitingSpace = <String>{};
     var limits = const PushLimits();
     rounds:
     while (rounds < _maxRounds) {
@@ -651,7 +659,9 @@ final class RecordCoordinator {
       if (!_pullOnly && !await _pushesHeld()) {
         final dirty = [
           for (final record in await _records.dirtyRecords())
-            if (!refused.contains(record.id)) record,
+            if (!refused.contains(record.id) &&
+                !awaitingSpace.contains(record.id))
+              record,
         ];
         // Batched to the limits the pull advertised: one body past them
         // would be refused whole, identically every round.
@@ -699,6 +709,13 @@ final class RecordCoordinator {
               }
             }
           }
+          // Not stored and nothing newer to pull: the record stays dirty
+          // exactly as sealed. Unrequested ids settle nothing, as above.
+          for (final refusal in response.refused) {
+            if (sentById.containsKey(refusal.id)) {
+              awaitingSpace.add(refusal.id);
+            }
+          }
         }
       }
       // No durable state changed this round (nothing pulled, nothing
@@ -712,6 +729,11 @@ final class RecordCoordinator {
     if (authFailed) {
       await _setNotice(syncNoticeAccountAuthFailed, true);
     }
+    await _throwIfAwaitingSpace(
+      awaitingSpace,
+      tooLarge: refused,
+      outcome: SyncOutcome(pulled: pulled, pushed: pushed, rounds: rounds),
+    );
     return SyncRoundResult(
       pulled: pulled,
       pushed: pushed,
@@ -720,6 +742,36 @@ final class RecordCoordinator {
       pushesHeld: await _pushesHeld(),
       authFailed: authFailed,
       refusedIds: refused.toList(),
+    );
+  }
+
+  /// Ends a round that otherwise completed with [SyncRecordsRefused] when
+  /// records still wait for space on the server.
+  ///
+  /// Thrown rather than returned because an older server refuses such a
+  /// push whole, and callers already surface that thrown quota error as the
+  /// round's failure; a server that stores the rest must not turn the same
+  /// shortfall into a silent success. Records another device's pulled copy
+  /// has since settled are not owed any more and are left out.
+  Future<void> _throwIfAwaitingSpace(
+    Set<String> awaitingSpace, {
+    required Set<String> tooLarge,
+    required SyncOutcome outcome,
+  }) async {
+    if (awaitingSpace.isEmpty) return;
+    final owed = {for (final r in await _records.dirtyRecords()) r.id};
+    final waiting = [
+      for (final id in awaitingSpace)
+        if (owed.contains(id)) RefusedRecord(id),
+    ];
+    if (waiting.isEmpty) return;
+    throw SyncRecordsRefused(
+      [
+        for (final id in tooLarge)
+          if (owed.contains(id)) RefusedRecord(id),
+      ],
+      awaitingSpace: waiting,
+      outcome: outcome,
     );
   }
 

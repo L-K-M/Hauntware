@@ -177,6 +177,19 @@ void main() {
           _stubNotices,
         );
 
+        final runtime = File('${appImage.path}.runtime').readAsStringSync();
+        expect(
+          p.isWithin(
+            p.join(
+              _repositoryRoot.parent.path,
+              'third_party/appimage-type2-runtime',
+            ),
+            runtime.trim(),
+          ),
+          isTrue,
+          reason: 'appimagetool embeds the vendored runtime: $runtime',
+        );
+
         final appDir = '${appImage.path}.appdir';
         expect(
           _read(p.join(appDir, '${spec.applicationId}.desktop')),
@@ -208,6 +221,49 @@ void main() {
         );
       });
     }
+  });
+
+  group('vendored AppImage runtime', () {
+    for (final arch in ['x86_64', 'aarch64']) {
+      test('the committed $arch runtime matches its pinned digest', () {
+        final run = _resolveAppImageRuntime(arch: arch);
+
+        expect(run.exitCode, 0, reason: '${run.stdout}\n${run.stderr}');
+        expect(
+          run.stdout,
+          endsWith('/third_party/appimage-type2-runtime/runtime-$arch\n'),
+        );
+      });
+
+      test('a missing $arch runtime stops the packager', () {
+        final run = _resolveAppImageRuntime(arch: arch, remove: true);
+
+        expect(run.exitCode, isNot(0));
+        expect(run.stderr, contains('runtime-$arch is missing'));
+        expect(run.stdout, isNot(contains('APPIMAGE_RUNTIME=')));
+      });
+
+      test('a modified $arch runtime stops the packager', () {
+        final run = _resolveAppImageRuntime(arch: arch, tamper: true);
+
+        expect(run.exitCode, isNot(0));
+        expect(run.stderr, contains('has SHA-256'));
+        expect(run.stdout, isNot(contains('APPIMAGE_RUNTIME=')));
+      });
+    }
+
+    test('the packager has no download path for the runtime', () {
+      final source = File(
+        p.join(_repositoryRoot.parent.path, 'scripts/package-linux-common.sh'),
+      ).readAsStringSync();
+      final runtimeFetch = RegExp(
+        r'curl[^\n]*type2-runtime',
+        caseSensitive: false,
+      );
+
+      expect(source, isNot(matches(runtimeFetch)));
+      expect(source, contains('--runtime-file "\$APPIMAGE_RUNTIME"'));
+    });
   });
 
   group('appimagetool download', () {
@@ -289,6 +345,46 @@ String _sha256Of(String text) {
     text,
   ]);
   return (result.stdout as String).trim();
+}
+
+/// Sources a copy of the shared packager laid out like the repository
+/// (scripts/ beside third_party/), so the test can remove or alter the
+/// vendored runtime without touching the checkout, and resolves the
+/// runtime for [arch].
+ProcessResult _resolveAppImageRuntime({
+  required String arch,
+  bool remove = false,
+  bool tamper = false,
+}) {
+  final sandbox = Directory.systemTemp.createTempSync('appimage-runtime-test-');
+  addTearDown(() => sandbox.deleteSync(recursive: true));
+  final root = _repositoryRoot.parent.path;
+
+  final scripts = Directory(p.join(sandbox.path, 'scripts'))..createSync();
+  for (final name in [
+    'package-linux-common.sh',
+    'package-linux-gcc-floors.sh',
+  ]) {
+    File(p.join(root, 'scripts', name)).copySync(p.join(scripts.path, name));
+  }
+  final runtimeDir = Directory(
+    p.join(sandbox.path, 'third_party/appimage-type2-runtime'),
+  )..createSync(recursive: true);
+  final runtime = File(p.join(runtimeDir.path, 'runtime-$arch'));
+  File(
+    p.join(root, 'third_party/appimage-type2-runtime/runtime-$arch'),
+  ).copySync(runtime.path);
+  if (remove) runtime.deleteSync();
+  if (tamper) runtime.writeAsBytesSync([...runtime.readAsBytesSync(), 0]);
+
+  return Process.runSync('bash', [
+    '-c',
+    r'set -e; source "$1"; APPIMAGE_ARCH="$2"; resolve_appimage_runtime; '
+        r'echo "APPIMAGE_RUNTIME=$APPIMAGE_RUNTIME"',
+    'resolve',
+    p.join(scripts.path, 'package-linux-common.sh'),
+    arch,
+  ]);
 }
 
 /// Sources the shared packager, resolves appimagetool with a stub `curl`
@@ -563,8 +659,8 @@ esac
 cp -a "$3" "$4"
 ''');
   tool('appimagetool', r'''
-[[ "$1" == --no-appstream ]] || exit 2
-cp -a "$2" "$3.appdir" && touch "$3"
+[[ "$1" == --no-appstream && "$2" == --runtime-file && -f "$3" ]] || exit 2
+cp -a "$4" "$5.appdir" && echo "$3" > "$5.runtime" && touch "$5"
 ''');
   final tools = bin.listSync().map((entity) => entity.path).toList();
   await Process.run('chmod', ['+x', ...tools]);

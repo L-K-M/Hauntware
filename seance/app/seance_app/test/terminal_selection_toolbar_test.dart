@@ -17,11 +17,14 @@ import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+const _urlLauncherChannel = MethodChannel('plugins.flutter.io/url_launcher');
 
 /// The touch selection toolbar: touch has no secondary click, so a
 /// long-press (or double-tap) selection needs its own Copy/Paste/Select all,
 /// as on Android and iOS text fields. Without it a touch selection could
-/// not be copied at all.
+/// not be copied at all. The soft keyboard's own paste and a touch tap on
+/// a terminal link are covered here too, as the other touch input that
+/// reaches the shell or the browser.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Directory? directory;
@@ -34,6 +37,9 @@ void main() {
   /// Everything the terminal sent its shell, in order.
   final shellInput = <String>[];
 
+  /// The URLs handed to the platform's browser.
+  final launched = <String>[];
+
   tearDown(() async {
     state?.dispose();
     state = null;
@@ -41,9 +47,11 @@ void main() {
     services = null;
     clipboard = null;
     shellInput.clear();
+    launched.clear();
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(_pathChannel, null);
+    messenger.setMockMethodCallHandler(_urlLauncherChannel, null);
     messenger.setMockMethodCallHandler(SystemChannels.platform, null);
     FlutterSecureStorage.setMockInitialValues({});
     try {
@@ -93,6 +101,11 @@ void main() {
               return clipboard == null ? null : {'text': clipboard};
           }
           return null;
+        });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_urlLauncherChannel, (call) async {
+          launched.add((call.arguments as Map)['url'] as String);
+          return true;
         });
     final engine = XtermTerminalEngine();
     engine.userInput.listen((bytes) => shellInput.add(utf8.decode(bytes)));
@@ -328,6 +341,62 @@ void main() {
 
     expect(controller().selection, isNotNull);
     expect(copyButton(), findsNothing);
+  });
+
+  testWidgets('a multi-line paste from the soft keyboard is reviewed, not '
+      'typed', (tester) async {
+    await pumpTerminal(tester);
+    await tester.tapAt(cell(tester, 20, 4));
+    await settle(tester);
+    shellInput.clear();
+
+    tester.testTextInput.enterText('cd /tmp\nrm -rf /');
+    await settle(tester);
+
+    expect(find.text('Paste 2 lines?'), findsOneWidget);
+    expect(find.textContaining('Line 2: '), findsOneWidget);
+    expect(shellInput, isEmpty);
+
+    await tester.tap(find.text('Cancel'));
+    await settle(tester);
+    expect(shellInput, isEmpty);
+  });
+
+  group('a link whose text hides its target', () {
+    const target = 'https://login.evil.test/';
+
+    Future<void> tapLabelledLink(WidgetTester tester) async {
+      await pumpTerminal(tester);
+      state!.activeSession!.engine.terminal.write(
+        '\x1b]8;;$target\x1b\\Authenticate\x1b]8;;\x1b\\',
+      );
+      await settle(tester);
+      // A letter of the label on the third row, where the link was written.
+      await tester.tapAt(cell(tester, 2, 2));
+      await settle(tester);
+    }
+
+    testWidgets('shows the target and opens it only on Open', (tester) async {
+      await tapLabelledLink(tester);
+
+      expect(find.text('Open this link?'), findsOneWidget);
+      expect(find.text('login.evil.test'), findsOneWidget);
+      expect(find.text(target), findsOneWidget);
+      expect(launched, isEmpty);
+
+      await tester.tap(find.text('Open'));
+      await settle(tester);
+      expect(launched, [target]);
+    });
+
+    testWidgets('opens nothing on Cancel', (tester) async {
+      await tapLabelledLink(tester);
+
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      expect(find.text('Open this link?'), findsNothing);
+      expect(launched, isEmpty);
+    });
   });
 }
 

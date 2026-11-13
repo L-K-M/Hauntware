@@ -1787,9 +1787,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'update:${info.latestVersion}'",
     r"'dragout:${notice.id}'",
   },
-  // The release asset an Android build updates from: the release
-  // manifest's file name, never rendered.
-  'lib/services/update_check_controller.dart': {"'poltergeist-android.apk'"},
   // Path grammar and route text: both path separators, the
   // endpoint:path composition, the empty-string seed, and the `→` route
   // arrow — technical formatting and machine data, reviewed per file.
@@ -2491,6 +2488,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The drag image's ellipsis glyph: typography, not copy.
   'lib/ui/panes/drag_out_image.dart': {"'\u2026'"},
+  // The keep-alive's notification channel id (stored user data, never
+  // rendered) and its status-bar drawable's resource name.
+  'lib/services/transfer_keep_alive.dart': {
+    "'poltergeist.keepalive'",
+    "'ic_stat_transfer_keep_alive'",
+  },
 };
 
 const _config = L10nContractConfig(

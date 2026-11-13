@@ -11536,7 +11536,18 @@ unverified.
     insets, and TalkBack over the compact surfaces. **2026-09-25:** D35
     made Android supported with these slices still open; the README's
     known issues name them and the release checklist's Android row
-    carries the device checks.
+    carries the device checks. **2026-11-10:** the transfer foreground
+    service landed through the shared ghost_keepalive plugin (Séance's
+    keep-alive moved there); while the composed queue has non-terminal
+    work (transfers, sync runs, archive jobs) a "Transfer keep-alive"
+    notification anchors the process, and the service stops when the
+    queue drains. Notification progress is a later enhancement; the
+    count is text only. Manual device check still owed: with a transfer
+    running, background the app and verify the transfer continues and
+    the notification is shown; verify the service stops when the queue
+    drains; and verify the notification-permission-denied path (the
+    service still runs, the notification stays hidden, nothing else
+    changes).
 34. **2026-09-25: D39 — what an extra workspace window lacks.**
     **2026-09-26:** drops from other apps, drag-out, and on macOS the
     unified toolbar, the Quick Look panel and accessibility now work in

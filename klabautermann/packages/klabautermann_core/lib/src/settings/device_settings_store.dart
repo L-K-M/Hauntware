@@ -36,6 +36,7 @@ const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const String _monitorSetKey = 'klabautermann.monitorSet';
 const String _safetyKey = 'klabautermann.safety';
 const String _syncSecretsKey = 'klabautermann.sync.secrets';
+const String _updateCheckKey = 'klabautermann.updateCheck';
 const String _deviceNameKey = 'klabautermann.audit.deviceName';
 const String _appLockKey = 'klabautermann.appLock';
 const String _logTextSizeKey = 'klabautermann.logs.textSize';
@@ -371,6 +372,19 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setSyncSecrets(bool enabled) async {
     _values[_syncSecretsKey] = enabled;
+    await _save();
+  }
+
+  /// The device's update check (c3 §shells), `klabautermann.updateCheck`:
+  /// on unless the user turned it off, so anything but `false` reads as
+  /// on and a missing or damaged file still checks.
+  bool get checkForUpdates => _values[_updateCheckKey] != false;
+
+  /// Stores [enabled] and writes the document. Throws when the write
+  /// fails or this session is read-only; the value stays in memory either
+  /// way.
+  Future<void> setCheckForUpdates(bool enabled) async {
+    _values[_updateCheckKey] = enabled;
     await _save();
   }
 

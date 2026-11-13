@@ -372,6 +372,13 @@ packages:
       relative: true
     source: path
     version: "1.9.4"
+  ghost_keepalive:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_keepalive"
+      relative: true
+    source: path
+    version: "1.9.4"
   ghost_keystore:
     dependency: "direct main"
     description:
@@ -418,6 +425,13 @@ packages:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_ui"
+      relative: true
+    source: path
+    version: "1.9.4"
+  ghost_update:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_update"
       relative: true
     source: path
     version: "1.9.4"

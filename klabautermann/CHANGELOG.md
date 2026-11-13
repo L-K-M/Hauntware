@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Klabautermann checks the suite's GitHub releases once per launch and
+  offers a newer version in a banner: every platform links to the release
+  page, and on Android the banner downloads and installs the release APK
+  once you choose Update. Turn the check off in Settings > General, or
+  pick Help > Check for Updates… to ask again.
 - Settings > Sync shows a synced host key that conflicts with the one
   this device trusts, with both fingerprints, and resolves it by keeping
   this device's key or trusting the new one, in the settings route and

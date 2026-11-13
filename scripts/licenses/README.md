@@ -5,8 +5,9 @@ host owns, so `scripts/appimage-notices.py` cannot read their notices from
 dpkg. `../appimage-notices.json` lists them. Fetched 2026-10-25.
 
 The AppImage runtime is the ELF header in front of each product's AppImage
-squashfs. appimagetool 1.9.1 downloads it from the type2-runtime
-`continuous` release, and it statically links libfuse, squashfuse, musl,
+squashfs. The packager embeds the copy vendored in
+`third_party/appimage-type2-runtime/` (type2-runtime `continuous`), and it
+statically links libfuse, squashfuse, musl,
 zstd and zlib. The set below matches runtime commits `75849dc`,
 `8f39b89` (Hauntware v1.9.2) and `fedfad5` (libfuse 3.15.0, squashfuse
 0.5.2, zstd 1.5.6, zlib 1.3.2, musl 1.2.5 from Alpine 3.21).

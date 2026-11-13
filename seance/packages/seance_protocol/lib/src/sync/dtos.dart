@@ -589,13 +589,38 @@ class LegacyMigrationResponse {
 }
 
 /// PUT /v1/records — push a batch of locally-changed records.
+/// How a push asks the server to answer records that would grow the account
+/// past its storage quota.
+///
+/// Sent as `refusalScope` only when it is [record], so a body an older client
+/// sends is unchanged. A server that predates the field ignores it and
+/// answers [batch]'s way, which every client must therefore still handle.
+enum PushRefusalScope {
+  /// Refuse the whole push with 413 `account_quota_exceeded` and store
+  /// nothing. What every server did before per-record refusals.
+  batch,
+
+  /// Store the whole push when it fits. When it does not, store each record
+  /// that fits and list the rest in [PushResponse.refused].
+  record;
+
+  static const _wireKey = 'refusalScope';
+
+  /// A value this build does not know reads as [batch]: the server then
+  /// gives the answer an older server gives, which the client handles anyway.
+  static PushRefusalScope _fromWire(Object? value) =>
+      value == record.name ? record : batch;
+}
+
 class PushRequest {
   final int protocolVersion;
   final List<EncryptedRecord> records;
+  final PushRefusalScope refusalScope;
 
   const PushRequest({
     this.protocolVersion = kProtocolVersion,
     required this.records,
+    this.refusalScope = PushRefusalScope.batch,
   });
 
   /// Keep [bodyBytesFor] in step with this map — see
@@ -603,6 +628,8 @@ class PushRequest {
   Map<String, dynamic> toJson() => {
         'protocolVersion': protocolVersion,
         'records': records.map((r) => r.toJson()).toList(),
+        if (refusalScope != PushRefusalScope.batch)
+          PushRefusalScope._wireKey: refusalScope.name,
       };
 
   /// Byte length of the body [toJson] encodes to, without building it.
@@ -610,6 +637,7 @@ class PushRequest {
         recordCount: records.length,
         recordBytes: records.fold(0, (sum, r) => sum + r.encodedJsonBytes()),
         protocolVersion: protocolVersion,
+        refusalScope: refusalScope,
       );
 
   /// Byte length of a push body holding [recordCount] records whose encoded
@@ -622,13 +650,20 @@ class PushRequest {
     required int recordCount,
     required int recordBytes,
     int protocolVersion = kProtocolVersion,
-  }) =>
-      jsonObjectFramingBytes(2) +
-      jsonKeyBytes('protocolVersion') +
-      jsonIntBytes(protocolVersion) +
-      jsonKeyBytes('records') +
-      jsonArrayFramingBytes(recordCount) +
-      recordBytes;
+    PushRefusalScope refusalScope = PushRefusalScope.batch,
+  }) {
+    final scoped = refusalScope != PushRefusalScope.batch;
+    return jsonObjectFramingBytes(scoped ? 3 : 2) +
+        jsonKeyBytes('protocolVersion') +
+        jsonIntBytes(protocolVersion) +
+        jsonKeyBytes('records') +
+        jsonArrayFramingBytes(recordCount) +
+        recordBytes +
+        (scoped
+            ? jsonKeyBytes(PushRefusalScope._wireKey) +
+                jsonStringBytes(refusalScope.name)
+            : 0);
+  }
 
   factory PushRequest.fromJson(Map<String, dynamic> json) => PushRequest(
         protocolVersion:
@@ -636,6 +671,8 @@ class PushRequest {
         records: (json['records'] as List)
             .map((e) => EncryptedRecord.fromJson((e as Map).cast()))
             .toList(),
+        refusalScope:
+            PushRefusalScope._fromWire(json[PushRefusalScope._wireKey]),
       );
 }
 
@@ -663,14 +700,65 @@ class PushResult {
       );
 }
 
+/// Why the server did not store one record of a [PushRefusalScope.record]
+/// push.
+enum PushRefusalReason {
+  /// Storing it would have grown the account past its record-count or
+  /// encoded-byte quota. The same code the whole-push refusal uses.
+  accountQuota('account_quota_exceeded'),
+
+  /// A reason newer than this build. The record was still not stored.
+  unknown('unknown');
+
+  const PushRefusalReason(this.wire);
+
+  final String wire;
+
+  static PushRefusalReason _fromWire(Object? value) {
+    for (final reason in values) {
+      if (reason != unknown && reason.wire == value) return reason;
+    }
+    return unknown;
+  }
+}
+
+/// One record the server did not store. Unlike a [PushResult] with
+/// `accepted == false`, the server holds no newer version to pull: the record
+/// is simply not there, and the client still owes it.
+class PushRefusal {
+  final String id;
+  final PushRefusalReason reason;
+
+  const PushRefusal({required this.id, required this.reason});
+
+  Map<String, dynamic> toJson() => {'id': id, 'reason': reason.wire};
+
+  factory PushRefusal.fromJson(Map<String, dynamic> json) => PushRefusal(
+        id: json['id'] as String,
+        reason: PushRefusalReason._fromWire(json['reason']),
+      );
+}
+
 class PushResponse {
   final List<PushResult> results;
+
+  /// Records not stored, only ever non-empty for a
+  /// [PushRefusalScope.record] push. A refused record has no entry in
+  /// [results]. Sent only when non-empty, so every other response keeps the
+  /// shape older clients parse.
+  final List<PushRefusal> refused;
   final int latestSeq;
 
-  const PushResponse({required this.results, required this.latestSeq});
+  const PushResponse({
+    required this.results,
+    required this.latestSeq,
+    this.refused = const [],
+  });
 
   Map<String, dynamic> toJson() => {
         'results': results.map((r) => r.toJson()).toList(),
+        if (refused.isNotEmpty)
+          'refused': refused.map((r) => r.toJson()).toList(),
         'latestSeq': latestSeq,
       };
 
@@ -678,6 +766,10 @@ class PushResponse {
         results: (json['results'] as List)
             .map((e) => PushResult.fromJson((e as Map).cast()))
             .toList(),
+        refused: [
+          for (final e in json['refused'] as List? ?? const [])
+            PushRefusal.fromJson((e as Map).cast()),
+        ],
         latestSeq: (json['latestSeq'] as num).toInt(),
       );
 }
