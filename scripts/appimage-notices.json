@@ -84,7 +84,7 @@
         "licenses/appimage-type2-runtime/zstd-LICENSE.txt",
         "licenses/appimage-type2-runtime/zlib-LICENSE.txt"
       ],
-      "reason": "The runtime is the AppImage's ELF header, which appimagetool downloads; it sits outside the squashfs, so no host package owns it. Its texts are vendored from upstream (licenses/README.md); the runtime commit pins the exact sources."
+      "reason": "The runtime is the AppImage's ELF header, vendored in third_party/appimage-type2-runtime and embedded by appimagetool; it sits outside the squashfs, so no host package owns it. Its texts are vendored from upstream (licenses/README.md); the runtime commit pins the exact sources."
     }
   ]
 }
