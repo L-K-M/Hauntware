@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show FileSystemException;
 import 'dart:ui' show AppExitResponse;
 
@@ -14,7 +15,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/admin_memory.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
-import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:klabautermann_app/controllers/account_size.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';
@@ -32,7 +33,9 @@ import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
+import 'package:klabautermann_app/controllers/recovery_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
+import 'package:klabautermann_app/services/recovery_files.dart';
 import 'package:klabautermann_app/services/settings_window/remote_settings.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_host.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
@@ -45,7 +48,14 @@ import 'package:klabautermann_app/ui/threshold_scope.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show MonitorEligibility, SafetyPolicy, ServerSafety, SyncPinConflict;
+    show
+        MonitorEligibility,
+        SafetyPolicy,
+        SecretsRestoreSummary,
+        ServerSafety,
+        SyncPinConflict,
+        VaultRecoveryFailure,
+        VaultRestorePolicy;
 
 import 'support/device_authenticator.dart';
 import 'support/fake_engine.dart';
@@ -118,6 +128,67 @@ final class _ManualAppLock extends ChangeNotifier implements AppLockSettings {
 
   @override
   Future<AppLockChange> setEnabled(bool enabled) async => AppLockChange.changed;
+}
+
+const _recoveryCode = 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-89AB';
+
+/// A recovery model with scripted answers, notifying like the app's and
+/// the window's do.
+final class _FakeRecovery extends ChangeNotifier implements RecoverySettings {
+  _FakeRecovery({this.configured});
+
+  @override
+  bool? configured;
+
+  String code = _recoveryCode;
+  String? destination;
+  SecretsRestoreSummary? summary;
+  Object? exportError;
+  Object? restoreError;
+  String? savedCode;
+  String? restoredCode;
+  VaultRestorePolicy? restoredPolicy;
+  int newCodeCalls = 0;
+  int refreshes = 0;
+
+  @override
+  Future<void> refresh() async {
+    refreshes++;
+    configured ??= false;
+    notifyListeners();
+  }
+
+  @override
+  Future<String> newCode() async {
+    newCodeCalls++;
+    return code;
+  }
+
+  @override
+  Future<void> saveCode(String code) async {
+    savedCode = code;
+    configured = true;
+    notifyListeners();
+  }
+
+  @override
+  Future<String?> exportSecrets() async {
+    final error = exportError;
+    if (error != null) throw error;
+    return destination;
+  }
+
+  @override
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required VaultRestorePolicy policy,
+  }) async {
+    final error = restoreError;
+    if (error != null) throw error;
+    restoredCode = code;
+    restoredPolicy = policy;
+    return summary;
+  }
 }
 
 /// A pin conflict settings the test resolves by hand.
@@ -274,6 +345,30 @@ void main() {
       editorDisplay: editorDisplay,
       accountSize: accountSize,
       pinConflicts: pinConflicts,
+      control: _control,
+      link: _appLink,
+      requestAppExit: () async => AppExitResponse.exit,
+    );
+    addTearDown(host.dispose);
+    return host;
+  }
+
+  /// A host carrying CRED-05's recovery service, for the recovery tests.
+  SettingsWindowHost newRecoveryHost(
+    AppearanceSettings appearance,
+    RecoverySettings recovery, {
+    AppLockSettings? appLock,
+  }) {
+    final host = SettingsWindowHost(
+      appearance: appearance,
+      announcements: AnnouncementController(),
+      deviceName: newDeviceName(),
+      appVersion: _appVersion,
+      monitorSet: newFleet().monitorSettings,
+      safety: newSafety(),
+      syncSecrets: newSyncSecrets(),
+      appLock: appLock,
+      recovery: recovery,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -1544,6 +1639,147 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('the Sync tab offers a recovery code over the link', (
+      tester,
+    ) async {
+      final recovery = _FakeRecovery(configured: false);
+      host.dispose();
+      await tester.runAsync(() async {
+        host = newRecoveryHost(appearance, recovery);
+      });
+      final remote = await pumpWindow(tester, SettingsTab.sync);
+      expect(remote.recovery, isNotNull);
+      expect(remote.recovery!.configured, isFalse);
+      expect(
+        find.text('This device has no recovery code yet.'),
+        findsOneWidget,
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('recovery.setUp')),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(SyncTab),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.byKey(const ValueKey('recovery.setUp')));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('recovery.code')), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('recovery.code.confirm')),
+        _recoveryCode.split('-').first,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('recovery.code.done')));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(recovery.savedCode, _recoveryCode);
+      expect(recovery.configured, isTrue);
+      expect(remote.recovery!.configured, isTrue);
+      expect(find.text('This device has a recovery code.'), findsOneWidget);
+    });
+
+    testWidgets('recovery status refresh runs in the app', (tester) async {
+      final recovery = _FakeRecovery(configured: false);
+      host.dispose();
+      await tester.runAsync(() async {
+        host = newRecoveryHost(appearance, recovery);
+      });
+      final remote = await pumpWindow(tester, SettingsTab.sync);
+      await tester.runAsync(() async => remote.recovery!.refresh());
+      await tester.pumpAndSettle();
+      expect(recovery.refreshes, 1);
+      expect(remote.recovery!.configured, isFalse);
+    });
+
+    testWidgets('the recovery snapshot carries only the configured flag', (
+      tester,
+    ) async {
+      final recovery = _FakeRecovery(configured: true);
+      host.dispose();
+      await tester.runAsync(() async {
+        host = newRecoveryHost(appearance, recovery);
+      });
+      final remote = (await tester.runAsync(() async {
+        expect(await host.open(SettingsTab.sync), isTrue);
+        return RemoteSettings.connect(link: _windowLink);
+      }))!;
+      addTearDown(remote.dispose);
+      await tester.pumpAndSettle();
+
+      final snapshot = remote.lastSnapshot;
+      final recoveryJson = (snapshot[SettingsLinkKey.recovery.name]! as Map)
+          .cast<String, Object?>();
+      expect(recoveryJson, {SettingsLinkKey.configured.name: true});
+      expect(recoveryJson.containsKey(SettingsLinkKey.code.name), isFalse);
+      expect(jsonEncode(snapshot), isNot(contains(_recoveryCode)));
+    });
+
+    testWidgets('a restore returns its summary over the link', (tester) async {
+      final recovery = _FakeRecovery(configured: true)
+        ..summary = const SecretsRestoreSummary(
+          added: 1,
+          replaced: 0,
+          kept: 0,
+          unreadable: 0,
+        );
+      host.dispose();
+      await tester.runAsync(() async {
+        host = newRecoveryHost(appearance, recovery);
+      });
+      final remote = await pumpWindow(tester, SettingsTab.sync);
+
+      await tester.runAsync(() async {
+        final summary = await remote.recovery!.restoreSecrets(
+          code: _recoveryCode,
+          policy: VaultRestorePolicy.keepExisting,
+        );
+        expect(summary, isNotNull);
+        expect(summary!.added, 1);
+      });
+
+      expect(recovery.restoredCode, _recoveryCode);
+      expect(recovery.restoredPolicy, VaultRestorePolicy.keepExisting);
+    });
+
+    testWidgets('a locked app refuses recovery actions without running them', (
+      tester,
+    ) async {
+      final recovery = _FakeRecovery(configured: false);
+      final lock = _ManualAppLock()..locked = true;
+      host.dispose();
+      await tester.runAsync(() async {
+        host = newRecoveryHost(appearance, recovery, appLock: lock);
+      });
+      final remote = await pumpWindow(tester, SettingsTab.sync);
+      expect(remote.recovery, isNotNull);
+
+      await tester.runAsync(() async {
+        await expectLater(
+          remote.recovery!.newCode(),
+          throwsA(isA<SettingsLinkException>()),
+        );
+      });
+
+      expect(recovery.newCodeCalls, 0);
+      expect(tester.takeException(), isA<AppLockedException>());
+
+      await tester.runAsync(() async {
+        await expectLater(
+          remote.recovery!.refresh(),
+          throwsA(isA<SettingsLinkException>()),
+        );
+      });
+      expect(recovery.refreshes, 0);
+      expect(tester.takeException(), isA<AppLockedException>());
+    });
   });
 
   group('the link', () {
@@ -1678,6 +1914,68 @@ void main() {
       expect(
         decodeLinkError(PlatformException(code: 'settings-failed')),
         isA<SettingsLinkException>(),
+      );
+    });
+
+    test(
+      'a recovery failure and a file failure cross as their fixed kinds',
+      () {
+        Exception roundTrip(Object error) =>
+            decodeLinkError(encodeLinkError(error));
+
+        expect(
+          roundTrip(const RecoveryException(VaultRecoveryFailure.wrongCode)),
+          isA<RecoveryException>().having(
+            (error) => error.failure,
+            'failure',
+            VaultRecoveryFailure.wrongCode,
+          ),
+        );
+        expect(
+          roundTrip(const RecoveryFileException(RecoveryFileFailure.tooLarge)),
+          isA<RecoveryFileException>().having(
+            (error) => error.failure,
+            'failure',
+            RecoveryFileFailure.tooLarge,
+          ),
+        );
+        // Only the fixed kind name crosses, never diagnostic text.
+        expect(
+          encodeLinkError(
+            const RecoveryException(VaultRecoveryFailure.tampered),
+          ).message,
+          'tampered',
+        );
+        expect(
+          decodeLinkError(
+            PlatformException(code: 'recoveryFailed', message: 'wrongCode'),
+          ),
+          isA<RecoveryException>().having(
+            (error) => error.failure,
+            'failure',
+            VaultRecoveryFailure.wrongCode,
+          ),
+        );
+        // A code this build does not know reads as a plain failure.
+        expect(
+          decodeLinkError(PlatformException(code: 'settings-recoveryFailed')),
+          isA<SettingsLinkException>(),
+        );
+      },
+    );
+
+    test('a restore summary crosses whole', () {
+      const summary = SecretsRestoreSummary(
+        added: 1,
+        replaced: 2,
+        kept: 3,
+        unreadable: 4,
+      );
+      final decoded = SecretsRestoreSummary.fromJson(summary.toJson());
+
+      expect(
+        (decoded.added, decoded.replaced, decoded.kept, decoded.unreadable),
+        (1, 2, 3, 4),
       );
     });
 

@@ -104,6 +104,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
                 pinPublication: remote.pinPublication,
                 pinConflicts: remote.pinConflicts,
                 accountSize: remote.accountSize,
+                recovery: remote.recovery,
                 initialTab: page.tab,
                 tabRequests: remote.tabRequests,
               );

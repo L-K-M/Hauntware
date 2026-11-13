@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'package:ghost_keystore/app_lock.dart' show AppLockSettings;
+
 import 'admin_controller.dart';
-import 'app_lock_controller.dart' show AppLockSettings;
 
 /// What Settings reads and changes of FL-16's admin memory, apart from
 /// where it runs: [AdminMemoryController] in the app, and a copy kept

@@ -3,6 +3,9 @@ import 'dart:async' show FutureOr;
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockController;
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostAppLockGate, GhostAppLockStrings;
 import 'package:ghost_update/ghost_update.dart';
 import 'package:ghost_desktop/ghost_desktop.dart'
     show ClaimMacosToolbarBand, withMacosToolbarBand;
@@ -42,7 +45,8 @@ import 'services/settings_models.dart'
         DirectoryGroupingModel,
         DoubleClickActionModel,
         EditorFontModel,
-        EditorTextSizeModel;
+        EditorTextSizeModel,
+        RecoverySettingsModel;
 import 'services/settings_window/settings_window_host.dart';
 import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
@@ -58,6 +62,7 @@ import 'services/workspace_windows/workspace_windows.dart';
 import 'theme/app_appearance.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
+import 'ui/app_lock_gate.dart';
 import 'ui/inspector/inspector_view.dart' show inspectorDefaultWidth;
 import 'ui/server_editor.dart' show ServerEditorDelegate;
 import 'ui/workspace_shell.dart';
@@ -79,6 +84,7 @@ class PoltergeistApp extends StatefulWidget {
     this.sshConfigImport,
     this.thirdPartyBookmarkImport,
     this.bookmarkBackup,
+    this.recovery,
     this.serverEditor,
     this.bookmarks,
     this.workspaces,
@@ -125,6 +131,7 @@ class PoltergeistApp extends StatefulWidget {
     this.syncTasks,
     this.updateCheck,
     this.appVersion,
+    this.appLock,
     this.settingsWindow,
     this.toolbarBand,
     this.window,
@@ -179,6 +186,11 @@ class PoltergeistApp extends StatefulWidget {
   /// leaves `open-settings-backup` unregistered; `main.dart` supplies
   /// it from the app-support stores and the OS keystore.
   final BookmarkBackupService? bookmarkBackup;
+
+  /// CRED-05's Recovery section, shown inside Settings → Backup and
+  /// offered after the first saved credential. Null leaves the section
+  /// and the offer unwired.
+  final RecoverySettingsModel? recovery;
 
   /// The server editor's application layer (04 §4.2's management
   /// verbs): add/edit on the catalog rows and the editor's own saves
@@ -345,6 +357,10 @@ class PoltergeistApp extends StatefulWidget {
   /// link's snapshot. Null where the platform cannot tell.
   final String? appVersion;
 
+  /// The app lock (cred-05): its gate covers the app while locked, and
+  /// its switch sits in Settings → General. Null leaves both unwired.
+  final AppLockController? appLock;
+
   /// The desktop Settings window (see [WorkspaceShell.settingsWindow]).
   final SettingsWindowHost? settingsWindow;
 
@@ -508,11 +524,27 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       // macOS: every route, dialog, and root-overlay toast keeps its
       // controls below the unified toolbar band, which claims clicks
       // for window drag...
-      builder: (context, child) => withMacosToolbarBand(
-        widget.toolbarBand,
-        windowedWithoutScope: true,
-        child: child!,
-      ),
+      builder: (context, child) {
+        final withBand = withMacosToolbarBand(
+          widget.toolbarBand,
+          windowedWithoutScope: true,
+          child: child!,
+        );
+        final appLock = widget.appLock;
+        if (appLock == null) return withBand;
+        final l10n = AppLocalizations.of(context);
+        return GhostAppLockGate(
+          model: AppLockGateModel(appLock),
+          strings: GhostAppLockStrings(
+            title: l10n.appLockTitle,
+            detail: l10n.appLockDetail,
+            unlock: l10n.appLockUnlock,
+            failed: l10n.appLockFailed,
+            unavailable: l10n.appLockUnavailable,
+          ),
+          child: withBand,
+        );
+      },
       // ...except the shell, which draws under the transparent titlebar
       // (the full-size content view), passes its header controls
       // through, and insets itself for the traffic lights, leaving no
@@ -539,6 +571,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       sshConfigImport: widget.sshConfigImport,
       thirdPartyBookmarkImport: widget.thirdPartyBookmarkImport,
       bookmarkBackup: widget.bookmarkBackup,
+      recovery: widget.recovery,
       serverEditor: widget.serverEditor,
       bookmarks: widget.bookmarks,
       workspaces: widget.workspaces,
@@ -587,6 +620,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       syncTasks: widget.syncTasks,
       updateCheck: widget.updateCheck,
       appVersion: widget.appVersion,
+      appLock: widget.appLock,
       settingsWindow: widget.settingsWindow,
       window: widget.window,
       probeOwner: widget.probeOwner,

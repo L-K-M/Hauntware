@@ -2,197 +2,104 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghost_keystore/ghost_keystore.dart'
-    show appLockBackgroundTimeout;
-import 'package:klabautermann_app/controllers/app_lock_controller.dart';
+import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/app_lock_gate.dart';
 
 import 'support/device_authenticator.dart';
 
-const _title = 'Klabautermann is locked';
-const _content = 'fleet content';
-
-/// SAF-20: the lock screen over the whole app.
+/// SAF-20: the shared gate over the app's own lock controller.
 void main() {
   late FakeDeviceAuthenticator device;
-  late Duration elapsed;
-  late DateTime wall;
-  late int locks;
-  late int taps;
 
-  setUp(() {
-    device = FakeDeviceAuthenticator();
-    elapsed = Duration.zero;
-    wall = DateTime.utc(2026, 10, 25, 12);
-    locks = 0;
-    taps = 0;
-  });
+  setUp(() => device = FakeDeviceAuthenticator());
 
-  Future<AppLockController> pump(
-    WidgetTester tester, {
-    bool enabled = true,
-  }) async {
-    final lock = AppLockController(
-      authenticator: device,
-      supported: true,
-      enabled: enabled,
-      onLocked: () => locks++,
-      elapsed: () => elapsed,
-      wallClock: () => wall,
-    );
+  AppLockController controller({bool enabled = true}) => AppLockController(
+    authenticator: device,
+    supported: true,
+    enabled: enabled,
+  );
+
+  test('the model reports the lock and maps each unlock outcome', () async {
+    final lock = controller();
+    final model = AppLockGateModel(lock);
     addTearDown(lock.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        builder: (context, child) => AppLockGate(lock: lock, child: child!),
-        home: Scaffold(
-          body: TextButton(
-            onPressed: () => taps++,
-            child: const Text(_content),
-          ),
-        ),
-      ),
-    );
-    return lock;
-  }
 
-  testWidgets('off, the app shows at once and never asks', (tester) async {
-    await pump(tester, enabled: false);
-    await tester.pumpAndSettle();
+    expect(model.locked, isTrue);
+    await model.refreshAvailability();
+    expect(model.locked, isTrue);
 
-    expect(find.text(_title), findsNothing);
-    expect(find.text(_content), findsOneWidget);
-    expect(device.prompts, 0);
-  });
-
-  testWidgets('on, the app opens behind the lock screen, which asks by '
-      'itself and hides the app from touch and screen readers', (tester) async {
-    final semantics = tester.ensureSemantics();
-    device.hold = Completer<void>();
-    final lock = await pump(tester);
-    await tester.pump();
-
-    expect(device.prompts, 1);
-    expect(find.text(_title), findsOneWidget);
-    expect(find.bySemanticsLabel(_content), findsNothing);
-    expect(find.bySemanticsLabel(_title), findsOneWidget);
-    // A tap on the app beneath reaches nothing.
-    await tester.tap(find.text(_content), warnIfMissed: false);
-    expect(taps, 0);
-
-    device.hold!.complete();
-    await tester.pumpAndSettle();
-    expect(lock.locked, isFalse);
-    expect(find.text(_title), findsNothing);
-    expect(find.bySemanticsLabel(_content), findsOneWidget);
-    expect(device.prompts, 1);
-    semantics.dispose();
-  });
-
-  testWidgets('a rejected prompt says so and Unlock asks again', (
-    tester,
-  ) async {
     device.accept = false;
-    await pump(tester);
-    await tester.pumpAndSettle();
+    expect(await model.unlock(), GhostAppLockUnlock.failed);
 
-    expect(
-      find.text('Authentication failed or was cancelled. Try again.'),
-      findsOneWidget,
-    );
-    expect(device.prompts, 1);
-
-    device.accept = true;
-    await tester.tap(find.text('Unlock'));
-    await tester.pumpAndSettle();
-    expect(device.prompts, 2);
-    expect(find.text(_title), findsNothing);
-  });
-
-  testWidgets('a prompt that fails some other way leaves Unlock working', (
-    tester,
-  ) async {
-    device.failWith = StateError('channel lost');
-    await pump(tester);
-    await tester.pumpAndSettle();
-
-    // ghost_keystore's AppLock turns any failure into a refusal, so the
-    // screen says the prompt failed rather than waiting on it.
-    expect(
-      find.text('Authentication failed or was cancelled. Try again.'),
-      findsOneWidget,
-    );
-
-    device.failWith = null;
-    await tester.tap(find.text('Unlock'));
-    await tester.pumpAndSettle();
-    expect(device.prompts, 2);
-    expect(find.text(_title), findsNothing);
-  });
-
-  testWidgets('a device with no authentication says what to set up', (
-    tester,
-  ) async {
     device.available = false;
-    await pump(tester);
-    await tester.pumpAndSettle();
+    expect(await model.unlock(), GhostAppLockUnlock.unavailable);
 
-    expect(
-      find.text(
-        'This device has no passcode, PIN or biometrics to ask for. Set '
-        'one up, then try again.',
-      ),
-      findsOneWidget,
-    );
-    expect(device.prompts, 0);
+    device.available = true;
+    device.accept = true;
+    expect(await model.unlock(), GhostAppLockUnlock.unlocked);
+    expect(model.locked, isFalse);
   });
 
-  testWidgets('a new controller asks by itself again', (tester) async {
+  Widget app(AppLockController lock) => MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    builder: (context, child) => GhostAppLockGate(
+      model: AppLockGateModel(lock),
+      strings: GhostAppLockStrings(
+        title: AppLocalizations.of(context).appLockTitle,
+        detail: AppLocalizations.of(context).appLockDetail,
+        unlock: AppLocalizations.of(context).appLockUnlock,
+        failed: AppLocalizations.of(context).appLockFailed,
+        unavailable: AppLocalizations.of(context).appLockUnavailable,
+      ),
+      child: child!,
+    ),
+    home: const Scaffold(body: Text('content')),
+  );
+
+  testWidgets('the gate over the controller asks by itself and unlocks', (
+    tester,
+  ) async {
+    final lock = controller();
+    addTearDown(lock.dispose);
+    device.hold = Completer<void>();
+    await tester.pumpWidget(app(lock));
+    await tester.pump();
+
+    expect(find.text('Klabautermann is locked'), findsOneWidget);
+    expect(device.prompts, 1);
+
+    device.hold!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Klabautermann is locked'), findsNothing);
+  });
+
+  testWidgets('a rebuild over the same controller does not ask again', (
+    tester,
+  ) async {
+    final lock = controller();
+    addTearDown(lock.dispose);
     device.accept = false;
-    await pump(tester);
+    await tester.pumpWidget(app(lock));
+    await tester.pumpAndSettle();
+    expect(device.prompts, 1);
+    expect(
+      find.text('Authentication failed or was cancelled. Try again.'),
+      findsOneWidget,
+    );
+
+    // A new wrapper over the same controller is the same lock: the failed
+    // outcome stays and the gate does not ask again on its own.
+    await tester.pumpWidget(app(lock));
     await tester.pumpAndSettle();
     expect(device.prompts, 1);
 
     device.accept = true;
-    await pump(tester);
+    await tester.tap(find.text('Unlock'));
     await tester.pumpAndSettle();
     expect(device.prompts, 2);
-    expect(find.text(_title), findsNothing);
-  });
-
-  testWidgets('back from the background past the timeout, the lock screen '
-      'returns and asks again; sooner, it does not', (tester) async {
-    await pump(tester);
-    await tester.pumpAndSettle();
-    expect(find.text(_title), findsNothing);
-
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    elapsed += const Duration(minutes: 1);
-    wall = wall.add(const Duration(minutes: 1));
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpAndSettle();
-    expect(find.text(_title), findsNothing);
-    expect(device.prompts, 1);
-
-    device.hold = Completer<void>();
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    elapsed += appLockBackgroundTimeout;
-    wall = wall.add(appLockBackgroundTimeout);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text(_title), findsOneWidget);
-    expect(locks, 1);
-    expect(device.prompts, 2);
-    device.hold!.complete();
-    await tester.pumpAndSettle();
-    expect(find.text(_title), findsNothing);
+    expect(find.text('Klabautermann is locked'), findsNothing);
   });
 }

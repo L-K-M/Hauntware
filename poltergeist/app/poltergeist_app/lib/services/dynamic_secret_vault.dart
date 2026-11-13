@@ -1,3 +1,5 @@
+import 'package:ghost_keystore/ghost_keystore.dart'
+    show AppLockException, CredentialReadGuard;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'secure_master_key.dart';
@@ -18,6 +20,7 @@ final class DynamicSecretVault extends SecretVault {
     VaultStore store,
     this._current, {
     void Function(Object error, StackTrace stackTrace)? onError,
+    this._readGuard,
   })  : // Keep the reporter private while allowing injection.
         // ignore: prefer_initializing_formals
         _onError = onError,
@@ -25,11 +28,14 @@ final class DynamicSecretVault extends SecretVault {
 
   final Future<SecretVault?> Function() _current;
   final void Function(Object error, StackTrace stackTrace)? _onError;
+  final CredentialReadGuard? _readGuard;
 
   Future<SecretVault> _vault() async {
     final SecretVault? vault;
     try {
       vault = await _current();
+    } on AppLockException {
+      rethrow;
     } on Object catch (error, stackTrace) {
       try {
         _onError?.call(error, stackTrace);
@@ -42,13 +48,21 @@ final class DynamicSecretVault extends SecretVault {
     return vault;
   }
 
-  @override
-  Future<Secret?> getSecret(String id) async =>
-      (await _vault()).getSecret(id);
+  // Keep the result behind the generation check too: authorization can
+  // expire while the blob store or decryption is still in flight.
+  Future<T> _read<T>(Future<T> Function(SecretVault) operation) {
+    Future<T> run() async => operation(await _vault());
+    final guard = _readGuard;
+    return guard == null ? run() : guard(run);
+  }
 
   @override
-  Future<Secret?> readableSecret(String id) async =>
-      (await _vault()).readableSecret(id);
+  Future<Secret?> getSecret(String id) =>
+      _read((vault) => vault.getSecret(id));
+
+  @override
+  Future<Secret?> readableSecret(String id) =>
+      _read((vault) => vault.readableSecret(id));
 
   @override
   Future<void> putSecret(Secret secret) async =>

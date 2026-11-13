@@ -1088,10 +1088,18 @@
   "@paneRowSemanticsFlagged": {
     "description": "Accessible label of a listing row whose decoded name carries U+FFFD (02 §13's flagged-name rule: the row's disabled reason is part of the node).",
     "placeholders": {
-      "name": {"type": "String"},
-      "kind": {"type": "String"},
-      "size": {"type": "String"},
-      "modified": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      },
+      "modified": {
+        "type": "String"
+      }
     }
   },
   "paneFlaggedNameTooltip": "Name is not valid UTF-8 — shown approximately",
@@ -1596,8 +1604,12 @@
   "@paneNoticeExpandFailed": {
     "description": "Transient notice strip (02 §2.5): a folder the user opened in place with its disclosure triangle could not be listed, so it closed again. {name} is the folder's name, {reason} the listing error's sentence.",
     "placeholders": {
-      "name": {"type": "String"},
-      "reason": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
     }
   },
   "paneRowExpand": "Expand",
@@ -2528,23 +2540,41 @@
     "description": "Note under the built-in editor's text size slider: the editor's View menu zoom commands set the same size."
   },
   "editorFontPickerTitle": "Choose a font",
-  "@editorFontPickerTitle": {"description": "Shared monospace font picker title"},
+  "@editorFontPickerTitle": {
+    "description": "Shared monospace font picker title"
+  },
   "editorFontPickerSearch": "Search fonts",
-  "@editorFontPickerSearch": {"description": "Font search field hint"},
+  "@editorFontPickerSearch": {
+    "description": "Font search field hint"
+  },
   "editorFontPickerIncluded": "Included fonts",
-  "@editorFontPickerIncluded": {"description": "Bundled font section heading"},
+  "@editorFontPickerIncluded": {
+    "description": "Bundled font section heading"
+  },
   "editorFontPickerInstalled": "Installed fonts",
-  "@editorFontPickerInstalled": {"description": "Installed font section heading"},
+  "@editorFontPickerInstalled": {
+    "description": "Installed font section heading"
+  },
   "editorFontPickerEmpty": "No fonts match your search.",
-  "@editorFontPickerEmpty": {"description": "Empty font search result"},
+  "@editorFontPickerEmpty": {
+    "description": "Empty font search result"
+  },
   "editorFontPickerUse": "Use font",
-  "@editorFontPickerUse": {"description": "Confirm the previewed font and ligatures"},
+  "@editorFontPickerUse": {
+    "description": "Confirm the previewed font and ligatures"
+  },
   "editorFontPickerDefault": "default",
-  "@editorFontPickerDefault": {"description": "Default font choice suffix"},
+  "@editorFontPickerDefault": {
+    "description": "Default font choice suffix"
+  },
   "editorFontPickerMonospace": "Monospace only",
-  "@editorFontPickerMonospace": {"description": "Installed font filter label"},
+  "@editorFontPickerMonospace": {
+    "description": "Installed font filter label"
+  },
   "editorFontPickerNoLigatures": "This font has no programming ligatures.",
-  "@editorFontPickerNoLigatures": {"description": "Notice for a font without coding ligatures"},
+  "@editorFontPickerNoLigatures": {
+    "description": "Notice for a font without coding ligatures"
+  },
   "editorFontLabel": "Font",
   "@editorFontLabel": {
     "description": "Label beside the built-in editor's font menu in Settings → Appearance."
@@ -6558,8 +6588,12 @@
   "@previewDownloadConfirm": {
     "description": "The §8 large-download confirmation for a known over-threshold remote preview (06 §5.2/§5.3).",
     "placeholders": {
-      "size": {"type": "String"},
-      "name": {"type": "String"}
+      "size": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
     }
   },
   "previewDownloadingLabel": "Downloading preview",
@@ -6570,23 +6604,33 @@
   "@previewDownloadProgress": {
     "description": "Preview download progress line over a known total (06 §5.2).",
     "placeholders": {
-      "transferred": {"type": "String"},
-      "total": {"type": "String"}
+      "transferred": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
     }
   },
   "previewDownloadingNamed": "Downloading {name} — {progress}",
   "@previewDownloadingNamed": {
     "description": "The Quick Look overlay's in-flight line: the item's name plus its progress (06 §5.1).",
     "placeholders": {
-      "name": {"type": "String"},
-      "progress": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "progress": {
+        "type": "String"
+      }
     }
   },
   "previewGatePrompt": "{transferred} downloaded so far. Keep going?",
   "@previewGatePrompt": {
     "description": "The unknown-size gate card: a remote preview stream parked at the large-download threshold asks before continuing (06 §5.3).",
     "placeholders": {
-      "transferred": {"type": "String"}
+      "transferred": {
+        "type": "String"
+      }
     }
   },
   "previewKeepDownloadingLabel": "Keep downloading",
@@ -6637,40 +6681,60 @@
   "@previewImageLabel": {
     "description": "Accessibility label of the rendered image preview.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "previewImageDimensions": "{width} × {height} pixels",
   "@previewImageDimensions": {
     "description": "The caption under an image preview — the decoded frame's real dimensions (06 §5.2).",
     "placeholders": {
-      "width": {"type": "int"},
-      "height": {"type": "int"}
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      }
     }
   },
   "previewSelectionSummary": "{count, plural, =1{1 item} other{{count} items}} · {size}{unknown, plural, =0{} other{ · {unknown} size unknown}}",
   "@previewSelectionSummary": {
     "description": "The panel header's multi-selection line (06 §5.2): count, the summed size of the size-known entries, and an explicit unknown-size count — never a silently incomplete total.",
     "placeholders": {
-      "count": {"type": "int"},
-      "size": {"type": "String"},
-      "unknown": {"type": "int"}
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      },
+      "unknown": {
+        "type": "int"
+      }
     }
   },
   "previewPdfPageRange": "Page 1–{shown} of {total}",
   "@previewPdfPageRange": {
     "description": "The PDF preview's header (06 §5.2): shown is min(20, total) — a 5-page PDF reads 'Page 1–5 of 5', never '1–20 of 5'.",
     "placeholders": {
-      "shown": {"type": "int"},
-      "total": {"type": "int"}
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "previewPdfPageLabel": "Page {page} of {total}",
   "@previewPdfPageLabel": {
     "description": "Accessibility label of one rasterized PDF page in the preview rail.",
     "placeholders": {
-      "page": {"type": "int"},
-      "total": {"type": "int"}
+      "page": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "previewPdfFailed": "Couldn't render this PDF.",
@@ -6693,7 +6757,9 @@
   "@previewCacheCleared": {
     "description": "Toast after Clear Preview Cache — reports bytes ACTUALLY reclaimed, never the pre-clear total (06 §8).",
     "placeholders": {
-      "mib": {"type": "int"}
+      "mib": {
+        "type": "int"
+      }
     }
   },
   "previewThresholdLabel": "Confirm downloads larger than",
@@ -6708,15 +6774,21 @@
   "@syncTabTitle": {
     "description": "Plan-view tab title (05 §7): the pair's name.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "syncScanning": "Scanning… left {leftCount} entries · right {rightCount} entries",
   "@syncScanning": {
     "description": "Live scan progress line (05 §3's verbatim shape).",
     "placeholders": {
-      "leftCount": {"type": "int"},
-      "rightCount": {"type": "int"}
+      "leftCount": {
+        "type": "int"
+      },
+      "rightCount": {
+        "type": "int"
+      }
     }
   },
   "syncCancel": "Cancel",
@@ -6751,29 +6823,39 @@
   "@syncHeaderCopyNew": {
     "description": "Plan header clause (05 §7): new-file copies landing on the destination.",
     "placeholders": {
-      "count": {"type": "int"},
-      "bytes": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "bytes": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderCreateFolders": "{count, plural, =1{create {count} folder} other{create {count} folders}}",
   "@syncHeaderCreateFolders": {
     "description": "Plan header clause (05 §7): directory creations landing on the destination.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncHeaderUpdateFiles": "update {count}",
   "@syncHeaderUpdateFiles": {
     "description": "Plan header clause (05 §7): overwrite updates landing on the destination — the count renders bare per the spec's sentence pattern.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncHeaderOnDestination": "on {destination}.",
   "@syncHeaderOnDestination": {
     "description": "Plan header tail (05 §7): the destination phrase closing the copy sentence — {destination} is '{favoriteLabel}:{path}', a shortened local path, or 'both sides' for Additive.",
     "placeholders": {
-      "destination": {"type": "String"}
+      "destination": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderBothSides": "both sides",
@@ -6784,8 +6866,12 @@
   "@syncHeaderCreateOnly": {
     "description": "Plan header sentence for a dirs-only plan (05 §7) — a plan with only directory creations must never show an empty headline.",
     "placeholders": {
-      "count": {"type": "int"},
-      "destination": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "destination": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderNothingDeleted": "Nothing will be deleted.",
@@ -6796,49 +6882,75 @@
   "@syncHeaderDeleteTrash": {
     "description": "Red plan-header clause (05 §7): delete-phase files headed for the side's trash root.",
     "placeholders": {
-      "count": {"type": "int"},
-      "side": {"type": "String"},
-      "trashLocation": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      },
+      "trashLocation": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderDeletePermanent": "{count, plural, =1{Delete {count} file on {side} permanently.} other{Delete {count} files on {side} permanently.}}",
   "@syncHeaderDeletePermanent": {
     "description": "Red plan-header clause (05 §7): delete-phase files under the permanent-deletion opt-in.",
     "placeholders": {
-      "count": {"type": "int"},
-      "side": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderReplaceTrash": "{count, plural, =1{Replace {count} file of a different kind on {side} (previous version moved to trash at {trashLocation}).} other{Replace {count} files of a different kind on {side} (previous versions moved to trash at {trashLocation}).}}",
   "@syncHeaderReplaceTrash": {
     "description": "Red plan-header clause (05 §7): kind-change pre-deletes whose removed versions go to trash.",
     "placeholders": {
-      "count": {"type": "int"},
-      "side": {"type": "String"},
-      "trashLocation": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      },
+      "trashLocation": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderReplacePermanent": "{count, plural, =1{Replace {count} file of a different kind on {side} (previous version deleted permanently).} other{Replace {count} files of a different kind on {side} (previous versions deleted permanently).}}",
   "@syncHeaderReplacePermanent": {
     "description": "Red plan-header clause (05 §7): kind-change pre-deletes under the permanent-deletion opt-in.",
     "placeholders": {
-      "count": {"type": "int"},
-      "side": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderRemoveEmptyFolders": "{count, plural, =1{Remove {count} empty folder on {side}.} other{Remove {count} empty folders on {side}.}}",
   "@syncHeaderRemoveEmptyFolders": {
     "description": "Plan-header tail (05 §8 rail 3): a plan whose only removals are zero-count directory cleanups never shows the green 'nothing deleted' sentence.",
     "placeholders": {
-      "count": {"type": "int"},
-      "side": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      }
     }
   },
   "syncHeaderConflicts": "{count, plural, =1{{count} conflict needs a decision.} other{{count} conflicts need a decision.}}",
   "@syncHeaderConflicts": {
     "description": "Amber plan-header clause (05 §7): unresolved conflict rows.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncHeaderNothingToDo": "Both sides match. Nothing to do.",
@@ -6853,49 +6965,63 @@
   "@syncWarningsTitle": {
     "description": "Warnings-strip header in the plan view (05 §7).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncFilterAll": "All ({count})",
   "@syncFilterAll": {
     "description": "Filter chip: every plan item (05 §7).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncFilterNew": "New ({count})",
   "@syncFilterNew": {
     "description": "Filter chip: create actions (05 §7).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncFilterUpdates": "Updates ({count})",
   "@syncFilterUpdates": {
     "description": "Filter chip: overwrite updates (05 §7).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncFilterDeletes": "Deletes ({count})",
   "@syncFilterDeletes": {
     "description": "Filter chip: deletions including per-file kind-change pre-delete tolls (05 §7).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncFilterConflicts": "Conflicts ({count})",
   "@syncFilterConflicts": {
     "description": "Filter chip: rows needing a decision (05 §7).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncFilterSkipped": "Skipped ({count})",
   "@syncFilterSkipped": {
     "description": "Filter chip: equal, excluded, and user-skipped rows (05 §7).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncFilterFieldHint": "Filter items",
@@ -6914,16 +7040,24 @@
   "@syncReasonNewerHere": {
     "description": "Plan row reason (05 §7): one side's copy is newer — both ages render like '2 min ago'.",
     "placeholders": {
-      "sourceAge": {"type": "String"},
-      "destinationAge": {"type": "String"}
+      "sourceAge": {
+        "type": "String"
+      },
+      "destinationAge": {
+        "type": "String"
+      }
     }
   },
   "syncReasonSizesDiffer": "sizes differ ({leftSize} vs {rightSize})",
   "@syncReasonSizesDiffer": {
     "description": "Plan row reason (05 §7): same name, different sizes.",
     "placeholders": {
-      "leftSize": {"type": "String"},
-      "rightSize": {"type": "String"}
+      "leftSize": {
+        "type": "String"
+      },
+      "rightSize": {
+        "type": "String"
+      }
     }
   },
   "syncReasonContentsDiffer": "contents differ",
@@ -6938,8 +7072,12 @@
   "@syncReasonTypeDiffers": {
     "description": "Plan row reason (05 §7): file vs folder vs link at one path — kind labels like 'file here, folder there'.",
     "placeholders": {
-      "leftKind": {"type": "String"},
-      "rightKind": {"type": "String"}
+      "leftKind": {
+        "type": "String"
+      },
+      "rightKind": {
+        "type": "String"
+      }
     }
   },
   "syncReasonExcluded": "excluded by rule",
@@ -6990,7 +7128,9 @@
   "@syncCompareTitle": {
     "description": "Title of the read-only sync-pair comparison (06 §6).",
     "placeholders": {
-      "path": {"type": "String"}
+      "path": {
+        "type": "String"
+      }
     }
   },
   "syncCompareSelected": "Compare Selected Item",
@@ -7009,8 +7149,12 @@
   "@syncCompareMetadata": {
     "description": "Size and modification time below a compare-side path (06 §6).",
     "placeholders": {
-      "size": {"type": "String"},
-      "modified": {"type": "String"}
+      "size": {
+        "type": "String"
+      },
+      "modified": {
+        "type": "String"
+      }
     }
   },
   "syncCompareLoading": "Loading…",
@@ -7049,8 +7193,12 @@
   "@syncCompareLineEndingsDiffer": {
     "description": "Notice when the compared text uses different line endings (06 §6).",
     "placeholders": {
-      "left": {"type": "String"},
-      "right": {"type": "String"}
+      "left": {
+        "type": "String"
+      },
+      "right": {
+        "type": "String"
+      }
     }
   },
   "syncCompareBomDiffers": "BOM differs",
@@ -7233,7 +7381,9 @@
   "@syncOverrideSkippedTypeDiffers": {
     "description": "Bulk-override result line (05 §7): in no-delete modes a bulk copy skips typeDiffers rows, reported never silent.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncResolveConflictsLabel": "Resolve conflicts:",
@@ -7264,28 +7414,36 @@
   "@syncRunCopyFiles": {
     "description": "Run button with a copies-only consequence (05 §7's 'Copy 15 Files').",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncRunCopyPart": "{count, plural, =1{Copy 1} other{Copy {count}}}",
   "@syncRunCopyPart": {
     "description": "Run-button copy clause inside a multi-verb label (05 §7's 'Copy 12, Delete 5').",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncRunCreateFolders": "{count, plural, =1{Create {count} Folder} other{Create {count} Folders}}",
   "@syncRunCreateFolders": {
     "description": "Run-button mkdir clause (05 §7) — the dirs-only consequence.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncRunDeletePart": "{count, plural, =1{Delete 1} other{Delete {count}}}",
   "@syncRunDeletePart": {
     "description": "Run-button delete clause inside a multi-verb label (05 §7's 'Copy 12, Delete 5').",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncRunNothingToDo": "Nothing to Do",
@@ -7296,8 +7454,12 @@
   "@syncHeavySuggestion": {
     "description": "First-run suggestion chip (05 §7): one known heavy directory contributes over half the plan.",
     "placeholders": {
-      "name": {"type": "String"},
-      "count": {"type": "int"}
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncDeleteConfirmTitle": "Confirm deletions",
@@ -7308,19 +7470,33 @@
   "@syncDeleteConfirmFraction": {
     "description": "Typed-confirmation body (05 §8 rail 3): the fraction clause tripped — {pct} renders the word 'half' at the 0.5 default and a numeric percentage otherwise.",
     "placeholders": {
-      "count": {"type": "int"},
-      "total": {"type": "int"},
-      "side": {"type": "String"},
-      "pct": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
     }
   },
   "syncDeleteConfirmFloor": "This will delete {count} of {total} files on {side} — 90 % or more of that side. Type DELETE to continue.",
   "@syncDeleteConfirmFloor": {
     "description": "Typed-confirmation body (05 §8 rail 3): the ≥90 % floor clause tripped — inclusive wording, never 'more than 90 %'.",
     "placeholders": {
-      "count": {"type": "int"},
-      "total": {"type": "int"},
-      "side": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      }
     }
   },
   "syncDeleteConfirmFieldHint": "DELETE",
@@ -7343,9 +7519,15 @@
   "@syncMaxDeleteBody": {
     "description": "maxDelete refusal body (05 §8 rail 4): explains and points at the pair's rules — never an override button.",
     "placeholders": {
-      "count": {"type": "int"},
-      "side": {"type": "String"},
-      "cap": {"type": "int"}
+      "count": {
+        "type": "int"
+      },
+      "side": {
+        "type": "String"
+      },
+      "cap": {
+        "type": "int"
+      }
     }
   },
   "syncMaxDeleteSaveAdjust": "Save as Favorite & Adjust Rules…",
@@ -7372,22 +7554,30 @@
   "@syncTrashNotice": {
     "description": "Persistent plan notice for aged sync trash. File counts are journal-derived; run counts include unjournaled directories.",
     "placeholders": {
-      "files": {"type": "int"},
-      "runs": {"type": "int"}
+      "files": {
+        "type": "int"
+      },
+      "runs": {
+        "type": "int"
+      }
     }
   },
   "syncTrashUnjournaled": "{count, plural, =1{Plus 1 unjournaled run.} other{Plus {count} unjournaled runs.}}",
   "@syncTrashUnjournaled": {
     "description": "Trash notice and confirmation tail for run directories whose file count cannot be derived locally.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncTrashAsOf": "As of {time}; reconnect to delete.",
   "@syncTrashAsOf": {
     "description": "Stale trash-cache label. Its purge action is disabled because deletion requires a live listing.",
     "placeholders": {
-      "time": {"type": "String"}
+      "time": {
+        "type": "String"
+      }
     }
   },
   "syncTrashAsOfRecent": "As of less than an hour ago; reconnect to delete.",
@@ -7398,14 +7588,18 @@
   "@syncTrashAsOfHours": {
     "description": "Stale trash-cache label for a listing less than one day old.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncTrashAsOfDays": "{count, plural, =1{As of 1 day ago; reconnect to delete.} other{As of {count} days ago; reconnect to delete.}}",
   "@syncTrashAsOfDays": {
     "description": "Stale trash-cache label for a listing less than one month old.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncTrashDelete": "Delete…",
@@ -7420,8 +7614,12 @@
   "@syncTrashPurgeSummary": {
     "description": "Purge confirmation count. Journal-less runs are disclosed separately instead of inventing file counts.",
     "placeholders": {
-      "files": {"type": "int"},
-      "runs": {"type": "int"}
+      "files": {
+        "type": "int"
+      },
+      "runs": {
+        "type": "int"
+      }
     }
   },
   "syncTrashPurgeScope": "Sync trash is shared by host and root.",
@@ -7436,7 +7634,9 @@
   "@syncTrashPurgeForeign": {
     "description": "Explicit-purge warning for foreign device-prefix run directories.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "syncTrashPurgeForfeit": "These files can no longer be restored.",
@@ -7455,15 +7655,21 @@
   "@syncTrashPurgeResult": {
     "description": "Toast after a sync-trash purge, including per-run failures.",
     "placeholders": {
-      "purged": {"type": "int"},
-      "failed": {"type": "int"}
+      "purged": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
     }
   },
   "syncTrashPurgeCancelled": "Purge cancelled after {purged, plural, =1{1 run} other{{purged} runs}}.",
   "@syncTrashPurgeCancelled": {
     "description": "Toast after cancelling a trash purge with a partial result.",
     "placeholders": {
-      "purged": {"type": "int"}
+      "purged": {
+        "type": "int"
+      }
     }
   },
   "syncTrashPurgeActive": "Wait for active syncs to finish, then try again.",
@@ -7474,7 +7680,9 @@
   "@syncTrashPurgeFailed": {
     "description": "Feedback when the purge fails before it can return a per-run report.",
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "syncTrashEndpointChanged": "The sync endpoint changed while sync trash was being resolved.",
@@ -7537,7 +7745,9 @@
   "@syncRestoreRecoveryBlocked": {
     "description": "Fail-closed plan-view explanation when interrupted recovery cannot be verified.",
     "placeholders": {
-      "path": {"type": "String"}
+      "path": {
+        "type": "String"
+      }
     }
   },
   "syncRestoreRecoveryAction": "Finish Restore…",
@@ -7552,8 +7762,12 @@
   "@syncRestoreRecoverySummary": {
     "description": "Recovery confirmation impact: original items restored and run-created files removed.",
     "placeholders": {
-      "restored": {"type": "int"},
-      "removedCreatedFiles": {"type": "int"}
+      "restored": {
+        "type": "int"
+      },
+      "removedCreatedFiles": {
+        "type": "int"
+      }
     }
   },
   "syncRestoreDialogTitle": "Restore Trashed Files",
@@ -7564,8 +7778,12 @@
   "@syncRestoreSummary": {
     "description": "Restore dialog impact: original items restored and run-created files removed by rule-4 recovery (05 §8 rail 9).",
     "placeholders": {
-      "restored": {"type": "int"},
-      "removedCreatedFiles": {"type": "int"}
+      "restored": {
+        "type": "int"
+      },
+      "removedCreatedFiles": {
+        "type": "int"
+      }
     }
   },
   "syncRestoreButton": "Restore",
@@ -7576,15 +7794,21 @@
   "@syncRestoreResult": {
     "description": "Post-restore summary line: how many files or directories came back and how many were skipped.",
     "placeholders": {
-      "restored": {"type": "int"},
-      "skipped": {"type": "int"}
+      "restored": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
     }
   },
   "syncRestoreFailed": "Restore stopped. Check the connection and file state, then retry. Error: {message}",
   "@syncRestoreFailed": {
     "description": "Actionable toast when Restore Trashed Files stops on a remote filesystem failure; the restore action remains available.",
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "syncDirectionLeftToRight": "Left to right",
@@ -7711,8 +7935,12 @@
   "@syncDocrootWarningBody": {
     "description": "Docroot trash warning body. Names the affected side and sync root.",
     "placeholders": {
-      "side": {"type": "String"},
-      "root": {"type": "String"}
+      "side": {
+        "type": "String"
+      },
+      "root": {
+        "type": "String"
+      }
     }
   },
   "syncDocrootWarningUseSaferPath": "Use safer path",
@@ -7723,7 +7951,9 @@
   "@syncDocrootWarningUseSaferPathForSide": {
     "description": "Accessible name for a docroot warning action. Distinguishes the affected side when both sides warn.",
     "placeholders": {
-      "side": {"type": "String"}
+      "side": {
+        "type": "String"
+      }
     }
   },
   "syncEditorPathHint": "/path",
@@ -7778,8 +8008,12 @@
   "@syncPairLabel": {
     "description": "A sync pair's display name — each leg's endpoint label joined by the §7 direction glyph (tab title and favorite name).",
     "placeholders": {
-      "left": {"type": "String"},
-      "right": {"type": "String"}
+      "left": {
+        "type": "String"
+      },
+      "right": {
+        "type": "String"
+      }
     }
   },
   "syncSynchronizePanes": "Synchronize…",
@@ -7794,7 +8028,9 @@
   "@syncScanFailed": {
     "description": "Plan-view error sentence when scanning or diffing fails before a plan exists.",
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "syncRemoteUnavailable": "Remote sync pairs aren't available yet — remote filesystems arrive with the engine-protocol transfer verbs.",
@@ -7805,16 +8041,24 @@
   "@syncRunFailed": {
     "description": "Plan-view run-error sentence: the executor aborted before finishing.",
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "syncSummaryCounts": "{done, plural, =1{{done} done} other{{done} done}} · {failed, plural, =1{{failed} failed} other{{failed} failed}} · {skipped, plural, =1{{skipped} skipped} other{{skipped} skipped}}",
   "@syncSummaryCounts": {
     "description": "Post-run summary counts in the plan view's action bar (05 §7).",
     "placeholders": {
-      "done": {"type": "int"},
-      "failed": {"type": "int"},
-      "skipped": {"type": "int"}
+      "done": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
     }
   },
   "syncPairLocalLabel": "local",
@@ -7825,7 +8069,9 @@
   "@syncSavedFavoriteToast": {
     "description": "Toast after the plan view's Save as Favorite persists the pair as a savedSync bookmark (05 §7).",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "quickOpenCommandLabel": "Quick Open…",
@@ -7864,23 +8110,33 @@
   "@quickOpenNoMatches": {
     "description": "The palette's filtered-empty state (02 §8.4) — the field's literal query.",
     "placeholders": {
-      "query": {"type": "String"}
+      "query": {
+        "type": "String"
+      }
     }
   },
   "quickOpenRowSemantics": "{label}, {section}",
   "@quickOpenRowSemantics": {
     "description": "Accessibility label of one palette row: the row's title and its section name.",
     "placeholders": {
-      "label": {"type": "String"},
-      "section": {"type": "String"}
+      "label": {
+        "type": "String"
+      },
+      "section": {
+        "type": "String"
+      }
     }
   },
   "quickOpenMenuPath": "{menu} ▸ {label}",
   "@quickOpenMenuPath": {
     "description": "A command row's subtitle: the menu path the command lives under (02 §8.4's 'Commands ▸ name' shape).",
     "placeholders": {
-      "menu": {"type": "String"},
-      "label": {"type": "String"}
+      "menu": {
+        "type": "String"
+      },
+      "label": {
+        "type": "String"
+      }
     }
   },
   "quickOpenRecentUnavailable": "This server is no longer available",
@@ -9059,8 +9315,12 @@
   "@compareFilesTitle": {
     "description": "Title of the read-only comparison opened by Compare Files when the two files have different names.",
     "placeholders": {
-      "left": {"type": "String"},
-      "right": {"type": "String"}
+      "left": {
+        "type": "String"
+      },
+      "right": {
+        "type": "String"
+      }
     }
   },
   "fileBatchRenameLabel": "Rename Items…",
@@ -9087,7 +9347,9 @@
   "@batchRenameTitle": {
     "description": "Rename Items dialog title; count is the number of selected items.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "batchRenameModeLabel": "Rename mode",
@@ -9158,7 +9420,9 @@
   "@batchRenameConfirm": {
     "description": "Rename Items confirm button; count is the number of items that will change.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "batchRenameCancel": "Cancel",
@@ -9181,15 +9445,21 @@
   "@batchRenameProgress": {
     "description": "Rename Items progress line while running.",
     "placeholders": {
-      "done": {"type": "int"},
-      "total": {"type": "int"}
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "batchRenameSummaryReady": "{count, plural, =1{1 item will be renamed.} other{{count} items will be renamed.}}",
   "@batchRenameSummaryReady": {
     "description": "Rename Items summary when the plan can run.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "batchRenameSummaryNothing": "No names change.",
@@ -9200,21 +9470,27 @@
   "@batchRenameSummaryBlocked": {
     "description": "Rename Items summary while rows block the run.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "batchRenameSummaryUnchanged": "{count, plural, =1{1 item unchanged} other{{count} items unchanged}}",
   "@batchRenameSummaryUnchanged": {
     "description": "Rename Items summary detail: rows whose name stays the same.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "batchRenameSummaryLeftOut": "{count, plural, =1{1 item left out: its name isn't valid UTF-8.} other{{count} items left out: their names aren't valid UTF-8.}}",
   "@batchRenameSummaryLeftOut": {
     "description": "Rename Items summary detail: flagged names that are never renamed (02 §13).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "batchRenameChanged": "The folder changed since the preview. Review the updated names.",
@@ -9229,7 +9505,9 @@
   "@batchRenameFolderCaption": {
     "description": "Rename Items preview: the folder of a row when the selection spans several folders.",
     "placeholders": {
-      "folder": {"type": "String"}
+      "folder": {
+        "type": "String"
+      }
     }
   },
   "batchRenameRowUnchanged": "No change",
@@ -9256,7 +9534,9 @@
   "@batchRenameRowExists": {
     "description": "Rename Items row status: the new name is taken by an item that keeps its name.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "batchRenameRowCycle": "These items would swap names. Rename them in two steps.",
@@ -9271,7 +9551,9 @@
   "@batchRenameRowSkippedBlocked": {
     "description": "Rename Items row outcome: skipped because the item whose name it takes did not rename.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "batchRenameRowNotAttempted": "Not attempted",
@@ -9286,48 +9568,72 @@
   "@batchRenameRowSemantics": {
     "description": "Screen-reader label of a Rename Items preview row.",
     "placeholders": {
-      "oldName": {"type": "String"},
-      "newName": {"type": "String"}
+      "oldName": {
+        "type": "String"
+      },
+      "newName": {
+        "type": "String"
+      }
     }
   },
   "batchRenameResultSome": "{total, plural, =1{Renamed {renamed} of 1 item.} other{Renamed {renamed} of {total} items.}}",
   "@batchRenameResultSome": {
     "description": "Rename Items result: the run finished but not every item renamed.",
     "placeholders": {
-      "renamed": {"type": "int"},
-      "total": {"type": "int"}
+      "renamed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "batchRenameResultStopped": "{total, plural, =1{Stopped after renaming {renamed} of 1 item.} other{Stopped after renaming {renamed} of {total} items.}}",
   "@batchRenameResultStopped": {
     "description": "Rename Items result: Stop ended the run.",
     "placeholders": {
-      "renamed": {"type": "int"},
-      "total": {"type": "int"}
+      "renamed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "batchRenameResultConnectionLost": "{total, plural, =1{The connection was lost after renaming {renamed} of 1 item. Refresh to check items marked unknown.} other{The connection was lost after renaming {renamed} of {total} items. Refresh to check items marked unknown.}}",
   "@batchRenameResultConnectionLost": {
     "description": "Rename Items result: the connection was lost or a request timed out.",
     "placeholders": {
-      "renamed": {"type": "int"},
-      "total": {"type": "int"}
+      "renamed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "batchRenameResultPaneChanged": "{total, plural, =1{This tab left the folder or reconnected after renaming {renamed} of 1 item.} other{This tab left the folder or reconnected after renaming {renamed} of {total} items.}}",
   "@batchRenameResultPaneChanged": {
     "description": "Rename Items result: the tab navigated away or rebound mid-run.",
     "placeholders": {
-      "renamed": {"type": "int"},
-      "total": {"type": "int"}
+      "renamed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "batchRenameResultFault": "{total, plural, =1{Something went wrong after renaming {renamed} of 1 item.} other{Something went wrong after renaming {renamed} of {total} items.}}",
   "@batchRenameResultFault": {
     "description": "Rename Items result: an unexpected error ended the run.",
     "placeholders": {
-      "renamed": {"type": "int"},
-      "total": {"type": "int"}
+      "renamed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "commandDisabledLocalArchive": "Archives are available for local files only.",
@@ -10953,5 +11259,297 @@
         "type": "int"
       }
     }
+  },
+  "appLockTitle": "Poltergeist is locked",
+  "@appLockTitle": {
+    "description": "App lock screen (cred-05): its heading, shown over the whole app while the app lock is engaged."
+  },
+  "appLockDetail": "Unlock with this device's passcode, PIN or biometrics. Connections already open keep running.",
+  "@appLockDetail": {
+    "description": "App lock screen: what unlocking asks for, and that open connections are not closed by the lock."
+  },
+  "appLockUnlock": "Unlock",
+  "@appLockUnlock": {
+    "description": "App lock screen: the button that asks for device authentication again."
+  },
+  "appLockFailed": "Authentication failed or was cancelled. Try again.",
+  "@appLockFailed": {
+    "description": "App lock screen: the last device authentication was rejected or dismissed."
+  },
+  "appLockUnavailable": "This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.",
+  "@appLockUnavailable": {
+    "description": "App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet."
+  },
+  "appLockReason": "Unlock Poltergeist",
+  "@appLockReason": {
+    "description": "The reason line the operating system's authentication prompt shows when the app lock asks for it."
+  },
+  "settingsAppLockTitle": "App lock",
+  "@settingsAppLockTitle": {
+    "description": "Settings > General: the heading over the app lock switch (cred-05)."
+  },
+  "settingsAppLock": "Require device authentication",
+  "@settingsAppLock": {
+    "description": "Settings > General: the app lock switch."
+  },
+  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Poltergeist opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background.",
+  "@settingsAppLockDetail": {
+    "description": "Settings > General: what the app lock switch does.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAppLockUnsupported": "This platform has no device authentication Poltergeist can ask for.",
+  "@settingsAppLockUnsupported": {
+    "description": "Settings > General: why the app lock switch is off and disabled on Linux."
+  },
+  "settingsAppLockUnavailable": "Set up a passcode, PIN or biometrics on this device to use the app lock.",
+  "@settingsAppLockUnavailable": {
+    "description": "Settings > General: why the app lock switch cannot be turned on right now."
+  },
+  "settingsAppLockNotChanged": "{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}",
+  "@settingsAppLockNotChanged": {
+    "description": "Settings > General: a toast after turning the app lock on or off did not take effect, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsWindowLocked": "Unlock it in its main window to change settings.",
+  "@settingsWindowLocked": {
+    "description": "The desktop settings window while the app is locked, under the title that it is locked."
+  },
+  "secretsExportTooLargeVault": "This device has too many saved secrets to export in one file.",
+  "@secretsExportTooLargeVault": {
+    "description": "Settings > Backup > Recovery: building an export failed because the vault is past the export caps."
+  },
+  "secretsExportMalformed": "That file is not a Poltergeist secrets export, or it is damaged.",
+  "@secretsExportMalformed": {
+    "description": "Settings > Backup > Recovery: a picked file is not a readable secrets export."
+  },
+  "secretsExportUnsupportedVersion": "That export was made by a newer version of Poltergeist. Update Poltergeist and try again.",
+  "@secretsExportUnsupportedVersion": {
+    "description": "Settings > Backup > Recovery: a picked export uses a newer wire format than this build reads."
+  },
+  "secretsExportFileTooLarge": "That file is too large to be a Poltergeist secrets export.",
+  "@secretsExportFileTooLarge": {
+    "description": "Settings > Backup > Recovery: a picked file exceeds the export size limit."
+  },
+  "secretsExportInvalidCode": "That is not a recovery code. Check it for typos.",
+  "@secretsExportInvalidCode": {
+    "description": "Settings > Backup > Recovery: the typed code is not a well-formed recovery code."
+  },
+  "secretsExportWrongCode": "That recovery code does not open this export.",
+  "@secretsExportWrongCode": {
+    "description": "Settings > Backup > Recovery: a well-formed code that does not match the picked export."
+  },
+  "secretsExportTampered": "That export was changed after it was made, so nothing was restored.",
+  "@secretsExportTampered": {
+    "description": "Settings > Backup > Recovery: the picked export fails its integrity check."
+  },
+  "recoveryTitle": "Recovery",
+  "@recoveryTitle": {
+    "description": "Settings > Backup: the recovery code section's title."
+  },
+  "recoveryDescription": "A recovery code opens an encrypted export of this device's saved passwords and keys, on this device or another one. Poltergeist shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.",
+  "@recoveryDescription": {
+    "description": "Settings > Backup > Recovery: what a recovery code is for."
+  },
+  "recoveryStatusFailed": "Could not check recovery settings. Try again.",
+  "@recoveryStatusFailed": {
+    "description": "Recovery status could not be loaded; no diagnostic data is shown."
+  },
+  "recoveryRetry": "Retry",
+  "@recoveryRetry": {
+    "description": "Retry reading this device's recovery status."
+  },
+  "recoveryFailed": "The recovery operation could not be completed. Try again.",
+  "@recoveryFailed": {
+    "description": "A recovery action failed; no diagnostic data is shown."
+  },
+  "recoveryChecking": "Checking…",
+  "@recoveryChecking": {
+    "description": "Settings > Backup > Recovery: the configured state is still loading."
+  },
+  "recoveryConfigured": "This device has a recovery code.",
+  "@recoveryConfigured": {
+    "description": "Settings > Backup > Recovery: this device has a stored recovery code."
+  },
+  "recoveryNotConfigured": "This device has no recovery code yet.",
+  "@recoveryNotConfigured": {
+    "description": "Settings > Backup > Recovery: this device has no stored recovery code."
+  },
+  "recoverySetUp": "Set up recovery…",
+  "@recoverySetUp": {
+    "description": "Settings > Backup > Recovery: the button that creates a first recovery code."
+  },
+  "recoveryReplace": "Replace recovery code…",
+  "@recoveryReplace": {
+    "description": "Settings > Backup > Recovery: the button that replaces an existing recovery code."
+  },
+  "recoveryExport": "Export secrets…",
+  "@recoveryExport": {
+    "description": "Settings > Backup > Recovery: the button that writes the encrypted export."
+  },
+  "recoveryRestore": "Restore secrets…",
+  "@recoveryRestore": {
+    "description": "Settings > Backup > Recovery: the button that opens an export and merges it."
+  },
+  "recoveryReplaceTitle": "Replace the recovery code?",
+  "@recoveryReplaceTitle": {
+    "description": "Settings > Backup > Recovery: the replace-code confirmation's title."
+  },
+  "recoveryReplaceBody": "Exports made with the current code still open with it. New exports open only with the new one.",
+  "@recoveryReplaceBody": {
+    "description": "Settings > Backup > Recovery: the replace-code confirmation's consequence."
+  },
+  "recoveryReplaceConfirm": "Replace",
+  "@recoveryReplaceConfirm": {
+    "description": "Settings > Backup > Recovery: the replace-code confirmation's confirm button."
+  },
+  "recoveryCancel": "Cancel",
+  "@recoveryCancel": {
+    "description": "Settings > Backup > Recovery: the shared cancel button."
+  },
+  "recoveryExportDone": "Exported to {destination}. It opens only with this device's recovery code.",
+  "@recoveryExportDone": {
+    "description": "Settings > Backup > Recovery: a successful export names where it was written.",
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryRestoreAdded": "{count} added",
+  "@recoveryRestoreAdded": {
+    "description": "Settings > Backup > Recovery: a restore summary's added count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreReplaced": "{count} replaced",
+  "@recoveryRestoreReplaced": {
+    "description": "Settings > Backup > Recovery: a restore summary's replaced count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreKept": "{count} kept",
+  "@recoveryRestoreKept": {
+    "description": "Settings > Backup > Recovery: a restore summary's kept count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreUnreadable": "{count} could not be read",
+  "@recoveryRestoreUnreadable": {
+    "description": "Settings > Backup > Recovery: a restore summary's unreadable count, shown only when nonzero.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recoveryRestoreSummary": "Restored: {parts}. A newer copy synced from another device still replaces a restored one.",
+  "@recoveryRestoreSummary": {
+    "description": "Settings > Backup > Recovery: a successful restore's summary sentence.",
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryCodeTitle": "Your recovery code",
+  "@recoveryCodeTitle": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's title."
+  },
+  "recoveryCodeBody": "Write this code down and keep it somewhere safe, away from this device. It is shown only now. With it, an export of this device's secrets opens anywhere; without it, nowhere. Nothing changes until you confirm.",
+  "@recoveryCodeBody": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's warning."
+  },
+  "recoveryCodeCopy": "Copy code",
+  "@recoveryCodeCopy": {
+    "description": "Settings > Backup > Recovery: the copy button before it is used."
+  },
+  "recoveryCodeCopied": "Copied",
+  "@recoveryCodeCopied": {
+    "description": "Settings > Backup > Recovery: the copy button after it is used."
+  },
+  "recoveryCodeConfirmLabel": "Type the code's first four characters",
+  "@recoveryCodeConfirmLabel": {
+    "description": "Settings > Backup > Recovery: the confirmation field's label."
+  },
+  "recoveryCodeCancel": "Cancel",
+  "@recoveryCodeCancel": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's cancel button."
+  },
+  "recoveryCodeDone": "I saved it",
+  "@recoveryCodeDone": {
+    "description": "Settings > Backup > Recovery: the show-once code dialog's confirm button."
+  },
+  "recoveryRestoreTitle": "Restore secrets",
+  "@recoveryRestoreTitle": {
+    "description": "Settings > Backup > Recovery: the restore dialog's title."
+  },
+  "recoveryRestoreBody": "Enter the recovery code of the device the export came from, then choose the export file.",
+  "@recoveryRestoreBody": {
+    "description": "Settings > Backup > Recovery: the restore dialog's instructions."
+  },
+  "recoveryRestoreCodeLabel": "Recovery code",
+  "@recoveryRestoreCodeLabel": {
+    "description": "Settings > Backup > Recovery: the restore dialog's code field label."
+  },
+  "recoveryRestoreConflictLabel": "Credentials this device already has:",
+  "@recoveryRestoreConflictLabel": {
+    "description": "Settings > Backup > Recovery: the restore dialog's conflict-policy prompt."
+  },
+  "recoveryRestoreKeep": "Keep this device's",
+  "@recoveryRestoreKeep": {
+    "description": "Settings > Backup > Recovery: the restore dialog's keep-existing choice."
+  },
+  "recoveryRestoreReplace": "Use the export's",
+  "@recoveryRestoreReplace": {
+    "description": "Settings > Backup > Recovery: the restore dialog's replace-existing choice."
+  },
+  "recoveryRestoreChoose": "Choose export…",
+  "@recoveryRestoreChoose": {
+    "description": "Settings > Backup > Recovery: the restore dialog's confirm button."
+  },
+  "recoveryPromptTitle": "Set up a recovery code?",
+  "@recoveryPromptTitle": {
+    "description": "The enrolment prompt's title after a credential is saved."
+  },
+  "recoveryPromptBody": "Passwords and keys saved here stay on this device unless you sync them. A recovery code lets you export them, encrypted, and restore them on another device, or on this one after a reinstall.",
+  "@recoveryPromptBody": {
+    "description": "The enrolment prompt's explanation after a credential is saved."
+  },
+  "recoveryPromptNotNow": "Not now",
+  "@recoveryPromptNotNow": {
+    "description": "The enrolment prompt's decline button, remembered."
+  },
+  "recoveryPromptSetUp": "Set up…",
+  "@recoveryPromptSetUp": {
+    "description": "The enrolment prompt's confirm button."
+  },
+  "recoveryPromptDeclineFailed": "Could not save your answer. Try again.",
+  "@recoveryPromptDeclineFailed": {
+    "description": "The enrolment prompt's fixed toast when the decline answer could not be persisted."
+  },
+  "recoveryPromptFailed": "Could not check for a recovery code.",
+  "@recoveryPromptFailed": {
+    "description": "The enrolment prompt's toast when the configured check failed."
+  },
+  "recoveryPromptRetry": "Retry",
+  "@recoveryPromptRetry": {
+    "description": "The enrolment prompt's retry action."
   }
 }

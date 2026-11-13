@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/application_error_reporter.dart';
 import 'package:poltergeist_app/services/atomic_file.dart';
@@ -11,6 +12,22 @@ import 'package:poltergeist_app/services/prompt_coordinator.dart';
 import 'package:poltergeist_app/services/secure_master_key.dart'
     show MasterKeyUnavailableException;
 import 'package:poltergeist_core/poltergeist_core.dart';
+
+final class _Authenticator implements DeviceAuthenticator {
+  int requests = 0;
+
+  @override
+  Future<AppLockAvailability> availability() async => AppLockAvailability.available;
+
+  @override
+  Future<void> authenticate() async { requests++; }
+}
+
+bool _hasListeners(AppLockController lock) {
+  // Inspect listener ownership without widening the production lock API.
+  // ignore: invalid_use_of_protected_member
+  return lock.hasListeners;
+}
 
 class FakePromptBridge implements PromptBridge {
   final promptsController = StreamController<EnginePromptEvent>.broadcast();
@@ -145,6 +162,144 @@ void main() {
     coordinator.dispose();
     await bridge.promptsController.close();
     await bridge.dismissalsController.close();
+  });
+
+  AppLockController attachLock({Duration Function()? elapsed}) {
+    final lock = AppLockController(
+      authenticator: _Authenticator(),
+      supported: true,
+      enabled: true,
+      elapsed: elapsed,
+    );
+    coordinator.dispose();
+    coordinator = PromptCoordinator(
+      engine: bridge,
+      vault: vault,
+      identityReader: reader,
+      appLock: lock,
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      errorReporter: ApplicationErrorReporter(
+        sink: (error, _) => reportedErrors.add(error),
+      ),
+    );
+    addTearDown(() {
+      coordinator.dispose();
+      lock.dispose();
+    });
+    return lock;
+  }
+
+  testWidgets('locked prompts wait, then retry with vault saving available', (
+    tester,
+  ) async {
+    final lock = attachLock();
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    coordinator.start();
+    bridge.emit(_event('wait', EnginePromptKind.credentialNeeded,
+        _credential.copyWithSecretRef('secret')));
+    await tester.pumpAndSettle();
+    expect(vault.reads, isEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(bridge.replies, isEmpty);
+
+    await lock.unlock();
+    await tester.pumpAndSettle();
+    expect(vault.reads, ['secret']);
+    expect(find.textContaining('system credential store'), findsNothing);
+    expect(find.byType(CheckboxListTile), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a relocked pending read is discarded and retried after unlock', (
+    tester,
+  ) async {
+    var elapsed = Duration.zero;
+    final lock = attachLock(elapsed: () => elapsed);
+    await lock.unlock();
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    vault.secret = const Secret(
+      id: 'secret', kind: SecretKind.password, value: 'stored',
+    );
+    vault.readGate = Completer<void>();
+    coordinator.start();
+    bridge.emit(_event('race', EnginePromptKind.credentialNeeded,
+        _credential.copyWithSecretRef('secret')));
+    await tester.pump();
+    await tester.pump();
+    expect(vault.reads, ['secret']);
+    lock.onLifecycle(AppLifecycleState.paused);
+    elapsed = appLockBackgroundTimeout + const Duration(seconds: 1);
+    lock.onLifecycle(AppLifecycleState.resumed);
+    expect(lock.locked, isTrue);
+    vault.readGate!.complete();
+    await tester.pumpAndSettle();
+    expect(bridge.replies, isEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+
+    await lock.unlock();
+    await tester.pumpAndSettle();
+    expect(vault.reads, ['secret', 'secret']);
+    expect((bridge.replies.single.$3 as CredentialPromptReply).password, 'stored');
+    expect(reportedErrors, isEmpty);
+  });
+
+  testWidgets('dismissing an unlock wait leaves no stale prompt or listener', (
+    tester,
+  ) async {
+    final lock = attachLock();
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    coordinator.start();
+    bridge.emit(_event('withdrawn', EnginePromptKind.credentialNeeded,
+        _credential.copyWithSecretRef('secret')));
+    await tester.pumpAndSettle();
+    expect(_hasListeners(lock), isTrue);
+    bridge.dismiss('withdrawn', EnginePromptKind.credentialNeeded);
+    await tester.pumpAndSettle();
+    expect(_hasListeners(lock), isFalse);
+    await lock.unlock();
+    await tester.pumpAndSettle();
+    expect(bridge.replies, isEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('disposing an unlock wait releases its listener', (tester) async {
+    final lock = attachLock();
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    coordinator.start();
+    bridge.emit(_event('disposed', EnginePromptKind.credentialNeeded,
+        _credential.copyWithSecretRef('secret')));
+    await tester.pumpAndSettle();
+    expect(_hasListeners(lock), isTrue);
+    coordinator.dispose();
+    await tester.pump();
+    expect(_hasListeners(lock), isFalse);
+    expect(bridge.replies, isEmpty);
+  });
+
+  testWidgets('app-lock refusal is not reported as a keystore failure', (
+    tester,
+  ) async {
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    vault.readFailure = const AppLockException('Authentication refused.');
+    coordinator.start();
+    bridge.emit(_event(
+      'locked-read',
+      EnginePromptKind.credentialNeeded,
+      const CredentialPromptData(
+        host: 'example.com',
+        port: 22,
+        username: 'deploy',
+        authMethod: AuthMethod.password,
+        secretRef: 'saved-password',
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('system credential store'), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect((bridge.replies.single.$3 as CredentialPromptReply).cancelled, isTrue);
+    expect(reportedErrors, isEmpty);
   });
 
   testWidgets('host-key first use renders and trusts', (tester) async {
@@ -987,6 +1142,53 @@ void main() {
     // Expire the transient notice before fixture teardown.
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('unlocking an encrypted stored key still asks for its passphrase', (
+    tester,
+  ) async {
+    final lock = attachLock();
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    PromptCoordinator.keyPassphraseUsable = (pem, passphrase) =>
+        passphrase == 'right';
+    vault.secret = const Secret(
+      id: 'secret-7',
+      kind: SecretKind.privateKey,
+      value: 'ENCRYPTED PEM',
+    );
+    coordinator.start();
+    bridge.emit(_event(
+      'locked-encrypted-key',
+      EnginePromptKind.credentialNeeded,
+      const CredentialPromptData(
+        host: 'example.com',
+        port: 2222,
+        username: 'deploy',
+        authMethod: AuthMethod.privateKey,
+        secretRef: 'secret-7',
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(vault.reads, isEmpty);
+    expect(bridge.replies, isEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+
+    await lock.unlock();
+    await tester.pumpAndSettle();
+    expect(vault.reads, ['secret-7']);
+    expect(bridge.replies, isEmpty);
+    expect(find.text('Key passphrase for example.com'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Passphrase'), 'right');
+    await tester.pump();
+    await tester.tap(dialogConnect);
+    await tester.pumpAndSettle();
+
+    final reply = bridge.replies.single.$3 as CredentialPromptReply;
+    expect(reply.origin, CredentialOrigin.prompted);
+    expect(reply.privateKeyPem, 'ENCRYPTED PEM');
+    expect(reply.keyPassphrase, 'right');
+    expect(vault.puts, isEmpty);
+    expect(reader.reads, isEmpty);
   });
 
   testWidgets('an encrypted stored key with no passphrase asks only for it', (

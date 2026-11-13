@@ -169,3 +169,46 @@ in three PRs (wrap + export/restore, enrolment + inline prompt, app lock).
 - **Rotation.** Settings offers "Replace recovery code": a new code
   replaces the stored W; exports made earlier still open with the old
   code.
+
+## Poltergeist implementation (Unreleased)
+
+Poltergeist's recovery UI is Settings → Backup → Recovery, in the
+Backup dialog and the desktop Settings window's Sync tab alike. It
+shows the configured state whether or not the backup account is
+enrolled, offers the code once with a first-group retype check, asks
+before replacing an existing code, and restores with a keep-or-replace
+choice for credentials this device already has. Saving a first
+credential offers the code once; "Not now" is remembered. The export
+keeps the `seance-secrets` format token, so exports restore across
+Poltergeist and Séance. The recovery service resolves the vault key
+through the app lock, and the Settings window's snapshot carries only
+the configured flag, never a code or an export. Credential and
+connect-time identity-file reads keep the lock's generation check
+through their asynchronous I/O. A refused authentication stays distinct
+from an unavailable keystore; a waiting credential prompt retries the
+current vault after you unlock, without a stale keystore banner.
+
+## Klabautermann implementation (Unreleased)
+
+Klabautermann's recovery settings are Settings → Sync → Recovery, in
+the settings route and the desktop Settings window alike. The engine
+runs the CRED-05 operations inside `EngineVault.exclusive` over its one
+vault, with the master key read through the existing app-lock-guarded
+keystore responder; a locked or unavailable keystore refuses without
+minting a key. The app's `RecoveryController` correlates the requests by
+`requestId`, bounds each wait, and reports the fixed failure kinds. The
+section shows the configured state, offers the code once with a
+first-group retype check, asks before replacing an existing code, and
+restores with a keep-or-replace choice and a summary. The export keeps
+the `seance-secrets` format token, so exports restore across the apps.
+The Settings window's snapshot carries only the configured flag, never a
+code or an export. Automated tests cover the controller, the file
+service's cancellation and bounds, the dialogs and the settings-window
+link. Desktop exports use a path-only save panel followed by one shared
+owner-only atomic write, so a failed write leaves an older export
+untouched. The mobile document provider keeps its existing save path.
+A failed status check shows a fixed error and Retry in both apps, not an
+absent code or an indefinite loading message. Android launch and normal
+themes use AppCompat for the biometric fallback on supported older APIs.
+Real-device SAF, biometric, native-dialog and lock-screen validation
+remains manual.

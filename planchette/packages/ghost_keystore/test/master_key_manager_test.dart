@@ -146,6 +146,19 @@ class _ToggleableKeystore extends FlutterSecureStorage {
   }
 }
 
+/// An app-lock guard the test opens and shuts, counting the reads it lets
+/// through.
+class _Gate {
+  bool locked = true;
+  int reads = 0;
+
+  Future<T> read<T>(Future<T> Function() operation) async {
+    if (locked) throw const AppLockException('locked');
+    reads++;
+    return operation();
+  }
+}
+
 const _masterKeyEntry = 'poltergeist.vault.masterKey.v1';
 
 MasterKeyManager _manager(FlutterSecureStorage storage) => MasterKeyManager(
@@ -380,6 +393,47 @@ void main() {
         ),
         throwsA(isA<AssertionError>()),
       );
+    });
+  });
+
+  group('the app-lock read guard', () {
+    test('a shut guard refuses reads but not writes', () async {
+      final keystore = _FakeKeystore();
+      final keys = _manager(keystore);
+      final gate = _Gate();
+      keys.protectCredentialReads(gate.read);
+
+      await expectLater(
+        keys.getApiKey('sync.token'),
+        throwsA(isA<AppLockException>()),
+      );
+      await expectLater(keys.probeKeystore(), throwsA(isA<AppLockException>()));
+      await expectLater(
+        keys.readKeystoreKey(),
+        throwsA(isA<AppLockException>()),
+      );
+      expect(gate.reads, 0);
+
+      await keys.putApiKey('sync.token', 'token');
+      await keys.setKeystoreKey(_stored);
+      await keys.deleteApiKey('sync.token');
+      expect(keystore.log, [
+        'write poltergeist.apikey.sync.token',
+        'write poltergeist.vault.masterKey.v1',
+        'delete poltergeist.apikey.sync.token',
+      ]);
+    });
+
+    test('an open guard lets reads through', () async {
+      final keystore = _FakeKeystore();
+      final keys = _manager(keystore);
+      final gate = _Gate()..locked = false;
+      keys.protectCredentialReads(gate.read);
+
+      await keys.probeKeystore();
+      expect(await keys.getApiKey('sync.token'), isNull);
+      expect(await keys.readKeystoreKey(), hasLength(32));
+      expect(gate.reads, 3);
     });
   });
 

@@ -11565,12 +11565,6 @@ abstract class AppLocalizations {
   /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} symlink{This path is a symbolic link that cannot be resolved on this host.} failed{The file could not be read.} other{The file could not be read.}}'**
   String editReadFailed(String reason);
 
-  /// Remote editor: under the path the editor opened, when it is a symbolic link; path is the real file that is read and saved.
-  ///
-  /// In en, this message translates to:
-  /// **'Link to {path}'**
-  String editLinkTo(String path);
-
   /// Remote editor: chip on a file only root may write; saving it runs through admin mode.
   ///
   /// In en, this message translates to:
@@ -14858,6 +14852,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Forward'**
   String get appsForwardStart;
+
+  /// Settings > Sync: the recovery code section's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery'**
+  String get recoveryTitle;
+
+  /// Settings > Sync > Recovery: what a recovery code is for.
+  ///
+  /// In en, this message translates to:
+  /// **'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Klabautermann shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.'**
+  String get recoveryDescription;
+
+  /// Recovery status could not be loaded; no diagnostic data is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check recovery settings. Try again.'**
+  String get recoveryStatusFailed;
+
+  /// Retry reading this device's recovery status.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get recoveryRetry;
+
+  /// Settings > Sync > Recovery: the configured state is still loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get recoveryChecking;
+
+  /// Settings > Sync > Recovery: this device has a stored recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has a recovery code.'**
+  String get recoveryConfigured;
+
+  /// Settings > Sync > Recovery: this device has no stored recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no recovery code yet.'**
+  String get recoveryNotConfigured;
+
+  /// Settings > Sync > Recovery: the button that creates a first recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up recovery…'**
+  String get recoverySetUp;
+
+  /// Settings > Sync > Recovery: the button that replaces an existing recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace recovery code…'**
+  String get recoveryReplace;
+
+  /// Settings > Sync > Recovery: the button that writes the encrypted export.
+  ///
+  /// In en, this message translates to:
+  /// **'Export secrets…'**
+  String get recoveryExport;
+
+  /// Settings > Sync > Recovery: the button that opens an export and merges it.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore secrets…'**
+  String get recoveryRestore;
+
+  /// Settings > Sync > Recovery: the replace-code confirmation's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace the recovery code?'**
+  String get recoveryReplaceTitle;
+
+  /// Settings > Sync > Recovery: the replace-code confirmation's consequence.
+  ///
+  /// In en, this message translates to:
+  /// **'Exports made with the current code still open with it. New exports open only with the new one.'**
+  String get recoveryReplaceBody;
+
+  /// Settings > Sync > Recovery: the replace-code confirmation's confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get recoveryReplaceConfirm;
+
+  /// Settings > Sync > Recovery: the shared cancel button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get recoveryCancel;
+
+  /// Settings > Sync > Recovery: a successful export names where it was written.
+  ///
+  /// In en, this message translates to:
+  /// **'Exported to {destination}. It opens only with this device\'s recovery code.'**
+  String recoveryExportDone(String destination);
+
+  /// Settings > Sync > Recovery: a restore summary's added count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} added'**
+  String recoveryRestoreAdded(int count);
+
+  /// Settings > Sync > Recovery: a restore summary's replaced count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} replaced'**
+  String recoveryRestoreReplaced(int count);
+
+  /// Settings > Sync > Recovery: a restore summary's kept count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} kept'**
+  String recoveryRestoreKept(int count);
+
+  /// Settings > Sync > Recovery: a restore summary's unreadable count, shown only when nonzero.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} could not be read'**
+  String recoveryRestoreUnreadable(int count);
+
+  /// Settings > Sync > Recovery: a successful restore's summary sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Restored: {parts}. A newer copy synced from another device still replaces a restored one.'**
+  String recoveryRestoreSummary(String parts);
+
+  /// Settings > Sync > Recovery: the show-once code dialog's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Your recovery code'**
+  String get recoveryCodeTitle;
+
+  /// Settings > Sync > Recovery: the show-once code dialog's warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Write this code down and keep it somewhere safe, away from this device. It is shown only now. With it, an export of this device\'s secrets opens anywhere; without it, nowhere. Nothing changes until you confirm.'**
+  String get recoveryCodeBody;
+
+  /// Settings > Sync > Recovery: the copy button before it is used.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get recoveryCodeCopy;
+
+  /// Settings > Sync > Recovery: the copy button after it is used.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get recoveryCodeCopied;
+
+  /// Settings > Sync > Recovery: the confirmation field's label.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the code\'s first four characters'**
+  String get recoveryCodeConfirmLabel;
+
+  /// Settings > Sync > Recovery: the show-once code dialog's cancel button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get recoveryCodeCancel;
+
+  /// Settings > Sync > Recovery: the show-once code dialog's confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'I saved it'**
+  String get recoveryCodeDone;
+
+  /// Settings > Sync > Recovery: the restore dialog's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore secrets'**
+  String get recoveryRestoreTitle;
+
+  /// Settings > Sync > Recovery: the restore dialog's instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the recovery code of the device the export came from, then choose the export file.'**
+  String get recoveryRestoreBody;
+
+  /// Settings > Sync > Recovery: the restore dialog's code field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery code'**
+  String get recoveryRestoreCodeLabel;
+
+  /// Settings > Sync > Recovery: the restore dialog's conflict-policy prompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Credentials this device already has:'**
+  String get recoveryRestoreConflictLabel;
+
+  /// Settings > Sync > Recovery: the restore dialog's keep-existing choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this device\'s'**
+  String get recoveryRestoreKeep;
+
+  /// Settings > Sync > Recovery: the restore dialog's replace-existing choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the export\'s'**
+  String get recoveryRestoreReplace;
+
+  /// Settings > Sync > Recovery: the restore dialog's confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose export…'**
+  String get recoveryRestoreChoose;
+
+  /// Settings > Sync > Recovery: the vault could not be opened because another process holds the support directory.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s support directory is in use by another window. Close it and try again.'**
+  String get recoveryDirectoryShared;
+
+  /// Settings > Sync > Recovery: the OS keystore holds no vault key or could not answer.
+  ///
+  /// In en, this message translates to:
+  /// **'The system keystore is locked or unavailable, so the vault could not be opened. Unlock Klabautermann and try again.'**
+  String get recoveryKeystoreUnavailable;
+
+  /// Settings > Sync > Recovery: an export was asked for without a stored code.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no recovery code. Set one up before exporting.'**
+  String get recoveryNotSetUp;
+
+  /// Settings > Sync > Recovery: the stored recovery entry does not open under this vault's key.
+  ///
+  /// In en, this message translates to:
+  /// **'This device\'s recovery code can no longer open its vault. Replace it to export again.'**
+  String get recoveryDamaged;
+
+  /// Settings > Sync > Recovery: the typed code is not a well-formed recovery code.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a recovery code. Check it for typos.'**
+  String get recoveryInvalidCode;
+
+  /// Settings > Sync > Recovery: a well-formed code that does not match the picked export.
+  ///
+  /// In en, this message translates to:
+  /// **'That recovery code does not open this export.'**
+  String get recoveryWrongCode;
+
+  /// Settings > Sync > Recovery: the picked export fails its integrity check.
+  ///
+  /// In en, this message translates to:
+  /// **'That export was changed after it was made, so nothing was restored.'**
+  String get recoveryTampered;
+
+  /// Settings > Sync > Recovery: the picked file is not a secrets export or is damaged.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not a Klabautermann secrets export.'**
+  String get recoveryMalformed;
+
+  /// Settings > Sync > Recovery: a picked export uses a newer wire format than this build reads.
+  ///
+  /// In en, this message translates to:
+  /// **'That export was written by a newer version of Klabautermann.'**
+  String get recoveryUnsupportedVersion;
+
+  /// Settings > Sync > Recovery: the picked export exceeds the size limit.
+  ///
+  /// In en, this message translates to:
+  /// **'That export is too large to read.'**
+  String get recoveryTooLarge;
+
+  /// Settings > Sync > Recovery: a generic failure with no more specific kind.
+  ///
+  /// In en, this message translates to:
+  /// **'The recovery operation could not be completed.'**
+  String get recoveryFailed;
+
+  /// Settings > Sync > Recovery: a picked file exceeds the export size limit before it is loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is too large to be a Klabautermann secrets export.'**
+  String get recoveryFileTooLarge;
+
+  /// Settings > Sync > Recovery: the picked export could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'That file could not be read. Choose the export again.'**
+  String get recoveryFileUnreadable;
+
+  /// Settings > Sync > Recovery: the chosen export destination could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The export could not be saved there. Choose another location.'**
+  String get recoveryFileSaveFailed;
+
+  /// Remote editor: under the path the editor opened, when it is a symbolic link; path is the real file that is read and saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Link to {path}'**
+  String editLinkTo(String path);
 
   /// Tooltip of the shared editor's replace controls toggle.
   ///

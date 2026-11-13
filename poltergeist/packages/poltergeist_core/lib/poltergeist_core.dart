@@ -232,6 +232,26 @@ export 'package:seance_core/catalog.dart'
         InMemoryConflictAwareHostKeyStore;
 export 'package:seance_core/catalog.dart'
     show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
+// CRED-05's recovery-code operations and the export wire types, shared by
+// every app's credential vault. `VaultRecovery` stays catalog-only, as the
+// Séance app's own stores already own the name clash on seance_core.dart.
+export 'package:seance_core/catalog.dart'
+    show
+        RecoveryDamagedException,
+        RecoveryNotSetUpException,
+        RestoreConflictPolicy,
+        SecretsRestoreSummary,
+        VaultRecovery;
+export 'package:seance_core/seance_core.dart'
+    show
+        OpenedSecretsExport,
+        RecoveryKey,
+        RecoveryWrapKey,
+        SecretsExport,
+        SecretsExportException,
+        SecretsExportFailure,
+        isReservedVaultId,
+        recoveryWrapKeyId;
 export 'package:seance_core/catalog.dart'
     show
         EnrollmentResult,

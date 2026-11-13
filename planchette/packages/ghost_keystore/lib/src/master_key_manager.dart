@@ -53,6 +53,10 @@ class KeystoreException implements Exception {
 /// at bootstrap (the original `KeyringLocked` hard-fail).
 enum KeystoreStatus { unknown, available, unavailable }
 
+/// Runs a credential read once the app lock lets it; throws when the app
+/// stays locked.
+typedef CredentialReadGuard = Future<T> Function<T>(Future<T> Function() read);
+
 /// Obtains the 32-byte vault master key using the layered model from the
 /// proposal:
 ///   1. a random key stored in the OS keystore (macOS/iOS Keychain, Windows
@@ -70,6 +74,7 @@ class MasterKeyManager {
   final FlutterSecureStorage _storage;
   final String _masterKeyEntry;
   final String _apiKeyPrefix;
+  CredentialReadGuard? _readGuard;
 
   /// Last observed keystore health. The bootstrap toast keys off this.
   KeystoreStatus keystoreStatus = KeystoreStatus.unknown;
@@ -130,6 +135,17 @@ class MasterKeyManager {
     return e.toString();
   }
 
+  /// Installed by the app host: [getApiKey], [probeKeystore] and
+  /// [readKeystoreKey] run through [guard], so a locked app hands out no
+  /// credential. Writes and deletes
+  /// are not held back, so a sign-out finishes while locked.
+  void protectCredentialReads(CredentialReadGuard guard) => _readGuard = guard;
+
+  Future<T> _guarded<T>(Future<T> Function() read) {
+    final guard = _readGuard;
+    return guard == null ? read() : guard(read);
+  }
+
   /// Load the device master key from the OS keystore, creating one on first
   /// run. Returns null when the keystore is unavailable right now —
   /// [keystoreStatus]/[lastKeystoreError] say why. Deliberately does NOT
@@ -145,7 +161,10 @@ class MasterKeyManager {
   /// [MasterKeyUnavailableException] rather than guess. A read that throws
   /// instead is a keystore that cannot answer at all — the locked-vault null
   /// above, not a refusal: nothing is minted either way.
-  Future<List<int>?> probeKeystore({bool hasExistingVault = false}) async {
+  Future<List<int>?> probeKeystore({bool hasExistingVault = false}) =>
+      _guarded(() => _probeKeystore(hasExistingVault: hasExistingVault));
+
+  Future<List<int>?> _probeKeystore({bool hasExistingVault = false}) async {
     try {
       final existing = await _storage.read(key: _masterKeyEntry);
       // An empty entry decodes to no bytes: no key, as an absent one.
@@ -187,7 +206,9 @@ class MasterKeyManager {
 
   /// Reads never crash the app on a locked/unavailable keystore; they behave
   /// as "not set" (and update [keystoreStatus] for the UI's retry affordance).
-  Future<String?> getApiKey(String name) async {
+  Future<String?> getApiKey(String name) => _guarded(() => _getApiKey(name));
+
+  Future<String?> _getApiKey(String name) async {
     try {
       final v = await _storage.read(key: '$_apiKeyPrefix$name');
       _markAvailable();
@@ -227,7 +248,9 @@ class MasterKeyManager {
   /// `KeyringLocked` the write just recorded because a read happened to
   /// work a moment later. Marking unavailable is no better: an entry that
   /// will not decode is a data problem, not an outage.
-  Future<List<int>?> readKeystoreKey() async {
+  Future<List<int>?> readKeystoreKey() => _guarded(_readKeystoreKey);
+
+  Future<List<int>?> _readKeystoreKey() async {
     try {
       final existing = await _storage.read(key: _masterKeyEntry);
       // An empty entry decodes to no bytes, which is no key either.

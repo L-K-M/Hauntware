@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockChange, AppLockSettings, AppLockSupport;
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
@@ -16,6 +18,8 @@ import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
 import 'package:poltergeist_app/services/external_file_opener.dart';
+import 'package:poltergeist_app/services/secrets_recovery.dart'
+    show RecoveryStatusException;
 import 'package:poltergeist_app/services/settings_models.dart';
 import 'package:poltergeist_app/services/settings_window/remote_settings.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_host.dart';
@@ -26,6 +30,8 @@ import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_app/ui/settings/preview_settings.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
+
+import '../support/fake_recovery_settings.dart';
 
 // One engine in a test, so each end of the link gets a channel of its own
 // and a relay between them stands in for the runners' forwarding.
@@ -171,6 +177,29 @@ final class _FakeEditors extends ChangeNotifier implements EditorRegistryModel {
   Future<void> setDefault(String id) async => calls.add('setDefault($id)');
 }
 
+/// The app lock with scripted state, recording each change and notifying
+/// like the controller does.
+final class _ManualAppLock extends ChangeNotifier implements AppLockSettings {
+  final List<bool> saved = [];
+
+  @override
+  bool enabled = false;
+
+  @override
+  bool locked = false;
+
+  @override
+  AppLockSupport get support => AppLockSupport.available;
+
+  @override
+  Future<AppLockChange> setEnabled(bool enabled) async {
+    this.enabled = enabled;
+    saved.add(enabled);
+    notifyListeners();
+    return AppLockChange.changed;
+  }
+}
+
 /// The Settings window's link, end to end: [SettingsWindowHost] in the app,
 /// [RemoteSettings] in the window, and the runner's relay between them.
 void main() {
@@ -194,6 +223,8 @@ void main() {
   Object? groupingSaveFailure;
   late DoubleClickActionController doubleClickAction;
   late List<DoubleClickAction> savedActions;
+  late _ManualAppLock appLock;
+  late FakeRecoverySettings recovery;
   late List<AppAppearance> savedAppearances;
   Object? appearanceSaveFailure;
 
@@ -244,6 +275,8 @@ void main() {
     editorFont: editorFont,
     directoryGrouping: directoryGrouping,
     doubleClickAction: doubleClickAction,
+    appLock: appLock,
+    recovery: recovery,
   );
 
   setUp(() {
@@ -262,6 +295,10 @@ void main() {
       save: (action) async => savedActions.add(action),
     );
     addTearDown(doubleClickAction.dispose);
+    appLock = _ManualAppLock();
+    addTearDown(appLock.dispose);
+    recovery = FakeRecoverySettings();
+    addTearDown(recovery.dispose);
     savedTextSizes = [];
     editorTextSize = EditorTextSizeController(
       save: (size) async => savedTextSizes.add(size),
@@ -361,6 +398,7 @@ void main() {
     expect(remote.editors, isNull);
     expect(remote.previewDownloads, isNull);
     expect(remote.backup, isNull);
+    expect(remote.recovery, isNull);
     // No Appearance tab, and the window draws the default theme.
     expect(remote.appearance, isNull);
     expect(remote.editorTextSize, isNull);
@@ -726,6 +764,123 @@ void main() {
     expect(second.generation, isNot(first.generation));
     expect(remote.general?.checkForUpdates, isFalse);
     expect(remote.backup!.syncing, isTrue);
+  });
+
+  group('the app lock', () {
+    test('crosses in the first snapshot', () async {
+      await appLock.setEnabled(true);
+
+      final remote = await openWindow();
+
+      expect(remote.appLock.enabled, isTrue);
+      expect(remote.appLock.support, AppLockSupport.available);
+      expect(remote.appLock.locked, isFalse);
+    });
+
+    test("set in the window, reaches the app's lock", () async {
+      final remote = await openWindow();
+
+      await remote.appLock.setEnabled(true);
+
+      expect(appLock.enabled, isTrue);
+      expect(appLock.saved, [true]);
+      await pumpEventQueue();
+      expect(remote.appLock.enabled, isTrue);
+    });
+
+    test('while the app is locked the app refuses its calls', () async {
+      final remote = await openWindow();
+      appLock.locked = true;
+      appLock.notifyListeners();
+      await pumpEventQueue();
+      expect(remote.appLock.locked, isTrue);
+
+      await expectLater(
+        remote.general!.onCheckForUpdatesChanged(false),
+        throwsA(
+          isA<SettingsLinkException>().having(
+            (e) => '$e',
+            'message',
+            'The app is locked',
+          ),
+        ),
+      );
+      expect(checkForUpdates, isTrue);
+    });
+  });
+
+  group('recovery', () {
+    test('crosses in the first snapshot', () async {
+      recovery.configured = false;
+
+      final remote = await openWindow();
+
+      expect(remote.recovery?.configured, isFalse);
+    });
+
+    test('refreshes recovery status in the app', () async {
+      final remote = await openWindow();
+      await remote.recovery!.refresh();
+      expect(recovery.calls, ['refreshRecoveryStatus']);
+      expect(remote.recovery!.configured, isFalse);
+    });
+
+    test('set up in the window keeps the code in the app', () async {
+      final remote = await openWindow();
+
+      final code = await remote.recovery!.newCode();
+      await remote.recovery!.saveCode(code);
+
+      expect(code, recovery.code);
+      expect(recovery.calls, ['newRecoveryCode', 'saveRecoveryCode']);
+      expect(recovery.configured, isTrue);
+    });
+
+    test('export and restore run in the app', () async {
+      recovery.destination = '/tmp/export.json';
+      recovery.summary = const SecretsRestoreSummary(
+        added: 1,
+        replaced: 2,
+        kept: 3,
+        unreadable: 0,
+      );
+      final remote = await openWindow();
+
+      expect(await remote.recovery!.exportSecrets(), '/tmp/export.json');
+      final summary = await remote.recovery!.restoreSecrets(
+        code: 'CODE',
+        policy: RestoreConflictPolicy.replaceExisting,
+      );
+
+      expect(recovery.calls, ['exportSecrets', 'restoreSecrets']);
+      expect(summary?.added, 1);
+      expect(summary?.replaced, 2);
+      expect(summary?.kept, 3);
+    });
+
+    test('while the app is locked the app refuses recovery calls', () async {
+      final remote = await openWindow();
+      appLock.locked = true;
+      appLock.notifyListeners();
+      await pumpEventQueue();
+
+      await expectLater(
+        remote.recovery!.newCode(),
+        throwsA(
+          isA<SettingsLinkException>().having(
+            (e) => '$e',
+            'message',
+            'The app is locked',
+          ),
+        ),
+      );
+      expect(recovery.calls, isEmpty);
+      await expectLater(
+        remote.recovery!.refresh(),
+        throwsA(isA<RecoveryStatusException>()),
+      );
+      expect(recovery.calls, isEmpty);
+    });
   });
 
   test('a request to quit is the app\'s to answer', () async {

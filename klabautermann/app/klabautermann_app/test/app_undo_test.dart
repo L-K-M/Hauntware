@@ -7,10 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostUndoHistory, GhostUndoableChange;
-import 'package:ghost_keystore/ghost_keystore.dart'
-    show appLockBackgroundTimeout;
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:klabautermann_app/app.dart' show appNavigatorKey;
-import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/app_undo.dart' show stepUndoHistory;

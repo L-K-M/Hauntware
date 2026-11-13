@@ -11,26 +11,40 @@ import '../../services/settings_models.dart';
 import '../../services/sync_account_gate.dart';
 import 'backup_enrolled_view.dart';
 import 'backup_enrollment_form.dart';
+import 'recovery_settings.dart';
 
 /// The Bookmark backup section, unenrolled or enrolled by the service's
-/// durable account state.
+/// durable account state, followed by CRED-05's Recovery section —
+/// available whether or not this device has a backup account or a
+/// recovery code.
 final class BackupSettingsSection extends StatelessWidget {
   const BackupSettingsSection({
     super.key,
     required this.service,
+    this.recovery,
     this.gate = const SyncAccountGate.production(),
   });
 
   final BackupSettingsModel service;
+  final RecoverySettingsModel? recovery;
   final SyncAccountGate gate;
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: service,
-      builder: (context, _) => service.account == null
-          ? BackupEnrollmentForm(service: service, gate: gate)
-          : BackupEnrolledView(service: service, gate: gate),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListenableBuilder(
+          listenable: service,
+          builder: (context, _) => service.account == null
+              ? BackupEnrollmentForm(service: service, gate: gate)
+              : BackupEnrolledView(service: service, gate: gate),
+        ),
+        if (recovery != null) ...[
+          const SizedBox(height: 24),
+          RecoverySection(model: recovery!),
+        ],
+      ],
     );
   }
 }
@@ -40,6 +54,7 @@ final class BackupSettingsSection extends StatelessWidget {
 Future<void> showBackupSettingsDialog(
   BuildContext context, {
   required BackupSettingsModel service,
+  RecoverySettingsModel? recovery,
   SyncAccountGate gate = const SyncAccountGate.production(),
 }) =>
     showDialog<void>(
@@ -52,7 +67,11 @@ Future<void> showBackupSettingsDialog(
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
-              child: BackupSettingsSection(service: service, gate: gate),
+              child: BackupSettingsSection(
+                service: service,
+                recovery: recovery,
+                gate: gate,
+              ),
             ),
           ),
           actions: [

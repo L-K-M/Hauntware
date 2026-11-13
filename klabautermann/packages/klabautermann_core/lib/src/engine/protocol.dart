@@ -342,6 +342,14 @@ import '../operations/plan_types.dart';
 /// private key, the server's or a jump host's, and is answered with
 /// [PromptSecretAnswer], whose `save` it never honours.
 ///
+/// Vault recovery then joined v3 the same way (03 §4.5, CRED-05):
+/// [NewRecoveryCode], [SetRecoveryCode], [RecoveryStatusRequest],
+/// [ExportVault] and [RestoreVault], answered by
+/// [RecoveryCodeGenerated], [RecoveryStatus], [VaultExported],
+/// [VaultRestored] and [VaultRecoveryFailed]. The vault key stays behind
+/// the keystore responder, so recovery runs inside the vault's exclusive
+/// queue.
+///
 /// Sync request ids then joined v3 the same way (03 §10.1): [EnrollSync]
 /// and [RunSyncRound] gained an optional `requestId` that each
 /// [SyncStatus] answering them echoes, so a round the engine starts after
@@ -1211,6 +1219,75 @@ final class SetSyncSecrets extends EngineRequest {
   const SetSyncSecrets({required this.enabled});
 
   final bool enabled;
+}
+
+/// Generates a new recovery code for the vault, to be shown once
+/// (03 §4.5, CRED-05). Answered by [RecoveryCodeGenerated] with
+/// [requestId]. Nothing is stored: the code becomes this device's
+/// recovery code only when [SetRecoveryCode] carries it back.
+final class NewRecoveryCode extends EngineRequest {
+  const NewRecoveryCode({required this.requestId});
+
+  final String requestId;
+}
+
+/// Makes [code] this device's recovery code, replacing any earlier one
+/// (03 §4.5, CRED-05). The vault key comes from the app's keystore
+/// answer, and the write runs inside the vault's exclusive queue beside
+/// the sync re-key journal. Answered by [RecoveryStatus] or
+/// [VaultRecoveryFailed].
+final class SetRecoveryCode extends EngineRequest {
+  const SetRecoveryCode({required this.requestId, required this.code});
+
+  final String requestId;
+  final String code;
+}
+
+/// Asks whether this device has a recovery code an export can use,
+/// answered by [RecoveryStatus] or [VaultRecoveryFailed]. With the
+/// keystore locked, whether the entry exists, which is all anyone can
+/// tell.
+final class RecoveryStatusRequest extends EngineRequest {
+  const RecoveryStatusRequest({required this.requestId});
+
+  final String requestId;
+}
+
+/// Exports the vault, encrypted under the recovery code (03 §4.5,
+/// CRED-05). The export is the `seance-secrets` format every app reads.
+/// Answered by [VaultExported] or [VaultRecoveryFailed].
+final class ExportVault extends EngineRequest {
+  const ExportVault({required this.requestId});
+
+  final String requestId;
+}
+
+/// What a [RestoreVault] does with a credential this device already
+/// holds.
+enum VaultRestorePolicy {
+  /// Keep this device's copy (the default).
+  keepExisting,
+
+  /// Take the export's copy.
+  replaceExisting,
+}
+
+/// Restores an export into this device's vault (03 §4.5, CRED-05). The
+/// bytes are bounded by `SecretsExport.maxBytes` before anything is
+/// decoded, and nothing is written unless the export opens with [code].
+/// Answered by [VaultRestored] or [VaultRecoveryFailed].
+final class RestoreVault extends EngineRequest {
+  const RestoreVault({
+    required this.requestId,
+    required this.export,
+    required this.code,
+    required this.policy,
+  });
+
+  final String requestId;
+  final Uint8List export;
+  final String code;
+  final VaultRestorePolicy policy;
 }
 
 /// The name the host syslog line gives this device (SAF-13, M5 plan Q6),
@@ -4048,6 +4125,100 @@ final class KeystoreRequest extends EngineEvent {
   /// Unique for the engine's lifetime.
   final int requestId;
   final KeystoreOperation operation;
+}
+
+/// A new recovery code, to be shown once (03 §4.5, CRED-05). The code
+/// crosses the protocol because the app shows it; the engine stores
+/// nothing until [SetRecoveryCode].
+final class RecoveryCodeGenerated extends EngineEvent {
+  const RecoveryCodeGenerated({required this.requestId, required this.code});
+
+  final String requestId;
+  final String code;
+}
+
+/// Whether this device has a recovery code an export can use (03 §4.5,
+/// CRED-05).
+final class RecoveryStatus extends EngineEvent {
+  const RecoveryStatus({required this.requestId, required this.configured});
+
+  final String requestId;
+  final bool configured;
+}
+
+/// The vault's encrypted export (03 §4.5, CRED-05), in the
+/// `seance-secrets` format every app reads.
+final class VaultExported extends EngineEvent {
+  const VaultExported({required this.requestId, required this.bytes});
+
+  final String requestId;
+  final Uint8List bytes;
+}
+
+/// What a restore did (03 §4.5, CRED-05), by [requestId].
+final class VaultRestored extends EngineEvent {
+  const VaultRestored({
+    required this.requestId,
+    required this.added,
+    required this.replaced,
+    required this.kept,
+    required this.unreadable,
+  });
+
+  final String requestId;
+  final int added;
+  final int replaced;
+  final int kept;
+  final int unreadable;
+}
+
+/// Why a recovery operation failed. [failure] is a fixed kind the app
+/// words through its ARB catalog; no diagnostic text, code, key material
+/// or exception message crosses with it.
+final class VaultRecoveryFailed extends EngineEvent {
+  const VaultRecoveryFailed({required this.requestId, required this.failure});
+
+  final String requestId;
+  final VaultRecoveryFailure failure;
+}
+
+/// Why a recovery operation could not be done (03 §4.5, CRED-05). Each
+/// kind is actionable on its own; the engine carries no raw exception
+/// text.
+enum VaultRecoveryFailure {
+  /// This process may not write the support directory (D63).
+  directoryShared,
+
+  /// The keystore holds no vault key or could not answer, so the vault
+  /// cannot be opened. Nothing was changed and no key was minted.
+  keystoreUnavailable,
+
+  /// This device has no recovery code, so there is nothing to export.
+  notSetUp,
+
+  /// The stored recovery entry does not open under this vault's key.
+  damaged,
+
+  /// The typed code is not a recovery code.
+  invalidCode,
+
+  /// The code is well formed but is not the one the export was made with.
+  wrongCode,
+
+  /// The export was altered after it was made.
+  tampered,
+
+  /// The export is not a secrets export or is damaged.
+  malformed,
+
+  /// The export was written by a newer format version.
+  unsupportedVersion,
+
+  /// The export exceeds the size or entry limit.
+  tooLarge,
+
+  /// Anything else; the app shows a generic failure.
+  failed,
 }
 
 /// One in-app threshold alert raised or cleared (ALR-01, 03 §7.19, D29):

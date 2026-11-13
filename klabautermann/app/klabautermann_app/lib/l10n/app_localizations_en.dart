@@ -9177,11 +9177,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String editLinkTo(String path) {
-    return 'Link to $path';
-  }
-
-  @override
   String get editRootFile => 'Root\'s file';
 
   @override
@@ -11612,6 +11607,189 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appsForwardStart => 'Forward';
+
+  @override
+  String get recoveryTitle => 'Recovery';
+
+  @override
+  String get recoveryDescription =>
+      'A recovery code opens an encrypted export of this device\'s saved passwords and keys, on this device or another one. Klabautermann shows the code once and cannot show it again. Without it, an export cannot be opened, by you or anyone else.';
+
+  @override
+  String get recoveryStatusFailed =>
+      'Could not check recovery settings. Try again.';
+
+  @override
+  String get recoveryRetry => 'Retry';
+
+  @override
+  String get recoveryChecking => 'Checking…';
+
+  @override
+  String get recoveryConfigured => 'This device has a recovery code.';
+
+  @override
+  String get recoveryNotConfigured => 'This device has no recovery code yet.';
+
+  @override
+  String get recoverySetUp => 'Set up recovery…';
+
+  @override
+  String get recoveryReplace => 'Replace recovery code…';
+
+  @override
+  String get recoveryExport => 'Export secrets…';
+
+  @override
+  String get recoveryRestore => 'Restore secrets…';
+
+  @override
+  String get recoveryReplaceTitle => 'Replace the recovery code?';
+
+  @override
+  String get recoveryReplaceBody =>
+      'Exports made with the current code still open with it. New exports open only with the new one.';
+
+  @override
+  String get recoveryReplaceConfirm => 'Replace';
+
+  @override
+  String get recoveryCancel => 'Cancel';
+
+  @override
+  String recoveryExportDone(String destination) {
+    return 'Exported to $destination. It opens only with this device\'s recovery code.';
+  }
+
+  @override
+  String recoveryRestoreAdded(int count) {
+    return '$count added';
+  }
+
+  @override
+  String recoveryRestoreReplaced(int count) {
+    return '$count replaced';
+  }
+
+  @override
+  String recoveryRestoreKept(int count) {
+    return '$count kept';
+  }
+
+  @override
+  String recoveryRestoreUnreadable(int count) {
+    return '$count could not be read';
+  }
+
+  @override
+  String recoveryRestoreSummary(String parts) {
+    return 'Restored: $parts. A newer copy synced from another device still replaces a restored one.';
+  }
+
+  @override
+  String get recoveryCodeTitle => 'Your recovery code';
+
+  @override
+  String get recoveryCodeBody =>
+      'Write this code down and keep it somewhere safe, away from this device. It is shown only now. With it, an export of this device\'s secrets opens anywhere; without it, nowhere. Nothing changes until you confirm.';
+
+  @override
+  String get recoveryCodeCopy => 'Copy code';
+
+  @override
+  String get recoveryCodeCopied => 'Copied';
+
+  @override
+  String get recoveryCodeConfirmLabel =>
+      'Type the code\'s first four characters';
+
+  @override
+  String get recoveryCodeCancel => 'Cancel';
+
+  @override
+  String get recoveryCodeDone => 'I saved it';
+
+  @override
+  String get recoveryRestoreTitle => 'Restore secrets';
+
+  @override
+  String get recoveryRestoreBody =>
+      'Enter the recovery code of the device the export came from, then choose the export file.';
+
+  @override
+  String get recoveryRestoreCodeLabel => 'Recovery code';
+
+  @override
+  String get recoveryRestoreConflictLabel =>
+      'Credentials this device already has:';
+
+  @override
+  String get recoveryRestoreKeep => 'Keep this device\'s';
+
+  @override
+  String get recoveryRestoreReplace => 'Use the export\'s';
+
+  @override
+  String get recoveryRestoreChoose => 'Choose export…';
+
+  @override
+  String get recoveryDirectoryShared =>
+      'Klabautermann\'s support directory is in use by another window. Close it and try again.';
+
+  @override
+  String get recoveryKeystoreUnavailable =>
+      'The system keystore is locked or unavailable, so the vault could not be opened. Unlock Klabautermann and try again.';
+
+  @override
+  String get recoveryNotSetUp =>
+      'This device has no recovery code. Set one up before exporting.';
+
+  @override
+  String get recoveryDamaged =>
+      'This device\'s recovery code can no longer open its vault. Replace it to export again.';
+
+  @override
+  String get recoveryInvalidCode =>
+      'That is not a recovery code. Check it for typos.';
+
+  @override
+  String get recoveryWrongCode =>
+      'That recovery code does not open this export.';
+
+  @override
+  String get recoveryTampered =>
+      'That export was changed after it was made, so nothing was restored.';
+
+  @override
+  String get recoveryMalformed =>
+      'That file is not a Klabautermann secrets export.';
+
+  @override
+  String get recoveryUnsupportedVersion =>
+      'That export was written by a newer version of Klabautermann.';
+
+  @override
+  String get recoveryTooLarge => 'That export is too large to read.';
+
+  @override
+  String get recoveryFailed => 'The recovery operation could not be completed.';
+
+  @override
+  String get recoveryFileTooLarge =>
+      'That file is too large to be a Klabautermann secrets export.';
+
+  @override
+  String get recoveryFileUnreadable =>
+      'That file could not be read. Choose the export again.';
+
+  @override
+  String get recoveryFileSaveFailed =>
+      'The export could not be saved there. Choose another location.';
+
+  @override
+  String editLinkTo(String path) {
+    return 'Link to $path';
+  }
 
   @override
   String get editorShowReplaceTooltip => 'Find and replace';

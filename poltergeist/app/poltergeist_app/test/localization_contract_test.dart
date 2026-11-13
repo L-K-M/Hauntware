@@ -225,6 +225,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'preview.largeDownloadThresholdBytes'",
     // The D19 update-check opt-out (02 §5) — a settings.json key.
     "'updates.checkEnabled'",
+    // The app lock switch (cred-05) — a settings.json key.
+    "'poltergeist.appLock'",
+    // CRED-05's enrolment-prompt answer — a settings.json key.
+    "'poltergeist.recoveryPromptDeclined'",
     // The device theme and its mode (Device themes): settings.json keys.
     "'theme.palette'",
     "'theme.mode'",
@@ -454,10 +458,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // What the failed call printed, carried to the window verbatim, as
     // the dialog shows it.
     r"'$error'",
+    // The locked app's refusal as the link carries it; the window covers
+    // itself rather than rendering this.
+    "'The app is locked'",
   },
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No Settings window method $name'",
     "'This section is not available.'",
+    // A window could only have shown the switch if the app had it.
+    "'No app lock settings'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
@@ -1989,6 +1998,29 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'backup.settings.dialog'",
     "'backup.settings.close'",
   },
+  // CRED-05's Recovery section: widget keys, the code dialog's group
+  // separator and summary's list join: plumbing and machine data.
+  'lib/ui/settings/recovery_settings.dart': {
+    "'-'",
+    "', '",
+    "'recovery.replace.confirm'",
+    "'recovery.status.retry'",
+    "'recovery.setUp'",
+    "'recovery.export'",
+    "'recovery.restore'",
+    "'recovery.message'",
+    "'recovery.code'",
+    "'recovery.code.confirm'",
+    "'recovery.code.cancel'",
+    "'recovery.code.done'",
+    "'recovery.restore.code'",
+    "'recovery.restore.choose'",
+  },
+  // CRED-05's enrolment prompt: widget keys, never rendered copy.
+  'lib/ui/recovery_prompt.dart': {
+    "'recovery.prompt.notNow'",
+    "'recovery.prompt.setUp'",
+  },
   // The registered command id (D21 plumbing).
   'lib/ui/settings/backup_settings_command.dart': {"'open-settings-backup'"},
   // The Editing sections' bounded mount (06 §8): widget keys, the
@@ -2488,6 +2520,54 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The drag image's ellipsis glyph: typography, not copy.
   'lib/ui/panes/drag_out_image.dart': {"'\u2026'"},
+  // The app lock's device-authentication diagnostics (cred-05): they
+  // reach no rendered surface, whose screens word failures from
+  // AppLockAvailability alone.
+  'lib/services/device_authenticator.dart': {
+    "'device authentication is unavailable'",
+    r"'device authentication failed: ${error.code}'",
+    "'device authentication was rejected'",
+  },
+  // The app lock switch's failed-change toast interpolates the caught
+  // error for the debug log — never rendered as authored copy. The empty
+  // reason and the note's line join are formatting, not copy.
+  'lib/ui/settings/app_lock_settings.dart': {r"'$error'", "''", r"'\n'"},
+  // CRED-05's recovery file plumbing (cred-05): the export file name's
+  // pieces, the SAF staging path, the channel's method names and its
+  // diagnostics are machine text, never rendered copy.
+  'lib/services/secrets_recovery.dart': {
+    "'0'",
+    r"'poltergeist-secrets-${now.year}-${two(now.month)}-${two(now.day)}'",
+    "'.json'",
+    "'application/json'",
+    "'secrets-export-'",
+    r"'${directory.path}/$fileName'",
+    "'That file could not be read.'",
+    // A fixed protocol diagnostic; the settings UI renders ARB copy.
+    "'Could not read recovery status.'",
+    "'The file exceeds the export size limit'",
+  },
+  // The ported Android SAF channel (cred-05): channel and method names,
+  // argument keys, error codes and diagnostics are protocol plumbing.
+  'lib/services/file_export_service.dart': {
+    "'poltergeist/files'",
+    "'pickExportDirectory'",
+    "'hasExportDirectoryAccess'",
+    "'exportFile'",
+    "'releaseExportDirectory'",
+    "'sourcePath'",
+    "'fileName'",
+    "'mimeType'",
+    "'INVALID_RESULT'",
+    "'Android returned no directory selection result.'",
+    "'Android returned no directory access result.'",
+    "'Android returned no exported document URI.'",
+    "'The staged export file no longer exists.'",
+  },
+  // The picked file's no-data diagnostic, never rendered copy.
+  'lib/services/picked_file_bytes.dart': {
+    "'The picker provided no readable data'",
+  },
   // The keep-alive's notification channel id (stored user data, never
   // rendered) and its status-bar drawable's resource name.
   'lib/services/transfer_keep_alive.dart': {

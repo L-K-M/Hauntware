@@ -66,6 +66,9 @@
   platform, as in the other apps. Before, they used JetBrains Mono only
   where it was installed and fell back to SF Mono, Menlo, Consolas or
   DejaVu Sans Mono.
+- Android's device-authentication host uses AppCompat launch and normal
+  themes in light and dark modes, matching Séance's required setup for
+  the biometric fallback on supported older Android versions.
 - Password, passphrase and private-key fields in the sync sign-in, the
   sudo prompt, the server editor and the connection prompts turn off
   autocorrect, suggestions and keyboard learning, so your keyboard does
@@ -351,6 +354,11 @@
   in the server's zone, and your sync account's size.
 - Copy the commands an action runs, run Séance's synced snippets on a
   server, and export a redacted diagnostic bundle.
+- Settings → Sync → Recovery: a recovery code for this device's saved
+  passwords and keys, shown once with its setup kept in the vault; an
+  encrypted export you can restore on this or another device, with a keep-or-replace
+  choice for credentials already here. The export keeps Séance's
+  `seance-secrets` wire format, so exports restore across the apps.
 - The remote file editor has a status row, as Séance's and Poltergeist's
   editors do: the caret's line and column (tap it to go to a line), the
   selection's size, an unsaved mark, the line ending, the encoding, the

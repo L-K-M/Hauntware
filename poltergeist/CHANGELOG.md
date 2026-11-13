@@ -49,6 +49,18 @@
   now carry a Windows Mark-of-the-Web stream or a macOS quarantine
   attribute, as Séance's downloads do. Marking is best effort and only
   logged on failure.
+- **Optional device-authentication lock.** Settings → General can require
+  your device's unlock before future saved-credential reads. It is off
+  by default, locks again after five minutes away, and leaves existing
+  connections running. Authentication refusal stays distinct from an
+  unavailable credential store.
+- **Recovery codes for saved passwords and keys.** Settings → Backup →
+  Recovery shows a code once and keeps the setup in the device's vault.
+  Export your credentials, encrypted, to restore here or on another
+  device, keeping existing entries unless you choose to replace them.
+  Saving a first
+  credential offers the code once; "Not now" is remembered. The export
+  uses Séance's `seance-secrets` format, so it opens in either app.
 - **The keyboard follows a sidebar location.** Choosing a location or a
   saved workspace in the sidebar now moves the keyboard to its file list,
   so the arrow keys move through files instead of the sidebar. Page Up

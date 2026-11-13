@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ghost_keystore/ghost_keystore.dart'
-    show appLockBackgroundTimeout;
+    show
+        AppLockChange,
+        AppLockSettings,
+        AppLockSupport,
+        appLockBackgroundTimeout;
 import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 
-import '../controllers/app_lock_controller.dart';
 import '../l10n/app_localizations.dart';
 
 /// Settings > Safety's app lock switch (SAF-20). Turning it on or off asks

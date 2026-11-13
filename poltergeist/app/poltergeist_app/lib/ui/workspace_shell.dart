@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart'
     show ReserveMacosToolbarBand, macosTrafficLightsInset;
+import 'package:ghost_keystore/ghost_keystore.dart' show AppLockSettings;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostPaneEdge, GhostResizeHandle, GhostUndoHistory;
 import 'package:ghost_update/ghost_update.dart';
@@ -64,7 +65,8 @@ import '../services/settings_models.dart'
         DirectoryGroupingModel,
         DoubleClickActionModel,
         EditorFontModel,
-        EditorTextSizeModel;
+        EditorTextSizeModel,
+        RecoverySettingsModel;
 import '../services/settings_window/settings_window_host.dart';
 import '../services/settings_window/settings_window_link.dart';
 import '../services/sidebar_controller.dart';
@@ -162,6 +164,7 @@ class WorkspaceShell extends StatefulWidget {
     this.sshConfigImport,
     this.thirdPartyBookmarkImport,
     this.bookmarkBackup,
+    this.recovery,
     this.serverEditor,
     this.bookmarks,
     this.workspaces,
@@ -210,6 +213,7 @@ class WorkspaceShell extends StatefulWidget {
     this.syncTasks,
     this.updateCheck,
     this.appVersion,
+    this.appLock,
     this.localVolumes,
     this.settingsWindow,
     this.window,
@@ -271,6 +275,11 @@ class WorkspaceShell extends StatefulWidget {
   /// Null leaves the command unregistered — tests and engine-less boots
   /// opt out.
   final BookmarkBackupService? bookmarkBackup;
+
+  /// CRED-05's Recovery section, shown inside Settings → Backup and
+  /// offered after the first saved credential. Null leaves the section
+  /// and the offer unwired.
+  final RecoverySettingsModel? recovery;
 
   /// The server editor's application layer (04 §4.2's management
   /// verbs): the catalog section's add/edit/duplicate/delete route
@@ -485,6 +494,10 @@ class WorkspaceShell extends StatefulWidget {
   /// Settings window through the link's snapshot. Null where the platform
   /// cannot tell.
   final String? appVersion;
+
+  /// The app lock (cred-05) behind Settings → General's switch. Null
+  /// leaves the section out.
+  final AppLockSettings? appLock;
 
   /// The sidebar's DEVICES source; null reads the host's volumes. Tests
   /// script it so a phone-posture run never lists the test machine's
@@ -1731,11 +1744,13 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     opener: widget.externalOpener,
     previewDownloads: _previewDownloadsSettings,
     backup: widget.bookmarkBackup,
+    recovery: widget.recovery,
     appearance: widget.appearance,
     editorTextSize: widget.editorTextSize,
     editorFont: widget.editorFont,
     directoryGrouping: widget.directoryGrouping,
     doubleClickAction: widget.doubleClickAction,
+    appLock: widget.appLock,
     changes: [?widget.updateCheck],
   );
 
@@ -1798,6 +1813,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       if (widget.bookmarkBackup != null)
         buildOpenSettingsBackupCommand(
           service: widget.bookmarkBackup!,
+          recovery: widget.recovery,
           enabled: () => !_commandSessionActive,
           openWindow: _openSettingsWindow,
         ),
@@ -1805,11 +1821,13 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       // show: D19's update-check opt-out (General's only row today) or
       // the device's theme (Appearance). A seam-less boot has neither.
       if (widget.updateCheck != null ||
+          widget.appLock != null ||
           widget.directoryGrouping != null ||
           widget.appearance != null ||
           widget.editorTextSize != null)
         buildAppSettingsCommand(
           settings: widget.updateCheck == null ? null : _generalSettings,
+          appLock: widget.appLock,
           directoryGrouping: widget.directoryGrouping,
           appearance: widget.appearance,
           editorTextSize: widget.editorTextSize,

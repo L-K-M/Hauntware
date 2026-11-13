@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ghost_keystore/ghost_keystore.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
 
 export 'package:ghost_keystore/ghost_keystore.dart'
     show
@@ -37,16 +38,17 @@ MasterKeyManager poltergeistMasterKeyManager([FlutterSecureStorage? storage]) =>
 /// Whether [vaultFile] holds sealed secrets that a newly minted master key
 /// would strand: the tiebreaker [MasterKeyManager.probeKeystore] needs to
 /// tell a first run from a keystore that lost its entry. Séance's
-/// `_holdsSecrets` rule: no file or an empty object holds nothing; any
-/// entry counts; a file that does not decode to an object counts too,
-/// because minting over a foreign or corrupt state is the one guess that
-/// cannot be taken back. Poltergeist stores no reserved app entries in
-/// its vault, so unlike Séance it excludes none.
+/// `_holdsSecrets` rule: no file or only reserved app entries holds no
+/// credentials. Any other entry, or a file that does not decode to an
+/// object, counts: minting over foreign or corrupt credentials is the one
+/// guess that cannot be taken back. A recovery wrap alone must not keep
+/// an otherwise empty vault from healing a lost keystore entry.
 Future<bool> vaultHoldsSecrets(File vaultFile) async {
   if (!await vaultFile.exists()) return false;
   try {
     final decoded = jsonDecode(await vaultFile.readAsString());
-    return decoded is! Map || decoded.isNotEmpty;
+    return decoded is! Map ||
+        decoded.keys.any((id) => id is! String || !isReservedVaultId(id));
   } catch (_) {
     return true;
   }

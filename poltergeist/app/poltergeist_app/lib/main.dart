@@ -4,6 +4,7 @@ import 'dart:ui' show AppExitType, PlatformDispatcher;
 
 import 'package:app_links/app_links.dart';
 import 'package:file_picker/file_picker.dart' show FilePicker;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
@@ -11,6 +12,7 @@ import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
 import 'package:ghost_keepalive/ghost_keepalive.dart'
     show BackgroundKeepAlive;
+import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:ghost_update/ghost_update.dart';
@@ -26,6 +28,7 @@ import 'services/atomic_file.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
+import 'services/device_authenticator.dart';
 import 'services/directory_grouping_controller.dart';
 import 'services/double_click_action_controller.dart';
 import 'services/editor_font_controller.dart';
@@ -48,6 +51,8 @@ import 'services/os_drag_out.dart' show DragOutRouter, platformDragOutBackend;
 import 'services/probe_settings_store.dart';
 import 'services/quit_guard.dart';
 import 'services/recent_locations.dart';
+import 'services/recovery_settings.dart';
+import 'services/secrets_recovery.dart';
 import 'services/seance_links.dart';
 import 'services/secure_master_key.dart';
 import 'services/server_config_source.dart';
@@ -152,6 +157,7 @@ Future<void> main(List<String> args) async {
     onError: errorReporter.report,
     syncDeviceId: () => syncEnrollmentState.cachedDeviceId,
   );
+  final preferences = AppPreferences(store: settingsStore);
   // The credential vault: one FileVaultStore beside the settings file
   // feeds every consumer so its serialized-write discipline covers all
   // of them. DynamicSecretVault re-resolves the key per call —
@@ -161,25 +167,63 @@ Future<void> main(List<String> args) async {
   final vaultStore = FileVaultStore(
     File('${supportDirectory.path}${Platform.pathSeparator}vault.json'),
   );
+  // The app lock (cred-05), device-local in settings.json: the keystore's
+  // credential reads wait for it, and the app opens behind its lock
+  // screen.
+  final appLock = AppLockController(
+    authenticator: LocalDeviceAuthenticator(
+      reason: () => lookupAppLocalizations(
+        basicLocaleListResolution(
+          PlatformDispatcher.instance.locales,
+          AppLocalizations.supportedLocales,
+        ),
+      ).appLockReason,
+    ),
+    supported: appLockSupportedOn(defaultTargetPlatform),
+    enabled: await preferences.loadAppLock(),
+    save: preferences.saveAppLock,
+  );
+  masterKeys.protectCredentialReads(appLock.read);
   // Settle an interrupted re-key before anything else reads the vault:
   // a crash between the keystore swap and the settle leaves .rekey
   // behind, and whichever sealed generation the installed key still
-  // opens wins.
-  try {
-    final vaultKey = await probeVaultKey(masterKeys, vaultStore.file);
-    if (vaultKey != null) await vaultStore.settleRekey(vaultKey);
-  } on Object catch (error, stack) {
-    errorReporter.report(error, stack);
+  // opens wins. A locked app defers this to its first unlocked read: the
+  // vault's provider settles under the lock, so no boot read reaches the
+  // keystore while locked.
+  if (!appLock.locked) {
+    try {
+      final vaultKey = await appLock.read(
+        () => probeVaultKey(masterKeys, vaultStore.file),
+      );
+      if (vaultKey != null) await vaultStore.settleRekey(vaultKey);
+    } on Object catch (error, stack) {
+      errorReporter.report(error, stack);
+    }
   }
+  // The vault under the app lock: every key read and re-key settle runs
+  // inside appLock.read, so a locked app never reaches the keystore. The
+  // dynamic vault and CRED-05's recovery service share this one guarded
+  // provider, so recovery exports, restores and code replacement keep the
+  // same boundary.
+  Future<SecretVault?> guardedVault() => appLock.read(() async {
+    final key = await probeVaultKey(masterKeys, vaultStore.file);
+    if (key == null) return null;
+    await vaultStore.settleRekey(key);
+    return SecretVault(vaultStore, key);
+  });
+
   final dynamicVault = DynamicSecretVault(
     vaultStore,
-    () async {
-      final key = await probeVaultKey(masterKeys, vaultStore.file);
-      return key == null ? null : SecretVault(vaultStore, key);
-    },
+    guardedVault,
     onError: errorReporter.report,
+    readGuard: appLock.read,
   );
-  final preferences = AppPreferences(store: settingsStore);
+  final recovery = RecoverySettings(
+    recovery: SecretsRecovery(vaultStore, guardedVault),
+    files: PlatformSecretsExportFiles(),
+    promptDeclined: await preferences.loadRecoveryPromptDeclined(),
+    savePromptDeclined: preferences.saveRecoveryPromptDeclined,
+  );
   // The external-editor registry (06 §4.1): one versioned document in
   // the shared settings.json — the Open With ▸ submenu and the remote
   // Open verb resolve through it. Tolerant decode: a malformed document
@@ -342,6 +386,8 @@ Future<void> main(List<String> args) async {
     navigatorKey: navigatorKey,
     scaffoldMessengerKey: scaffoldMessengerKey,
     vault: dynamicVault,
+    recovery: recovery,
+    appLock: appLock,
     onError: errorReporter.report,
   );
 
@@ -703,6 +749,7 @@ Future<void> main(List<String> args) async {
       recentLocations: recentLocations,
       engineSession: engineSession,
       bookmarkBackup: bookmarkBackup,
+      recovery: recovery,
       serverEditor: serverEditor,
       navigatorKey: navigatorKey,
       scaffoldMessengerKey: scaffoldMessengerKey,
@@ -775,6 +822,7 @@ Future<void> main(List<String> args) async {
       syncTasks: syncTasks,
       updateCheck: updateCheck,
       appVersion: appVersion,
+      appLock: appLock,
       appearance: appearance,
       editorTextSize: editorTextSize,
       editorFont: editorFont,
