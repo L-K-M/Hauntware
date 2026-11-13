@@ -121,6 +121,24 @@ Future<void> terminalPaste(TerminalSession tab, {BuildContext? context}) async {
   final data = await Clipboard.getData(Clipboard.kTextPlain);
   final text = data?.text;
   if (text == null || text.isEmpty) return;
+  // A context unmounted during the read falls back to the navigator.
+  if (context == null || !context.mounted) {
+    await terminalPasteText(tab, text);
+    return;
+  }
+  await terminalPasteText(tab, text, context: context);
+}
+
+/// Paste [text] into [tab]'s terminal through the same policy as
+/// [terminalPaste]. The soft keyboard's own paste (a clipboard chip or
+/// paste suggestion, `TerminalView.onKeyboardPaste`) comes here with its
+/// text, since it never passes the clipboard read.
+Future<void> terminalPasteText(
+  TerminalSession tab,
+  String text, {
+  BuildContext? context,
+}) async {
+  if (text.isEmpty) return;
   await TerminalPastePolicy(
     inspect: (text) async => [
       for (final finding in DangerLinter.scan(text))

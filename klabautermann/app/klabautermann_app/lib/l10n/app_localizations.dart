@@ -10995,6 +10995,12 @@ abstract class AppLocalizations {
   /// **'These lines could not be checked. Each line runs as you paste it.'**
   String get dockerShellPasteUnchecked;
 
+  /// Body of the paste dialog when the danger linter found nothing but the shell has bracketed paste off, so each pasted line would run on its own (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'This shell runs each line as it arrives. Check the lines before you paste them.'**
+  String get dockerShellPasteUnbracketed;
+
   /// One danger finding in the paste dialog: the pasted line it is on and the linter's explanation (CTX-07).
   ///
   /// In en, this message translates to:
@@ -11018,6 +11024,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get dockerShellPasteCancel;
+
+  /// Title of the dialog that shows where a container shell link leads when its text does not show its address.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this link?'**
+  String get dockerShellLinkReviewTitle;
+
+  /// Body of the link review dialog, above the link's host and full address.
+  ///
+  /// In en, this message translates to:
+  /// **'The text you chose does not show where this link goes. Open it only if you trust this site.'**
+  String get dockerShellLinkReviewBody;
+
+  /// Link review dialog button that opens the link in the browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get dockerShellLinkReviewOpen;
+
+  /// Link review dialog button that opens nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerShellLinkReviewCancel;
 
   /// Context menu item that selects the whole terminal buffer, scrollback included (CTX-07).
   ///
