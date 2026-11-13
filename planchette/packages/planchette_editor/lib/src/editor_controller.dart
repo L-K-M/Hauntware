@@ -1697,7 +1697,7 @@ class EditorController extends ChangeNotifier {
   /// change has settled: after pair completion, and not mid-composition.
   void _trackHistory() {
     final value = text.value;
-    if (_applyingHistory || identical(value.text, _historyText)) {
+    if (_applyingHistory || _sameAsHistory(value.text)) {
       if (!value.composing.isValid) _historySelection = value.selection;
       return;
     }
@@ -1720,10 +1720,23 @@ class EditorController extends ChangeNotifier {
     _syncUndoState();
   }
 
+  /// Whether [value] is the text the history last saw. The platform
+  /// delivers a decoded copy of the text with every input method update,
+  /// so an update that only marks or ends a composing range carries an
+  /// equal string that is not the same object. The identity check keeps
+  /// caret moves free, and an equal copy is adopted so the next check is
+  /// one again.
+  bool _sameAsHistory(String value) {
+    if (identical(value, _historyText)) return true;
+    if (value != _historyText) return false;
+    _historyText = value;
+    return true;
+  }
+
   /// Publishes what undo and redo can do. A composition not yet recorded
   /// counts as something to undo, and as a new edit it hides redo.
   void _syncUndoState() {
-    final pending = !identical(text.text, _historyText);
+    final pending = !_sameAsHistory(text.text);
     undoController.value = UndoHistoryValue(
       canUndo: _history.canUndo || pending,
       canRedo: _history.canRedo && !pending,

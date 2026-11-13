@@ -300,7 +300,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     if (!mounted) return;
     if (_installSeen != c.installGeneration) {
       _installSeen = c.installGeneration;
-      // The install remounts the field, which drops its snapshot history.
+      // The install remounts the field, which drops its snapshot history,
+      // so a remount still waiting would only repeat it.
+      _fieldRemount?.cancel();
       _fieldSnapshots.reset(c.text.value, clock.now());
       _carryOverInstall();
     }
@@ -2419,10 +2421,12 @@ final class _FieldSnapshotEstimate {
   int get bytes => _settled + _open;
 
   /// Starts over for a fresh field, which records [value] as its first
-  /// snapshot.
+  /// snapshot. That snapshot is not charged: a remount cannot drop it, so
+  /// counting it would remount a field whose text alone exceeds the budget
+  /// at every pause, for nothing.
   void reset(TextEditingValue value, DateTime now) {
     _settled = 0;
-    _open = value.text.length * 2;
+    _open = 0;
     _windowStart = now;
     _last = value;
   }

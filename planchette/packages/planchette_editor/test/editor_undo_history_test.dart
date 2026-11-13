@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -116,6 +118,49 @@ void main() {
     expect(c.undoController.value.canRedo, isFalse);
     c.redo();
     expect(c.text.text, 'x');
+  });
+
+  testWidgets('an input method marking a word keeps undo state', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'ab');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.showKeyboard(document);
+    c.text.selection = const TextSelection.collapsed(offset: 2);
+    await tester.pump();
+    await type(tester, c, 'cd');
+    c.undo();
+    await tester.pump();
+    expect(c.text.text, 'ab');
+
+    // Android keyboards mark the word at the caret as composing without
+    // changing it. The platform delivers a decoded copy of the text: equal
+    // to the buffer's, but not the same string.
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'ab',
+        selection: TextSelection.collapsed(offset: 2),
+        composing: TextRange(start: 0, end: 2),
+      ),
+    );
+    await tester.pump();
+    expect(c.text.value.composing.isValid, isTrue);
+    expect(c.undoController.value.canUndo, isFalse);
+    expect(c.undoController.value.canRedo, isTrue);
+
+    // The keyboard ends the marking, again without a change.
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'ab',
+        selection: TextSelection.collapsed(offset: 2),
+      ),
+    );
+    await tester.pump();
+    expect(c.undoController.value.canRedo, isTrue);
+    c.undoController.redo();
+    await tester.pump();
+    expect(c.text.text, 'abcd');
   });
 
   testWidgets('a composition is recorded only once it commits', (tester) async {
@@ -245,5 +290,66 @@ void main() {
     expect(c.text.text, '$lines${'x' * 40}!');
 
     expect(await fieldHistoryDepth(tester, c), lessThanOrEqualTo(5));
+  });
+
+  testWidgets('a document larger than the budget alone is not remounted', (
+    tester,
+  ) async {
+    final budget = PlanchetteEditor.fieldSnapshotBudgetBytes;
+    addTearDown(() => PlanchetteEditor.fieldSnapshotBudgetBytes = budget);
+    // The 400-character text is 800 bytes: the fresh field's own first
+    // snapshot already exceeds the budget, and a remount cannot drop it.
+    PlanchetteEditor.fieldSnapshotBudgetBytes = 600;
+    final lines = List.generate(40, (i) => 'line ${i + 100}').join('\n');
+    final c = EditorController(displayPath: 'a.txt', initialText: lines);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.showKeyboard(document);
+    final field = tester.state(find.byType(UndoHistory<TextEditingValue>));
+
+    for (var i = 0; i < 3; i++) {
+      c.text.selection = TextSelection.collapsed(offset: i);
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(
+      tester.state(find.byType(UndoHistory<TextEditingValue>)),
+      same(field),
+    );
+  });
+
+  testWidgets('a reload cancels a pending remount', (tester) async {
+    final budget = PlanchetteEditor.fieldSnapshotBudgetBytes;
+    addTearDown(() => PlanchetteEditor.fieldSnapshotBudgetBytes = budget);
+    PlanchetteEditor.fieldSnapshotBudgetBytes = 1000;
+    final lines = List.generate(40, (i) => 'line ${i + 100}').join('\n');
+    final c = EditorController(displayPath: 'a.txt', initialText: lines);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.showKeyboard(document);
+    c.text.selection = TextSelection.collapsed(offset: lines.length);
+    await tester.pump();
+
+    // Two snapshots of about 800 bytes each arm the remount; the reload
+    // lands before it fires and already gives the field a fresh history.
+    await type(tester, c, 'x', gap: const Duration(milliseconds: 600));
+    await type(tester, c, 'y', gap: Duration.zero);
+    c.adoptDocument(
+      TextDocument(
+        file: File('/tmp/a.txt'),
+        text: lines,
+        hasUtf8Bom: false,
+        lineEnding: LineEnding.lf,
+        sha256: 'reloaded',
+      ),
+      replaceText: true,
+    );
+    await tester.pump();
+    final field = tester.state(find.byType(UndoHistory<TextEditingValue>));
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(
+      tester.state(find.byType(UndoHistory<TextEditingValue>)),
+      same(field),
+    );
   });
 }
