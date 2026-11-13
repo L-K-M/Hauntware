@@ -216,7 +216,7 @@ final class ExecCore {
   ///
   /// [open] owns its own bound and late-open cleanup (the link's budgeted
   /// open does both); [stdin] bytes, when given, are written and sealed
-  /// with EOF before output is awaited.
+  /// with EOF unless the remote output has already ended.
   Future<RemoteCommandResult> run(
     String command, {
     required Future<SSHSession> Function() open,
@@ -240,10 +240,7 @@ final class ExecCore {
       throw RemoteCommandException('Could not open a command channel: $e');
     }
 
-    if (stdin != null) {
-      channel.write(Uint8List.fromList(stdin));
-      channel.stdin.close().ignore();
-    }
+    if (stdin != null) channel.write(Uint8List.fromList(stdin));
 
     final stdout = BytesBuilder(copy: false);
     final stderr = BytesBuilder(copy: false);
@@ -277,6 +274,23 @@ final class ExecCore {
         cancelOnError: true,
       ),
     ];
+
+    if (stdin != null) {
+      // dartssh2 4.1.0 finishes the channel, completing `done` without
+      // waiting for `exit-status` or CLOSE, when the local stdin ends after
+      // the remote EOF has already arrived. A fast command's EOF can land
+      // while `open` is still resuming, which lost its exit code (PR #709).
+      // Sealing stdin one event-loop turn later lets every message already
+      // received reach the output listeners first. When the remote EOF is
+      // among them the process has finished its output, so no EOF is sent:
+      // sshd still reports the exit and sends CLOSE, which dartssh2 answers
+      // with EOF and CLOSE. Otherwise EOF goes out before the remote one can
+      // be processed, so commands that read stdin still see it end.
+      Timer.run(() {
+        if (stdoutDone.isCompleted || stderrDone.isCompleted) return;
+        channel.stdin.close().ignore();
+      });
+    }
 
     Future<void> abort() async {
       for (final subscription in subscriptions) {

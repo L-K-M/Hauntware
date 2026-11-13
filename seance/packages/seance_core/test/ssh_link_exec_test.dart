@@ -101,6 +101,46 @@ void main() {
       expect(channel.eofFromClient, isTrue);
     });
 
+    test('empty stdin still seals a stdin-reading command with EOF', () async {
+      final link = await openTestLink();
+      addTearDown(link.link.close);
+      link.peer.onExec = SshChannelPeer.execAnswerOnStdinEof;
+
+      final result = await link.link.run('cat', stdin: const []);
+
+      expect(result.stdout, 'stdin:0');
+      expect(result.exitCode, 0);
+      expect(link.peer.channels.single.eofFromClient, isTrue);
+    });
+
+    test(
+      'keeps the exit status when the remote EOF beats the stdin EOF',
+      () async {
+        // PR #709 CI: a fast command's EOF reached the client before the
+        // client's own stdin EOF went out. dartssh2 then treated the channel
+        // as closed and completed `done` before `exit-status` arrived, so
+        // the result reported no exit code. sshd sends EOF, exit-status and
+        // CLOSE without waiting for the client's EOF, as this peer does.
+        final link = await openTestLink();
+        addTearDown(link.link.close);
+        link.peer.onExec = (channel, command) {
+          channel
+            ..sendData(utf8.encode('out\n'))
+            ..sendEof();
+          Timer(const Duration(milliseconds: 20), () {
+            channel
+              ..sendExitStatus(3)
+              ..sendClose();
+          });
+        };
+
+        final result = await link.link.run('true', stdin: const []);
+
+        expect(result.stdout, 'out\n');
+        expect(result.exitCode, 3);
+      },
+    );
+
     test('a stalled command aborts at the timeout', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);
