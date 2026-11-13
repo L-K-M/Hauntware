@@ -18,7 +18,7 @@ dependencies:
   # The OS keystore (macOS/iOS Keychain, Android Keystore, Linux Secret
   # Service, Windows Credential Manager). Each app pins the exact version
   # in its own pubspec; this range admits both apps' current locks.
-  flutter_secure_storage: ^10.3.1
+  flutter_secure_storage: ^11.2.0
   # secureRandomBytes for the minted master key. The protocol package,
   # never seance_core: Poltergeist consumes this package and must not
   # inherit dartssh2.
