@@ -767,7 +767,8 @@ def dart_main(args):
     runtime = [render("Dart SDK (runtime and core libraries)", sdk_version,
                       " AND ".join(sorted(classify(sdk_text))) or "BSD-3-Clause",
                       f"https://github.com/dart-lang/sdk/tree/{revision or sdk_version}", None,
-                      ["Statically linked into every executable built by `dart compile exe` or `dart build cli`."],
+                      ["Statically linked into every executable built by `dart compile exe`. A `dart build cli` "
+                       "bundle carries it in its executable or, on newer SDKs, in lib/libdartaot<name>."],
                       [("LICENSE", sdk_text)])]
     if not args.runtime_licenses:
         fail("--runtime-licenses is required: the AOT runtime embeds BoringSSL, ICU, zlib, LLVM "
