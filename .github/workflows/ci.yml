@@ -1444,7 +1444,7 @@ jobs:
           (cd planchette/packages/ghost_keepalive && flutter pub get)
           (cd planchette/packages/ghost_licenses && flutter pub get)
           (cd planchette/packages/ghost_update && flutter pub get)
-          (cd planchette/app/planchette_app && flutter pub get)
+          (cd planchette/app/planchette_app && flutter pub get --enforce-lockfile)
       - name: Shared UI primitives
         working-directory: planchette/packages/ghost_ui
         run: |
