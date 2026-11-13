@@ -180,10 +180,10 @@ if [[ "$scope" != dart ]]; then
                packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update packages/ghost_keepalive \
-               packages/ghost_licenses packages/ghost_update \
-               app/planchette_app; do
+               packages/ghost_licenses packages/ghost_update; do
       (cd "$dir" && run flutter pub get)
     done
+    (cd app/planchette_app && run flutter pub get --enforce-lockfile)
     for dir in packages/ghost_ui packages/ghost_fonts packages/planchette_editor \
                packages/ghost_desktop packages/ghost_marks \
                packages/ghost_marks_picker packages/ghost_theme \
