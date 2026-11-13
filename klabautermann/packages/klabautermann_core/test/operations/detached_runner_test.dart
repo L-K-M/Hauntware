@@ -206,6 +206,77 @@ void main() {
       expect(link.commands.last, contains("'docker' 'compose' 'pull'"));
     });
 
+    test(
+      'a setsid PID acknowledges the launch even without SSH exit status',
+      () async {
+        final link = _Link({
+          'XDG_STATE_HOME': _out('$_userDir\n'),
+          'klabautermann-launch': const RemoteCommandResult(stdout: '4242\n'),
+        });
+        final started = await launch(link, DetachedRunner.loginSetsid);
+        expect(started.failure, isNull);
+        expect(started.dir, _userDir);
+        expect(started.pid, 4242);
+        expect(
+          started.exitCode,
+          isNull,
+          reason: 'do not invent an exit status',
+        );
+        expect(link.commands, hasLength(2), reason: 'never launch twice');
+      },
+    );
+
+    test('an elevated setsid launch keeps its PID acknowledgement', () async {
+      final link = _Link({
+        'klabautermann-launch': const RemoteCommandResult(stdout: '4242\n'),
+      });
+      final session = AdminSession.test(
+        ElevatedExecutor(link, const ElevationProbe(isRoot: true)),
+        null,
+      );
+      final started = await launch(
+        link,
+        DetachedRunner.rootSetsid,
+        session: session,
+      );
+      expect(started.failure, isNull);
+      expect(started.dir, kRootOpsDir);
+      expect(started.pid, 4242);
+      expect(started.exitCode, isNull);
+      expect(link.commands, hasLength(1));
+    });
+
+    test(
+      'missing status never accepts invalid or truncated PID output',
+      () async {
+        for (final result in [
+          const RemoteCommandResult(),
+          const RemoteCommandResult(stdout: '0\n'),
+          const RemoteCommandResult(stdout: '-1\n'),
+          const RemoteCommandResult(stdout: '4242 extra\n'),
+          const RemoteCommandResult(stdout: '4242'),
+          const RemoteCommandResult(stdout: '4242\n', truncated: true),
+          const RemoteCommandResult(stdout: '4242\n', exitCode: 1),
+        ]) {
+          final link = _Link({
+            'XDG_STATE_HOME': _out('$_userDir\n'),
+            'klabautermann-launch': result,
+          });
+          final answer = await launch(link, DetachedRunner.loginSetsid);
+          expect(answer.failure, LaunchFailure.failed, reason: '$result');
+        }
+      },
+    );
+
+    test('missing status is not accepted for a systemd launch', () async {
+      final link = _Link({
+        'XDG_STATE_HOME': _out('$_userDir\n'),
+        'systemd-run': const RemoteCommandResult(stdout: '4242\n'),
+      });
+      final answer = await launch(link, DetachedRunner.loginSystemdUser);
+      expect(answer.failure, LaunchFailure.failed);
+    });
+
     test('the systemd user row names its unit and reports no PID', () async {
       final link = _Link({'XDG_STATE_HOME': _out('$_userDir\n')});
       final started = await launch(link, DetachedRunner.loginSystemdUser);

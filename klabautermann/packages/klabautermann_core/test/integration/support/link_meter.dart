@@ -25,9 +25,19 @@ import 'package:seance_core/seance_core.dart';
 /// The test isolate's side: the entry point to spawn the engine with, and
 /// readings of its links.
 final class LinkMeter {
-  LinkMeter() {
+  LinkMeter({
+    this.captureDetachedLaunches = false,
+    this.simulateMissingSetsidStatus = false,
+  }) {
     _engineSide = _replies.first.then((port) => port as SendPort);
   }
+
+  /// Capture only non-sensitive result metadata for detached launches.
+  final bool captureDetachedLaunches;
+
+  /// For the inventory fixture, remove one successful setsid exit status
+  /// per dialed link.
+  final bool simulateMissingSetsidStatus;
 
   final _replies = ReceivePort('klabautermann link meter');
   late final Future<SendPort> _engineSide;
@@ -36,7 +46,9 @@ final class LinkMeter {
   /// to [IsolateEngineClient.spawn] once.
   void Function(EngineStart start) get entryPoint {
     final port = _replies.sendPort;
-    return (start) => _meteredEngine(port, start);
+    final capture = captureDetachedLaunches;
+    final simulate = simulateMissingSetsidStatus;
+    return (start) => _meteredEngine(port, start, capture, simulate);
   }
 
   /// Every link the engine has dialed so far, in dial order, as plain
@@ -67,9 +79,42 @@ final class LinkMeter {
   void close() => _replies.close();
 }
 
+/// Only the launcher and its directory resolution are relevant to the
+/// inventory fixture. Never retain command text, output, or stdin.
+String? detachedCommandKind(String command) {
+  if (command.contains('klabautermann-launch')) return 'setsid';
+  if (command.contains('XDG_STATE_HOME')) return 'directory';
+  return null;
+}
+
+/// A launch result's shape without its potentially sensitive contents.
+Map<String, Object?> detachedRunSummary(
+  String kind,
+  RemoteCommandResult result,
+) {
+  final stdout = result.stdout.trim();
+  final pid = RegExp(r'^[1-9][0-9]*\n$').hasMatch(result.stdout)
+      ? int.tryParse(stdout)
+      : null;
+  return {
+    'kind': kind,
+    'exitCode': result.exitCode,
+    'truncated': result.truncated,
+    'stdoutEmpty': stdout.isEmpty,
+    'stdoutAbsolute': stdout.startsWith('/'),
+    'stdoutIsPid': pid != null,
+    'stderrEmpty': result.stderr.isEmpty,
+  };
+}
+
 /// Runs in the engine isolate: hands [meter] a port for readings, then
 /// becomes the engine.
-void _meteredEngine(SendPort meter, EngineStart start) {
+void _meteredEngine(
+  SendPort meter,
+  EngineStart start,
+  bool captureLaunches,
+  bool simulateMissingStatus,
+) {
   final links = <_MeteredLink>[];
   final readings = ReceivePort('klabautermann link meter requests');
   meter.send(readings.sendPort);
@@ -100,6 +145,8 @@ void _meteredEngine(SendPort meter, EngineStart start) {
               onKeyboardInteractive: onKeyboardInteractive,
               resolveJumpHost: resolveJumpHost,
             ),
+            captureLaunches: captureLaunches,
+            simulateMissingStatus: simulateMissingStatus,
           );
           links.add(link);
           return link;
@@ -109,9 +156,17 @@ void _meteredEngine(SendPort meter, EngineStart start) {
 
 /// [SshLink] with its channels and process bytes counted.
 final class _MeteredLink implements SshLink {
-  _MeteredLink(this._inner);
+  _MeteredLink(
+    this._inner, {
+    required this.captureLaunches,
+    required this.simulateMissingStatus,
+  });
 
   final SshLink _inner;
+  final bool captureLaunches;
+  final bool simulateMissingStatus;
+  var _statusSimulated = false;
+  final _detachedRuns = <Map<String, Object?>>[];
 
   /// Open channels by kind: processes until their exit, runs while they
   /// run, forwarding duplexes until done. The SFTP lease is lazy and
@@ -131,6 +186,9 @@ final class _MeteredLink implements SshLink {
       'fileSystems': _fileSystems,
     },
     'stdoutBytes': _stdoutBytes,
+    'detachedRuns': [
+      for (final result in _detachedRuns) {...result},
+    ],
     'stderrBytes': _stderrBytes,
     'stdinBytes': _stdinBytes,
     'replies': {
@@ -158,13 +216,45 @@ final class _MeteredLink implements SshLink {
     List<int>? stdin,
   }) async {
     _runs++;
+    final kind = captureLaunches || simulateMissingStatus
+        ? detachedCommandKind(command)
+        : null;
     try {
-      return await _inner.run(
+      final result = await _inner.run(
         command,
         timeout: timeout,
         maxOutputBytes: maxOutputBytes,
         stdin: stdin,
       );
+      final summary = kind == null ? null : detachedRunSummary(kind, result);
+      final simulate =
+          simulateMissingStatus &&
+          !_statusSimulated &&
+          kind == 'setsid' &&
+          result.exitCode == 0 &&
+          !result.truncated &&
+          summary!['stdoutIsPid'] == true;
+      if (simulate) _statusSimulated = true;
+      if (captureLaunches && summary != null) {
+        _detachedRuns.add({...summary, 'statusSimulated': simulate});
+      }
+      if (simulate) {
+        return RemoteCommandResult(
+          stdout: result.stdout,
+          stderr: result.stderr,
+          truncated: result.truncated,
+        );
+      }
+      return result;
+    } catch (error) {
+      if (captureLaunches && kind != null) {
+        _detachedRuns.add({
+          'kind': kind,
+          'errorType': '${error.runtimeType}',
+          'statusSimulated': false,
+        });
+      }
+      rethrow;
     } finally {
       _runs--;
     }
