@@ -1,27 +1,9 @@
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:seance_sync_server/seance_sync_server.dart';
-import 'package:sqlite3/open.dart';
-
-/// On Linux, distro runtime packages ship `libsqlite3.so.0` but not the
-/// unversioned `libsqlite3.so` symlink (that lives in the -dev package). Point
-/// the loader at the versioned name so a slim Docker image works without extra
-/// symlink gymnastics.
-void _configureSqliteLoader() {
-  if (!Platform.isLinux) return;
-  open.overrideFor(OperatingSystem.linux, () {
-    try {
-      return DynamicLibrary.open('libsqlite3.so.0');
-    } catch (_) {
-      return DynamicLibrary.open('libsqlite3.so');
-    }
-  });
-}
 
 Future<void> main(List<String> argv) async {
-  _configureSqliteLoader();
   final parser = ArgParser()
     ..addOption('bind', help: 'Address to bind', defaultsTo: null)
     ..addOption('port', abbr: 'p', help: 'Port to listen on')

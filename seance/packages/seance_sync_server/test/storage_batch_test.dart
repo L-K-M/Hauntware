@@ -66,9 +66,9 @@ class _FaultingDatabase implements Database {
   int get updatedRows => _inner.updatedRows;
 
   @override
-  void dispose() {
+  void close() {
     disposed = true;
-    _inner.dispose();
+    _inner.close();
   }
 
   @override

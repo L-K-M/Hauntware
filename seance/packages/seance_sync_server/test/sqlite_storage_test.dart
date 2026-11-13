@@ -115,7 +115,7 @@ void main() {
         'INSERT INTO records VALUES (?, ?, ?, ?, ?, ?, ?)',
         ['alice', 'old', 1, 'device', 0, 1, Uint8List.fromList([1])],
       );
-      legacy.dispose();
+      legacy.close();
 
       final storage = SqliteStorage.open(path);
       expect((await storage.getRecord('alice', 'old'))!.envelopeVersion, 1);

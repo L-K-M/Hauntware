@@ -35,10 +35,9 @@ updates:
   #
   # Majors that need a migration the grouped PR cannot carry are held:
   # flutter_secure_storage 11 drops data written with v10's deprecated
-  # options (keychain entries are user data), and sqlite3 3 loads SQLite
-  # through a build hook that `dart compile exe` refuses. archive 4.6
-  # stops reporting damaged data by default, which Poltergeist's
-  # extraction of untrusted archives must audit first.
+  # options (keychain entries are user data). archive 4.6 stops
+  # reporting damaged data by default, which Poltergeist's extraction
+  # of untrusted archives must audit first.
   - package-ecosystem: pub
     directories:
       - /
@@ -59,8 +58,6 @@ updates:
     open-pull-requests-limit: 5
     ignore:
       - dependency-name: flutter_secure_storage
-        update-types: ['version-update:semver-major']
-      - dependency-name: sqlite3
         update-types: ['version-update:semver-major']
       - dependency-name: archive
         versions: ['>=4.6.0']

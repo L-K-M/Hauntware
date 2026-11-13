@@ -169,8 +169,9 @@ git clone --depth 1 -b stable https://github.com/flutter/flutter.git /opt/flutte
 export PATH=/opt/flutter/bin:$PATH
 flutter --version                      # first run bootstraps Dart + engine
 
-# libsqlite3 — only needed to RUN the server's SQLite backend / its test.
-sudo apt-get update && sudo apt-get install -y libsqlite3-0
+# No system libsqlite3 needed: package:sqlite3's build hook downloads a
+# prebuilt library (from GitHub releases) when the server's package runs
+# `dart test`, `dart run` or `dart build cli`.
 ```
 
 Facts about this environment:
@@ -287,11 +288,13 @@ asking for. Anything guarded by `#available(macOS 11.0, *)` or
 is always true and the dead branch is still compiled, which is how a deprecated
 API that was deliberately replaced gets its warning back.
 
-**Sync server as a native binary (works without Docker):**
+**Sync server as a native bundle (works without Docker):** package:sqlite3's
+build hook bundles SQLite in `lib/`, which `dart compile exe` refuses.
 
 ```bash
-dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o /tmp/seance-sync
-SEANCE_OPEN_REGISTRATION=true SEANCE_BIND=127.0.0.1 SEANCE_PORT=8799 /tmp/seance-sync
+(cd packages/seance_sync_server && dart build cli -o /tmp/seance-sync)
+SEANCE_OPEN_REGISTRATION=true SEANCE_BIND=127.0.0.1 SEANCE_PORT=8799 \
+  /tmp/seance-sync/bundle/bin/seance_sync_server
 ```
 
 **Docker** (build context MUST be the repo root so the workspace resolves):

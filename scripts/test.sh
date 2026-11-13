@@ -64,15 +64,17 @@ if [[ "$scope" != flutter ]]; then
     run dart test packages/planchette_core
   )
 
-  # ---- Séance: protocol, core, sync server. The server's SQLite
-  # storage test loads libsqlite3 at runtime (CI installs it).
+  # ---- Séance: protocol, core, sync server. The server's tests run in
+  # its own directory: build hooks run only for the package under test,
+  # and package:sqlite3's hook bundles the SQLite library.
   (
     cd seance
     run dart pub get
     run dart analyze \
       packages/seance_protocol packages/seance_core packages/seance_sync_server
-    run dart test \
-      packages/seance_protocol packages/seance_core packages/seance_sync_server
+    run dart test packages/seance_protocol packages/seance_core
+    cd packages/seance_sync_server
+    run dart test
   )
 
   # ---- Poltergeist: workspace packages plus its remaining tooling

@@ -130,7 +130,7 @@ void main() {
       addTearDown(storage.close);
       final token = await _seed(storage);
       final writer = sqlite3.open(path);
-      addTearDown(writer.dispose);
+      addTearDown(writer.close);
       writer.execute('BEGIN IMMEDIATE');
       final handler = SyncServer(
         storage: storage,
