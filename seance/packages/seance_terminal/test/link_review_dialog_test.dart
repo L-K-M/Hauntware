@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_terminal/seance_terminal.dart';
 
@@ -37,6 +38,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(await answer, choice, reason: button);
     }
+  });
+
+  testWidgets('Cancel holds the focus, so Enter opens nothing', (tester) async {
+    final answer = await open(tester);
+    final cancel = find.widgetWithText(TextButton, 'Cancel');
+    final focus = Focus.of(
+      tester.element(
+        find.descendant(of: cancel, matching: find.text('Cancel')),
+      ),
+    );
+    expect(focus.hasPrimaryFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TerminalLinkReviewDialog), findsNothing);
+    expect(await answer, isFalse);
   });
 
   testWidgets('a dismissed review opens nothing', (tester) async {
