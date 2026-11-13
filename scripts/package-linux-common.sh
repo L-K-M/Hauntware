@@ -312,6 +312,33 @@ resolve_appimagetool() {
   APPIMAGE_TOOL="$cache"
 }
 
+# The AppImage runtime (the ELF header appimagetool puts in front of the
+# squashfs) is vendored per target arch under third_party/ and never
+# downloaded: upstream rebuilds its only moving release, so a hash pin of
+# that would break, and the one dated release lacks a security fix. The
+# files and their digests are described in third_party/appimage-type2-runtime/README.md.
+readonly APPIMAGE_RUNTIME_DIR="${PACKAGE_LINUX_COMMON%/*}/../third_party/appimage-type2-runtime"
+declare -grA APPIMAGE_RUNTIME_PINNED_SHA256=(
+  [x86_64]='617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46'
+  [aarch64]='9a72a744d221576c9347ec074243acc5c3c7568896b12714e0e82e9f0bf47900'
+)
+
+# Sets APPIMAGE_RUNTIME to the vendored runtime for $APPIMAGE_ARCH after
+# checking its SHA-256. A missing or modified file is a broken checkout,
+# not an environment limit, so it dies even under --appimage=best-effort
+# rather than shipping an AppImage with an unknown runtime.
+resolve_appimage_runtime() {
+  local expected="${APPIMAGE_RUNTIME_PINNED_SHA256[$APPIMAGE_ARCH]:-}"
+  local file="$APPIMAGE_RUNTIME_DIR/runtime-$APPIMAGE_ARCH"
+  [[ -n "$expected" ]] || die "no vendored AppImage runtime for $APPIMAGE_ARCH"
+  [[ -f "$file" ]] || die "vendored AppImage runtime $file is missing"
+  local actual
+  actual="$(sha256_of "$file")"
+  [[ "$actual" == "$expected" ]] \
+    || die "vendored AppImage runtime $file has SHA-256 $actual, expected $expected"
+  APPIMAGE_RUNTIME="$file"
+}
+
 # appimagetool shells out to `file` (and to mksquashfs, which it bundles);
 # check upfront so the failure is a clear message, not a mid-build one.
 appimage_prereqs() {
@@ -347,24 +374,26 @@ EOF
   chmod 755 "$appdir/AppRun"
 
   # appimagetool: a pinned release asset, verified and cached across runs.
-  # The tool's arch is the BUILD host's (it embeds the target runtime per
-  # ARCH=, so an x86_64 tool packages arm64 images fine). APPIMAGETOOL may
-  # be a path or a URL (with APPIMAGETOOL_SHA256).
+  # The tool's arch is the BUILD host's (it embeds the vendored runtime of
+  # the target ARCH=, so an x86_64 tool packages arm64 images fine).
+  # APPIMAGETOOL may be a path or a URL (with APPIMAGETOOL_SHA256).
   resolve_appimagetool || return 1   # sets APPIMAGE_TOOL
+  resolve_appimage_runtime   # sets APPIMAGE_RUNTIME
   appimage_prereqs
   local tool="$APPIMAGE_TOOL"
 
   echo "-- appimagetool → $(basename "$out")"
   # No AppStream metainfo yet — pass --no-appstream rather than shipping an
-  # empty one. EXTRACT_AND_RUN keeps the tool working where FUSE can't mount
+  # empty one. --runtime-file embeds the vendored runtime, so the tool never
+  # fetches one. EXTRACT_AND_RUN keeps the tool working where FUSE can't mount
   # (CI containers, this dev container, …).
   if ARCH="$APPIMAGE_ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$tool" \
-      --no-appstream "$appdir" "$out" >/dev/null 2>&1; then
+      --no-appstream --runtime-file "$APPIMAGE_RUNTIME" "$appdir" "$out" >/dev/null 2>&1; then
     :
   else
     # Retry once with output visible so the failure is diagnosable.
     ARCH="$APPIMAGE_ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$tool" \
-      --no-appstream "$appdir" "$out"
+      --no-appstream --runtime-file "$APPIMAGE_RUNTIME" "$appdir" "$out"
   fi
 }
 

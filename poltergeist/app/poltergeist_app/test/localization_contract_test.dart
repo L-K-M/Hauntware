@@ -2568,6 +2568,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/picked_file_bytes.dart': {
     "'The picker provided no readable data'",
   },
+  // The keep-alive's notification channel id (stored user data, never
+  // rendered) and its status-bar drawable's resource name.
+  'lib/services/transfer_keep_alive.dart': {
+    "'poltergeist.keepalive'",
+    "'ic_stat_transfer_keep_alive'",
+  },
 };
 
 const _config = L10nContractConfig(

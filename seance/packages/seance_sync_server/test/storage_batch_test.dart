@@ -408,6 +408,120 @@ void main() {
           hasLength(8),
         );
       });
+
+      group('per-record refusal scope', () {
+        const quota = AccountQuota(maxRecords: 2, maxBytes: 4096);
+
+        Future<void> fill() async {
+          await storage.pushRecords('alice', [
+            _record('a', 1),
+            _record('b', 1),
+            _record('gone', 1, deleted: true),
+          ], quota: quota);
+        }
+
+        test('stores edits and refuses new ids past the quota', () async {
+          await fill();
+          final response = await storage.pushRecords(
+            'alice',
+            [
+              _record('a', 2),
+              _record('new', 2),
+              _record('gone', 2),
+              _record('b', 2, deleted: true),
+            ],
+            quota: quota,
+            refusalScope: PushRefusalScope.record,
+          );
+          // The deletion of `b` comes last but still frees a slot for the
+          // new id, which is offered again after the first pass. Reviving the
+          // tombstone `gone` would add a third live record, so it waits.
+          expect(
+            [for (final r in response.results) (r.id, r.seq, r.accepted)],
+            [('a', 4, true), ('b', 5, true), ('new', 6, true)],
+          );
+          expect(
+            [for (final r in response.refused) (r.id, r.reason)],
+            [('gone', PushRefusalReason.accountQuota)],
+          );
+          expect(response.latestSeq, 6);
+          final stored = {
+            for (final r in (await storage.pullSnapshot('alice', 0)).records)
+              r.id: r,
+          };
+          expect(stored.keys, unorderedEquals(['a', 'b', 'new', 'gone']));
+          expect(stored['a']!.updatedAt, 2);
+          expect(stored['b']!.deleted, isTrue);
+          expect(stored['gone']!.deleted, isTrue);
+        });
+
+        test('a push that fits as a whole is stored whole', () async {
+          await fill();
+          final response = await storage.pushRecords(
+            'alice',
+            [_record('new', 2), _record('b', 2, deleted: true)],
+            quota: quota,
+            refusalScope: PushRefusalScope.record,
+          );
+          expect(response.refused, isEmpty);
+          expect([for (final r in response.results) r.accepted], [true, true]);
+        });
+
+        test('the batch scope still refuses the whole push', () async {
+          await fill();
+          await expectLater(
+            storage.pushRecords('alice', [
+              _record('a', 2),
+              _record('new', 2),
+            ], quota: quota),
+            throwsA(isA<AccountQuotaExceededException>()),
+          );
+          final snapshot = await storage.pullSnapshot('alice', 0);
+          expect(snapshot.latestSeq, 3);
+          expect(snapshot.records.firstWhere((r) => r.id == 'a').updatedAt, 1);
+        });
+
+        test('refuses an edit that grows past the byte quota', () async {
+          await storage.pushRecords('alice', [_record('a', 1, blobBytes: 8)]);
+          final used = (await storage.pullSnapshot(
+            'alice',
+            0,
+          )).records.fold(0, (sum, r) => sum + r.encodedJsonBytes());
+          final byteQuota = AccountQuota(maxRecords: 10, maxBytes: used);
+          final grown = await storage.pushRecords(
+            'alice',
+            [_record('a', 2, blobBytes: 64)],
+            quota: byteQuota,
+            refusalScope: PushRefusalScope.record,
+          );
+          expect(grown.results, isEmpty);
+          expect(grown.refused.single.id, 'a');
+          final shrunk = await storage.pushRecords(
+            'alice',
+            [_record('a', 3, blobBytes: 1), _record('b', 3, blobBytes: 1)],
+            quota: byteQuota,
+            refusalScope: PushRefusalScope.record,
+          );
+          expect([for (final r in shrunk.results) r.id], ['a']);
+          expect(shrunk.refused.single.id, 'b');
+        });
+
+        test('a losing edit is still an LWW result, not a refusal', () async {
+          await fill();
+          final response = await storage.pushRecords(
+            'alice',
+            [_record('a', 0), _record('new', 2)],
+            quota: quota,
+            refusalScope: PushRefusalScope.record,
+          );
+          expect(
+            [for (final r in response.results) (r.id, r.seq, r.accepted)],
+            [('a', 1, false)],
+          );
+          expect(response.refused.single.id, 'new');
+          expect(response.latestSeq, 3);
+        });
+      });
     });
   }
 

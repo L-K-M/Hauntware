@@ -12331,6 +12331,24 @@ abstract class AppLocalizations {
   /// **'Poltergeist on {platform}'**
   String syncSessionDeviceName(String platform);
 
+  /// Notification channel name for the Android transfer keep-alive service.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer keep-alive'**
+  String get keepAliveChannelName;
+
+  /// Notification channel description for the Android transfer keep-alive service.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown while transfers are kept alive in the background.'**
+  String get keepAliveChannelDescription;
+
+  /// Notification text of the Android transfer keep-alive while count transfers are live.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Keeping 1 transfer alive in the background.} other{Keeping {count} transfers alive in the background.}}'**
+  String keepAliveNotificationText(int count);
+
   /// App lock screen (cred-05): its heading, shown over the whole app while the app lock is engaged.
   ///
   /// In en, this message translates to:

@@ -29,6 +29,16 @@ final class FakeSyncApi implements SyncApi {
   /// 413 `payload_too_large` for the whole push, as the real server does.
   final tooLarge = <String>{};
 
+  /// A cap on live records; null means none. A push that would pass it is
+  /// refused whole with 413 `account_quota_exceeded`, as a server without
+  /// per-record refusals does, unless [perRecordQuota] is set.
+  int? maxLiveRecords;
+
+  /// Answer a push past [maxLiveRecords] as a current server answers a client
+  /// that opts in: store what fits, list the rest in [PushResponse.refused],
+  /// and offer those a second time after the first pass.
+  bool perRecordQuota = false;
+
   var pullCalls = 0;
   var pushCalls = 0;
 
@@ -90,6 +100,16 @@ final class FakeSyncApi implements SyncApi {
     if (pushed.any((record) => tooLarge.contains(record.id))) {
       throw const ApiError(code: 'payload_too_large', message: 'too large');
     }
+    final cap = maxLiveRecords;
+    if (cap != null && !rejectPushes && _liveAfter(pushed) > cap) {
+      if (!perRecordQuota) {
+        throw const ApiError(
+          code: 'account_quota_exceeded',
+          message: 'The account has reached its record storage quota',
+        );
+      }
+      return _pushEachRecord(pushed, cap);
+    }
     final results = <PushResult>[];
     for (final incoming in pushed) {
       final existing = records[incoming.id];
@@ -121,5 +141,57 @@ final class FakeSyncApi implements SyncApi {
       results.add(PushResult(id: incoming.id, seq: _seq, accepted: true));
     }
     return PushResponse(results: results, latestSeq: _seq);
+  }
+
+  bool _wins(EncryptedRecord? existing, EncryptedRecord incoming) =>
+      existing == null || identical(Lww.resolve(existing, incoming), incoming);
+
+  int get _live => records.values.where((r) => !r.deleted).length;
+
+  int _liveAfter(List<EncryptedRecord> pushed) {
+    final whole = Map.of(records);
+    for (final incoming in pushed) {
+      if (_wins(whole[incoming.id], incoming)) whole[incoming.id] = incoming;
+    }
+    return whole.values.where((r) => !r.deleted).length;
+  }
+
+  PushResponse _pushEachRecord(List<EncryptedRecord> pushed, int cap) {
+    final results = <PushResult>[];
+    var pending = pushed;
+    for (var pass = 0; pass < 2; pass++) {
+      final deferred = <EncryptedRecord>[];
+      for (final incoming in pending) {
+        final existing = records[incoming.id];
+        if (!_wins(existing, incoming)) {
+          results.add(
+            PushResult(
+              id: incoming.id,
+              seq: existing!.seq ?? 0,
+              accepted: false,
+            ),
+          );
+          continue;
+        }
+        final grows =
+            !incoming.deleted && (existing == null || existing.deleted);
+        if (grows && _live >= cap) {
+          deferred.add(incoming);
+          continue;
+        }
+        _seq++;
+        records[incoming.id] = incoming.withSeq(_seq);
+        results.add(PushResult(id: incoming.id, seq: _seq, accepted: true));
+      }
+      pending = deferred;
+    }
+    return PushResponse(
+      results: results,
+      refused: [
+        for (final record in pending)
+          PushRefusal(id: record.id, reason: PushRefusalReason.accountQuota),
+      ],
+      latestSeq: _seq,
+    );
   }
 }

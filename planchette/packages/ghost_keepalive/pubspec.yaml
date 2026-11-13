@@ -1,0 +1,29 @@
+name: ghost_keepalive
+description: >-
+  The background keep-alive shared by Seance and Poltergeist: an Android
+  foreground service anchors the process while sessions or transfers are
+  live, so a backgrounded app keeps working instead of being frozen.
+  Android only; the apps keep the channel id and every user-facing
+  string.
+version: 1.9.4
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: ch.lkmc.ghost.keepalive
+        pluginClass: GhostKeepAlivePlugin

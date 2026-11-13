@@ -28,6 +28,12 @@
   the queue drains get their own notice. On Android, Poltergeist is only
   offered for `poltergeist://browse`, the one link form its parser
   accepts.
+- **Transfers keep running in the background on Android.** While the
+  queue has live work (transfers, sync runs, archive jobs), a
+  transfer keep-alive notification anchors the process so Android
+  cannot freeze it; the service stops when the queue drains. It comes
+  from the ghost_keepalive plugin shared with Séance's session
+  keep-alive.
 - **File panels open again on macOS.** Open Folder, adding an editor
   program, bookmark imports, and choosing a key file or a server's image
   showed no panel: file_picker refused them in the unsandboxed app, as it

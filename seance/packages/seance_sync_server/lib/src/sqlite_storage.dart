@@ -6,6 +6,7 @@ import 'package:seance_protocol/seance_protocol.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'legacy_migration_validation.dart';
+import 'record_quota.dart';
 import 'storage.dart';
 
 enum _TransactionMode { read, write }
@@ -745,6 +746,7 @@ class SqliteStorage implements Storage {
     String username,
     List<EncryptedRecord> records, {
     AccountQuota? quota,
+    PushRefusalScope refusalScope = PushRefusalScope.batch,
   }) async {
     // A no-op push must not contend with writers.
     final mode = records.isEmpty
@@ -752,11 +754,42 @@ class SqliteStorage implements Storage {
         : _TransactionMode.write;
     return _transaction(
       mode,
-      () => _pushRecords(username, records, quota: quota),
+      () => _pushRecords(
+        username,
+        records,
+        quota: quota,
+        refusalScope: refusalScope,
+      ),
     );
   }
 
+  /// Runs inside the caller's transaction. Under [PushRefusalScope.record]
+  /// the whole batch is tried first behind a savepoint, so a batch that fits
+  /// commits exactly as a batch-scoped one does.
   PushResponse _pushRecords(
+    String username,
+    List<EncryptedRecord> records, {
+    AccountQuota? quota,
+    required PushRefusalScope refusalScope,
+  }) {
+    if (quota == null || refusalScope == PushRefusalScope.batch) {
+      return _pushBatch(username, records, quota: quota);
+    }
+    _db.execute('SAVEPOINT $_wholeBatchSavepoint');
+    try {
+      final whole = _pushBatch(username, records, quota: quota);
+      _db.execute('RELEASE $_wholeBatchSavepoint');
+      return whole;
+    } on AccountQuotaExceededException {
+      _db.execute('ROLLBACK TO $_wholeBatchSavepoint');
+      _db.execute('RELEASE $_wholeBatchSavepoint');
+    }
+    return _pushEachRecord(username, records, quota: quota);
+  }
+
+  static const _wholeBatchSavepoint = 'push_whole_batch';
+
+  PushResponse _pushBatch(
     String username,
     List<EncryptedRecord> records, {
     AccountQuota? quota,
@@ -792,18 +825,100 @@ class SqliteStorage implements Storage {
     return PushResponse(results: results, latestSeq: _latestSeq(username));
   }
 
+  /// [Storage.pushRecords] under [PushRefusalScope.record] once the batch as
+  /// a whole did not fit. Usage is tracked as the entries apply rather than
+  /// re-summed per entry, which would scan the account once per record.
+  PushResponse _pushEachRecord(
+    String username,
+    List<EncryptedRecord> records, {
+    required AccountQuota quota,
+  }) {
+    final start = _recordUsage(username);
+    RecordUsage usage = (count: start.$1, bytes: start.$2);
+    final results = <PushResult>[];
+    var pending = records;
+    for (var pass = 0; pass < perRecordQuotaPasses; pass++) {
+      final deferred = <EncryptedRecord>[];
+      for (final incoming in pending) {
+        final existing = _getRecord(username, incoming.id);
+        if (existing != null &&
+            !identical(Lww.resolve(existing, incoming), incoming)) {
+          results.add(
+            PushResult(
+              id: incoming.id,
+              seq: existing.seq ?? 0,
+              accepted: false,
+            ),
+          );
+          continue;
+        }
+
+        // Sized with the sequence it would get, as the stored row is.
+        final candidate = incoming.withSeq(_latestSeq(username) + 1);
+        final after = usageAfterReplacing(
+          usage,
+          existing: existing,
+          existingBytes: existing == null
+              ? 0
+              : _storedSize(username, incoming.id),
+          replacement: candidate,
+        );
+        if (exceedsAccountQuota(
+          beforeCount: usage.count,
+          beforeBytes: usage.bytes,
+          afterCount: after.count,
+          afterBytes: after.bytes,
+          quota: quota,
+        )) {
+          deferred.add(incoming);
+          continue;
+        }
+
+        final seq = _nextSeq(username);
+        _putRecord(username, candidate);
+        results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
+        usage = after;
+      }
+      pending = deferred;
+    }
+    final refused = [
+      for (final record in pending)
+        PushRefusal(id: record.id, reason: PushRefusalReason.accountQuota),
+    ];
+    return PushResponse(
+      results: results,
+      refused: refused,
+      latestSeq: _latestSeq(username),
+    );
+  }
+
+  /// The bytes a stored row counts toward the quota: its recorded size, which
+  /// is what [_recordUsage] sums.
+  int _storedSize(String username, String id) =>
+      _db.select(
+            'SELECT encoded_size FROM records WHERE username = ? AND id = ?',
+            [username, id],
+          ).single['encoded_size']
+          as int;
+
   @override
   Future<PushResponse> pushRecordsFor(
     AuthPrincipal principal,
     List<EncryptedRecord> records, {
     AccountQuota? quota,
+    PushRefusalScope refusalScope = PushRefusalScope.batch,
   }) async {
     final mode = records.isEmpty
         ? _TransactionMode.read
         : _TransactionMode.write;
     return _transaction(mode, () {
       _requireCurrent(principal);
-      return _pushRecords(principal.username, records, quota: quota);
+      return _pushRecords(
+        principal.username,
+        records,
+        quota: quota,
+        refusalScope: refusalScope,
+      );
     });
   }
 

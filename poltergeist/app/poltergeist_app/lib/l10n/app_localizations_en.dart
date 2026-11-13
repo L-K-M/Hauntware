@@ -8740,6 +8740,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get keepAliveChannelName => 'Transfer keep-alive';
+
+  @override
+  String get keepAliveChannelDescription =>
+      'Shown while transfers are kept alive in the background.';
+
+  @override
+  String keepAliveNotificationText(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Keeping $count transfers alive in the background.',
+      one: 'Keeping 1 transfer alive in the background.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get appLockTitle => 'Poltergeist is locked';
 
   @override

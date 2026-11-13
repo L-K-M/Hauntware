@@ -10429,6 +10429,10 @@
   "@dockerShellPasteUnchecked": {
     "description": "Body of the paste dialog when the danger check failed: unknown, not clean (CTX-07)."
   },
+  "dockerShellPasteUnbracketed": "This shell runs each line as it arrives. Check the lines before you paste them.",
+  "@dockerShellPasteUnbracketed": {
+    "description": "Body of the paste dialog when the danger linter found nothing but the shell has bracketed paste off, so each pasted line would run on its own (CTX-07)."
+  },
   "dockerShellPasteFinding": "Line {line}: {explanation}",
   "@dockerShellPasteFinding": {
     "description": "One danger finding in the paste dialog: the pasted line it is on and the linter's explanation (CTX-07).",
@@ -10454,6 +10458,22 @@
   "dockerShellPasteCancel": "Cancel",
   "@dockerShellPasteCancel": {
     "description": "Paste dialog button that pastes nothing (CTX-07)."
+  },
+  "dockerShellLinkReviewTitle": "Open this link?",
+  "@dockerShellLinkReviewTitle": {
+    "description": "Title of the dialog that shows where a container shell link leads when its text does not show its address."
+  },
+  "dockerShellLinkReviewBody": "The text you chose does not show where this link goes. Open it only if you trust this site.",
+  "@dockerShellLinkReviewBody": {
+    "description": "Body of the link review dialog, above the link's host and full address."
+  },
+  "dockerShellLinkReviewOpen": "Open",
+  "@dockerShellLinkReviewOpen": {
+    "description": "Link review dialog button that opens the link in the browser."
+  },
+  "dockerShellLinkReviewCancel": "Cancel",
+  "@dockerShellLinkReviewCancel": {
+    "description": "Link review dialog button that opens nothing."
   },
   "dockerShellSelectAll": "Select all",
   "@dockerShellSelectAll": {

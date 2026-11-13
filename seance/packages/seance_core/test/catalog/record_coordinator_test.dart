@@ -787,6 +787,72 @@ void main() {
       },
     );
 
+    group('over the account quota', () {
+      /// Device `a` saved `web` and `db` at a cap of two; `b` pulled them,
+      /// renamed `web` and added `cache`.
+      Future<_Device> full() async {
+        server.maxLiveRecords = 2;
+        final a = await _Device.create(tempDir, 'a', shared: true);
+        await _saveServer(a, _server('web', label: 'web'));
+        await _saveServer(a, _server('db', label: 'db'));
+        await a.coordinator.runRound(server);
+        final b = await _Device.create(tempDir, 'b', shared: true);
+        await b.coordinator.runRound(server);
+        b.clock.ms += 1000;
+        await _saveServer(b, _server('web', label: 'web-renamed'));
+        await _saveServer(b, _server('cache', label: 'cache'));
+        return b;
+      }
+
+      test('a per-record server takes the edit and the new one waits', () async {
+        server.perRecordQuota = true;
+        final b = await full();
+        server.pushSizes.clear();
+
+        final failure = await _quotaRefusal(b.coordinator.runRound(server));
+
+        expect(failure.code, 'account_quota_exceeded');
+        expect(failure.awaitingSpaceIds, ['cache']);
+        expect(failure.toString(),
+            startsWith('1 record waits for space on the sync server.'));
+        expect(server.records.keys, unorderedEquals(['web', 'db']));
+        final web = await b.crypto.open(server.records['web']!);
+        expect(ServerConfig.fromJson(web.data).label, 'web-renamed');
+        expect(
+          [for (final r in await b.records.dirtyRecords()) r.id],
+          ['cache'],
+          reason: 'the new server stays queued, not lost',
+        );
+        expect(server.pushSizes, [2],
+            reason: 'a waiting record is sent once per round, not per pass');
+
+        // Deleting a server frees a slot, and the next round fills it.
+        b.clock.ms += 1000;
+        await _deleteServer(b, (await b.servers!.byId('db'))!);
+        await b.coordinator.runRound(server);
+        expect(server.records['cache'], isNotNull);
+        expect(server.records['db']!.deleted, isTrue);
+        expect(await b.records.dirtyRecords(), isEmpty);
+      });
+
+      test('an older server still refuses the whole push', () async {
+        final b = await full();
+
+        await expectLater(
+          b.coordinator.runRound(server),
+          throwsA(isA<ApiError>()
+              .having((e) => e.code, 'code', 'account_quota_exceeded')
+              .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
+        );
+        final web = await b.crypto.open(server.records['web']!);
+        expect(ServerConfig.fromJson(web.data).label, 'web');
+        expect(
+          {for (final r in await b.records.dirtyRecords()) r.id},
+          {'web', 'cache'},
+        );
+      });
+    });
+
     test('create, edit, and delete converge across shared devices', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
       final b = await _Device.create(tempDir, 'b', shared: true);
@@ -1451,4 +1517,14 @@ void main() {
       expect(await a.records.dirtyRecords(), isEmpty);
     });
   });
+}
+
+/// Awaits a round that must end in [SyncRecordsRefused], and returns it.
+Future<SyncRecordsRefused> _quotaRefusal(Future<Object?> round) async {
+  try {
+    await round;
+  } on SyncRecordsRefused catch (error) {
+    return error;
+  }
+  fail('the round was expected to report records waiting for space');
 }
