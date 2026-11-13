@@ -147,7 +147,9 @@ enum LaunchFailure {
 
 /// How a launch ended: [id] started in [dir] with [pid] where the
 /// `setsid` rows print it, or [failure] with the launcher's [exitCode].
-/// Started means the launcher returned, not that the wrapper accepted:
+/// A setsid PID also acknowledges a launch when the SSH exit status is
+/// unavailable; in that case [exitCode] remains null. Started means the
+/// launcher returned or printed its PID, not that the wrapper accepted:
 /// it runs in the background or in the unit, so its refusal (E08's
 /// [kOpWrapperSetupFailed]) never reaches the launcher and shows as an
 /// id with no record, which re-attach reports (E17b).
@@ -208,6 +210,25 @@ Future<LaunchResult> launchDetached({
             stdin: const [],
           );
     if (result == null) return failed(LaunchFailure.elevationRefused, dir: dir);
+    // The setsid launcher prints $! only after starting the background child.
+    // Some SSH servers or clients omit an exit status even after delivering
+    // that acknowledgement. Do not launch again: the operation may be live.
+    final printed = result.stdout.trim();
+    final acknowledgedPid =
+        !runner.transientUnit &&
+            !result.truncated &&
+            RegExp(r'^[1-9][0-9]*$').hasMatch(printed)
+        ? int.tryParse(printed)
+        : null;
+    if (result.exitCode == null && acknowledgedPid != null) {
+      return (
+        id: id,
+        dir: dir,
+        pid: acknowledgedPid,
+        failure: null,
+        exitCode: null,
+      );
+    }
     return switch (result.exitCode) {
       0 => (
         id: id,
