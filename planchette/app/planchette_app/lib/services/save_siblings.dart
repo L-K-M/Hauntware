@@ -40,7 +40,8 @@ abstract interface class SaveSiblings {
   Future<List<SaveSibling>> find(String documentPath);
 
   /// Deletes [sibling] of [documentPath], or throws [SaveSiblingException]
-  /// when the evidence no longer says it is abandoned.
+  /// when the evidence no longer says it is abandoned. One already gone
+  /// counts as deleted.
   Future<void> delete(String documentPath, SaveSibling sibling);
 }
 
@@ -126,6 +127,9 @@ final class LocalSaveSiblings implements SaveSiblings {
   Future<void> delete(String documentPath, SaveSibling sibling) async {
     final file = File(sibling.path);
     final stat = await file.stat();
+    // Gone already, say by a save that finished in another window: what
+    // the user asked for has happened.
+    if (stat.type == FileSystemEntityType.notFound) return;
     if (stat.type != FileSystemEntityType.file ||
         stat.modified != sibling.stamp.modified ||
         stat.size != sibling.stamp.size) {
@@ -134,10 +138,11 @@ final class LocalSaveSiblings implements SaveSiblings {
         'it',
       );
     }
-    // With the document gone, a backup may hold the only copy of its text.
-    if (sibling.path.endsWith('.backup') &&
-        await FileSystemEntity.type(documentPath, followLinks: false) ==
-            FileSystemEntityType.notFound) {
+    // With the document gone, either sibling may hold the only copy of a
+    // version of its text: a save that stopped between its renames leaves
+    // the earlier text in the backup and the newest in the staging file.
+    if (await FileSystemEntity.type(documentPath, followLinks: false) ==
+        FileSystemEntityType.notFound) {
       throw SaveSiblingException(
         '${paths.basename(documentPath)} is missing, so this may be its only '
         'copy',

@@ -1314,8 +1314,20 @@ final class DocumentWorkspace extends ChangeNotifier {
     final siblings = saveSiblings;
     final path = tab.path;
     if (siblings == null || path == null || tab._publication != null) return;
-    if (!_siblingsOffered.add(_pathKey(path))) return;
-    final found = await siblings.find(path);
+    final key = _pathKey(path);
+    if (!_siblingsOffered.add(key)) return;
+    final List<SaveSibling> found;
+    try {
+      found = await siblings.find(path);
+    } catch (error, stackTrace) {
+      // Nothing awaits this offer, and the document itself opened, so the
+      // failure is kept diagnosable and the next open of it asks again.
+      _siblingsOffered.remove(key);
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: error, stack: stackTrace),
+      );
+      return;
+    }
     if (found.isEmpty || _disposed || _quitAccepted) return;
     final choice = await _dialog(
       () => dialogs.chooseSaveSiblings(tab.name, [
@@ -1333,6 +1345,13 @@ final class DocumentWorkspace extends ChangeNotifier {
           try {
             await siblings.delete(path, sibling);
           } on SaveSiblingException catch (error) {
+            failures.add('${_paths.basename(sibling.path)}: $error');
+          } catch (error, stackTrace) {
+            // Not a refusal the store explains, so likely a bug: keep it
+            // diagnosable, say it with the rest, and try the others.
+            FlutterError.reportError(
+              FlutterErrorDetails(exception: error, stack: stackTrace),
+            );
             failures.add('${_paths.basename(sibling.path)}: $error');
           }
         }

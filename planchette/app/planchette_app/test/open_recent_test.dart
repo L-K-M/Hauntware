@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/app_settings.dart';
+import 'package:planchette_app/services/document_store.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:planchette_app/services/recent_documents.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
@@ -109,11 +113,15 @@ void main() {
     PlatformMenuItem row(WidgetTester tester, String label) =>
         recentRows(tester).firstWhere((item) => item.label == label);
 
-    // The folder check reads the real disk, which fake time cannot wait for.
+    // The folder check reads the real disk, which fake time cannot wait for,
+    // so real time passes until the outcome is reported, within a bound.
     Future<void> chooseOnDisk(WidgetTester tester, String label) async {
       await tester.runAsync(() async {
         row(tester, label).onSelected!();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        final deadline = DateTime.now().add(const Duration(seconds: 10));
+        while (workspace.error == null && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
       });
       await tester.pumpAndSettle();
     }
@@ -233,5 +241,34 @@ void main() {
       expect(settings.value.recentDocuments, isEmpty);
       await tester.pumpWidget(const SizedBox.shrink());
     }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+  });
+  group('recentDocumentState', () {
+    // Root reads any folder, so the refusal needs an ordinary user; Windows
+    // has no chmod.
+    final unrestricted =
+        Platform.isWindows ||
+        (Process.runSync('id', ['-u']).stdout as String).trim() == '0';
+
+    test('a folder it may not look into is not available', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-recent-',
+      );
+      final locked = Directory(paths.join(directory.path, 'locked'));
+      final folder = Directory(paths.join(locked.path, 'notes'));
+      await folder.create(recursive: true);
+      await Process.run('chmod', ['000', locked.path]);
+      addTearDown(() async {
+        await Process.run('chmod', ['700', locked.path]);
+        await directory.delete(recursive: true);
+      });
+
+      expect(
+        await recentDocumentState(
+          LocalDocumentStore(),
+          paths.join(folder.path, 'a.txt'),
+        ),
+        RecentDocumentState.folderUnavailable,
+      );
+    }, skip: unrestricted ? 'needs a non-root POSIX user' : false);
   });
 }

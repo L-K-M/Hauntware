@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_app/services/document_workspace.dart';
@@ -95,23 +96,37 @@ void main() {
       expect(await backup.exists(), isTrue);
     });
 
-    test('keeps a backup once the document is gone', () async {
+    test('treats a sibling that is already gone as deleted', () async {
       final backup = await sibling('notes.txt.planchette-$_uuid.backup');
       final found = await siblings().find(document.path);
-      await document.delete();
+      await backup.delete();
 
-      await expectLater(
-        siblings().delete(document.path, found.single),
-        throwsA(
-          isA<SaveSiblingException>().having(
-            (error) => error.message,
-            'message',
-            contains('only copy'),
-          ),
-        ),
-      );
-      expect(await backup.exists(), isTrue);
+      await siblings().delete(document.path, found.single);
+
+      expect(await backup.exists(), isFalse);
     });
+
+    // A save interrupted between its renames leaves the document missing,
+    // the earlier text in the backup and the newest in the staging file.
+    for (final kind in ['backup', 'edit']) {
+      test('keeps a .$kind file once the document is gone', () async {
+        final left = await sibling('notes.txt.planchette-$_uuid.$kind');
+        final found = await siblings().find(document.path);
+        await document.delete();
+
+        await expectLater(
+          siblings().delete(document.path, found.single),
+          throwsA(
+            isA<SaveSiblingException>().having(
+              (error) => error.message,
+              'message',
+              contains('only copy'),
+            ),
+          ),
+        );
+        expect(await left.exists(), isTrue);
+      });
+    }
   });
 
   group('the workspace', () {
@@ -195,6 +210,43 @@ void main() {
       expect(dialogs.siblingsAsked, hasLength(1));
     });
 
+    test('a failed check is asked again at the next open', () async {
+      siblings.failFind = true;
+      final reported = <FlutterErrorDetails>[];
+      final previous = FlutterError.onError;
+      FlutterError.onError = reported.add;
+      addTearDown(() => FlutterError.onError = previous);
+
+      await workspace.open(testPath('notes.txt'));
+      await pumpEventQueue();
+
+      expect(reported.single.exception, isA<StateError>());
+      expect(dialogs.siblingsAsked, isEmpty);
+
+      siblings.failFind = false;
+      await workspace.closeTab(workspace.active!);
+      await workspace.open(testPath('notes.txt'));
+      await pumpEventQueue();
+
+      expect(dialogs.siblingsAsked, hasLength(1));
+    });
+
+    test('Delete reports an unexpected failure with the rest', () async {
+      final backup = testPath('notes.txt.planchette-$_uuid.backup');
+      siblings.crash.add(backup);
+      dialogs.siblingChoice = SaveSiblingChoice.delete;
+      final reported = <FlutterErrorDetails>[];
+      final previous = FlutterError.onError;
+      FlutterError.onError = reported.add;
+      addTearDown(() => FlutterError.onError = previous);
+
+      await workspace.open(testPath('notes.txt'));
+      await pumpEventQueue();
+
+      expect(reported.single.exception, isA<StateError>());
+      expect(workspace.error, contains(paths.basename(backup)));
+    });
+
     test('nothing is asked without siblings', () async {
       siblings.found.clear();
 
@@ -210,16 +262,21 @@ final class _FakeSiblings implements SaveSiblings {
   final found = <String, List<SaveSibling>>{};
   final deleted = <String>[];
   final refuse = <String>{};
+  final crash = <String>{};
+  var failFind = false;
 
   @override
-  Future<List<SaveSibling>> find(String documentPath) async =>
-      found[documentPath] ?? const [];
+  Future<List<SaveSibling>> find(String documentPath) async {
+    if (failFind) throw StateError('cannot look');
+    return found[documentPath] ?? const [];
+  }
 
   @override
   Future<void> delete(String documentPath, SaveSibling sibling) async {
     if (refuse.contains(sibling.path)) {
       throw const SaveSiblingException('it changed since it was found');
     }
+    if (crash.contains(sibling.path)) throw StateError('cannot delete');
     deleted.add(sibling.path);
   }
 }

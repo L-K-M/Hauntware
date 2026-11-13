@@ -28,7 +28,13 @@ Future<RecentDocumentState> recentDocumentState(
 ) async {
   if (await store.stamp(path) != null) return RecentDocumentState.available;
   final folder = Directory(paths.dirname(path));
-  return await folder.exists()
-      ? RecentDocumentState.missing
-      : RecentDocumentState.folderUnavailable;
+  try {
+    return await folder.exists()
+        ? RecentDocumentState.missing
+        : RecentDocumentState.folderUnavailable;
+  } on FileSystemException {
+    // A folder Planchette may not look into, unlike a missing one, throws
+    // here; it is as unavailable to this user, so the entry stays.
+    return RecentDocumentState.folderUnavailable;
+  }
 }
