@@ -218,17 +218,21 @@ void main() {
     expectSucceeded(answer);
     final readings = await meter.read();
     final links = readings['links']! as List;
+    final launches = [
+      for (final link in links)
+        for (final run in (link as Map)['detachedRuns'] as List)
+          if ((run as Map)['kind'] == 'setsid') run,
+    ];
     expect(
-      links.any((link) {
-        final runs = (link as Map)['detachedRuns'] as List;
-        return runs.any((run) {
-          final result = run as Map;
-          return result['kind'] == 'setsid' &&
-              result['stdoutIsPid'] == true &&
-              result['truncated'] == false &&
-              (result['statusSimulated'] == true || result['exitCode'] == null);
-        });
-      }),
+      launches,
+      hasLength(1),
+      reason: 'a missing SSH status must not launch the operation twice',
+    );
+    final launch = launches.single;
+    expect(
+      launch['stdoutIsPid'] == true &&
+          launch['truncated'] == false &&
+          (launch['statusSimulated'] == true || launch['exitCode'] == null),
       isTrue,
       reason: 'the real setsid launch must exercise the missing-status path',
     );

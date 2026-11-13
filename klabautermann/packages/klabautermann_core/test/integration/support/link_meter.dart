@@ -35,7 +35,8 @@ final class LinkMeter {
   /// Capture only non-sensitive result metadata for detached launches.
   final bool captureDetachedLaunches;
 
-  /// For the inventory fixture, remove one successful setsid exit status.
+  /// For the inventory fixture, remove one successful setsid exit status
+  /// per dialed link.
   final bool simulateMissingSetsidStatus;
 
   final _replies = ReceivePort('klabautermann link meter');
@@ -92,7 +93,7 @@ Map<String, Object?> detachedRunSummary(
   RemoteCommandResult result,
 ) {
   final stdout = result.stdout.trim();
-  final pid = RegExp(r'^[1-9][0-9]*$').hasMatch(stdout)
+  final pid = RegExp(r'^[1-9][0-9]*\n$').hasMatch(result.stdout)
       ? int.tryParse(stdout)
       : null;
   return {
@@ -247,7 +248,11 @@ final class _MeteredLink implements SshLink {
       return result;
     } catch (error) {
       if (captureLaunches && kind != null) {
-        _detachedRuns.add({'kind': kind, 'errorType': '${error.runtimeType}'});
+        _detachedRuns.add({
+          'kind': kind,
+          'errorType': '${error.runtimeType}',
+          'statusSimulated': false,
+        });
       }
       rethrow;
     } finally {

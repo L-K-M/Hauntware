@@ -212,13 +212,13 @@ Future<LaunchResult> launchDetached({
     if (result == null) return failed(LaunchFailure.elevationRefused, dir: dir);
     // The setsid launcher prints $! only after starting the background child.
     // Some SSH servers or clients omit an exit status even after delivering
-    // that acknowledgement. Do not launch again: the operation may be live.
-    final printed = result.stdout.trim();
+    // that acknowledgement. Require its newline so a partial PID cannot be
+    // mistaken for the whole one. Never launch again: it may already be live.
     final acknowledgedPid =
         !runner.transientUnit &&
             !result.truncated &&
-            RegExp(r'^[1-9][0-9]*$').hasMatch(printed)
-        ? int.tryParse(printed)
+            RegExp(r'^[1-9][0-9]*\n$').hasMatch(result.stdout)
+        ? int.tryParse(result.stdout.trim())
         : null;
     if (result.exitCode == null && acknowledgedPid != null) {
       return (

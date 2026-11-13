@@ -36,6 +36,13 @@ void main() {
     expect(
       detachedRunSummary(
         'setsid',
+        const RemoteCommandResult(stdout: '4242'),
+      )['stdoutIsPid'],
+      isFalse,
+    );
+    expect(
+      detachedRunSummary(
+        'setsid',
         const RemoteCommandResult(stdout: '0'),
       )['stdoutIsPid'],
       isFalse,

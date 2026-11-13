@@ -254,6 +254,7 @@ void main() {
           const RemoteCommandResult(stdout: '0\n'),
           const RemoteCommandResult(stdout: '-1\n'),
           const RemoteCommandResult(stdout: '4242 extra\n'),
+          const RemoteCommandResult(stdout: '4242'),
           const RemoteCommandResult(stdout: '4242\n', truncated: true),
           const RemoteCommandResult(stdout: '4242\n', exitCode: 1),
         ]) {
