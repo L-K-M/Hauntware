@@ -5,6 +5,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import '../services/workspace_remote_files.dart';
 import '../services/document_workspace.dart';
 import '../widgets/mono_text_style.dart';
+import '../l10n/app_localizations.dart';
 
 typedef WorkspacePromptHost = ({
   BuildContext context,
@@ -101,10 +102,9 @@ final class AppWorkspaceConnectionPrompts
             : null,
         strings: GhostCredentialStrings(
           explanation: retry
-              ? 'That passphrase did not open the key. Try again. It is used '
-                    'for this workspace session and never saved.'
-              : 'Used for this workspace session and never saved.',
-          connect: 'Connect',
+              ? AppLocalizations.of(context).credentialRetry
+              : AppLocalizations.of(context).credentialExplanation,
+          connect: AppLocalizations.of(context).credentialConnect,
         ),
       );
       return switch (reply) {

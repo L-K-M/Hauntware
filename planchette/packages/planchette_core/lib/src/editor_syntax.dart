@@ -14,6 +14,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'line_operations.dart';
+import 'search_fold.dart';
 
 part 'diff_syntax.dart';
 part 'dotenv_syntax.dart';
@@ -1568,12 +1569,13 @@ final class SearchResult {
 /// exactly such a fold, and it is the one worth having. Injectable so the
 /// guarded paths are testable at all.
 ///
-/// A fold that *changes* the length cannot be used on a document: matches are
-/// located in the folded text, so their offsets would address the wrong
-/// characters. [searchText] then compares exactly and reports
-/// [CaseFolding.lengthChanging]. Expanding `ß` to `ss`, which is what Unicode
-/// *full* case folding does, therefore needs a folded-offset map rather than
-/// a different fold — see ANALYSIS.md B37.
+/// A fold that *changes* the length of a run of text cannot be used on a
+/// document: matches are located in the folded text, so their offsets would
+/// address the wrong characters. [searchText] then compares exactly and
+/// reports [CaseFolding.lengthChanging]. The search itself expands `ß`, `ẞ`,
+/// `İ` and the Latin ligatures the way Unicode *full* case folding does,
+/// before this fold sees the text, and maps offsets back through a sparse
+/// folded-offset map (ANALYSIS.md B37); a fold need not and should not.
 typedef CaseFolder = String Function(String value);
 
 /// Substring search used by the editor's find bar, reporting how the case
@@ -1612,14 +1614,19 @@ SearchResult searchText(
   var haystack = text;
   var needle = query;
   var caseFolding = CaseFolding.exact;
+  // Translates offsets between the original and a folded document that
+  // expanded characters such as `ß` (B37). Null leaves offsets as they are.
+  FoldedSearchText? map;
   if (!caseSensitive) {
     // Only the haystack's length matters: a match is located in the folded
-    // document and spans what is there, so its offsets address the original
-    // exactly when the fold preserved the document's length.
-    final lowered = fold(text);
-    if (lowered.length == text.length) {
-      haystack = lowered;
-      needle = fold(query);
+    // document and spans what is there. Its offsets address the original
+    // when the fold preserved each run's length, through [map] across the
+    // characters the full fold expands.
+    final lowered = foldDocumentForSearch(text, fold);
+    if (lowered != null) {
+      haystack = lowered.text;
+      if (lowered.isMapped) map = lowered;
+      needle = foldQueryForSearch(query, fold);
       // A fold may erase characters. An empty needle would "match" at every
       // offset, and Replace All would insert its text at each of them.
       if (needle.isEmpty) {
@@ -1646,16 +1653,37 @@ SearchResult searchText(
     scope == null || scope.start <= scope.end,
     'a search scope must be ordered: start at or before end',
   );
-  final low = (scope?.start ?? 0).clamp(0, haystack.length);
-  final high = (scope?.end ?? haystack.length).clamp(0, haystack.length);
+  // Offsets given and returned are the original's; everything below works
+  // on the folded haystack, so they are translated at the edges.
+  int folded(int offset) =>
+      map == null ? offset : map.folded(offset.clamp(0, text.length));
+  TextMatch matchAt(int at) => map == null
+      ? TextMatch(start: at, end: at + needle.length)
+      : TextMatch(
+          start: map.originalStart(at),
+          end: map.originalEnd(at + needle.length),
+        );
+
+  final low = folded(scope?.start ?? 0).clamp(0, haystack.length);
+  final high = folded(scope?.end ?? text.length).clamp(0, haystack.length);
+
+  // The original end of the last hit [next] returned. Two hits inside one
+  // expanded character, such as `s` twice in the `ss` of a `ß`, are the same
+  // original range: only the first counts, so matches never overlap and
+  // Replace All never rewrites a character twice.
+  var lastEnd = -1;
 
   // One enumeration serves both directions and every option, so Find
   // Previous can never offer an occurrence Find Next would not.
   int next(int from) {
     var at = haystack.indexOf(needle, from < low ? low : from);
-    while (at >= 0 &&
-        wholeWord &&
-        !_isWholeWordMatch(text, at, at + needle.length)) {
+    while (at >= 0) {
+      final match = matchAt(at);
+      if (match.start >= lastEnd &&
+          (!wholeWord || _isWholeWordMatch(text, match.start, match.end))) {
+        lastEnd = match.end;
+        return at;
+      }
       // A rejected hit can hide a whole word that starts inside it.
       at = haystack.indexOf(needle, at + 1);
     }
@@ -1668,7 +1696,7 @@ SearchResult searchText(
     // 'aaaa' is [0, 2] forwards and [0, 1, 2] backwards — so Find Previous
     // would offer hits Find Next never had. The window is a ring of starts,
     // so dropping the oldest hit costs nothing however many matches pass.
-    final bound = (start ?? haystack.length).clamp(0, haystack.length);
+    final bound = folded(start ?? text.length).clamp(0, haystack.length);
     final ring = List<int>.filled(limit, 0);
     var count = 0;
     for (
@@ -1682,22 +1710,18 @@ SearchResult searchText(
     final kept = count < limit ? count : limit;
     return SearchResult(
       matches: [
-        for (var i = count - kept; i < count; i++)
-          TextMatch(
-            start: ring[i % limit],
-            end: ring[i % limit] + needle.length,
-          ),
+        for (var i = count - kept; i < count; i++) matchAt(ring[i % limit]),
       ],
       caseFolding: caseFolding,
       precedingCount: count - kept,
     );
   }
   final matches = <TextMatch>[];
-  var from = (start ?? 0).clamp(0, haystack.length);
+  var from = folded(start ?? 0).clamp(0, haystack.length);
   while (matches.length < limit) {
     final at = next(from);
     if (at < 0 || at + needle.length > high) break;
-    matches.add(TextMatch(start: at, end: at + needle.length));
+    matches.add(matchAt(at));
     from = at + needle.length;
   }
   return SearchResult(

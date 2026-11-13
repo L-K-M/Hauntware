@@ -17,6 +17,7 @@ import 'services/document_store.dart';
 import 'services/document_windows.dart';
 import 'services/document_workspace.dart';
 import 'services/open_documents.dart';
+import 'services/save_siblings.dart';
 import 'services/semantics_view_routing.dart';
 import 'services/window_host.dart';
 import 'services/workspace_catalog.dart';
@@ -99,6 +100,7 @@ Future<void> main(List<String> arguments) async {
         pickers: WindowPickers(window),
       ),
       toolHistory: toolHistory,
+      saveSiblings: LocalSaveSiblings(),
     ),
     quitApplication: desktop.requestQuit,
     mainTitle: desktop.setTitle,

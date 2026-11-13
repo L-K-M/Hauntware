@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../widgets/mono_text_style.dart';
+import '../l10n/app_localizations.dart';
 
 Future<String?> showRemoteWorkspaceRoot(
   BuildContext context,
@@ -35,7 +36,7 @@ class _RemoteFolderState extends State<_RemoteFolder> {
     if (ModalRoute.of(context)?.isCurrent != true) return;
     final folder = _folderOf(_path.text);
     if (folder == null) {
-      setState(() => _error = 'Enter a folder using /path, ~ or ~/path.');
+      setState(() => _error = AppLocalizations.of(context).remoteFolderInvalid);
       return;
     }
     Navigator.pop(context, folder);
@@ -57,7 +58,9 @@ class _RemoteFolderState extends State<_RemoteFolder> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: _path,
     builder: (context, _) => AlertDialog(
-      title: Text('Open Folder on ${widget.server.label}'),
+      title: Text(
+        AppLocalizations.of(context).remoteFolderTitle(widget.server.label),
+      ),
       content: SizedBox(
         width: 420,
         child: TextField(
@@ -65,8 +68,8 @@ class _RemoteFolderState extends State<_RemoteFolder> {
           autofocus: true,
           style: monoTextStyle.copyWith(fontSize: 12),
           decoration: InputDecoration(
-            labelText: 'Remote folder',
-            helperText: 'Absolute path or relative to your login home.',
+            labelText: AppLocalizations.of(context).remoteFolderLabel,
+            helperText: AppLocalizations.of(context).remoteFolderHelper,
             errorText: _error,
           ),
           // Return submits, and an invalid path says why rather than
@@ -77,11 +80,11 @@ class _RemoteFolderState extends State<_RemoteFolder> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(AppLocalizations.of(context).actionCancel),
         ),
         FilledButton(
           onPressed: _pathValid ? _open : null,
-          child: const Text('Open'),
+          child: Text(AppLocalizations.of(context).actionOpen),
         ),
       ],
     ),

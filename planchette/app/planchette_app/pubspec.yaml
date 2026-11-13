@@ -12,6 +12,9 @@ dependencies:
   file_selector: 1.1.0
   flutter:
     sdk: flutter
+  # The ARB catalog's generated AppLocalizations (l10n.yaml).
+  flutter_localizations:
+    sdk: flutter
   ghost_desktop:
     path: ../../packages/ghost_desktop
   ghost_fonts:
@@ -25,6 +28,7 @@ dependencies:
     path: ../../packages/ghost_servers
   ghost_ui:
     path: ../../packages/ghost_ui
+  intl: 0.20.3
   path: 1.9.1
   path_provider: 2.1.6
   # The running build's version for Settings › About (lib/services/
@@ -48,7 +52,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: 6.0.0
+  # The suite's scanner for authored UI strings outside the ARB catalog.
+  l10n_contract:
+    path: ../../../tool/l10n_contract
   plugin_platform_interface: 2.1.8
 
 flutter:
   uses-material-design: true
+  generate: true

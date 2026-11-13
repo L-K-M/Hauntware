@@ -6,6 +6,7 @@ import 'package:seance_core/seance_core.dart';
 
 import '../services/workspace_catalog.dart';
 import '../widgets/mono_text_style.dart';
+import '../l10n/app_localizations.dart';
 
 Future<ServerConfig?> showWorkspaceServersDialog(
   BuildContext context,
@@ -140,6 +141,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: _catalog,
     builder: (context, _) {
+      final l10n = AppLocalizations.of(context);
       final busy = _catalog.busy;
       final account = _catalog.account;
       final servers = _catalog.servers.where(
@@ -150,10 +152,10 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
       return AlertDialog(
         title: Row(
           children: [
-            const Expanded(child: Text('Workspace servers')),
+            Expanded(child: Text(l10n.serversTitle)),
             if (account != null)
               IconButton(
-                tooltip: 'Refresh catalog',
+                tooltip: l10n.serversRefresh,
                 onPressed: busy ? null : _refresh,
                 icon: const Icon(Icons.refresh),
               ),
@@ -187,14 +189,14 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   onResolve: _resolvePinConflict,
                 ),
               if (_showSignIn) ...[
-                const Text('Sign in to your existing suite catalog.'),
+                Text(l10n.serversSignInPrompt),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _baseUrl,
                   readOnly: account != null,
                   enabled: !busy,
                   keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(labelText: 'Server URL'),
+                  decoration: InputDecoration(labelText: l10n.serversUrl),
                   onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
@@ -202,7 +204,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   controller: _username,
                   readOnly: account != null,
                   enabled: !busy,
-                  decoration: const InputDecoration(labelText: 'Username'),
+                  decoration: InputDecoration(labelText: l10n.serversUsername),
                   onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
@@ -213,9 +215,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   autocorrect: false,
                   enableSuggestions: false,
                   enableIMEPersonalizedLearning: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Account password',
-                  ),
+                  decoration: InputDecoration(labelText: l10n.serversPassword),
                   onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
@@ -226,18 +226,16 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                   autocorrect: false,
                   enableSuggestions: false,
                   enableIMEPersonalizedLearning: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Encryption passphrase',
+                  decoration: InputDecoration(
+                    labelText: l10n.serversPassphrase,
                   ),
                   onSubmitted: busy ? null : (_) => _submitSignIn(),
                 ),
                 const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Sync saved passwords and keys'),
-                  subtitle: const Text(
-                    'Optional. Credentials stay encrypted on this device.',
-                  ),
+                  title: Text(l10n.serversSyncCredentials),
+                  subtitle: Text(l10n.serversSyncCredentialsDetail),
                   value: _credentialSync == WorkspaceCredentialSync.enabled,
                   onChanged: busy
                       ? null
@@ -247,16 +245,16 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                               : WorkspaceCredentialSync.disabled;
                         }),
                 ),
-                const Text('Planchette only downloads catalog changes.'),
+                Text(l10n.serversDownloadOnly),
               ] else ...[
                 if (account != null)
-                  Text('${account.username} · ${account.baseUrl}'),
+                  Text(l10n.serversAccount(account.username, account.baseUrl)),
                 const SizedBox(height: 12),
                 TextField(
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Search servers',
-                    prefixIcon: Icon(Icons.search),
+                  decoration: InputDecoration(
+                    labelText: l10n.serversSearch,
+                    prefixIcon: const Icon(Icons.search),
                   ),
                   onChanged: (value) =>
                       setState(() => _query = value.trim().toLowerCase()),
@@ -265,8 +263,8 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                 if (servers.isEmpty)
                   Text(
                     _catalog.servers.isEmpty
-                        ? 'No servers in the cached catalog. Refresh to download changes.'
-                        : 'No matching servers.',
+                        ? l10n.serversEmptyCatalog
+                        : l10n.serversNoMatch,
                   ),
                 for (final server in servers)
                   ListTile(
@@ -284,19 +282,19 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(l10n.actionClose),
           ),
           if (_showSignIn && account != null)
             TextButton(
               onPressed: busy
                   ? null
                   : () => setState(() => _showSignIn = false),
-              child: const Text('Back'),
+              child: Text(l10n.actionBack),
             ),
           if (_showSignIn)
             FilledButton(
               onPressed: busy || !_canSignIn ? null : _submitSignIn,
-              child: const Text('Sign In'),
+              child: Text(l10n.actionSignIn),
             )
           else
             TextButton(
@@ -306,7 +304,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
                       _prepareSignIn();
                       setState(() => _showSignIn = true);
                     },
-              child: const Text('Sign In'),
+              child: Text(l10n.actionSignIn),
             ),
         ],
       );
@@ -334,6 +332,7 @@ class _PinConflictCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final onContainer = TextStyle(color: scheme.onErrorContainer);
     final fingerprint = monoTextStyle.copyWith(color: scheme.onErrorContainer);
@@ -348,21 +347,15 @@ class _PinConflictCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Another device synced a different host key for '
-              '${conflict.locator}. Planchette kept this device\'s key and is '
-              'not using the other one. If the server\'s key really changed, '
-              'trust the new one; otherwise keep yours.',
-              style: onContainer,
-            ),
+            Text(l10n.hostKeyConflict(conflict.locator), style: onContainer),
             const SizedBox(height: 8),
-            Text('This device trusts', style: onContainer),
+            Text(l10n.hostKeyLocal, style: onContainer),
             SelectableText(
               conflict.local.fingerprintSha256,
               style: fingerprint,
             ),
             const SizedBox(height: 4),
-            Text('The other device synced', style: onContainer),
+            Text(l10n.hostKeyPulled, style: onContainer),
             SelectableText(
               conflict.pulled.fingerprintSha256,
               style: fingerprint,
@@ -376,13 +369,13 @@ class _PinConflictCard extends StatelessWidget {
                   onPressed: busy
                       ? null
                       : () => onResolve(conflict, keepLocal: true),
-                  child: const Text("Keep this device's key"),
+                  child: Text(l10n.hostKeyKeepLocal),
                 ),
                 TextButton(
                   onPressed: busy
                       ? null
                       : () => onResolve(conflict, keepLocal: false),
-                  child: const Text('Trust the new key'),
+                  child: Text(l10n.hostKeyTrustNew),
                 ),
               ],
             ),

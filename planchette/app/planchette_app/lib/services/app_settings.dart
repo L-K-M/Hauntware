@@ -21,6 +21,7 @@ final class AppSettings {
     this.fontFamily,
     this.ligatures = EditorLigatures.on,
     this.recentTextTools = const [],
+    this.recentDocuments = const [],
     this.saveOptions = const TextSaveOptions(),
     this.sidebarVisible = true,
     this.sidebarWidth = defaultSidebarWidth,
@@ -62,6 +63,31 @@ final class AppSettings {
   /// non-default text option never reach it.
   final List<Object?> recentTextTools;
 
+  /// Files opened or saved on this device, most recent first, for File ›
+  /// Open Recent and the empty window. Absolute local paths only, at most
+  /// [maximumRecentDocuments]; [withRecentDocument] keeps both rules.
+  final List<String> recentDocuments;
+
+  /// How many files Open Recent remembers.
+  static const int maximumRecentDocuments = 20;
+
+  /// These settings with [path] first in [recentDocuments], moved there if
+  /// it was already listed, and the oldest entry dropped past the limit.
+  AppSettings withRecentDocument(String path) => copyWith(
+    recentDocuments: [
+      path,
+      ...recentDocuments.where((listed) => listed != path),
+    ].take(maximumRecentDocuments).toList(growable: false),
+  );
+
+  /// These settings without [path] in [recentDocuments].
+  AppSettings withoutRecentDocument(String path) => copyWith(
+    recentDocuments: [
+      for (final listed in recentDocuments)
+        if (listed != path) listed,
+    ],
+  );
+
   /// Opt-in whitespace cleanup. Both choices default off.
   final TextSaveOptions saveOptions;
 
@@ -81,6 +107,7 @@ final class AppSettings {
     String? Function()? fontFamily,
     EditorLigatures? ligatures,
     List<Object?>? recentTextTools,
+    List<String>? recentDocuments,
     TextSaveOptions? saveOptions,
     bool? sidebarVisible,
     double? sidebarWidth,
@@ -91,6 +118,7 @@ final class AppSettings {
     fontFamily: fontFamily == null ? this.fontFamily : fontFamily(),
     ligatures: ligatures ?? this.ligatures,
     recentTextTools: recentTextTools ?? this.recentTextTools,
+    recentDocuments: recentDocuments ?? this.recentDocuments,
     saveOptions: saveOptions ?? this.saveOptions,
     sidebarVisible: sidebarVisible ?? this.sidebarVisible,
     sidebarWidth: sidebarWidth ?? this.sidebarWidth,
@@ -109,6 +137,7 @@ final class AppSettings {
     if (fontFamily != null) 'fontFamily': fontFamily,
     'ligatures': ligatures.name,
     if (recentTextTools.isNotEmpty) 'recentTextTools': recentTextTools,
+    if (recentDocuments.isNotEmpty) 'recentDocuments': recentDocuments,
     // The defaults need no keys: an older file stays valid unchanged.
     if (!sidebarVisible) 'sidebarVisible': false,
     if (sidebarWidth != defaultSidebarWidth) 'sidebarWidth': sidebarWidth,
@@ -131,6 +160,7 @@ final class AppSettings {
       recentTextTools: json['recentTextTools'] is List
           ? List<Object?>.of(json['recentTextTools'] as List)
           : const [],
+      recentDocuments: _recentDocuments(json['recentDocuments']),
       saveOptions: _saveOptions(json),
       sidebarVisible: json['sidebarVisible'] is bool
           ? json['sidebarVisible'] as bool
@@ -180,6 +210,21 @@ final class AppSettings {
     );
   }
 
+  /// Keeps the absolute paths, in order and without repeats, up to the
+  /// limit. A relative or non-string entry from a hand edit is dropped:
+  /// reopening it would depend on the working directory.
+  static List<String> _recentDocuments(Object? value) {
+    if (value is! List) return const [];
+    final kept = <String>[];
+    for (final entry in value) {
+      if (entry is! String || !paths.isAbsolute(entry)) continue;
+      if (kept.contains(entry)) continue;
+      kept.add(entry);
+      if (kept.length == maximumRecentDocuments) break;
+    }
+    return List.unmodifiable(kept);
+  }
+
   static double? _sidebarWidth(Object? value) {
     if (value is! num) return null;
     final width = value.toDouble();
@@ -197,7 +242,8 @@ final class AppSettings {
       other.saveOptions == saveOptions &&
       other.sidebarVisible == sidebarVisible &&
       other.sidebarWidth == sidebarWidth &&
-      _listsEqual(other.recentTextTools, recentTextTools);
+      _listsEqual(other.recentTextTools, recentTextTools) &&
+      _listsEqual(other.recentDocuments, recentDocuments);
 
   /// The list is JSON-shaped (it is what [TextToolHistory.encode] wrote),
   /// so its canonical encoding is the deep comparison.
@@ -217,6 +263,7 @@ final class AppSettings {
     sidebarVisible,
     sidebarWidth,
     jsonEncode(recentTextTools),
+    Object.hashAll(recentDocuments),
   );
 }
 

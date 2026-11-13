@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_app/l10n/app_localizations.dart';
 import 'package:planchette_app/services/workspace_catalog.dart';
 import 'package:planchette_app/ui/workspace_servers_dialog.dart';
 import 'package:seance_core/catalog.dart';
@@ -15,6 +16,7 @@ void main() {
   }) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: Builder(
           builder: (context) => Scaffold(
             body: TextButton(

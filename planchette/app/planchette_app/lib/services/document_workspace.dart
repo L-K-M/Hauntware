@@ -8,6 +8,10 @@ import 'package:seance_core/seance_core.dart' show DownloadProvenance;
 import 'document_store.dart';
 import 'document_publication.dart';
 import 'folder_workspace.dart';
+import 'save_siblings.dart';
+
+// DocumentDialogs answers with it, so its implementers need no second import.
+export 'save_siblings.dart' show SaveSiblingChoice;
 
 enum CloseChoice { save, discard, cancel }
 
@@ -85,6 +89,17 @@ abstract interface class DocumentDialogs {
   /// Whether to delete the recovery copy [name] as its tab closes. True
   /// deletes it; false keeps it, and it opens again at the next launch.
   Future<bool> confirmDiscardRecovery(String name);
+
+  /// Whether to choose another place for [name] after [folder] refused the
+  /// file a save needs beside it. True runs Save As.
+  Future<bool> offerSaveElsewhere(String name, String folder);
+
+  /// What to do with [siblings], the files an interrupted save left beside
+  /// the document [name]. Keep leaves them.
+  Future<SaveSiblingChoice> chooseSaveSiblings(
+    String name,
+    List<String> siblings,
+  );
 }
 
 /// What other document windows hold, for app-wide open deduplication and
@@ -212,6 +227,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     FolderWorkspace? folders,
     DownloadProvenance? provenance,
     this.recoveries,
+    this.saveSiblings,
   }) : _paths = pathContext ?? paths.context,
        toolHistory = toolHistory ?? TextToolHistory(),
        folders = folders ?? FolderWorkspace(),
@@ -236,6 +252,13 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   /// Null where the store keeps no recovery copies.
   final RecoveryCopies? recoveries;
+
+  /// Null where saves leave no files beside documents to look for.
+  final SaveSiblings? saveSiblings;
+
+  /// Documents already asked about their leftover save files this session,
+  /// so closing and reopening one does not ask again.
+  final Set<String> _siblingsOffered = {};
   final FolderWorkspace folders;
   final List<DocumentTab> _documents = [];
   final Map<String, Future<_OpenFailure?>> _opening = {};
@@ -741,6 +764,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         peers!.focusTab(held.workspace, held.tab);
       } else {
         tab.editor.displayPath = tab.displayPath;
+        unawaited(_offerSaveSiblings(tab));
       }
       // The path opened: any earlier failure about it (and any
       // still-opening refusal raised against this tab) has been resolved.
@@ -877,6 +901,15 @@ final class DocumentWorkspace extends ChangeNotifier {
         _saveFailures[tab] = reason;
         _clearScope(tab);
         return false;
+      }
+      // No save into that folder can succeed until its permissions change,
+      // so offer the way on. This save still holds the tab's save slot, so
+      // the Save As runs here rather than queueing behind itself.
+      if (error is TextDocumentFolderNotWritableException &&
+          await _dialog(
+            () => dialogs.offerSaveElsewhere(tab.name, error.folder),
+          )) {
+        return _saveOnce(tab, saveAs: true, access: access);
       }
       _reportError('Could not save ${tab.name}: $error', scope: tab);
       _saveFailures[tab] = '$error';
@@ -1122,14 +1155,17 @@ final class DocumentWorkspace extends ChangeNotifier {
         break;
       }
       if (reverting()) return false;
-      final text = tab.editor.text.text;
-      final language = tab.editor.text.language;
-      final page = highlightedHtml(
-        text: text,
-        tokens: language == null ? const [] : tokenizeSyntax(text, language),
+      // Read the buffer now: edits made while the page renders belong to
+      // the next export, not this one.
+      final page = await highlightedHtmlInBackground(
+        text: tab.editor.text.text,
+        language: tab.editor.text.language,
         palette: palette,
         title: tab.name,
       );
+      // A revert confirmed while the page rendered discarded the text it
+      // shows.
+      if (reverting()) return false;
       // The store holds every write to the document limit. Markup and
       // escaping make a page several times its buffer, so name the page
       // rather than let the store speak of an edited file.
@@ -1351,6 +1387,61 @@ final class DocumentWorkspace extends ChangeNotifier {
     final path = tab.path;
     if (path == null || recoveries?.isRecoveryCopy(path) != true) return null;
     return path;
+  }
+
+  /// Asks what to do with the files an interrupted save left beside [tab]'s
+  /// document, if there are any. Nothing is restored or deleted without the
+  /// user's answer, and the store re-checks each file before deleting it.
+  /// Server copies are left to their host's own recovery.
+  Future<void> _offerSaveSiblings(DocumentTab tab) async {
+    final siblings = saveSiblings;
+    final path = tab.path;
+    if (siblings == null || path == null || tab._publication != null) return;
+    final key = _pathKey(path);
+    if (!_siblingsOffered.add(key)) return;
+    final List<SaveSibling> found;
+    try {
+      found = await siblings.find(path);
+    } catch (error, stackTrace) {
+      // Nothing awaits this offer, and the document itself opened, so the
+      // failure is kept diagnosable and the next open of it asks again.
+      _siblingsOffered.remove(key);
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: error, stack: stackTrace),
+      );
+      return;
+    }
+    if (found.isEmpty || _disposed || _quitAccepted) return;
+    final choice = await _dialog(
+      () => dialogs.chooseSaveSiblings(tab.name, [
+        for (final sibling in found) _paths.basename(sibling.path),
+      ]),
+    );
+    switch (choice) {
+      case SaveSiblingChoice.keep:
+        return;
+      case SaveSiblingChoice.open:
+        await openAll([for (final sibling in found) sibling.path]);
+      case SaveSiblingChoice.delete:
+        final failures = <String>[];
+        for (final sibling in found) {
+          try {
+            await siblings.delete(path, sibling);
+          } on SaveSiblingException catch (error) {
+            failures.add('${_paths.basename(sibling.path)}: $error');
+          } catch (error, stackTrace) {
+            // Not a refusal the store explains, so likely a bug: keep it
+            // diagnosable, say it with the rest, and try the others.
+            FlutterError.reportError(
+              FlutterErrorDetails(exception: error, stack: stackTrace),
+            );
+            failures.add('${_paths.basename(sibling.path)}: $error');
+          }
+        }
+        if (failures.isNotEmpty) {
+          _reportError('Could not delete ${failures.join('; ')}.');
+        }
+    }
   }
 
   /// Whether the copy is gone. A failed delete leaves it to open again at

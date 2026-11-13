@@ -402,13 +402,16 @@ Future<String> _writeTextDocument(
       // A folder deleted since the document opened is a different cause and
       // needs a different remedy than fixing permissions.
       Error.throwWithStackTrace(
-        TextDocumentException(
-          isVanishedPathError(error)
-              ? 'The folder containing the document no longer exists. '
-                    '${_osDetail(error)}'
-              : 'A temporary file could not be created beside the document. '
-                    'Check that its folder is writable. ${_osDetail(error)}',
-        ),
+        isVanishedPathError(error)
+            ? TextDocumentException(
+                'The folder containing the document no longer exists. '
+                '${_osDetail(error)}',
+              )
+            : TextDocumentFolderNotWritableException(
+                'A temporary file could not be created beside the document. '
+                'Check that its folder is writable. ${_osDetail(error)}',
+                folder: temporary.parent.path,
+              ),
         stackTrace,
       );
     }
@@ -469,6 +472,9 @@ Future<String> _writeTextDocument(
       }
       final stat = await backup.stat();
       setFilePermissions(temporary.path, stat.mode & _posixPermissionMask);
+      // Attributes the process may not set are left behind rather than
+      // failing a save whose text is ready; see copyExtendedAttributes.
+      copyExtendedAttributes(backup.path, temporary.path);
       windowsReadOnly =
           Platform.isWindows && stat.mode & _writePermissionBits == 0;
       renameFileWithoutReplacing(temporary.path, file.path);
@@ -498,6 +504,19 @@ Future<String> _writeTextDocument(
     await handle?.close();
     if (!retainTemporary && await temporary.exists()) await temporary.delete();
   }
+}
+
+/// The document's folder refused the staging file a guarded write needs,
+/// so no save into that folder can succeed while it stays that way. A host
+/// can offer to save somewhere else; [folder] names the one that refused.
+final class TextDocumentFolderNotWritableException
+    extends TextDocumentException {
+  const TextDocumentFolderNotWritableException(
+    super.message, {
+    required this.folder,
+  });
+
+  final String folder;
 }
 
 // Common desktop filesystems limit a component to 255 bytes. Counting UTF-8
