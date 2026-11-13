@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Keep live work (SSH sessions, transfers) alive while the app is
+         backgrounded: Android freezes cached processes, killing their
+         sockets. The anchor is a dataSync foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <!-- Android 13+: the service runs without it, but its notification (the
+         user-visible surface of the anchor) stays hidden. The plugin asks
+         for it once per process at the first anchor. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <application>
+        <!-- Anchors the process while Dart reports live work. Controlled
+             from Dart via the ghost_keepalive channel; every user-facing
+             string arrives per call, so the app owns the wording. -->
+        <service
+            android:name="ch.lkmc.ghost.keepalive.KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
+    </application>
+</manifest>

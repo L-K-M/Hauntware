@@ -35,6 +35,10 @@ dependencies:
   # The Android in-app update: download, verify and open the release APK.
   ghost_apk_update:
     path: ../../../planchette/packages/ghost_apk_update
+  # The Android background keep-alive: the foreground service that keeps
+  # the process unfrozen while sessions are live.
+  ghost_keepalive:
+    path: ../../../planchette/packages/ghost_keepalive
   characters: ^1.4.0
   flutter:
     sdk: flutter
