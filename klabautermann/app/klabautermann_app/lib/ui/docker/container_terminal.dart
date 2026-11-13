@@ -375,6 +375,13 @@ class _ShellViewState extends State<_ShellView> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text == null || !mounted) return;
+    await _pasteText(text);
+  }
+
+  /// Pastes [text] into the shell through the paste policy. The soft
+  /// keyboard's own paste (`TerminalView.onKeyboardPaste`) comes here with
+  /// its text, since it never passes the clipboard read.
+  Future<void> _pasteText(String text) async {
     await TerminalPastePolicy(
       inspect: (text) async => [
         for (final finding in DangerLinter.scan(text))
@@ -402,6 +409,7 @@ class _ShellViewState extends State<_ShellView> {
         title: l10n.dockerShellPasteTitle,
         findings: l10n.dockerShellPasteFindings,
         unchecked: l10n.dockerShellPasteUnchecked,
+        unbracketed: l10n.dockerShellPasteUnbracketed,
         finding: l10n.dockerShellPasteFinding,
         pasteAll: l10n.dockerShellPasteAll,
         firstLineOnly: l10n.dockerShellPasteFirstLine,
@@ -448,6 +456,24 @@ class _ShellViewState extends State<_ShellView> {
       }
     }
     if (!opened && overlay.mounted) showTopToast(overlay, message: notOpened);
+  }
+
+  /// A link whose text does not show its target (an OSC 8 label such as
+  /// "Click here") opens only after the user has seen where it leads.
+  Future<void> _reviewLink(Uri uri) async {
+    final l10n = AppLocalizations.of(context);
+    final open = await showTerminalLinkReview(
+      context,
+      uri,
+      strings: TerminalLinkReviewStrings(
+        title: l10n.dockerShellLinkReviewTitle,
+        explanation: l10n.dockerShellLinkReviewBody,
+        open: l10n.dockerShellLinkReviewOpen,
+        cancel: l10n.dockerShellLinkReviewCancel,
+      ),
+    );
+    if (!open || !mounted) return;
+    await _openLink(uri);
   }
 
   /// The platform's selection toolbar over a touch selection, as
@@ -606,6 +632,8 @@ class _ShellViewState extends State<_ShellView> {
               readOnly: ended,
               onKeyEvent: _onKey,
               onLinkTap: _openLink,
+              onHiddenLinkTap: (uri) => unawaited(_reviewLink(uri)),
+              onKeyboardPaste: (text) => unawaited(_pasteText(text)),
               onTouchSelectionEnd: _showSelectionToolbar,
               // No default shortcuts: xterm's would paste around the
               // paste policy and take Ctrl+V and Ctrl+A from the shell.

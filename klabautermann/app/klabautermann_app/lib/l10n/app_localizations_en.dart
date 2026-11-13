@@ -8681,6 +8681,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'These lines could not be checked. Each line runs as you paste it.';
 
   @override
+  String get dockerShellPasteUnbracketed =>
+      'This shell runs each line as it arrives. Check the lines before you paste them.';
+
+  @override
   String dockerShellPasteFinding(int line, String explanation) {
     return 'Line $line: $explanation';
   }
@@ -8693,6 +8697,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerShellPasteCancel => 'Cancel';
+
+  @override
+  String get dockerShellLinkReviewTitle => 'Open this link?';
+
+  @override
+  String get dockerShellLinkReviewBody =>
+      'The text you chose does not show where this link goes. Open it only if you trust this site.';
+
+  @override
+  String get dockerShellLinkReviewOpen => 'Open';
+
+  @override
+  String get dockerShellLinkReviewCancel => 'Cancel';
 
   @override
   String get dockerShellSelectAll => 'Select all';
