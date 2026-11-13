@@ -203,6 +203,23 @@ void main() {
     );
   });
 
+  test('metadata copyWith changes only the named choices', () {
+    const utf16 = TextDocumentMetadata(encoding: TextEncoding.utf16be);
+    expect(
+      utf16.copyWith(lineEnding: LineEnding.cr),
+      const TextDocumentMetadata(
+        lineEnding: LineEnding.cr,
+        encoding: TextEncoding.utf16be,
+      ),
+    );
+    const marked = TextDocumentMetadata(utf8Bom: Utf8Bom.present);
+    expect(
+      marked.copyWith(lineEnding: LineEnding.crlf).utf8Bom,
+      Utf8Bom.present,
+    );
+    expect(utf16.copyWith(), utf16);
+  });
+
   test('a single-line file never grows CRLF', () async {
     await file.writeAsString('single line, no breaks');
     final document = await loadTextDocument(file);

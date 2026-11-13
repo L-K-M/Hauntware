@@ -55,6 +55,7 @@ class MemoryDocuments implements DocumentStore {
   }) async {
     await loadGate?.future;
     loadEncodings.add(encoding);
+    loadSymlinkPolicies.add(symlinkPolicy);
     // A load failure stands for undecodable bytes: naming an encoding
     // reads them.
     if (loadFailures[path] case final error? when encoding == null) {
@@ -67,6 +68,9 @@ class MemoryDocuments implements DocumentStore {
 
   /// The encoding each load asked for; null means detect.
   final loadEncodings = <TextEncoding?>[];
+
+  /// The symbolic-link policy each load asked for.
+  final loadSymlinkPolicies = <SymlinkPolicy>[];
 
   @override
   Future<String> canonicalSavePath(String path) async {

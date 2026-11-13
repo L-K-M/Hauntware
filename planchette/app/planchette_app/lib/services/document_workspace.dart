@@ -164,6 +164,10 @@ final class DocumentTab {
   String get name => path == null ? untitledName : paths.basename(path!);
 }
 
+/// A file refused as undecodable, with the publication of the managed
+/// checkout it belongs to, if any.
+typedef _ReopenOffer = ({String path, DocumentPublication? publication});
+
 /// One file that failed to open, for callers that aggregate batch results.
 typedef _OpenFailure = ({
   String path,
@@ -296,8 +300,10 @@ final class DocumentWorkspace extends ChangeNotifier {
   Object? _errorScope;
 
   /// The file the current [_error] refused as undecodable, which the banner
-  /// offers to reopen in an encoding the user picks. Cleared with the error.
-  String? _reopenWithEncodingPath;
+  /// offers to reopen in an encoding the user picks, and the publication it
+  /// was opened under when it is a managed checkout, so the reopen keeps it
+  /// managed. Cleared with the error.
+  _ReopenOffer? _reopenWithEncoding;
 
   List<DocumentTab> get documents => List.unmodifiable(_documents);
   DocumentTab? get active => _active;
@@ -306,7 +312,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// A file that just failed to open because its bytes are not UTF-8 (or
   /// marked UTF-16) text, while its failure is on the banner. The shell
   /// offers [reopenWithEncoding] for it, never an automatic guess.
-  String? get reopenWithEncodingPath => _reopenWithEncodingPath;
+  String? get reopenWithEncodingPath => _reopenWithEncoding?.path;
   bool get interactionLocked =>
       _dialogCount > 0 || _closingAll || _quitAccepted;
   String get windowTitle {
@@ -481,10 +487,21 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   /// Open the host's durable working copy through the ordinary local guards.
   /// The publication owns its remote target independently of the browser root.
-  Future<void> openManaged(String path, DocumentPublication publication) async {
-    final failure = await _openDeduped(path, publication: publication);
+  Future<void> openManaged(String path, DocumentPublication publication) =>
+      _openManaged(path, publication);
+
+  Future<void> _openManaged(
+    String path,
+    DocumentPublication publication, {
+    TextEncoding? encoding,
+  }) async {
+    final failure = await _openDeduped(
+      path,
+      publication: publication,
+      encoding: encoding,
+    );
     if (failure != null) {
-      _reportOpenFailures([failure]);
+      _reportOpenFailures([failure], publication: publication);
       return;
     }
     final tab = _findPath(path);
@@ -535,6 +552,14 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// refused as not UTF-8. The document then saves in that encoding.
   Future<void> reopenWithEncoding(String path, TextEncoding encoding) async {
     if (interactionLocked) return;
+    // A managed checkout reopens under its publication: a plain open would
+    // turn it into a local file that no longer publishes and that follows
+    // a symbolic link the checkout refuses.
+    final offered = _reopenWithEncoding;
+    if (offered?.publication case final publication?
+        when _pathKey(offered!.path) == _pathKey(path)) {
+      return _openManaged(path, publication, encoding: encoding);
+    }
     final failure = await _openDeduped(path, encoding: encoding);
     if (failure != null) _reportOpenFailures([failure]);
   }
@@ -543,13 +568,18 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// successfully retires it; a batch summary belongs to no one document.
   /// Only a single undecodable file is offered Reopen with Encoding: a
   /// batch names several files and the banner has room for one choice.
-  void _reportOpenFailures(List<_OpenFailure> failures) {
+  void _reportOpenFailures(
+    List<_OpenFailure> failures, {
+    DocumentPublication? publication,
+  }) {
     if (failures.length == 1) {
       final failure = failures.single;
       _reportError(
         _openFailureMessage(failures),
         scope: _pathKey(failure.path),
-        reopenWithEncoding: failure.encodingRefused ? failure.path : null,
+        reopenWithEncoding: failure.encodingRefused
+            ? (path: failure.path, publication: publication)
+            : null,
       );
     } else if (failures.isNotEmpty) {
       _reportError(_openFailureMessage(failures));
@@ -1939,11 +1969,11 @@ final class DocumentWorkspace extends ChangeNotifier {
   void _reportError(
     String message, {
     Object? scope,
-    String? reopenWithEncoding,
+    _ReopenOffer? reopenWithEncoding,
   }) {
     _error = message;
     _errorScope = scope;
-    _reopenWithEncodingPath = reopenWithEncoding;
+    _reopenWithEncoding = reopenWithEncoding;
     _notify();
   }
 
@@ -1956,14 +1986,14 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (_errorScope != scope) return;
     _error = null;
     _errorScope = null;
-    _reopenWithEncodingPath = null;
+    _reopenWithEncoding = null;
     _notify();
   }
 
   void clearError() {
     _error = null;
     _errorScope = null;
-    _reopenWithEncodingPath = null;
+    _reopenWithEncoding = null;
     _notify();
   }
 

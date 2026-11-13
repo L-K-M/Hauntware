@@ -176,7 +176,7 @@ DecodedText _decodeUtf8(Uint8List bytes) {
     );
   }
   return (
-    text: leadingBoms > 1 ? '﻿' * (leadingBoms - 1) + content : content,
+    text: leadingBoms > 1 ? '\u{FEFF}' * (leadingBoms - 1) + content : content,
     encoding: TextEncoding.utf8,
     utf8Bom: leadingBoms > 0,
   );

@@ -57,6 +57,19 @@ final class TextDocumentMetadata {
   final Utf8Bom utf8Bom;
   final TextEncoding encoding;
 
+  /// These choices with only the named ones changed. Prefer it to a fresh
+  /// constructor for a partial change: the constructor's defaults would
+  /// quietly reset the fields it was not given, such as the encoding.
+  TextDocumentMetadata copyWith({
+    LineEnding? lineEnding,
+    Utf8Bom? utf8Bom,
+    TextEncoding? encoding,
+  }) => TextDocumentMetadata(
+    lineEnding: lineEnding ?? this.lineEnding,
+    utf8Bom: utf8Bom ?? this.utf8Bom,
+    encoding: encoding ?? this.encoding,
+  );
+
   /// The encoding as status bars name it, with "BOM" for a marked UTF-8 file.
   String get encodingLabel =>
       utf8Bom == Utf8Bom.present ? '${encoding.label} BOM' : encoding.label;

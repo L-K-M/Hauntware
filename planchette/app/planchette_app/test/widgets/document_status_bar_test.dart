@@ -75,6 +75,25 @@ void main() {
     expect(editor.isDirty, isTrue, reason: 'the next save writes CR breaks');
   });
 
+  testWidgets('the line ending menu keeps the encoding', (tester) async {
+    final editor = controller();
+    editor.setMetadata(
+      const TextDocumentMetadata(encoding: TextEncoding.utf16le),
+    );
+    await mount(tester, editor);
+    await tester.tap(find.text('LF'));
+    await tester.pumpAndSettle();
+    await tester.tap(menuItem('CRLF'));
+    await tester.pumpAndSettle();
+    expect(
+      editor.metadata,
+      const TextDocumentMetadata(
+        lineEnding: LineEnding.crlf,
+        encoding: TextEncoding.utf16le,
+      ),
+    );
+  });
+
   testWidgets('BOM choice explains its size and applies next save', (
     tester,
   ) async {

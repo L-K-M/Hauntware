@@ -92,11 +92,7 @@ class DocumentStatusBar extends StatelessWidget {
       tooltip: 'Line endings apply on next save',
       enabled: controller.canChangeMetadata,
       onSelected: (ending) => controller.setMetadata(
-        TextDocumentMetadata(
-          lineEnding: ending,
-          utf8Bom: controller.metadata.utf8Bom,
-          encoding: controller.metadata.encoding,
-        ),
+        controller.metadata.copyWith(lineEnding: ending),
       ),
       itemBuilder: (_) => [
         for (final ending in LineEnding.values)
@@ -117,7 +113,7 @@ class DocumentStatusBar extends StatelessWidget {
   Widget _encoding(TextStyle? style) {
     final metadata = controller.metadata;
     return PopupMenuButton<TextDocumentMetadata>(
-      tooltip: 'Encoding applies on next save, BOM adds 3 bytes',
+      tooltip: 'Encoding applies on next save, a UTF-8 BOM adds 3 bytes',
       enabled: controller.canChangeMetadata,
       onSelected: controller.setMetadata,
       itemBuilder: (_) => [

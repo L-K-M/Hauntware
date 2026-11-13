@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_core/planchette_core.dart';
 import 'package:planchette_app/services/document_publication.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
@@ -61,6 +62,24 @@ void main() {
     await workspace.openManaged(testPath('config.txt'), publication);
     return workspace.active!;
   }
+
+  test('Reopen with Encoding keeps the checkout managed', () async {
+    final path = testPath('config.txt');
+    store.loadFailures[path] = const UnsupportedTextEncodingException(
+      'This file is not valid UTF-8 text.',
+    );
+    await workspace.openManaged(path, publication);
+    expect(workspace.reopenWithEncodingPath, path);
+
+    store.loadSymlinkPolicies.clear();
+    await workspace.reopenWithEncoding(path, TextEncoding.latin1);
+
+    final tab = workspace.active!;
+    expect(tab.publication, same(publication));
+    expect(tab.editor.displayPath, publication.displayPath);
+    expect(tab.editor.metadata.encoding, TextEncoding.latin1);
+    expect(store.loadSymlinkPolicies, [SymlinkPolicy.reject]);
+  });
 
   test('failed upload retains pending state and Save All retries it', () async {
     final tab = await open();

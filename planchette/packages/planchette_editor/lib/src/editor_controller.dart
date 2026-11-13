@@ -430,6 +430,8 @@ class EditorController extends ChangeNotifier {
 
   /// Change what the next save writes, without rewriting the editing buffer
   /// or its undo history. Returning to the saved choices clears their dirt.
+  /// [value] replaces every choice, the encoding included; derive a partial
+  /// change from [metadata] with [TextDocumentMetadata.copyWith].
   bool setMetadata(TextDocumentMetadata value) {
     if (!canChangeMetadata || value == _metadata) return false;
     _metadata = value;

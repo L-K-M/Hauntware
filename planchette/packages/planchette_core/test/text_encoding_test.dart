@@ -41,7 +41,7 @@ void main() {
 
   // 'é', an astral emoji (a surrogate pair), CRLF breaks and a second
   // U+FEFF that is content, not a mark.
-  const fixture = 'café \u{1F600}\r\n﻿line two\r\n';
+  const fixture = 'café \u{1F600}\r\n\u{FEFF}line two\r\n';
 
   Uint8List utf16(String text, Endian endian, {bool bom = true}) {
     final units = [if (bom) 0xFEFF, ...text.codeUnits];
@@ -66,7 +66,7 @@ void main() {
         expect(document.encoding, encoding);
         expect(document.hasUtf8Bom, isFalse);
         expect(document.lineEnding, LineEnding.crlf);
-        expect(document.text, 'café \u{1F600}\n﻿line two\n');
+        expect(document.text, 'café \u{1F600}\n\u{FEFF}line two\n');
         expect(document.metadata.encodingLabel, encoding.label);
 
         await saveBack(document);
