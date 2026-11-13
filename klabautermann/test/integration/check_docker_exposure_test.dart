@@ -399,7 +399,7 @@ void main() {
       'image': 'klabautermann-sync:fixture',
       'environment': {
         'SEANCE_OPEN_REGISTRATION': '1',
-        if (dbPath != null) 'SEANCE_DB_PATH': dbPath,
+        'SEANCE_DB_PATH': ?dbPath,
       },
       'ports': [
         {'target': target, 'host_ip': hostIp, 'published': '2251'},

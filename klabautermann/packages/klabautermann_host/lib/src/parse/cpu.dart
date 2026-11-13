@@ -105,10 +105,7 @@ CpuTopology? parseCpuTopology(String raw) {
       .map((field) => field.$2)
       .firstOrNull;
 
-  final models = {
-    for (final group in groups)
-      if (_text(group[_model]) case final model?) model,
-  };
+  final models = {for (final group in groups) ?_text(group[_model])};
   return CpuTopology(
     models: models.isEmpty ? info.models : models.toList(),
     vendor: _text(field('Vendor ID')),

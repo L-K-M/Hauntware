@@ -78,10 +78,7 @@ final class SnippetMirror {
 
   /// The live snippets, by title then id.
   List<Snippet> snippets() {
-    final live = [
-      for (final entry in _entries.values)
-        if (entry.snippet case final snippet?) snippet,
-    ];
+    final live = [for (final entry in _entries.values) ?entry.snippet];
     return live..sort((a, b) {
       final byTitle = a.title.toLowerCase().compareTo(b.title.toLowerCase());
       return byTitle != 0 ? byTitle : a.id.compareTo(b.id);

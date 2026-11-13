@@ -68,10 +68,7 @@ importedHostsFromSshConfig(String text) {
   // [pick] gives each name, or null.
   ({List<ImportedHost> hosts, List<ImportedHost> hops, Set<String> leftOut})
   split(ImportedHost? Function(SshConfigResolution) pick) {
-    final settings = {
-      for (final name in names)
-        if (pick(resolved[name]!) case final host?) name: host,
-    };
+    final settings = {for (final name in names) name: ?pick(resolved[name]!)};
     return (
       hosts: [for (final alias in config.aliases) ?settings[alias]],
       hops: [

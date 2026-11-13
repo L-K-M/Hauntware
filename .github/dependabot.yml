@@ -2,59 +2,50 @@
 # .github/dependabot.yml files were never applied in the monorepo.
 version: 2
 updates:
-  # Workflow actions (the root workflows are the only ones GitHub runs).
+  # Workflow actions (the root workflows are the only ones GitHub runs),
+  # one grouped PR per run.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-  # Android Gradle builds (AGP, Kotlin, wrapper). The standalone repos
-  # pointed this at their roots, where no Gradle files exist (X-14).
+    groups:
+      github-actions:
+        patterns: ['*']
+  # Android Gradle builds (AGP, Kotlin, wrapper) of the four apps, one
+  # grouped PR per run. The standalone repos pointed this at their roots,
+  # where no Gradle files exist (X-14).
   - package-ecosystem: gradle
-    directory: /seance/app/seance_app/android
+    directories:
+      - /seance/app/seance_app/android
+      - /poltergeist/app/poltergeist_app/android
+      - /klabautermann/app/klabautermann_app/android
+      - /planchette/app/planchette_app/android
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-  - package-ecosystem: gradle
-    directory: /poltergeist/app/poltergeist_app/android
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-  - package-ecosystem: gradle
-    directory: /klabautermann/app/klabautermann_app/android
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-  - package-ecosystem: gradle
-    directory: /planchette/app/planchette_app/android
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-  # Planchette's pub workspace, editor and app, as in its standalone repo.
-  - package-ecosystem: pub
-    directory: /planchette
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-  - package-ecosystem: pub
-    directory: /planchette/packages/planchette_editor
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-  - package-ecosystem: pub
-    directory: /planchette/app/planchette_app
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-  # Every other directory with its own pubspec.lock: the root release
-  # tooling, the other three workspaces, their apps and the separately
-  # resolved shared packages. One grouped PR per directory keeps the
-  # count down. The M0 bench packages are left out: they reproduce the
-  # M0 measurements against an exact dartssh2 pin.
+    groups:
+      gradle:
+        patterns: ['*']
+  # Every directory with its own pubspec.lock: the root release tooling,
+  # the four workspaces, their apps, Planchette's editor and the
+  # separately resolved shared packages. One grouped PR keeps the count
+  # down. The M0 bench packages are left out: they reproduce the M0
+  # measurements against an exact dartssh2 pin.
+  #
+  # Majors that need a migration the grouped PR cannot carry are held:
+  # flutter_secure_storage 11 drops data written with v10's deprecated
+  # options (keychain entries are user data), and sqlite3 3 loads SQLite
+  # through a build hook that `dart compile exe` refuses. archive 4.6
+  # stops reporting damaged data by default, which Poltergeist's
+  # extraction of untrusted archives must audit first.
   - package-ecosystem: pub
     directories:
       - /
       - /tool/l10n_contract
+      - /planchette
+      - /planchette/packages/planchette_editor
+      - /planchette/app/planchette_app
       - /seance
       - /seance/app/seance_app
       - /seance/packages/seance_terminal
@@ -66,6 +57,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: flutter_secure_storage
+        update-types: ['version-update:semver-major']
+      - dependency-name: sqlite3
+        update-types: ['version-update:semver-major']
+      - dependency-name: archive
+        versions: ['>=4.6.0']
+      - dependency-name: xml
+        versions: ['>7.0.1']
     groups:
       pub:
         patterns: ['*']

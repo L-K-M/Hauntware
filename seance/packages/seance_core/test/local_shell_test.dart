@@ -58,7 +58,7 @@ Future<LocalShellSession> startWith(
   HeadlessTerminalEngine engine, {
   LocalShellCommand command = const LocalShellCommand(executable: '/bin/zsh'),
 }) => LocalShellSession.start(
-      launcher: (_, __) async => pty,
+      launcher: (_, _) async => pty,
       command: command,
       engine: engine,
     );
@@ -546,7 +546,7 @@ void main() {
       final engine = HeadlessTerminalEngine();
       await expectLater(
         LocalShellSession.start(
-          launcher: (_, __) async => throw StateError('Failed to create PTY'),
+          launcher: (_, _) async => throw StateError('Failed to create PTY'),
           command: const LocalShellCommand(executable: '/bin/nope'),
           engine: engine,
         ),

@@ -178,8 +178,7 @@ void main() {
 
   testWidgets('a line command can be undone', (tester) async {
     final editor = await pumpEditor(tester, 'one\ntwo', caret: 1);
-    // Flutter's UndoHistory records a value only after 500 ms without
-    // changes, so each pump settles one entry: the loaded text, then the move.
+    // A line command is an undo step of its own.
     await tester.pump(const Duration(seconds: 1));
 
     await press(tester, LogicalKeyboardKey.arrowDown, alt: true);

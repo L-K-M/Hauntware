@@ -184,7 +184,7 @@ final class _WindowsWatch {
     await Future.wait<void>([
       if (root != null) Future<void>.sync(root.cancel),
       if (parent != null) Future<void>.sync(parent.cancel),
-      if (_probeFuture case final probe?) probe,
+      ?_probeFuture,
     ]);
   }
 }
