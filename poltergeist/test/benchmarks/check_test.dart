@@ -1407,8 +1407,7 @@ Map<String, Object?> _scenarioJson({
   'unit': 'ms',
   'minimumRepetitions': 2,
   'landed': landed,
-  if (calibratedConfig != null)
-    'calibratedScenarioConfig': calibratedConfig,
+  'calibratedScenarioConfig': ?calibratedConfig,
 };
 
 BudgetCatalog _catalog() => BudgetCatalog.fromJson({
@@ -1442,7 +1441,7 @@ Map<String, Object?> _rowJson({
   'repetition': repetition,
   'status': status,
   if (status == 'ok') ...{'value': value, 'unit': unit},
-  if (error != null) 'error': error,
+  'error': ?error,
   'fingerprint': fingerprint ?? _fingerprintJson(),
 };
 

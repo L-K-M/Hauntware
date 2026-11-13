@@ -150,8 +150,7 @@ Future<DockerPayload> checkImageUpdates({
   }
 
   return DockerImageUpdatesPayload([
-    for (final entry in entries)
-      if (cache.row(entry.tag) case final row?) row,
+    for (final entry in entries) ?cache.row(entry.tag),
   ], curlMissing: curlMissing);
 }
 

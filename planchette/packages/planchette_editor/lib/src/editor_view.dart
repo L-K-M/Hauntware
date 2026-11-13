@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -92,6 +93,17 @@ class PlanchetteEditor extends StatefulWidget {
   /// fields alike.
   final EditorLigatures ligatures;
 
+  /// How much the document field's own snapshot history may hold before
+  /// the view remounts the field to drop it; see
+  /// [_PlanchetteEditorState._fieldSnapshots]. Tests lower it to reach the
+  /// remount with a small document.
+  @visibleForTesting
+  static int fieldSnapshotBudgetBytes = defaultFieldSnapshotBudgetBytes;
+
+  /// 16 MiB: a few snapshots of the largest document the editor loads, or
+  /// minutes of typing in a large one, between remounts.
+  static const defaultFieldSnapshotBudgetBytes = 16 * 1024 * 1024;
+
   @override
   State<PlanchetteEditor> createState() => _PlanchetteEditorState();
 }
@@ -145,6 +157,25 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// so it ends with the view.
   static const _problemCheckDelay = Duration(milliseconds: 500);
   Timer? _problemCheck;
+
+  /// Flutter's text field keeps an undo history of its own (UndoHistory in
+  /// Flutter 3.47): a copy of the whole text for every half second of
+  /// editing, with no limit and no way to trim or switch it off. The editor
+  /// undoes through [EditorController.undo] and never reads it, so the view
+  /// estimates what it holds and, past
+  /// [PlanchetteEditor.fieldSnapshotBudgetBytes], remounts the field at the
+  /// next idle moment; the new field starts with an empty history.
+  final _fieldSnapshots = _FieldSnapshotEstimate();
+  Timer? _fieldRemount;
+  int _fieldRemounts = 0;
+
+  /// How long the field must be left alone before it is remounted, and how
+  /// often a busy field is checked again.
+  static const _fieldRemountPause = Duration(milliseconds: 500);
+
+  /// Pointers down on the document or its scrollbar: a remount would cut a
+  /// drag-selection or a thumb drag short.
+  int _pointersDown = 0;
   EditorController get c => widget.controller;
   TextStyle get _style {
     // Installed fonts follow the operating system, not a theme's platform.
@@ -190,6 +221,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void initState() {
     super.initState();
     c.addListener(_changed);
+    c.text.addListener(_fieldValueChanged);
+    _fieldSnapshots.reset(c.text.value, clock.now());
     _installSeen = c.installGeneration;
     _lastCaretReveal = c.caretRevealRequest;
     c.setViewEditingLocked(this, widget.editingLocked);
@@ -228,9 +261,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != c) {
       oldWidget.controller.removeListener(_changed);
+      oldWidget.controller.text.removeListener(_fieldValueChanged);
       oldWidget.controller.setViewEditingLocked(this, false);
       _problemCheck?.cancel();
+      _fieldRemount?.cancel();
       c.addListener(_changed);
+      c.text.addListener(_fieldValueChanged);
+      _fieldSnapshots.reset(c.text.value, clock.now());
       _scheduleProblemCheck();
       _lastReveal = -1;
       _lastCaretReveal = c.caretRevealRequest;
@@ -263,6 +300,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     if (!mounted) return;
     if (_installSeen != c.installGeneration) {
       _installSeen = c.installGeneration;
+      // The install remounts the field, which drops its snapshot history,
+      // so a remount still waiting would only repeat it.
+      _fieldRemount?.cancel();
+      _fieldSnapshots.reset(c.text.value, clock.now());
       _carryOverInstall();
     }
     _scheduleProblemCheck();
@@ -391,8 +432,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   @override
   void dispose() {
     c.removeListener(_changed);
+    c.text.removeListener(_fieldValueChanged);
     c.setViewEditingLocked(this, false);
     _problemCheck?.cancel();
+    _fieldRemount?.cancel();
     _gutterRepaint.dispose();
     _searchBarFocus.dispose();
     _textToolsFocus.dispose();
@@ -1293,125 +1336,133 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 // at the edge on every platform; without it a 10,000 line
                 // mobile document gives no indication of where the caret is
                 // and nothing to drag. The field's is suppressed below.
-                child: Scrollbar(
-                  controller: c.scroll,
-                  thumbVisibility: widget.showScrollbar,
-                  child: ScrollConfiguration(
-                    behavior: _WithoutScrollbar(
-                      ScrollConfiguration.of(context),
-                    ),
-                    child: KeyedSubtree(
-                      // A new document field per installed buffer: the field's
-                      // undo history cannot be cleared, and must not reach back
-                      // past a load, reload or revert into the previous text.
-                      key: ValueKey(c.installGeneration),
-                      child: Actions(
-                        actions: {
-                          // Undo, redo and paste deliver a stored or clipboard
-                          // write that the buffer must not read as a keystroke:
-                          // they run under code-input suppression so a restored
-                          // or pasted bracket never pairs. Locked, they are
-                          // swallowed as before.
-                          UndoTextIntent: CallbackAction<UndoTextIntent>(
-                            onInvoke: (_) {
-                              if (!_locked) c.undo();
-                              return null;
-                            },
-                          ),
-                          RedoTextIntent: CallbackAction<RedoTextIntent>(
-                            onInvoke: (_) {
-                              if (!_locked) c.redo();
-                              return null;
-                            },
-                          ),
-                          PasteTextIntent: _PasteAction(
-                            locked: () => _locked,
-                            controller: c,
-                          ),
-                          _IndentIntent: _EditAction<_IndentIntent>(
-                            enabled: () => !_locked,
-                            run: c.indent,
-                            heldWhileComposing: _composing,
-                            keepsKey: true,
-                          ),
-                          _OutdentIntent: _EditAction<_OutdentIntent>(
-                            enabled: () => !_locked,
-                            run: c.outdent,
-                            heldWhileComposing: _composing,
-                            keepsKey: true,
-                          ),
-                          _NewlineIntent: _EditAction<_NewlineIntent>(
-                            enabled: () => !_locked,
-                            run: c.insertNewline,
-                          ),
-                          _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
-                            enabled: () =>
-                                !_locked && c.canDeleteIndentBackward,
-                            run: c.deleteIndentBackward,
-                          ),
-                        },
-                        child: Shortcuts(
-                          shortcuts: {
-                            if (widget.tabKeyBehavior ==
-                                EditorTabKeyBehavior.indent) ...const {
-                              SingleActivator(LogicalKeyboardKey.tab):
-                                  _IndentIntent(),
-                              SingleActivator(
-                                LogicalKeyboardKey.tab,
-                                shift: true,
-                              ): _OutdentIntent(),
-                            },
-                            const SingleActivator(LogicalKeyboardKey.enter):
-                                const _NewlineIntent(),
-                            const SingleActivator(
-                              LogicalKeyboardKey.numpadEnter,
-                            ): const _NewlineIntent(),
-                            const SingleActivator(LogicalKeyboardKey.backspace):
-                                const _DeleteIndentIntent(),
-                            // Windows' own redo key; Flutter binds only
-                            // Control+Shift+Z there.
-                            if (Theme.of(context).platform ==
-                                TargetPlatform.windows)
-                              const SingleActivator(
-                                LogicalKeyboardKey.keyY,
-                                control: true,
-                              ): const RedoTextIntent(
-                                SelectionChangedCause.keyboard,
-                              ),
+                child: Listener(
+                  onPointerDown: (_) => _pointersDown++,
+                  onPointerUp: (_) => _pointersDown--,
+                  onPointerCancel: (_) => _pointersDown--,
+                  child: Scrollbar(
+                    controller: c.scroll,
+                    thumbVisibility: widget.showScrollbar,
+                    child: ScrollConfiguration(
+                      behavior: _WithoutScrollbar(
+                        ScrollConfiguration.of(context),
+                      ),
+                      child: KeyedSubtree(
+                        // A new document field per installed buffer, and
+                        // whenever the field's own snapshot history passes
+                        // its budget: that history cannot be cleared any
+                        // other way. The editor's undo lives in the
+                        // controller and survives both.
+                        key: ValueKey((c.installGeneration, _fieldRemounts)),
+                        child: Actions(
+                          actions: {
+                            // Undo, redo and paste deliver a stored or clipboard
+                            // write that the buffer must not read as a keystroke:
+                            // they run under code-input suppression so a restored
+                            // or pasted bracket never pairs. Locked, they are
+                            // swallowed as before.
+                            UndoTextIntent: CallbackAction<UndoTextIntent>(
+                              onInvoke: (_) {
+                                if (!_locked) c.undo();
+                                return null;
+                              },
+                            ),
+                            RedoTextIntent: CallbackAction<RedoTextIntent>(
+                              onInvoke: (_) {
+                                if (!_locked) c.redo();
+                                return null;
+                              },
+                            ),
+                            PasteTextIntent: _PasteAction(
+                              locked: () => _locked,
+                              controller: c,
+                            ),
+                            _IndentIntent: _EditAction<_IndentIntent>(
+                              enabled: () => !_locked,
+                              run: c.indent,
+                              heldWhileComposing: _composing,
+                              keepsKey: true,
+                            ),
+                            _OutdentIntent: _EditAction<_OutdentIntent>(
+                              enabled: () => !_locked,
+                              run: c.outdent,
+                              heldWhileComposing: _composing,
+                              keepsKey: true,
+                            ),
+                            _NewlineIntent: _EditAction<_NewlineIntent>(
+                              enabled: () => !_locked,
+                              run: c.insertNewline,
+                            ),
+                            _DeleteIndentIntent:
+                                _EditAction<_DeleteIndentIntent>(
+                                  enabled: () =>
+                                      !_locked && c.canDeleteIndentBackward,
+                                  run: c.deleteIndentBackward,
+                                ),
                           },
-                          child: TextField(
-                            key: const ValueKey('planchette.document'),
-                            contextMenuBuilder: ghostTextContextMenu,
-                            controller: c.text,
-                            undoController: c.undoController,
-                            readOnly: _locked,
-                            focusNode: c.editorFocus,
-                            scrollController: c.scroll,
-                            autofocus: widget.isActive && _routeIsCurrent,
-                            expands: true,
-                            maxLines: null,
-                            minLines: null,
-                            keyboardType: TextInputType.multiline,
-                            textAlignVertical: TextAlignVertical.top,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            // Files can hold secrets (.env, remote
-                            // configs): a privacy hint to the keyboard,
-                            // as every field of the editor gives.
-                            enableIMEPersonalizedLearning: false,
-                            smartDashesType: SmartDashesType.disabled,
-                            smartQuotesType: SmartQuotesType.disabled,
-                            style: _style,
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.all(_padding),
-                              hintText: widget.placeholder,
-                              hintStyle: _style.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withValues(alpha: 0.6),
-                                fontStyle: FontStyle.italic,
+                          child: Shortcuts(
+                            shortcuts: {
+                              if (widget.tabKeyBehavior ==
+                                  EditorTabKeyBehavior.indent) ...const {
+                                SingleActivator(LogicalKeyboardKey.tab):
+                                    _IndentIntent(),
+                                SingleActivator(
+                                  LogicalKeyboardKey.tab,
+                                  shift: true,
+                                ): _OutdentIntent(),
+                              },
+                              const SingleActivator(LogicalKeyboardKey.enter):
+                                  const _NewlineIntent(),
+                              const SingleActivator(
+                                LogicalKeyboardKey.numpadEnter,
+                              ): const _NewlineIntent(),
+                              const SingleActivator(
+                                LogicalKeyboardKey.backspace,
+                              ): const _DeleteIndentIntent(),
+                              // Windows' own redo key; Flutter binds only
+                              // Control+Shift+Z there.
+                              if (Theme.of(context).platform ==
+                                  TargetPlatform.windows)
+                                const SingleActivator(
+                                  LogicalKeyboardKey.keyY,
+                                  control: true,
+                                ): const RedoTextIntent(
+                                  SelectionChangedCause.keyboard,
+                                ),
+                            },
+                            child: TextField(
+                              key: const ValueKey('planchette.document'),
+                              contextMenuBuilder: ghostTextContextMenu,
+                              controller: c.text,
+                              readOnly: _locked,
+                              focusNode: c.editorFocus,
+                              scrollController: c.scroll,
+                              autofocus: widget.isActive && _routeIsCurrent,
+                              expands: true,
+                              maxLines: null,
+                              minLines: null,
+                              keyboardType: TextInputType.multiline,
+                              textAlignVertical: TextAlignVertical.top,
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              // Files can hold secrets (.env, remote
+                              // configs): a privacy hint to the keyboard,
+                              // as every field of the editor gives.
+                              enableIMEPersonalizedLearning: false,
+                              smartDashesType: SmartDashesType.disabled,
+                              smartQuotesType: SmartQuotesType.disabled,
+                              style: _style,
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.all(_padding),
+                                hintText: widget.placeholder,
+                                hintStyle: _style.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant
+                                      .withValues(alpha: 0.6),
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
                             ),
                           ),
@@ -1514,6 +1565,55 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   };
 
   bool _composing() => c.text.value.composing.isValid;
+
+  void _fieldValueChanged() {
+    _fieldSnapshots.note(c.text.value, clock.now());
+    if (_fieldSnapshots.bytes <= PlanchetteEditor.fieldSnapshotBudgetBytes) {
+      return;
+    }
+    // Every change, a caret move included, restarts the wait: the remount
+    // waits for the user to stop.
+    _fieldRemount?.cancel();
+    _fieldRemount = Timer(_fieldRemountPause, _remountFieldWhenIdle);
+  }
+
+  /// Whether a remount now would interrupt the user: a composition, a
+  /// selection whose handles or menu would go, a pointer still down, or a
+  /// scroll still moving.
+  bool get _fieldBusy {
+    final value = c.text.value;
+    return value.composing.isValid ||
+        (value.selection.isValid && !value.selection.isCollapsed) ||
+        _pointersDown > 0 ||
+        c.scroll.positions.any((p) => p.isScrollingNotifier.value);
+  }
+
+  /// Replaces the document field with a fresh one, whose snapshot history
+  /// starts empty, keeping the scroll offset, focus and keyboard.
+  void _remountFieldWhenIdle() {
+    if (!mounted) return;
+    if (_fieldBusy) {
+      _fieldRemount = Timer(_fieldRemountPause, _remountFieldWhenIdle);
+      return;
+    }
+    c.scroll.carryOffsetOver();
+    final focused = c.editorFocus.hasFocus;
+    setState(() => _fieldRemounts++);
+    _fieldSnapshots.reset(c.text.value, clock.now());
+    if (!focused) return;
+    // The focus node stays focused across the remount, so the new field
+    // never sees a focus change: it would neither connect to the keyboard
+    // nor blink its caret. Connecting in this frame, before the old
+    // connection's deferred keyboard hide runs, keeps a soft keyboard up;
+    // the listener reminder starts the caret.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !c.editorFocus.hasFocus) return;
+      c.editorFocus.context
+          ?.findAncestorStateOfType<EditableTextState>()
+          ?.requestKeyboard();
+      c.text.remindListeners();
+    });
+  }
 
   double _measureGutter(TextScaler scaler) {
     final painter = TextPainter(
@@ -2302,4 +2402,45 @@ class _BracketJumpAction extends Action<_BracketJumpIntent> {
 class _HistoryIntent extends Intent {
   const _HistoryIntent({required this.older});
   final bool older;
+}
+
+/// What Flutter's UndoHistory holds for the document field, estimated the
+/// way it grows: at most one snapshot of the whole text per 500 ms window
+/// in which the text or the composing range changed. Each window is
+/// charged at the largest text it saw, two bytes per UTF-16 code unit, so
+/// the estimate errs high.
+final class _FieldSnapshotEstimate {
+  /// UndoHistoryState's throttle in Flutter 3.47.
+  static const _window = Duration(milliseconds: 500);
+
+  int _settled = 0;
+  int _open = 0;
+  DateTime? _windowStart;
+  TextEditingValue _last = TextEditingValue.empty;
+
+  int get bytes => _settled + _open;
+
+  /// Starts over for a fresh field, which records [value] as its first
+  /// snapshot. That snapshot is not charged: a remount cannot drop it, so
+  /// counting it would remount a field whose text alone exceeds the budget
+  /// at every pause, for nothing.
+  void reset(TextEditingValue value, DateTime now) {
+    _settled = 0;
+    _open = 0;
+    _windowStart = now;
+    _last = value;
+  }
+
+  void note(TextEditingValue value, DateTime now) {
+    final last = _last;
+    _last = value;
+    if (last.text == value.text && last.composing == value.composing) return;
+    final start = _windowStart;
+    if (start == null || now.difference(start) >= _window) {
+      _settled += _open;
+      _open = 0;
+      _windowStart = now;
+    }
+    _open = math.max(_open, value.text.length * 2);
+  }
 }

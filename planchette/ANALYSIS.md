@@ -1386,6 +1386,24 @@ same change if P1's notification pruning lands, and measure with the
 keystroke harness rather than by inspection — this is a micro-optimization and
 must not be sold as a fix for P1.
 
+### P10. Unbounded undo history — L (owner decision: bound it)
+Flutter 3.47's `EditableText` wraps an `UndoHistory` whose private
+`_UndoStack` keeps a full-text snapshot per 500 ms of editing, with no size
+limit and no trim or clear API (widgets/undo_history.dart, editable_text.dart).
+A long session in a large document grew without bound. **Done in branch
+`planchette/undo-budget`:** the editor owns its undo (`EditHistory`), storing
+each step as a diff (range, old and new text, selection before and after),
+grouping typing by caret continuity, a 500 ms pause and word starts, never
+recording mid-composition, and dropping the oldest steps past 16 MiB (the
+newest step always stays). Loads clear it; every command write is one step.
+Flutter's own stack cannot be switched off, so the view estimates it and
+remounts the document field at an idle moment once it passes 16 MiB,
+carrying scroll offset, focus and the keyboard connection over. Not covered:
+iOS system undo gestures still drive Flutter's stack (they land as ordinary
+edits), and the remounted field misses the keyboard-inset observer until the
+next focus change. Removing the now redundant `undoQuiet` wait is a
+follow-up.
+
 ## 5. Editing features
 
 ### E1. Validate comment toggle; extend block-only languages — after #23

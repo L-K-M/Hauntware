@@ -17,12 +17,10 @@ import 'package:test/test.dart';
 /// Each shell's first hit on PATH, then in /bin or /usr/bin.
 final _shells = <String, String>{
   for (final name in ['dash', 'bash', 'mksh'])
-    if ([...?Platform.environment['PATH']?.split(':'), '/bin', '/usr/bin']
-            .map((dir) => '$dir/$name')
-            .where((path) => File(path).existsSync())
-            .firstOrNull
-        case final path?)
-      name: path,
+    name: ?[...?Platform.environment['PATH']?.split(':'), '/bin', '/usr/bin']
+        .map((dir) => '$dir/$name')
+        .where((path) => File(path).existsSync())
+        .firstOrNull,
 };
 
 /// Whether [shell] does 64-bit arithmetic; mksh does 32-bit, so its

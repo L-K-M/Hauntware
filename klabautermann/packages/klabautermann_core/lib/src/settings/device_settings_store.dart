@@ -798,7 +798,7 @@ final class DeviceSettingsStore {
   /// the file.
   Map<String, DockerEndpointOverride> get dockerEndpointOverrides => {
     for (final MapEntry(:key, :value) in _rawEndpointOverrides.entries)
-      if (_readOverride(value) case final override?) key: override,
+      key: ?_readOverride(value),
   };
 
   /// Stores [override] as [serverId]'s settings, or removes them when
@@ -950,8 +950,7 @@ final class DeviceSettingsStore {
       if (value case final List<Object?> labels)
         if ([
               for (final label in labels)
-                if (label case final String text)
-                  if (TlsEndpoint.parse(text) case final endpoint?) endpoint,
+                if (label case final String text) ?TlsEndpoint.parse(text),
             ]
             case final endpoints when endpoints.isNotEmpty)
           key: List.unmodifiable(endpoints),

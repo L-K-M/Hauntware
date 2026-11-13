@@ -483,11 +483,7 @@ extension DockerEndpoints on DockerClient {
     final res = await requestJsonValues(
       'POST',
       '/images/create',
-      query: {
-        'fromImage': fromImage,
-        if (tag != null) 'tag': tag,
-        if (platform != null) 'platform': platform,
-      },
+      query: {'fromImage': fromImage, 'tag': ?tag, 'platform': ?platform},
       headers: headers,
       timeout: timeout,
       cancelToken: cancelToken,

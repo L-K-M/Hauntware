@@ -30,7 +30,7 @@ Future<T> boundedOpen<T>({
     unawaited(
       Future.sync(
         () => discard(value),
-      ).then<void>((_) {}, onError: (Object _, StackTrace __) {}),
+      ).then<void>((_) {}, onError: (Object _, StackTrace _) {}),
     );
   }
 
@@ -80,7 +80,7 @@ Future<T> boundedOpen<T>({
 
   result.future.then<void>(
     (_) => settled(),
-    onError: (Object _, StackTrace __) => settled(),
+    onError: (Object _, StackTrace _) => settled(),
   );
   return result.future;
 }
@@ -91,7 +91,7 @@ final class _OwnerCloseWaiters {
   _OwnerCloseWaiters(Future<void> ownerClosed) {
     ownerClosed.then<void>(
       (_) => _close(),
-      onError: (Object _, StackTrace __) => _close(),
+      onError: (Object _, StackTrace _) => _close(),
     );
   }
 

@@ -701,8 +701,7 @@ Map<int, String?> _readArtifacts(String directory) {
 
   return {
     for (final entry in root.listSync().whereType<Directory>())
-      if (int.tryParse(p.basename(entry.path)) case final runId?)
-        runId: _readResults(entry.path),
+      ?int.tryParse(p.basename(entry.path)): _readResults(entry.path),
   };
 }
 

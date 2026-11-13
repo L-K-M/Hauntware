@@ -18,7 +18,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  crypto: ^3.0.7
+  crypto: ^3.0.8
 
 # Each family is registered as 'packages/ghost_fonts/<family>'; see
 # BundledMonoFont. README.md records where every file comes from.

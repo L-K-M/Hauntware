@@ -824,7 +824,7 @@ final class SyncRunJournal {
         : _normalizeTrashScope(trashScope);
     await _append(<String, Object?>{
       'type': trashScope == null ? 'purged' : 'trashScopePurged',
-      if (normalizedScope != null) 'trashScope': normalizedScope,
+      'trashScope': ?normalizedScope,
     });
     if (trashScope == null) {
       _legacyPurged = true;

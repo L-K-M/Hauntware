@@ -169,7 +169,7 @@ final class PreviewCache {
       unawaited(
         cancellation.then<void>(
           (_) => _cancelProductionWaiter(key, queue, waiter),
-          onError: (Object _, StackTrace __) =>
+          onError: (Object _, StackTrace _) =>
               _cancelProductionWaiter(key, queue, waiter),
         ),
       );
@@ -477,7 +477,7 @@ final class PreviewCache {
     _mutationTail = mutation.then<void>(
       (_) {},
       // A failed caller must not prevent later mutations from running.
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return mutation;
   }
@@ -489,7 +489,7 @@ final class PreviewCache {
     _indexWriteTail = write.then<void>(
       (_) {},
       // A failed caller must not prevent later mutations from persisting.
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return write;
   }

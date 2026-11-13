@@ -15,8 +15,7 @@ import 'package:test/test.dart';
 import 'support/local_process_link.dart';
 
 final _shells = {
-  for (final name in ['dash', 'bash'])
-    if (localShell(name) case final path?) name: path,
+  for (final name in ['dash', 'bash']) name: ?localShell(name),
 };
 
 /// Words a shell would act on unquoted, and the shapes 03 §6.5 names.

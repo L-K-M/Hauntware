@@ -251,7 +251,7 @@ void main() {
     unawaited(
       ticket.result.then<void>(
         (_) => settled = true,
-        onError: (Object _, StackTrace __) => settled = true,
+        onError: (Object _, StackTrace _) => settled = true,
       ),
     );
     await pump();
