@@ -256,7 +256,10 @@ export 'package:seance_core/catalog.dart'
         SyncTrackingServerStore,
         serverStoreQuarantinePath;
 export 'src/update/update_check.dart'
-    show poltergeistUpdateRepo, poltergeistUpdateUserAgent;
+    show
+        poltergeistAndroidReleaseAsset,
+        poltergeistUpdateRepo,
+        poltergeistUpdateUserAgent;
 export 'package:seance_core/catalog.dart'
     show
         InMemoryPinVerdictStore,

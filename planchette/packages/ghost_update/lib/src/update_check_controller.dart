@@ -1,52 +1,50 @@
-// The D19 update check's app-side owner (00 D19/D23, 07 §3.10, 01 §6):
-// once per launch the checker asks GitHub for Hauntware's latest release
-// tag — a plain GET of the static endpoint, no version string, platform
-// hint, or identifier on the wire — and the response is compared
-// locally. The alert it feeds links to the releases page; on Android
-// (D23's 2026-10-17 amendment) it can instead download the release APK
-// and open the system installer, and only when the user chooses Update.
+// The D19 update check's app-side owner (Poltergeist 00 D19/D23,
+// 07 §3.10, 01 §6): once per launch the checker asks GitHub for
+// Hauntware's latest release tag — a plain GET of the static endpoint,
+// no version string, platform hint, or identifier on the wire — and the
+// response is compared locally. The alert it feeds links to the
+// releases page; on Android (D23's 2026-10-17 amendment) it can instead
+// download the release APK and open the system installer, and only when
+// the user chooses Update.
 import 'package:flutter/foundation.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
-import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:seance_core/seance_core.dart';
+
+import 'update_check_settings.dart';
 
 /// Session state for the update check: [update] is the banner's content
 /// (null means "nothing to show" — up to date, check failed, dismissed,
 /// or opted out), and [enabled] is the persisted opt-out. Every failure
 /// mode reads as "no banner"; the check is best-effort by contract.
-class UpdateCheckController extends ChangeNotifier {
+class UpdateCheckController extends ChangeNotifier
+    implements UpdateCheckSettings {
   UpdateCheckController({
-    UpdateChecker? checker,
+    // The release lookup, pinned by the app to its repository and
+    // user agent.
+    required this._checker,
     // Android's in-place update; null elsewhere, where the alert only
     // links to the release page.
     this._apkUpdater,
-    bool enabled = true,
+    // The release asset an Android build updates itself from; the
+    // release manifest (scripts/release-manifest.txt) names it.
+    required this._androidReleaseAsset,
+    this._enabled = true,
     // The persist sink stays private to the controller.
-    Future<void> Function(bool enabled)? onEnabledChanged,
-  }) : _checker =
-           checker ??
-           UpdateChecker(
-             repo: poltergeistUpdateRepo,
-             userAgent: poltergeistUpdateUserAgent,
-           ),
-       // ignore: prefer_initializing_formals
-       _enabled = enabled,
-       // ignore: prefer_initializing_formals
-       _onEnabledChanged = onEnabledChanged {
+    this._onEnabledChanged,
+  }) {
     // Download progress reaches the alert through this controller.
     _apkUpdater?.addListener(notifyListeners);
   }
 
-  /// The release asset an Android build updates itself from; the release
-  /// manifest (scripts/release-manifest.txt) names it.
-  static const androidReleaseAsset = 'poltergeist-android.apk';
-
   final UpdateChecker _checker;
   final ApkUpdater? _apkUpdater;
+  final String _androidReleaseAsset;
   final Future<void> Function(bool enabled)? _onEnabledChanged;
   bool _enabled;
   UpdateInfo? _update;
 
   /// The opt-out setting (default ON per D19/D23).
+  @override
   bool get enabled => _enabled;
 
   /// The newer release to banner, or null when there is nothing to say.
@@ -55,7 +53,7 @@ class UpdateCheckController extends ChangeNotifier {
   /// The verified APK [update] offers this build, or null when it cannot
   /// update in place: off Android, or a release without a digested APK.
   ApkRelease? get updateApk {
-    final asset = _update?.assets[androidReleaseAsset];
+    final asset = _update?.assets[_androidReleaseAsset];
     if (_apkUpdater == null || asset == null) return null;
     return ApkRelease(
       url: asset.downloadUrl,
@@ -109,6 +107,7 @@ class UpdateCheckController extends ChangeNotifier {
   /// field commits, so a failed save rethrows for the caller's
   /// revert idiom and the in-memory flag never diverges from disk.
   /// Opting out clears a banner already showing this session.
+  @override
   Future<void> setEnabled(bool value) async {
     if (value == _enabled) return;
     await _onEnabledChanged?.call(value);

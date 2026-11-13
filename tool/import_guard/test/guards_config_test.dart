@@ -320,6 +320,42 @@ void main() {
     await expectLater(loadGuardsConfig(missing), throwsA(anything));
   });
 
+  // The ghost_* packages are listed one by one so ghost_update can take
+  // seance_core; a new package must not go unguarded because of that.
+  test(
+    'every ghost package but ghost_update is kept off seance_core',
+    () async {
+      var root = Directory.current;
+      while (!File(p.join(root.path, 'tool', 'guards.yaml')).existsSync()) {
+        expect(
+          root.parent.path,
+          isNot(root.path),
+          reason: 'no tool/guards.yaml',
+        );
+        root = root.parent;
+      }
+      final config = await loadGuardsConfig(
+        File(p.join(root.path, 'tool', 'guards.yaml')),
+      );
+      final planchette = config.product('planchette');
+      final packages = Directory(p.join(root.path, 'planchette', 'packages'))
+          .listSync()
+          .whereType<Directory>()
+          .map((directory) => p.basename(directory.path))
+          .where((name) => name.startsWith('ghost_'))
+          .toList();
+
+      expect(packages, contains('ghost_update'));
+      for (final name in packages) {
+        expect(
+          planchette.forbiddenDependenciesFor(name).contains('seance_core'),
+          name != 'ghost_update',
+          reason: name,
+        );
+      }
+    },
+  );
+
   test('fails closed on unreadable YAML', () {
     expect(() => _parse('products: [poltergeist'), throwsA(anything));
     expect(() => _parse('products: not a map'), throwsFormatException);

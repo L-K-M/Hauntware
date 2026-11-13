@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
+import 'package:ghost_update/ghost_update.dart';
 
 import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'server_coverage.dart' show UpdateNoticeBanner;
 
 /// Below this width the coverage sheet is a bottom sheet (03 §10.5), and a
 /// dialog above it.
@@ -41,12 +43,22 @@ class CoverageHeader extends StatelessWidget {
     required this.placement,
     required this.coverage,
     required this.fleet,
+    this.updates,
+    this.openRelease,
     required this.child,
   });
 
   final CoveragePlacement placement;
   final CoverageController coverage;
   final FleetController fleet;
+
+  /// The update check whose banner heads [child]; null in tests that
+  /// leave it out, where no banner shows.
+  final UpdateCheckController? updates;
+
+  /// Opens the release page the banner's View Release action names.
+  final Future<void> Function(Uri url)? openRelease;
+
   final Widget child;
 
   @override
@@ -57,6 +69,11 @@ class CoverageHeader extends StatelessWidget {
         builder: (context, child) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (updates != null && openRelease != null)
+              UpdateNoticeBanner(
+                updates: updates!,
+                openRelease: openRelease!,
+              ),
             if (coverage.showsFirstRunCard)
               ConstrainedBox(
                 constraints: BoxConstraints(
