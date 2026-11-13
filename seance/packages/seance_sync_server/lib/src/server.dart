@@ -601,6 +601,7 @@ class SyncServer {
         maxRecords: settings.maxRecordsPerAccount,
         maxBytes: settings.maxAccountBytes,
       ),
+      refusalScope: r.refusalScope,
     );
     return _json(pushed.toJson());
   });

@@ -85,6 +85,71 @@ class FakeServer implements SyncApi {
   }
 }
 
+/// A [FakeServer] with a cap on live records, answering a push that would
+/// pass it either as a server with per-record refusals does (for a client
+/// that opts in, as [HttpSyncClient] does) or as an older server does: one
+/// 413 `account_quota_exceeded` for the whole push.
+class QuotaServer extends FakeServer {
+  final int maxLiveRecords;
+  final bool perRecord;
+
+  /// Every record id pushed, in order, so a test can count retries.
+  final List<String> pushedIds = [];
+
+  QuotaServer({required this.maxLiveRecords, required this.perRecord});
+
+  int _liveAfter(Map<String, EncryptedRecord> store) =>
+      store.values.where((r) => !r.deleted).length;
+
+  bool _wins(EncryptedRecord? existing, EncryptedRecord incoming) =>
+      existing == null || identical(Lww.resolve(existing, incoming), incoming);
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    pushedIds.addAll(records.map((r) => r.id));
+    final whole = Map.of(_store);
+    for (final incoming in records) {
+      if (_wins(whole[incoming.id], incoming)) whole[incoming.id] = incoming;
+    }
+    if (_liveAfter(whole) <= maxLiveRecords) return super.push(records);
+    if (!perRecord) {
+      throw const ApiError(
+        code: 'account_quota_exceeded',
+        message: 'The account has reached its record storage quota',
+      );
+    }
+    // As the real server does: list order first, then the refused records
+    // once more in whatever room the first pass made.
+    final results = <PushResult>[];
+    var pending = records;
+    for (var pass = 0; pass < 2; pass++) {
+      final deferred = <EncryptedRecord>[];
+      for (final incoming in pending) {
+        final existing = _store[incoming.id];
+        if (!_wins(existing, incoming)) {
+          results.add(PushResult(
+              id: incoming.id, seq: existing!.seq ?? 0, accepted: false));
+          continue;
+        }
+        final grows =
+            !incoming.deleted && (existing == null || existing.deleted);
+        if (grows && _liveAfter(_store) >= maxLiveRecords) {
+          deferred.add(incoming);
+          continue;
+        }
+        _store[incoming.id] = incoming.withSeq(++_seq);
+        results.add(PushResult(id: incoming.id, seq: _seq, accepted: true));
+      }
+      pending = deferred;
+    }
+    final refused = [
+      for (final record in pending)
+        PushRefusal(id: record.id, reason: PushRefusalReason.accountQuota),
+    ];
+    return PushResponse(results: results, refused: refused, latestSeq: _seq);
+  }
+}
+
 class PushRaceApi implements SyncApi {
   final FakeServer server;
   final EncryptedRecord concurrentRecord;
@@ -1273,6 +1338,119 @@ void main() {
         expect(outcome.pushed, 0);
         expect(outcome.rounds, 3);
         expect(await store.dirtyRecords(), hasLength(5));
+      });
+    });
+
+    group('account quota', () {
+      /// The server holds `a` and `b` from another device, at its cap of two,
+      /// and [store] has pulled them, edited `a` and added `c` and `d`.
+      Future<InMemoryLocalRecordStore> full(QuotaServer server) async {
+        final other = InMemoryLocalRecordStore();
+        await other.putLocal(rec('a', 1, 'B'));
+        await other.putLocal(rec('b', 1, 'B'));
+        await SyncEngine(other).sync(server);
+        final store = InMemoryLocalRecordStore();
+        await SyncEngine(store).sync(server);
+        await store.putLocal(rec('a', 20, 'A'));
+        await store.putLocal(rec('c', 20, 'A'));
+        await store.putLocal(rec('d', 20, 'A'));
+        server.pushedIds.clear();
+        return store;
+      }
+
+      test('a per-record server stores edits and new records wait', () async {
+        final server = QuotaServer(maxLiveRecords: 2, perRecord: true);
+        final store = await full(server);
+
+        await expectLater(
+          SyncEngine(store).sync(server),
+          throwsA(isA<SyncRecordsRefused>()
+              .having((e) => e.code, 'code', 'account_quota_exceeded')
+              .having((e) => e.recordIds, 'too large', isEmpty)
+              .having((e) => e.awaitingSpaceIds, 'awaiting space',
+                  unorderedEquals(['c', 'd']))
+              .having((e) => e.outcome.pushed, 'pushed', 1)
+              .having(
+                  (e) => e.toString(),
+                  'message',
+                  startsWith(
+                      '2 records wait for space on the sync server.'))),
+        );
+
+        expect((await server.pull(since: 0)).records
+            .firstWhere((r) => r.id == 'a').updatedAt, 20,
+            reason: 'the edit to a record the server holds is stored');
+        expect((await store.getRecord('a'))!.seq, isNotNull,
+            reason: 'and marked synced');
+        expect((await store.dirtyRecords()).map((r) => r.id).toSet(),
+            {'c', 'd'},
+            reason: 'the new records stay queued, not lost');
+        expect(server.pushedIds.where((id) => id == 'c'), hasLength(1),
+            reason: 'a waiting record is sent once per run, not every round');
+
+        // Deleting a record frees a slot, and the next run fills it.
+        await store.putLocal(rec('b', 30, 'A', deleted: true));
+        final retry = SyncEngine(store).sync(server);
+        await expectLater(
+          retry,
+          throwsA(isA<SyncRecordsRefused>().having(
+              (e) => e.toString(),
+              'message',
+              startsWith('1 record waits for space on the sync server.'))),
+        );
+        final live = (await server.pull(since: 0))
+            .records
+            .where((r) => !r.deleted)
+            .map((r) => r.id)
+            .toSet();
+        expect(live, hasLength(2));
+        expect(live, contains('a'));
+        expect(await store.dirtyRecords(), hasLength(1));
+      });
+
+      test('an older server still refuses the whole push', () async {
+        final server = QuotaServer(maxLiveRecords: 2, perRecord: false);
+        final store = await full(server);
+
+        await expectLater(
+          SyncEngine(store).sync(server),
+          throwsA(isA<ApiError>()
+              .having((e) => e.code, 'code', 'account_quota_exceeded')
+              .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
+        );
+        expect((await server.pull(since: 0)).records
+            .firstWhere((r) => r.id == 'a').updatedAt, 1);
+        expect((await store.dirtyRecords()).map((r) => r.id).toSet(),
+            {'a', 'c', 'd'});
+      });
+
+      test('both kinds of refusal read as one status', () {
+        const outcome = SyncOutcome(pulled: 0, pushed: 0, rounds: 1);
+        final both = SyncRecordsRefused(
+          const [RefusedRecord('snippet:x', kind: RecordKind.snippet)],
+          awaitingSpace: const [RefusedRecord('n1'), RefusedRecord('n2')],
+          outcome: outcome,
+        );
+        expect(both.code, 'payload_too_large');
+        expect(
+          both.toString(),
+          'Snippet (snippet:x) is too large for the sync server, so it stays '
+          'on this device until you make it smaller. 2 records wait for '
+          'space on the sync server. They stay on this device and sync once '
+          'the account has room. Everything else synced.',
+        );
+        final one = SyncRecordsRefused(
+          const [],
+          awaitingSpace: const [RefusedRecord('n1')],
+          outcome: outcome,
+        );
+        expect(one.code, 'account_quota_exceeded');
+        expect(
+          one.toString(),
+          '1 record waits for space on the sync server. It stays on this '
+          'device and syncs once the account has room. Everything else '
+          'synced.',
+        );
       });
     });
 
