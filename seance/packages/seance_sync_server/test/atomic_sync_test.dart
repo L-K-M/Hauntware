@@ -158,7 +158,7 @@ void main() {
     await client.push([_record('existing', 10)]);
     final before = await client.pull(since: 0);
     final writer = sqlite3.open(path);
-    addTearDown(writer.dispose);
+    addTearDown(writer.close);
 
     writer.execute('BEGIN IMMEDIATE');
     try {
@@ -190,7 +190,7 @@ void main() {
     final client = await _connect(storage);
     await client.push([_record('shared', 10)]);
     final writer = sqlite3.open(path);
-    addTearDown(writer.dispose);
+    addTearDown(writer.close);
 
     // A test-only view commits another connection while the watermark is read.
     // Only a real read transaction can keep the following row query on that snapshot.

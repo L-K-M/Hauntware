@@ -6,10 +6,9 @@
 // it, run a server binary and point the variable at it, as Poltergeist's
 // sync_server_convergence_test.dart documents:
 //
-//   dart compile exe \
-//     seance/packages/seance_sync_server/bin/seance_sync_server.dart
+//   (cd seance/packages/seance_sync_server && dart build cli -o /tmp/sync)
 //   SEANCE_OPEN_REGISTRATION=1 SEANCE_BIND=127.0.0.1 SEANCE_PORT=8799 \
-//     SEANCE_DB_PATH= ./seance_sync_server
+//     SEANCE_DB_PATH= /tmp/sync/bundle/bin/seance_sync_server
 //   KLABAUTERMANN_SYNC_SERVER=http://127.0.0.1:8799 dart test \
 //     --tags sync test/integration/sync_convergence_test.dart
 //

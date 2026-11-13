@@ -1,0 +1,11 @@
+// Components of the sync server that `dart pub deps` does not list.
+{
+  "extra": [
+    {"name": "SQLite",
+     "license": "blessing",
+     "source_url": "https://sqlite.org/copyright.html",
+     "files": ["sqlite-blessing.txt"],
+     "note": "Shared library in the lib directory of the server bundle: the prebuilt release binary that the resolved package:sqlite3's build hook bundles (its CHANGELOG names the SQLite version).",
+     "reason": "package:sqlite3's LICENSE covers only its Dart code; the SQLite library it bundles is public domain under the blessing in every SQLite source file"}
+  ]
+}

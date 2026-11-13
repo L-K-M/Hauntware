@@ -56,7 +56,7 @@ void main() {
       INSERT INTO records VALUES ('alice', 'r', 5, 'd', 0, 1, x'010203');
       INSERT INTO seqs VALUES ('alice', 1);
     ''');
-    old.dispose();
+    old.close();
 
     final s = SqliteStorage.open(path);
     addTearDown(s.close);
@@ -122,12 +122,12 @@ void main() {
     final old = sqlite3.open(path);
     old.execute('ALTER TABLE records DROP COLUMN encoded_size');
     old.execute('ALTER TABLE inbox_items DROP COLUMN encoded_size');
-    old.dispose();
+    old.close();
 
     final s2 = SqliteStorage.open(path);
     addTearDown(s2.close);
     final inspection = sqlite3.open(path);
-    addTearDown(inspection.dispose);
+    addTearDown(inspection.close);
     expect(
       inspection
           .select('SELECT encoded_size FROM records')
@@ -209,11 +209,11 @@ void main() {
       legacy.execute(
         "UPDATE records SET blob = 'not-a-blob' WHERE id = 'repair-me'",
       );
-      legacy.dispose();
+      legacy.close();
 
       final broken = sqlite3.open(path);
       expect(() => SqliteStorage(broken), throwsA(anything));
-      broken.dispose();
+      broken.close();
 
       final afterFailure = sqlite3.open(path);
       expect(
@@ -231,12 +231,12 @@ void main() {
       afterFailure.execute(
         "UPDATE records SET blob = x'02' WHERE id = 'repair-me'",
       );
-      afterFailure.dispose();
+      afterFailure.close();
 
       final repaired = SqliteStorage.open(path);
       addTearDown(repaired.close);
       final inspection = sqlite3.open(path);
-      addTearDown(inspection.dispose);
+      addTearDown(inspection.close);
       expect(
         inspection
             .select('SELECT encoded_size FROM records ORDER BY id')

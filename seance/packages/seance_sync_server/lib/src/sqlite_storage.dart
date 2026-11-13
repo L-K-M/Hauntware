@@ -1032,7 +1032,7 @@ class SqliteStorage implements Storage {
         recordBytes = nextBytes;
       }
     } finally {
-      statement.dispose();
+      statement.close();
     }
     return PullResponse(
       records: records,
@@ -1118,7 +1118,7 @@ class SqliteStorage implements Storage {
         recordBytes = nextBytes;
       }
     } finally {
-      statement.dispose();
+      statement.close();
     }
     return LegacyRecordPage(
       records: records,
@@ -1290,7 +1290,7 @@ class SqliteStorage implements Storage {
     }
 
     try {
-      _connection.dispose();
+      _connection.close();
     } catch (_) {
       // Preserve the original write/commit failure, not a cleanup exception.
     }
@@ -1741,7 +1741,7 @@ class SqliteStorage implements Storage {
         itemBytes = nextBytes;
       }
     } finally {
-      statement.dispose();
+      statement.close();
     }
     return InboxPage(
       items: items,
@@ -1785,5 +1785,5 @@ class SqliteStorage implements Storage {
     return _db.updatedRows;
   }
 
-  void close() => _connection.dispose();
+  void close() => _connection.close();
 }
