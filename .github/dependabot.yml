@@ -64,6 +64,8 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: archive
         versions: ['>=4.6.0']
+      - dependency-name: xml
+        versions: ['>7.0.1']
     groups:
       pub:
         patterns: ['*']
