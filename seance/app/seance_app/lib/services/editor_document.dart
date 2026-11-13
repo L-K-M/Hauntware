@@ -21,6 +21,7 @@ Future<String> saveBuiltInTextDocument(
   String text, {
   bool hasUtf8Bom = false,
   shared.LineEnding lineEnding = shared.LineEnding.lf,
+  shared.TextEncoding encoding = shared.TextEncoding.utf8,
   String? expectedSha256,
   Future<void> Function(File temporary)? observeTemporary,
 }) async => shared.saveTextDocument(
@@ -28,6 +29,7 @@ Future<String> saveBuiltInTextDocument(
   text,
   hasUtf8Bom: hasUtf8Bom,
   lineEnding: lineEnding,
+  encoding: encoding,
   normalization: seanceSaveNormalization(lineEnding),
   expectedSha256: expectedSha256 ?? await shared.textDocumentSha256(file),
   temporaryPrefix: '.seance',

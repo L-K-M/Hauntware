@@ -85,6 +85,22 @@ void main() {
     );
   });
 
+  test('classifies an undecodable file by its type, not its message', () async {
+    final file = File('${directory.path}/latin1.txt');
+    await file.writeAsBytes([0x63, 0x61, 0x66, 0xe9]);
+    Object? thrown;
+    try {
+      await loadBuiltInTextDocumentDetails(file);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(
+      classifyBuiltInTextDocumentFailure(thrown! as BuiltInEditorException),
+      BuiltInTextDocumentFailure.invalidUtf8,
+    );
+  });
+
   test('classifies loader failures for localized hosts', () {
     expect(
       classifyBuiltInTextDocumentFailure(

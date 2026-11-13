@@ -1697,6 +1697,10 @@ class _DocumentShellState extends State<_DocumentShell>
                         key: const ValueKey('workspace-error-banner'),
                         message: error,
                         onDismiss: workspace.clearError,
+                        action: switch (workspace.reopenWithEncodingPath) {
+                          final path? => _reopenWithEncoding(path),
+                          null => null,
+                        },
                       ),
                     if (settings.error case final error?)
                       _errorBanner(
@@ -1904,10 +1908,37 @@ class _DocumentShellState extends State<_DocumentShell>
     );
   }
 
+  /// The banner's answer to a file refused as not UTF-8: read it in an
+  /// encoding the user names. Never offered as a guess.
+  Widget _reopenWithEncoding(String path) {
+    final scheme = Theme.of(context).colorScheme;
+    return PopupMenuButton<TextEncoding>(
+      key: const ValueKey('reopen-with-encoding'),
+      tooltip: 'Read the file in another encoding',
+      onSelected: (encoding) =>
+          unawaited(workspace.reopenWithEncoding(path, encoding)),
+      itemBuilder: (_) => [
+        for (final encoding in TextEncoding.reopenChoices)
+          PopupMenuItem(value: encoding, child: Text(encoding.label)),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        child: Text(
+          'Reopen with Encoding…',
+          style: TextStyle(
+            color: scheme.onErrorContainer,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _errorBanner({
     required Key key,
     required String message,
     required VoidCallback onDismiss,
+    Widget? action,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
@@ -1925,6 +1956,7 @@ class _DocumentShellState extends State<_DocumentShell>
                   style: TextStyle(color: scheme.onErrorContainer),
                 ),
               ),
+              ?action,
               IconButton(
                 tooltip: 'Dismiss error',
                 onPressed: onDismiss,

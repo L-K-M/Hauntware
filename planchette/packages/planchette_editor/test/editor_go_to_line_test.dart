@@ -331,6 +331,8 @@ void main() {
     expect(await savedSize('ab\r\ncd\r\n', LineEnding.crlf), 8);
     expect(await savedSize('ab\r\ncd', LineEnding.lf), 5);
     expect(await savedSize('ab\rcd', LineEnding.crlf), 6);
+    expect(await savedSize('ab\ncd\n', LineEnding.cr), 6);
+    expect(await savedSize('ab\r\ncd', LineEnding.cr), 5);
   });
 
   test('review fix: an untitled size counts breaks as a new file saves', () {

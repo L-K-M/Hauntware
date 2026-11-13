@@ -5,10 +5,8 @@ import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_core/planchette_core.dart'
     show
-        LineEnding,
         TextProblem,
         TextProblemSeverity,
-        Utf8Bom,
         UnifiedDiffResult,
         UnifiedDiffStatus,
         boundedUnifiedDiff,
@@ -555,8 +553,8 @@ class _RemoteEditorState extends State<RemoteEditor> {
       if (selected.characters > 0)
         strings.selectionSummary(selected.characters, selected.lines),
       if (_dirty) strings.unsaved,
-      editor.metadata.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
-      editor.metadata.utf8Bom == Utf8Bom.present ? 'UTF-8 BOM' : 'UTF-8',
+      editor.metadata.lineEnding.label,
+      editor.metadata.encodingLabel,
       strings.indentation(editor.indentation),
       strings.languageName(editor.text.language),
       if (!editor.highlightingEnabled) strings.largeFile,

@@ -37,7 +37,7 @@ String hardWrapText(
   if (_loneCarriageReturn.hasMatch(source)) {
     throw const TextWrapNeedsNormalizedLineEndings();
   }
-  final insertedBreak = lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  final insertedBreak = lineEnding.separator;
 
   final lines = <({String body, String separator})>[];
   var start = 0;

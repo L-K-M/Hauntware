@@ -7,8 +7,9 @@ import 'package:planchette_editor/planchette_editor.dart';
 /// default; this bar uses [PlanchetteEditor.statusBuilder] instead.
 ///
 /// Rebuilds from the controller, so the shell holds no metadata state.
-/// Line endings and the BOM apply on the next save through `setMetadata`;
-/// indentation sets the controller level without dirtying the file.
+/// Line endings and the encoding apply on the next save through
+/// `setMetadata`; indentation sets the controller level without dirtying
+/// the file.
 class DocumentStatusBar extends StatelessWidget {
   const DocumentStatusBar({
     super.key,
@@ -91,62 +92,64 @@ class DocumentStatusBar extends StatelessWidget {
       tooltip: 'Line endings apply on next save',
       enabled: controller.canChangeMetadata,
       onSelected: (ending) => controller.setMetadata(
-        TextDocumentMetadata(
-          lineEnding: ending,
-          utf8Bom: controller.metadata.utf8Bom,
-        ),
+        controller.metadata.copyWith(lineEnding: ending),
       ),
       itemBuilder: (_) => [
-        CheckedPopupMenuItem(
-          value: LineEnding.lf,
-          checked: metadata.lineEnding == LineEnding.lf,
-          child: const Text('LF'),
-        ),
-        CheckedPopupMenuItem(
-          value: LineEnding.crlf,
-          checked: metadata.lineEnding == LineEnding.crlf,
-          child: const Text('CRLF'),
-        ),
+        for (final ending in LineEnding.values)
+          CheckedPopupMenuItem(
+            value: ending,
+            checked: metadata.lineEnding == ending,
+            child: Text(ending.label),
+          ),
       ],
-      child: Text(
-        metadata.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
-        maxLines: 1,
-        style: style,
-      ),
+      child: Text(metadata.lineEnding.label, maxLines: 1, style: style),
     );
   }
 
-  /// The BOM is 3 bytes written on the next save.
+  /// The encoding a save writes. Choosing one converts the file on the
+  /// next save, not the buffer; a character the new encoding cannot hold
+  /// blocks that save with its position. Reading a file in another
+  /// encoding is Reopen with Encoding, on a refused open's banner.
   Widget _encoding(TextStyle? style) {
     final metadata = controller.metadata;
-    return PopupMenuButton<Utf8Bom>(
-      tooltip: 'Encoding applies on next save, BOM adds 3 bytes',
+    return PopupMenuButton<TextDocumentMetadata>(
+      tooltip: 'Encoding applies on next save, a UTF-8 BOM adds 3 bytes',
       enabled: controller.canChangeMetadata,
-      onSelected: (bom) => controller.setMetadata(
-        TextDocumentMetadata(
-          lineEnding: controller.metadata.lineEnding,
-          utf8Bom: bom,
-        ),
-      ),
+      onSelected: controller.setMetadata,
       itemBuilder: (_) => [
-        CheckedPopupMenuItem(
-          value: Utf8Bom.absent,
-          checked: metadata.utf8Bom == Utf8Bom.absent,
-          child: const Text('UTF-8'),
-        ),
-        CheckedPopupMenuItem(
-          value: Utf8Bom.present,
-          checked: metadata.utf8Bom == Utf8Bom.present,
-          child: const Text('UTF-8 BOM'),
-        ),
+        for (final (encoding, bom) in _encodingChoices)
+          _encodingItem(
+            TextDocumentMetadata(
+              lineEnding: metadata.lineEnding,
+              encoding: encoding,
+              utf8Bom: bom,
+            ),
+            metadata,
+          ),
       ],
-      child: Text(
-        metadata.utf8Bom == Utf8Bom.present ? 'UTF-8 BOM' : 'UTF-8',
-        maxLines: 1,
-        style: style,
-      ),
+      child: Text(metadata.encodingLabel, maxLines: 1, style: style),
     );
   }
+
+  static PopupMenuEntry<TextDocumentMetadata> _encodingItem(
+    TextDocumentMetadata choice,
+    TextDocumentMetadata current,
+  ) => CheckedPopupMenuItem(
+    value: choice,
+    checked: choice == current,
+    child: Text(choice.encodingLabel),
+  );
+
+  /// Every encoding a document can be saved in; only UTF-8 has a choice of
+  /// byte order mark, since UTF-16 always writes one.
+  static const _encodingChoices = [
+    (TextEncoding.utf8, Utf8Bom.absent),
+    (TextEncoding.utf8, Utf8Bom.present),
+    (TextEncoding.utf16le, Utf8Bom.absent),
+    (TextEncoding.utf16be, Utf8Bom.absent),
+    (TextEncoding.latin1, Utf8Bom.absent),
+    (TextEncoding.windows1252, Utf8Bom.absent),
+  ];
 
   Widget _indentation(TextStyle? style) {
     final current = controller.indentation;

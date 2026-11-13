@@ -7,6 +7,9 @@ import 'package:poltergeist_core/poltergeist_core.dart'
 
 enum DocumentWriteTarget { local, managedRemote }
 
+/// Linux's own limit on links followed while resolving one path.
+const _maximumLinkHops = 40;
+
 /// A cheap summary of a file's state, read without opening it. Equal stamps
 /// mean the file almost certainly did not change, so the costlier digest is
 /// read only when they differ. A same-size rewrite within the file system's
@@ -37,9 +40,12 @@ abstract interface class RecoveryCopies {
 
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
 abstract interface class DocumentStore {
+  /// Reads [path] as [encoding], or detects UTF-8 or marked UTF-16 when it
+  /// is null; see [loadTextDocument].
   Future<TextDocument> load(
     String path, {
     SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+    TextEncoding? encoding,
   });
 
   /// Null when no regular file exists at [path], as when a directory has
@@ -66,7 +72,12 @@ final class LocalDocumentStore implements DocumentStore {
   Future<TextDocument> load(
     String path, {
     SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
-  }) => loadTextDocument(File(path), symlinkPolicy: symlinkPolicy);
+    TextEncoding? encoding,
+  }) => loadTextDocument(
+    File(path),
+    symlinkPolicy: symlinkPolicy,
+    encoding: encoding,
+  );
 
   @override
   Future<FileStamp?> stamp(String path) async {
@@ -81,6 +92,9 @@ final class LocalDocumentStore implements DocumentStore {
   Future<String> canonicalSavePath(String path) async {
     final absolute = paths.normalize(paths.absolute(path));
     final type = await FileSystemEntity.type(absolute, followLinks: false);
+    if (type == FileSystemEntityType.link) {
+      return _resolveSaveLink(absolute);
+    }
     if (type == FileSystemEntityType.file) {
       // An existing target's actual spelling matters on case-insensitive
       // volumes: a case variant must retain its open tab and digest identity.
@@ -103,6 +117,54 @@ final class LocalDocumentStore implements DocumentStore {
       paths.dirname(absolute),
     ).resolveSymbolicLinks();
     return paths.join(parent, paths.basename(absolute));
+  }
+
+  /// Save As onto a link writes through it, as opening one reads through
+  /// it: the destination becomes the regular file the link names, which
+  /// then takes the same digest guard and replace question as any existing
+  /// file, and the link itself is never replaced. A link that names no
+  /// regular file is refused with the reason rather than created or
+  /// replaced.
+  Future<String> _resolveSaveLink(String link) async {
+    // Walk the chain by hand: resolving reports a missing target and a loop
+    // with the same platform-specific errors.
+    final visited = <String>{};
+    var current = link;
+    while (await FileSystemEntity.isLink(current)) {
+      if (!visited.add(current) || visited.length > _maximumLinkHops) {
+        throw FileSystemException(
+          'The destination is a symbolic link that loops back on itself, '
+          'so it names no file.',
+          link,
+        );
+      }
+      final target = await Link(current).target();
+      current = paths.normalize(paths.join(paths.dirname(current), target));
+    }
+    switch (await FileSystemEntity.type(current)) {
+      case FileSystemEntityType.notFound:
+        throw FileSystemException(
+          'The destination is a symbolic link that points to a file that '
+          'does not exist: $current. Choose the file itself, or create it '
+          'first.',
+          link,
+        );
+      case FileSystemEntityType.directory:
+        throw FileSystemException(
+          'The destination is a symbolic link to a folder, not a file: '
+          '$current.',
+          link,
+        );
+      case FileSystemEntityType.file:
+        // Resolving again fixes directory aliases in the target's spelling.
+        return File(current).resolveSymbolicLinks();
+      default:
+        throw FileSystemException(
+          'The destination is a symbolic link to something other than a '
+          'regular file: $current.',
+          link,
+        );
+    }
   }
 
   @override
@@ -140,6 +202,7 @@ final class LocalDocumentStore implements DocumentStore {
     final format = metadata ?? source?.metadata ?? const TextDocumentMetadata();
     final bom = format.utf8Bom == Utf8Bom.present;
     final ending = format.lineEnding;
+    final encoding = format.encoding;
     // Managed siblings must retain the checkout store's crash-recovery names.
     final digest = target == DocumentWriteTarget.managedRemote
         ? await saveBuiltInTextDocument(
@@ -147,6 +210,7 @@ final class LocalDocumentStore implements DocumentStore {
             text,
             hasUtf8Bom: bom,
             lineEnding: ending,
+            encoding: encoding,
             expectedSha256: expectedSha256,
           )
         : expectedSha256 == null
@@ -155,6 +219,7 @@ final class LocalDocumentStore implements DocumentStore {
             text,
             hasUtf8Bom: bom,
             lineEnding: ending,
+            encoding: encoding,
           )
         : await saveTextDocument(
             file,
@@ -162,6 +227,7 @@ final class LocalDocumentStore implements DocumentStore {
             expectedSha256: expectedSha256,
             hasUtf8Bom: bom,
             lineEnding: ending,
+            encoding: encoding,
           );
     return TextDocument(
       file: file,
@@ -169,6 +235,7 @@ final class LocalDocumentStore implements DocumentStore {
       hasUtf8Bom: bom,
       lineEnding: ending,
       sha256: digest,
+      encoding: encoding,
     );
   }
 }

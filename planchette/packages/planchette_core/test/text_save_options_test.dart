@@ -66,9 +66,7 @@ void main() {
             utf8Bom: bom,
           );
           final folded = 'é\nx\ny\n';
-          final disk = ending == LineEnding.crlf
-              ? folded.replaceAll('\n', '\r\n')
-              : folded;
+          final disk = folded.replaceAll('\n', ending.separator);
           final prefix = bom == Utf8Bom.present ? 3 : 0;
           expect(
             textDocumentByteCount(source, metadata),
@@ -114,11 +112,11 @@ void main() {
                 as TextToolChanged;
         expect(
           result.edit.text,
-          ending == LineEnding.lf ? 'a\nb\nc\n' : 'a\r\nb\r\nc\r\n',
+          'a\nb\nc\n'.replaceAll('\n', ending.separator),
         );
         expect(result.changed, 2);
         expect(result.scope, 3);
-        expect(result.edit.selectionBase, ending == LineEnding.lf ? 3 : 4);
+        expect(result.edit.selectionBase, ending == LineEnding.crlf ? 4 : 3);
         expect(result.edit.selectionBase, result.edit.selectionExtent);
       }
     },

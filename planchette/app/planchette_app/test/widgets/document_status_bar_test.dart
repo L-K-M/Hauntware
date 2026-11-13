@@ -59,6 +59,41 @@ void main() {
     expect(find.text('CRLF'), findsOneWidget);
   });
 
+  testWidgets('the line ending menu offers CR and shows it once chosen', (
+    tester,
+  ) async {
+    final editor = controller();
+    await mount(tester, editor);
+    await tester.tap(find.text('LF'));
+    await tester.pumpAndSettle();
+    expect(menuItem('LF'), findsOneWidget);
+    expect(menuItem('CRLF'), findsOneWidget);
+    await tester.tap(menuItem('CR'));
+    await tester.pumpAndSettle();
+    expect(editor.metadata.lineEnding, LineEnding.cr);
+    expect(find.text('CR'), findsOneWidget);
+    expect(editor.isDirty, isTrue, reason: 'the next save writes CR breaks');
+  });
+
+  testWidgets('the line ending menu keeps the encoding', (tester) async {
+    final editor = controller();
+    editor.setMetadata(
+      const TextDocumentMetadata(encoding: TextEncoding.utf16le),
+    );
+    await mount(tester, editor);
+    await tester.tap(find.text('LF'));
+    await tester.pumpAndSettle();
+    await tester.tap(menuItem('CRLF'));
+    await tester.pumpAndSettle();
+    expect(
+      editor.metadata,
+      const TextDocumentMetadata(
+        lineEnding: LineEnding.crlf,
+        encoding: TextEncoding.utf16le,
+      ),
+    );
+  });
+
   testWidgets('BOM choice explains its size and applies next save', (
     tester,
   ) async {
@@ -67,10 +102,10 @@ void main() {
     final button = find.text('UTF-8');
     expect(
       tester
-          .widget<PopupMenuButton<Utf8Bom>>(
+          .widget<PopupMenuButton<TextDocumentMetadata>>(
             find.ancestor(
               of: button,
-              matching: find.byType(PopupMenuButton<Utf8Bom>),
+              matching: find.byType(PopupMenuButton<TextDocumentMetadata>),
             ),
           )
           .tooltip,
@@ -81,6 +116,39 @@ void main() {
     await tester.tap(menuItem('UTF-8 BOM'));
     await tester.pumpAndSettle();
     expect(editor.metadata.utf8Bom, Utf8Bom.present);
+  });
+
+  testWidgets('the encoding menu converts on the next save', (tester) async {
+    final editor = controller();
+    editor.setMetadata(
+      const TextDocumentMetadata(encoding: TextEncoding.windows1252),
+    );
+    await mount(tester, editor);
+    await tester.tap(find.text('Windows-1252'));
+    await tester.pumpAndSettle();
+    for (final label in [
+      'UTF-8',
+      'UTF-8 BOM',
+      'UTF-16 LE',
+      'UTF-16 BE',
+      'Latin-1',
+    ]) {
+      expect(menuItem(label), findsOneWidget, reason: label);
+    }
+    await tester.tap(menuItem('UTF-16 BE'));
+    await tester.pumpAndSettle();
+    expect(editor.metadata.encoding, TextEncoding.utf16be);
+    expect(editor.metadata.utf8Bom, Utf8Bom.absent);
+    expect(find.text('UTF-16 BE'), findsOneWidget);
+
+    await tester.tap(find.text('UTF-16 BE'));
+    await tester.pumpAndSettle();
+    await tester.tap(menuItem('UTF-8 BOM'));
+    await tester.pumpAndSettle();
+    expect(
+      editor.metadata,
+      const TextDocumentMetadata(utf8Bom: Utf8Bom.present),
+    );
   });
 
   testWidgets('indentation sets without dirtying the file', (tester) async {
@@ -149,8 +217,8 @@ void main() {
       find.byType(PopupMenuButton<LineEnding>),
     );
     expect(lineEnding.enabled, isFalse);
-    final encoding = tester.widget<PopupMenuButton<Utf8Bom>>(
-      find.byType(PopupMenuButton<Utf8Bom>),
+    final encoding = tester.widget<PopupMenuButton<TextDocumentMetadata>>(
+      find.byType(PopupMenuButton<TextDocumentMetadata>),
     );
     expect(encoding.enabled, isFalse);
   });

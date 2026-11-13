@@ -124,6 +124,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
         text,
         hasUtf8Bom: baseline?.hasUtf8Bom ?? false,
         lineEnding: baseline?.lineEnding ?? LineEnding.lf,
+        encoding: baseline?.encoding ?? pe.TextEncoding.utf8,
         expectedSha256: baseline?.sha256,
       );
     },

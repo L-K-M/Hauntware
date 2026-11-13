@@ -51,13 +51,26 @@ class MemoryDocuments implements DocumentStore {
   Future<TextDocument> load(
     String path, {
     SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+    TextEncoding? encoding,
   }) async {
     await loadGate?.future;
-    if (loadFailures[path] case final error?) throw error;
+    loadEncodings.add(encoding);
+    loadSymlinkPolicies.add(symlinkPolicy);
+    // A load failure stands for undecodable bytes: naming an encoding
+    // reads them.
+    if (loadFailures[path] case final error? when encoding == null) {
+      throw error;
+    }
     final value = files[aliases[path] ?? path];
     if (value == null) throw const FileSystemException('Missing file');
-    return value;
+    return encoding == null ? value : value.copyWith(encoding: encoding);
   }
+
+  /// The encoding each load asked for; null means detect.
+  final loadEncodings = <TextEncoding?>[];
+
+  /// The symbolic-link policy each load asked for.
+  final loadSymlinkPolicies = <SymlinkPolicy>[];
 
   @override
   Future<String> canonicalSavePath(String path) async {
@@ -1628,7 +1641,7 @@ void main() {
     },
   );
   test(
-    'Save As continues to refuse a final symbolic-link destination',
+    'Save As onto a symbolic link writes the target and keeps the link',
     () async {
       if (Platform.isWindows) {
         markTestSkipped(
@@ -1640,11 +1653,12 @@ void main() {
         'planchette-final-link-',
       );
       addTearDown(() => directory.delete(recursive: true));
+      final real = Directory(await directory.resolveSymbolicLinks());
       final target = await File(
-        paths.join(directory.path, 'target.txt'),
+        paths.join(real.path, 'target.txt'),
       ).writeAsString('target');
       final link = await Link(
-        paths.join(directory.path, 'link.txt'),
+        paths.join(real.path, 'link.txt'),
       ).create(target.path);
       final local = DocumentWorkspace(
         store: LocalDocumentStore(),
@@ -1653,8 +1667,45 @@ void main() {
       addTearDown(local.dispose);
       final tab = local.newDocument()!..editor.text.text = 'replacement';
       dialogs.savePath = link.path;
+      expect(await local.save(tab, saveAs: true), isTrue);
+      expect(await target.readAsString(), 'replacement');
+      expect(
+        await FileSystemEntity.type(link.path, followLinks: false),
+        FileSystemEntityType.link,
+      );
+      expect(await link.target(), target.path);
+      // The tab saves to the file it wrote, as an opened link does.
+      expect(tab.path, target.path);
+      expect(dialogs.replaceAsked, [target.path]);
+    },
+  );
+
+  test(
+    'Save As onto a dangling symbolic link names the missing target',
+    () async {
+      if (Platform.isWindows) {
+        markTestSkipped(
+          'Creating Windows links requires developer privileges.',
+        );
+        return;
+      }
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-dangling-link-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final link = await Link(
+        paths.join(directory.path, 'link.txt'),
+      ).create(paths.join(directory.path, 'gone.txt'));
+      final local = DocumentWorkspace(
+        store: LocalDocumentStore(),
+        dialogs: dialogs,
+      );
+      addTearDown(local.dispose);
+      final tab = local.newDocument()!..editor.text.text = 'replacement';
+      dialogs.savePath = link.path;
       expect(await local.save(tab, saveAs: true), isFalse);
-      expect(await target.readAsString(), 'target');
+      expect(local.error, contains('points to a file that does not exist'));
+      expect(await File(link.path).exists(), isFalse);
       expect(
         await FileSystemEntity.type(link.path, followLinks: false),
         FileSystemEntityType.link,
@@ -1688,6 +1739,118 @@ void main() {
     opened.editor.text.text = 'edited';
     expect(await workspace.save(opened), isTrue);
     expect(workspace.error, contains('already open'));
+  });
+
+  group('Reopen with Encoding', () {
+    const refusal = UnsupportedTextEncodingException(
+      'This file is not valid UTF-8 text: the byte 0xE9 at offset 3 does '
+      'not begin a valid UTF-8 sequence.',
+    );
+
+    test('a file that is not UTF-8 offers it on its banner', () async {
+      final path = testPath('legacy.txt');
+      store.files[path] = document('legacy.txt', 'caf\u00e9');
+      store.loadFailures[path] = refusal;
+
+      await workspace.open(path);
+
+      expect(workspace.documents, isEmpty);
+      expect(workspace.error, 'Could not open legacy.txt: ${refusal.message}');
+      expect(workspace.reopenWithEncodingPath, path);
+    });
+
+    test('other failures and dismissal do not offer it', () async {
+      await workspace.open(testPath('missing.txt'));
+      expect(workspace.error, isNotNull);
+      expect(workspace.reopenWithEncodingPath, isNull);
+
+      final path = testPath('legacy.txt');
+      store.files[path] = document('legacy.txt', 'x');
+      store.loadFailures[path] = refusal;
+      await workspace.open(path);
+      workspace.clearError();
+      expect(workspace.reopenWithEncodingPath, isNull);
+    });
+
+    test('opens in the chosen encoding and reloads in it', () async {
+      final path = testPath('legacy.txt');
+      store.files[path] = document('legacy.txt', 'caf\u00e9');
+      store.loadFailures[path] = refusal;
+      await workspace.open(path);
+
+      await workspace.reopenWithEncoding(path, TextEncoding.windows1252);
+
+      final tab = workspace.active!;
+      expect(tab.path, path);
+      expect(tab.editor.metadata.encoding, TextEncoding.windows1252);
+      expect(workspace.error, isNull);
+      expect(workspace.reopenWithEncodingPath, isNull);
+
+      // Reading the file again must not fall back to the refusing default.
+      store.loadEncodings.clear();
+      tab.editor.text.text = 'edited';
+      dialogs.revert = true;
+      expect(await workspace.revert(tab), isTrue);
+      expect(store.loadEncodings, [TextEncoding.windows1252]);
+      expect(tab.editor.text.text, 'caf\u00e9');
+    });
+
+    test('a detected encoding reloads by detection', () async {
+      final path = testPath('marked.txt');
+      store.files[path] = document(
+        'marked.txt',
+        'text',
+      ).copyWith(encoding: TextEncoding.utf16le);
+      await workspace.open(path);
+      final tab = workspace.active!;
+      tab.editor.text.text = 'edited';
+
+      store.loadEncodings.clear();
+      expect(await workspace.revert(tab), isTrue);
+      expect(store.loadEncodings, [null]);
+      expect(tab.editor.metadata.encoding, TextEncoding.utf16le);
+    });
+
+    test(
+      'saves a real Latin-1 file back in Latin-1 and refuses a euro',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'planchette-latin1-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final real = Directory(await directory.resolveSymbolicLinks());
+        final file = File(paths.join(real.path, 'legacy.txt'));
+        await file.writeAsBytes([0x63, 0x61, 0x66, 0xe9, 0x0a]);
+        final local = DocumentWorkspace(
+          store: LocalDocumentStore(),
+          dialogs: dialogs,
+        );
+        addTearDown(local.dispose);
+
+        await local.open(file.path);
+        expect(local.reopenWithEncodingPath, file.path);
+        expect(local.error, contains('the byte 0xE9 at offset 3'));
+        await local.reopenWithEncoding(file.path, TextEncoding.latin1);
+        final tab = local.active!;
+        expect(tab.editor.text.text, 'caf\u00e9\n');
+
+        tab.editor.text.text = 'na\u00efve\n';
+        expect(await local.save(tab), isTrue);
+        expect(await file.readAsBytes(), [0x6e, 0x61, 0xef, 0x76, 0x65, 0x0a]);
+
+        tab.editor.text.text = '5\u20ac\n';
+        expect(await local.save(tab), isFalse);
+        expect(
+          local.error,
+          contains(
+            'The character "\u20ac" (U+20AC) at line 1, column 2 cannot '
+            'be saved in Latin-1.',
+          ),
+        );
+        expect(await file.readAsBytes(), [0x6e, 0x61, 0xef, 0x76, 0x65, 0x0a]);
+        expect(tab.editor.isDirty, isTrue);
+      },
+    );
   });
 
   test('a failed open retires its banner when that path opens', () async {

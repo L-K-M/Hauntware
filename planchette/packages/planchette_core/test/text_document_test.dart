@@ -34,7 +34,7 @@ void main() {
   });
 
   test(
-    'the dominant line ending wins, a tie is LF, and lone CRs are not counted',
+    'the dominant line ending wins and ties prefer LF, then CRLF, then CR',
     () async {
       Future<LineEnding> endingOf(String text) async {
         await file.writeAsString(text);
@@ -46,8 +46,12 @@ void main() {
       expect(await endingOf('a\r\nb\n'), LineEnding.lf, reason: 'a tie');
       expect(await endingOf('\r\n\r\n'), LineEnding.crlf);
       expect(await endingOf('\n\r\n'), LineEnding.lf, reason: 'a tie');
-      expect(await endingOf('a\rb\r\n'), LineEnding.crlf);
-      expect(await endingOf('a\rb'), LineEnding.lf, reason: 'nothing counted');
+      expect(await endingOf('a\rb\r\n'), LineEnding.crlf, reason: 'a tie');
+      expect(await endingOf('a\rb'), LineEnding.cr);
+      expect(await endingOf('a\rb\rc\n'), LineEnding.cr);
+      expect(await endingOf('a\rb\nc\n'), LineEnding.lf);
+      expect(await endingOf('a\rb\n'), LineEnding.lf, reason: 'a tie');
+      expect(await endingOf('a\r\r\nb\r\n'), LineEnding.crlf);
       expect(await endingOf('single line'), LineEnding.lf);
     },
   );
@@ -143,23 +147,77 @@ void main() {
     expect(await file.readAsBytes(), 'a\r\nb\r\nc\r\n'.codeUnits);
   });
 
-  test('a lone-CR file votes LF and normalizes to LF on save', () async {
-    // A lone \r never votes: a CR-only file saves back all-LF (06 §2.1).
-    await file.writeAsBytes('a\rb\rc'.codeUnits);
-    final document = await loadTextDocument(file);
+  group('line endings round-trip byte-for-byte', () {
+    for (final (name, bytes, ending) in [
+      ('LF', 'a\nb\nc\n', LineEnding.lf),
+      ('CRLF', 'a\r\nb\r\nc\r\n', LineEnding.crlf),
+      ('CR', 'a\rb\rc\r', LineEnding.cr),
+      ('CR without a final break', 'a\rb\rc', LineEnding.cr),
+    ]) {
+      test(name, () async {
+        await file.writeAsBytes(bytes.codeUnits);
+        final document = await loadTextDocument(file);
 
-    expect(document.text, 'a\nb\nc');
-    expect(document.lineEnding, LineEnding.lf);
+        // The buffer is LF whatever the file uses.
+        expect(
+          document.text,
+          bytes.replaceAll('\r\n', '\n').replaceAll('\r', '\n'),
+        );
+        expect(document.lineEnding, ending);
 
-    await _save(
-      file,
-      document.text,
-      hasUtf8Bom: document.hasUtf8Bom,
-      lineEnding: document.lineEnding,
-      expectedSha256: document.sha256,
+        await _save(
+          file,
+          document.text,
+          hasUtf8Bom: document.hasUtf8Bom,
+          lineEnding: document.lineEnding,
+          expectedSha256: document.sha256,
+        );
+
+        expect(await file.readAsBytes(), bytes.codeUnits);
+      });
+    }
+
+    test('a mixed file saves every break as its dominant ending', () async {
+      // Two lone CRs outvote one LF and one CRLF; every break becomes CR.
+      await file.writeAsBytes('a\rb\nc\r\nd\re'.codeUnits);
+      final document = await loadTextDocument(file);
+
+      expect(document.text, 'a\nb\nc\nd\ne');
+      expect(document.lineEnding, LineEnding.cr);
+
+      await _save(
+        file,
+        document.text,
+        lineEnding: document.lineEnding,
+        expectedSha256: document.sha256,
+      );
+
+      expect(await file.readAsBytes(), 'a\rb\rc\rd\re'.codeUnits);
+    });
+  });
+
+  test('each line ending names its separator and status label', () {
+    expect(
+      {for (final e in LineEnding.values) e.label: e.separator},
+      {'LF': '\n', 'CRLF': '\r\n', 'CR': '\r'},
     );
+  });
 
-    expect(await file.readAsBytes(), 'a\nb\nc'.codeUnits);
+  test('metadata copyWith changes only the named choices', () {
+    const utf16 = TextDocumentMetadata(encoding: TextEncoding.utf16be);
+    expect(
+      utf16.copyWith(lineEnding: LineEnding.cr),
+      const TextDocumentMetadata(
+        lineEnding: LineEnding.cr,
+        encoding: TextEncoding.utf16be,
+      ),
+    );
+    const marked = TextDocumentMetadata(utf8Bom: Utf8Bom.present);
+    expect(
+      marked.copyWith(lineEnding: LineEnding.crlf).utf8Bom,
+      Utf8Bom.present,
+    );
+    expect(utf16.copyWith(), utf16);
   });
 
   test('a single-line file never grows CRLF', () async {
@@ -206,7 +264,7 @@ void main() {
         isA<TextDocumentException>().having(
           (error) => error.message,
           'message',
-          'This file is not valid UTF-8 text.',
+          'This file is not valid UTF-8 text: the byte 0xFF at offset 0 does not begin a valid UTF-8 sequence.',
         ),
       ),
     );
@@ -267,7 +325,10 @@ void main() {
       fail('expected the load to refuse');
     } on TextDocumentException catch (error) {
       // §2.4's toast contract: error.toString() IS the message.
-      expect(error.toString(), 'This file is not valid UTF-8 text.');
+      expect(
+        error.toString(),
+        'This file is not valid UTF-8 text: the byte 0xFF at offset 0 does not begin a valid UTF-8 sequence.',
+      );
     }
   });
 
