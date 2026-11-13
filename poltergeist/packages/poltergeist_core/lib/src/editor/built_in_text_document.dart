@@ -22,9 +22,13 @@ const _missingOrNonregularMessage =
     'The file is missing or no longer a regular file.';
 
 /// Adapts Planchette's stable message contract to a localized host enum.
+/// Any undecodable file classifies as [BuiltInTextDocumentFailure.invalidUtf8]:
+/// the shared message names the offending byte, so it is matched by type.
 BuiltInTextDocumentFailure classifyBuiltInTextDocumentFailure(
   BuiltInEditorException error,
 ) => switch (error.message) {
+  _ when error is shared.UnsupportedTextEncodingException =>
+    BuiltInTextDocumentFailure.invalidUtf8,
   _invalidUtf8Message => BuiltInTextDocumentFailure.invalidUtf8,
   _binaryMessage => BuiltInTextDocumentFailure.binary,
   _changedMessage => BuiltInTextDocumentFailure.changed,
@@ -74,6 +78,7 @@ Future<String> saveBuiltInTextDocument(
   String text, {
   bool hasUtf8Bom = false,
   shared.LineEnding lineEnding = shared.LineEnding.lf,
+  shared.TextEncoding encoding = shared.TextEncoding.utf8,
   String? expectedSha256,
   Future<void> Function(File temporary)? observeTemporary,
 }) async => shared.saveTextDocument(
@@ -81,6 +86,7 @@ Future<String> saveBuiltInTextDocument(
   text,
   hasUtf8Bom: hasUtf8Bom,
   lineEnding: lineEnding,
+  encoding: encoding,
   expectedSha256: expectedSha256 ?? await shared.textDocumentSha256(file),
   temporaryPrefix: '.poltergeist',
   observeTemporary: observeTemporary,

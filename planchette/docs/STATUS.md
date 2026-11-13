@@ -1,5 +1,28 @@
 # Status
 
+## Line endings, Save As through links and encodings (2026-11-12)
+
+- A classic Mac OS file whose lines end in a lone CR now saves back with CR
+  instead of silently becoming LF. The status bar shows CR and the
+  line-ending menu offers it. Mixed files keep the majority rule.
+- Save As onto a symbolic link writes the file the link names, with the
+  usual conflict check and replace question, and leaves the link in place.
+  A dangling link, a link to a folder or a link loop is refused with that
+  reason.
+- UTF-16 files with a byte order mark open and save back in the same byte
+  order with their mark. Other files that are not UTF-8 are still refused,
+  now with the first invalid byte, and the banner offers Reopen with
+  Encoding for Latin-1 or Windows-1252. A character the encoding cannot
+  hold blocks the save with its line and column. The status bar shows the
+  encoding and converts it on the next save. Séance's and Poltergeist's
+  editors open and save UTF-16 too and show CR and the encoding.
+
+Local proof: core, shared editor and app analysis are clean and their full
+suites pass; round-trip tests cover LF, CRLF, CR, mixed, UTF-8 with a mark,
+UTF-16 LE/BE, Latin-1 and Windows-1252, and link tests use real links on
+Linux. Windows and macOS link behavior and the desktop banner by hand still
+need checks.
+
 ## Optional folder and server workspaces (2026-10-17)
 
 - Open Folder and Open Containing Folder add a resizable file browser beside

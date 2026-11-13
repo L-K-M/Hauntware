@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart'
+    show ghostMonoFontFamilies, ghostMonoFontFamily;
 
 /// What [TerminalLinkReviewDialog] says. The defaults are English; an app
 /// with its own strings (Klabautermann's ARB) passes them.
@@ -60,8 +62,11 @@ class TerminalLinkReviewDialog extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: SelectableText(
                 uri.toString(),
+                // The family's shared monospace stack: a bare 'monospace'
+                // resolves only on Android and Linux.
                 style: theme.textTheme.bodySmall?.copyWith(
-                  fontFamily: 'monospace',
+                  fontFamily: ghostMonoFontFamily,
+                  fontFamilyFallback: ghostMonoFontFamilies,
                 ),
               ),
             ),
@@ -69,7 +74,9 @@ class TerminalLinkReviewDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        // Cancel holds the initial focus, so Enter takes the safe answer.
         TextButton(
+          autofocus: true,
           onPressed: () => Navigator.pop(context, false),
           child: Text(strings.cancel),
         ),

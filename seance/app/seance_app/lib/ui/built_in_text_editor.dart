@@ -129,6 +129,7 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
           text,
           hasUtf8Bom: baseline?.hasUtf8Bom ?? false,
           lineEnding: baseline?.lineEnding ?? LineEnding.lf,
+          encoding: baseline?.encoding ?? TextEncoding.utf8,
           expectedSha256: baseline?.sha256,
         );
       },
@@ -528,8 +529,9 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
         'Local changes'
       else if (copy != null)
         'In sync',
-      _editor.document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
-      (_editor.document?.hasUtf8Bom ?? false) ? 'UTF-8 BOM' : 'UTF-8',
+      (_editor.document?.lineEnding ?? LineEnding.lf).label,
+      (_editor.document?.metadata ?? const TextDocumentMetadata())
+          .encodingLabel,
       strings.indentation(_editor.indentation),
       strings.languageName(_editor.text.language),
       if (!_editor.highlightingEnabled) strings.largeFile,

@@ -1586,7 +1586,7 @@ LineEdit? prepareTextForSave(
       !cleaned.endsWith('\r');
   if (edits.isEmpty && !appendBreak) return null;
 
-  final ending = lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  final ending = lineEnding.separator;
   // An appended break leaves the caret at the original content end.
   return LineEdit(
     appendBreak ? cleaned + ending : cleaned,
@@ -1596,7 +1596,7 @@ LineEdit? prepareTextForSave(
 }
 
 TextToolOutcome _normalizeLineEndings(TextToolRun run) {
-  final ending = run.context.lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  final ending = run.context.lineEnding.separator;
   final edits = <_Edit>[];
   var breaks = 0;
   for (final match in RegExp(r'\r\n|\r|\n').allMatches(run.text)) {
@@ -2812,7 +2812,7 @@ TextToolOutcome _reformatJson(TextToolRun run, {required bool minify}) {
   final start = math.min(run.base, run.extent);
   final end = math.max(run.base, run.extent);
   final slice = run.text.substring(start, end);
-  final newline = run.context.lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  final newline = run.context.lineEnding.separator;
   final String reformatted;
   try {
     reformatted = minify

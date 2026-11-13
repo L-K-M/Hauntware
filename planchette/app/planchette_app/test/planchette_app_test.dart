@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show commandPaletteQueryKey;
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:planchette_core/planchette_core.dart'
+    show TextEncoding, UnsupportedTextEncodingException;
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
@@ -672,6 +674,47 @@ void main() {
     expect(tester.getSemantics(banner), isSemantics(isLiveRegion: true));
     semantics.dispose();
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('a file that is not UTF-8 offers Reopen with Encoding', (
+    tester,
+  ) async {
+    final path = testPath('legacy.txt');
+    store.files[path] = document('legacy.txt', 'caf\u00e9');
+    store.loadFailures[path] = const UnsupportedTextEncodingException(
+      'This file is not valid UTF-8 text.',
+    );
+    await mount(tester);
+    await workspace.open(path);
+    await tester.pumpAndSettle();
+
+    final reopen = find.byKey(const ValueKey('reopen-with-encoding'));
+    expect(reopen, findsOneWidget);
+    await tester.tap(reopen);
+    await tester.pumpAndSettle();
+    // Only the explicit legacy choices; UTF-8 is what was refused.
+    expect(find.text('Latin-1'), findsOneWidget);
+    expect(find.text('UTF-16 LE'), findsNothing);
+    await tester.tap(find.text('Windows-1252'));
+    await tester.pumpAndSettle();
+
+    expect(
+      workspace.active!.editor.metadata.encoding,
+      TextEncoding.windows1252,
+    );
+    expect(find.byKey(const ValueKey('workspace-error-banner')), findsNothing);
+    expect(find.text('Windows-1252'), findsOneWidget, reason: 'status bar');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('other open failures offer no encoding choice', (tester) async {
+    await mount(tester);
+    await workspace.open(testPath('missing.txt'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('workspace-error-banner')), findsOne);
+    expect(find.byKey(const ValueKey('reopen-with-encoding')), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 

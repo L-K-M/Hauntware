@@ -154,11 +154,27 @@ final class DocumentTab {
   /// save does not ask again. A Save As to another file asks afresh.
   String? _acceptedReadOnlyPath;
 
+  /// The encoding the user chose when opening, until a load or save records
+  /// the document's own in [baseline].
+  TextEncoding? _chosenEncoding;
+
+  /// Set when the last load refused the file as undecodable.
+  bool _encodingRefused = false;
+
   String get name => path == null ? untitledName : paths.basename(path!);
 }
 
+/// A file refused as undecodable, with the publication of the managed
+/// checkout it belongs to, if any.
+typedef _ReopenOffer = ({String path, DocumentPublication? publication});
+
 /// One file that failed to open, for callers that aggregate batch results.
-typedef _OpenFailure = ({String path, String name, String message});
+typedef _OpenFailure = ({
+  String path,
+  String name,
+  String message,
+  bool encodingRefused,
+});
 
 /// The part of a tab's editor state that the shell draws: its label, dirty
 /// marker, window title and menu enablement. Shell code that reads another
@@ -283,9 +299,20 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// failure retires its banner without hiding another document's.
   Object? _errorScope;
 
+  /// The file the current [_error] refused as undecodable, which the banner
+  /// offers to reopen in an encoding the user picks, and the publication it
+  /// was opened under when it is a managed checkout, so the reopen keeps it
+  /// managed. Cleared with the error.
+  _ReopenOffer? _reopenWithEncoding;
+
   List<DocumentTab> get documents => List.unmodifiable(_documents);
   DocumentTab? get active => _active;
   String? get error => _error;
+
+  /// A file that just failed to open because its bytes are not UTF-8 (or
+  /// marked UTF-16) text, while its failure is on the banner. The shell
+  /// offers [reopenWithEncoding] for it, never an automatic guess.
+  String? get reopenWithEncodingPath => _reopenWithEncoding?.path;
   bool get interactionLocked =>
       _dialogCount > 0 || _closingAll || _quitAccepted;
   String get windowTitle {
@@ -340,7 +367,14 @@ final class DocumentWorkspace extends ChangeNotifier {
       loadDocument: path == null
           ? null
           : () async {
-              final document = await _loadTab(tab);
+              final TextDocument document;
+              try {
+                document = await _loadTab(tab);
+              } on UnsupportedTextEncodingException {
+                tab._encodingRefused = true;
+                rethrow;
+              }
+              tab._encodingRefused = false;
               tab.baseline = document;
               tab.path = document.file.path;
               return document;
@@ -453,10 +487,21 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   /// Open the host's durable working copy through the ordinary local guards.
   /// The publication owns its remote target independently of the browser root.
-  Future<void> openManaged(String path, DocumentPublication publication) async {
-    final failure = await _openDeduped(path, publication: publication);
+  Future<void> openManaged(String path, DocumentPublication publication) =>
+      _openManaged(path, publication);
+
+  Future<void> _openManaged(
+    String path,
+    DocumentPublication publication, {
+    TextEncoding? encoding,
+  }) async {
+    final failure = await _openDeduped(
+      path,
+      publication: publication,
+      encoding: encoding,
+    );
     if (failure != null) {
-      _reportError(_openFailureMessage([failure]), scope: _pathKey(path));
+      _reportOpenFailures([failure], publication: publication);
       return;
     }
     final tab = _findPath(path);
@@ -495,16 +540,46 @@ final class DocumentWorkspace extends ChangeNotifier {
             path: path,
             name: _paths.basename(path),
             message: '$error',
+            encodingRefused: false,
           ));
         }
       }
     }
-    // A single failure belongs to its path, so opening that file again
-    // successfully retires it; a batch summary belongs to no one document.
+    _reportOpenFailures(failures);
+  }
+
+  /// Opens [path] reading it as [encoding], the user's answer to a file
+  /// refused as not UTF-8. The document then saves in that encoding.
+  Future<void> reopenWithEncoding(String path, TextEncoding encoding) async {
+    if (interactionLocked) return;
+    // A managed checkout reopens under its publication: a plain open would
+    // turn it into a local file that no longer publishes and that follows
+    // a symbolic link the checkout refuses.
+    final offered = _reopenWithEncoding;
+    if (offered?.publication case final publication?
+        when _pathKey(offered!.path) == _pathKey(path)) {
+      return _openManaged(path, publication, encoding: encoding);
+    }
+    final failure = await _openDeduped(path, encoding: encoding);
+    if (failure != null) _reportOpenFailures([failure]);
+  }
+
+  /// A single failure belongs to its path, so opening that file again
+  /// successfully retires it; a batch summary belongs to no one document.
+  /// Only a single undecodable file is offered Reopen with Encoding: a
+  /// batch names several files and the banner has room for one choice.
+  void _reportOpenFailures(
+    List<_OpenFailure> failures, {
+    DocumentPublication? publication,
+  }) {
     if (failures.length == 1) {
+      final failure = failures.single;
       _reportError(
         _openFailureMessage(failures),
-        scope: _pathKey(failures.single.path),
+        scope: _pathKey(failure.path),
+        reopenWithEncoding: failure.encodingRefused
+            ? (path: failure.path, publication: publication)
+            : null,
       );
     } else if (failures.isNotEmpty) {
       _reportError(_openFailureMessage(failures));
@@ -546,22 +621,24 @@ final class DocumentWorkspace extends ChangeNotifier {
   Future<_OpenFailure?> _openDeduped(
     String path, {
     DocumentPublication? publication,
+    TextEncoding? encoding,
   }) {
     if (_quitAccepted || _disposed) return Future.value();
     if (interactionLocked) {
       return (_unlocked ??= Completer<void>()).future.then(
-        (_) => _openDeduped(path, publication: publication),
+        (_) => _openDeduped(path, publication: publication, encoding: encoding),
       );
     }
     final key = _pathKey(path);
     return _opening.putIfAbsent(
       key,
-      () => _open(path, publication: publication).whenComplete(() {
-        _opening.remove(key);
-        // The open's own notification ran while it was still listed, so a
-        // quit notice waiting on it needs one more.
-        _notify();
-      }),
+      () => _open(path, publication: publication, encoding: encoding)
+          .whenComplete(() {
+            _opening.remove(key);
+            // The open's own notification ran while it was still listed, so a
+            // quit notice waiting on it needs one more.
+            _notify();
+          }),
     );
   }
 
@@ -605,6 +682,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   Future<_OpenFailure?> _open(
     String path, {
     DocumentPublication? publication,
+    TextEncoding? encoding,
   }) async {
     final existing = _findPath(path);
     if (existing != null) {
@@ -629,7 +707,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     final tab = _makeTab(
       path: _paths.normalize(_paths.absolute(path)),
       publication: publication,
-    );
+    ).._chosenEncoding = encoding;
     _documents.add(tab);
     _active = tab;
     _notify();
@@ -638,7 +716,12 @@ final class DocumentWorkspace extends ChangeNotifier {
     final error = tab.editor.error;
     _OpenFailure? failure;
     if (error != null) {
-      failure = (path: tab.path ?? tab.name, name: tab.name, message: error);
+      failure = (
+        path: tab.path ?? tab.name,
+        name: tab.name,
+        message: error,
+        encodingRefused: tab._encodingRefused,
+      );
       _remove(tab);
     } else {
       // A symlink may resolve onto an already-open document. Keep the existing
@@ -1751,12 +1834,21 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
-  Future<TextDocument> _loadTab(DocumentTab tab) => store.load(
-    tab.path!,
-    symlinkPolicy: tab._publication == null
-        ? SymlinkPolicy.resolveOnce
-        : SymlinkPolicy.reject,
-  );
+  Future<TextDocument> _loadTab(DocumentTab tab) {
+    // A chosen encoding is chosen again on every read; detection could
+    // only refuse the file. UTF-8 and UTF-16 are detected afresh, so a file
+    // rewritten in the other one elsewhere still opens.
+    final encoding = tab.baseline?.encoding ?? tab._chosenEncoding;
+    return store.load(
+      tab.path!,
+      symlinkPolicy: tab._publication == null
+          ? SymlinkPolicy.resolveOnce
+          : SymlinkPolicy.reject,
+      encoding: encoding != null && encoding.requiresExplicitChoice
+          ? encoding
+          : null,
+    );
+  }
 
   /// Workspace pickers and connection prompts obey the same editing and quit
   /// lock as document dialogs. Opening the chosen file happens after it ends.
@@ -1874,9 +1966,14 @@ final class DocumentWorkspace extends ChangeNotifier {
   static String _withoutFinalStop(String detail) =>
       detail.endsWith('.') ? detail.substring(0, detail.length - 1) : detail;
 
-  void _reportError(String message, {Object? scope}) {
+  void _reportError(
+    String message, {
+    Object? scope,
+    _ReopenOffer? reopenWithEncoding,
+  }) {
     _error = message;
     _errorScope = scope;
+    _reopenWithEncoding = reopenWithEncoding;
     _notify();
   }
 
@@ -1889,12 +1986,14 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (_errorScope != scope) return;
     _error = null;
     _errorScope = null;
+    _reopenWithEncoding = null;
     _notify();
   }
 
   void clearError() {
     _error = null;
     _errorScope = null;
+    _reopenWithEncoding = null;
     _notify();
   }
 

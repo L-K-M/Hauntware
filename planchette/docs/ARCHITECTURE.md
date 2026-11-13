@@ -102,12 +102,39 @@ remote state stay in their applications.
 
 ## File handling
 
-The editor remains a bounded UTF-8 text editor: a 4 MiB file limit and a
-200,000-character highlighting limit. BOM and dominant line-ending metadata
-survive saves; mixed line endings are normalized according to the existing
-document policy, rather than claimed to be preserved individually.
+The editor is a bounded text editor: a 4 MiB file limit, counted in the
+file's bytes whatever its encoding, and a 200,000-character highlighting
+limit.
 
-User-selected local symlinks may be resolved once at open. Managed copies
+Opening detects strict UTF-8 and UTF-16 that starts with a byte order mark
+(little- or big-endian), and records the encoding in `TextDocument` and
+`TextDocumentMetadata`. A UTF-16 file saves back in the same byte order with
+its mark, so an unedited file round-trips byte for byte; an odd byte count,
+an unpaired surrogate or a UTF-32 mark is refused with the offset. Unmarked
+UTF-16 is never guessed. Any other bytes are refused by default with the
+first invalid offset, as `UnsupportedTextEncodingException`. Latin-1 and
+Windows-1252 accept almost any bytes, so they are only ever an explicit
+choice: Planchette's open-failure banner offers Reopen with Encoding for
+them, a document so opened reloads in that encoding, and Windows-1252
+refuses its five undefined bytes rather than reading them as controls. A
+save encodes the whole buffer before touching the file and refuses a
+character the encoding cannot hold, naming it and its line and column,
+instead of replacing it. A UTF-8 file's leading mark is kept as metadata
+and written back; further leading marks are content. The status bar shows
+the encoding, and Planchette's lets the next save convert to another one.
+ BOM and dominant line-ending metadata
+survive saves; mixed line endings are normalized according to the existing
+document policy, rather than claimed to be preserved individually. The line
+ending is LF, CRLF or a lone CR (classic Mac OS). Loading counts each break
+once, takes the most frequent kind, and breaks a tie toward LF, then CRLF,
+then CR, so a file without breaks is LF and CR needs a strict majority. A
+normalized save writes every break as that one ending.
+
+User-selected local symlinks may be resolved once at open. Save As onto a
+link resolves it the same way: the regular file it names becomes the
+destination, with the same digest guard and replace question as any
+existing file, and the link stays a link. A dangling link, a link to a
+folder and a link loop are refused with that reason. Managed copies
 must be regular files and reject symlinks. Saves use the resolved identity,
 guard the expected on-disk digest, and preserve original permission bits.
 Temporary plaintext is owner-only before writing on POSIX. Each host retains
@@ -164,6 +191,6 @@ telemetry or updater. The shared Flutter surface stays usable in the host
 apps' existing mobile flows. Android starts one workspace without the desktop
 window host. Its `AndroidDocuments` service maps system document-provider
 identities onto the existing `DocumentStore` boundary; private staging reuses
-the core's UTF-8, BOM, line-ending and size rules. The native provider adapter
+the core's encoding, BOM, line-ending and size rules. The native provider adapter
 checks digests before writes and verifies read-back, retaining the original
 in private recovery storage until success. Provider writes are not atomic.

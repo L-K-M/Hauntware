@@ -116,7 +116,11 @@ void main() {
         error = caught;
       }
       // The editor shows this string verbatim in its body and toasts.
-      expect('$error', 'This file is not valid UTF-8 text.');
+      expect(
+        '$error',
+        'This file is not valid UTF-8 text: the byte 0xFF at offset 0 '
+            'does not begin a valid UTF-8 sequence.',
+      );
     },
   );
 

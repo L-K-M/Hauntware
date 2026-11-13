@@ -397,4 +397,20 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the status bar names the line ending and encoding', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'mac.txt', initialText: 'a\n');
+    addTearDown(c.dispose);
+    c.setMetadata(
+      const TextDocumentMetadata(
+        lineEnding: LineEnding.cr,
+        encoding: TextEncoding.utf16le,
+      ),
+    );
+    await tester.pumpWidget(app(c));
+    expect(find.textContaining('CR'), findsWidgets);
+    expect(find.textContaining('UTF-16 LE'), findsOneWidget);
+  });
 }

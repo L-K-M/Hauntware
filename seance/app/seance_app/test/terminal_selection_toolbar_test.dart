@@ -398,6 +398,23 @@ void main() {
       expect(launched, isEmpty);
     });
   });
+
+  testWidgets('a link whose text is its target opens without a review', (
+    tester,
+  ) async {
+    const target = 'https://example.test/';
+    await pumpTerminal(tester);
+    state!.activeSession!.engine.terminal.write(
+      '\x1b]8;;$target\x1b\\$target\x1b]8;;\x1b\\',
+    );
+    await settle(tester);
+    // A letter of the host on the third row, where the link was written.
+    await tester.tapAt(cell(tester, 10, 2));
+    await settle(tester);
+
+    expect(find.text('Open this link?'), findsNothing);
+    expect(launched, [target]);
+  });
 }
 
 /// Just enough of a live SSH session for the terminal to count as connected.
