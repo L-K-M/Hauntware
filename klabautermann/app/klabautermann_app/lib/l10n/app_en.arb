@@ -1389,6 +1389,10 @@
   "@processesCommandUnavailable": {
     "description": "In place of a command line the server did not give, as for a kernel thread (03 §7.2)."
   },
+  "processesCommandTruncated": "The server cut this command line at its read limit, so its end is missing.",
+  "@processesCommandTruncated": {
+    "description": "Under a process's command line that the server's read cut at its per-file byte cap (D48)."
+  },
   "processesCommandUnavailableOf": "{name} (command line unavailable)",
   "@processesCommandUnavailableOf": {
     "description": "A process's kernel name in place of a command line the server did not give.",

@@ -7929,6 +7929,9 @@ subscribes while it shows:
   shows its time on the day of the reading, else its date, and
   "unknown" where the engine could not date it (7.2). A row with no
   command line shows the kernel's name and "command line unavailable".
+  A command line the host's per-file byte cap cut (`cmdline_cap`,
+  `ProcessRow.argumentsTruncated`) ends in an ellipsis, and the details
+  say that its end is missing.
 - The filter needs every term in the PID, name, user or shown command
   line. It draws and searches at most 4,096 characters of a command
   line or argument, which can fill the 1 MiB section.

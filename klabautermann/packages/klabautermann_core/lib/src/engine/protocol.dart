@@ -7764,6 +7764,7 @@ final class ProcessRow {
     this.startTicks,
     this.startedAt,
     this.arguments,
+    this.argumentsTruncated = false,
   });
 
   final int pid;
@@ -7801,6 +7802,11 @@ final class ProcessRow {
   /// null when it could not be read (7.2's "command line unavailable").
   /// Pass an unmodifiable list.
   final List<MaskedValue>? arguments;
+
+  /// Whether the host's read of the command line reached its per-file
+  /// byte cap (D48), so the last of [arguments] may be cut and later ones
+  /// missing. A command line of exactly the cap counts as cut too.
+  final bool argumentsTruncated;
 }
 
 /// Every systemd unit and the failed ones ([SampleStream.units], 7.5).

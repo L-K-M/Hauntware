@@ -1233,6 +1233,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesCommandUnavailable => 'Command line unavailable';
 
   @override
+  String get processesCommandTruncated =>
+      'The server cut this command line at its read limit, so its end is missing.';
+
+  @override
   String processesCommandUnavailableOf(String name) {
     return '$name (command line unavailable)';
   }

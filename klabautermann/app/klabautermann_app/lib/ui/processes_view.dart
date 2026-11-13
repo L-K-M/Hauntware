@@ -32,7 +32,9 @@ String argumentText(MaskedValue argument, {String? maskWord}) {
 /// [row]'s command line as the tab shows it: its arguments' display text
 /// joined by spaces, so a masked one shows its mask and never its secret
 /// (03 §8.9). Null where the host gave none: unreadable (7.2's "command
-/// line unavailable") or empty, as for a kernel thread.
+/// line unavailable") or empty, as for a kernel thread. A command line the
+/// host cut at its byte cap (D48) ends in an ellipsis, as a clipped one
+/// does.
 String? commandLineText(ProcessRow row, {String? maskWord}) {
   final arguments = row.arguments;
   if (arguments == null || arguments.isEmpty) return null;
@@ -43,7 +45,9 @@ String? commandLineText(ProcessRow row, {String? maskWord}) {
     line.write(argumentText(argument, maskWord: maskWord));
     if (line.length > kProcessTextLimit) break;
   }
-  return clipProcessText(line.toString());
+  final text = line.toString();
+  if (text.length > kProcessTextLimit) return clipProcessText(text);
+  return row.argumentsTruncated ? '$text…' : text;
 }
 
 /// Who runs [row] by name: the name a `ps` fallback gave, or the probe's

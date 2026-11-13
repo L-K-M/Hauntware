@@ -1804,6 +1804,12 @@ abstract class AppLocalizations {
   /// **'Command line unavailable'**
   String get processesCommandUnavailable;
 
+  /// Under a process's command line that the server's read cut at its per-file byte cap (D48).
+  ///
+  /// In en, this message translates to:
+  /// **'The server cut this command line at its read limit, so its end is missing.'**
+  String get processesCommandTruncated;
+
   /// A process's kernel name in place of a command line the server did not give.
   ///
   /// In en, this message translates to:
