@@ -17,7 +17,7 @@ dependencies:
   # Each app's lock holds the resolved versions; these ranges admit them.
   # http 1.5 introduced the abortable request that Cancel uses.
   http: ^1.5.0
-  crypto: ^3.0.0
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:
