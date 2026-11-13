@@ -4775,6 +4775,60 @@ void main() {
     });
   });
 
+  group('records the server refuses for the account quota', () {
+    SyncCoordinator coord(
+      String deviceId,
+      ConfigStore configStore, {
+      TombstoneStore? tombstones,
+    }) =>
+        SyncCoordinator(
+          configStore: configStore,
+          hostKeyStore: InMemoryHostKeyStore(),
+          codec: _sharedCodec,
+          local: InMemoryLocalRecordStore(),
+          deviceId: deviceId,
+          tombstoneStore: tombstones,
+        );
+
+    test('wait on the device while edits still land', () async {
+      final remote = _QuotaServer(maxLiveRecords: 2);
+      final cfgA = InMemoryConfigStore();
+      final cfgB = InMemoryConfigStore();
+      final tombstonesB = InMemoryTombstoneStore();
+      await cfgA.putServer(server('s1', 'alpha', 10));
+      await cfgA.putServer(server('s2', 'beta', 10));
+      await coord('A', cfgA).run(remote);
+      await coord('B', cfgB, tombstones: tombstonesB).run(remote);
+
+      // B renames a server the account holds and adds one it has no room for.
+      await cfgB.putServer(server('s1', 'alpha-renamed', 20));
+      await cfgB.putServer(server('s3', 'gamma', 20));
+      final failure = await _refusal(
+          coord('B', cfgB, tombstones: tombstonesB).run(remote));
+
+      expect(failure.code, 'account_quota_exceeded');
+      expect(failure.recordIds, isEmpty);
+      expect(failure.awaitingSpaceIds, ['s3']);
+      expect(failure.toString(),
+          startsWith('1 record waits for space on the sync server.'));
+      expect(failure.outcome.pushed, greaterThan(0));
+      await coord('A', cfgA).run(remote);
+      expect((await cfgA.getServer('s1'))!.label, 'alpha-renamed',
+          reason: 'the edit reached the other device');
+      expect(remote.stored('s3'), isNull);
+      expect((await cfgB.getServer('s3'))!.label, 'gamma',
+          reason: 'the new server stays on the device that made it');
+
+      // Deleting a server makes room, and the next sync stores the new one.
+      await cfgB.deleteServer('s2');
+      await tombstonesB.add(
+          EncryptedRecord.tombstone(id: 's2', updatedAt: 30, deviceId: 'B'));
+      await coord('B', cfgB, tombstones: tombstonesB).run(remote);
+      expect(remote.stored('s3'), isNotNull);
+      expect(remote.stored('s2')!.deleted, isTrue);
+    });
+  });
+
   group('a pulled pin that disagrees with the local one (Séance #56)', () {
     HostKey pin(String fingerprint, int pinnedAt) => HostKey(
           host: 'alpha.example.com',
@@ -5128,6 +5182,53 @@ class _WithheldKeyStore implements AssistantSettingsStore {
 /// A [FakeServer] that refuses an over-sized blob the way the real server
 /// does: a 413 for the whole push, with the cap advertised on every pull so
 /// the client sends such a record alone.
+/// A server with a cap on live records and per-record refusals: a push that
+/// would pass the cap stores what fits and lists the rest, offering them a
+/// second time after the first pass as the real server does.
+class _QuotaServer extends FakeServer {
+  final int maxLiveRecords;
+
+  _QuotaServer({required this.maxLiveRecords});
+
+  int get _live => _store.values.where((r) => !r.deleted).length;
+
+  @override
+  Future<PushResponse> push(List<EncryptedRecord> records) async {
+    pushedRecords += records.length;
+    final results = <PushResult>[];
+    var pending = records;
+    for (var pass = 0; pass < 2; pass++) {
+      final deferred = <EncryptedRecord>[];
+      for (final incoming in pending) {
+        final existing = _store[incoming.id];
+        if (existing != null &&
+            !identical(Lww.resolve(existing, incoming), incoming)) {
+          results.add(PushResult(
+              id: incoming.id, seq: existing.seq ?? 0, accepted: false));
+          continue;
+        }
+        final grows =
+            !incoming.deleted && (existing == null || existing.deleted);
+        if (grows && _live >= maxLiveRecords) {
+          deferred.add(incoming);
+          continue;
+        }
+        _store[incoming.id] = incoming.withSeq(++_seq);
+        results.add(PushResult(id: incoming.id, seq: _seq, accepted: true));
+      }
+      pending = deferred;
+    }
+    return PushResponse(
+      results: results,
+      refused: [
+        for (final record in pending)
+          PushRefusal(id: record.id, reason: PushRefusalReason.accountQuota),
+      ],
+      latestSeq: _seq,
+    );
+  }
+}
+
 class _BlobCapServer extends FakeServer {
   final int maxBlobBytes;
 

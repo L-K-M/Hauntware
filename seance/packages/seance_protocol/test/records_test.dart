@@ -1015,6 +1015,69 @@ void main() {
       expect(back.latestSeq, 6);
     });
 
+    test('PushRequest omits the default refusal scope', () {
+      // A body an old client sends stays byte-identical, and an old server
+      // that ignores the field answers the request the way it always has.
+      final plain = PushRequest(records: const []).toJson();
+      expect(plain.containsKey('refusalScope'), isFalse);
+      expect(PushRequest.fromJson(plain).refusalScope, PushRefusalScope.batch);
+
+      final opted = PushRequest(
+        records: const [],
+        refusalScope: PushRefusalScope.record,
+      ).toJson();
+      expect(opted['refusalScope'], 'record');
+      expect(PushRequest.fromJson(opted).refusalScope, PushRefusalScope.record);
+    });
+
+    test('PushRequest reads an unknown refusal scope as batch', () {
+      final request = PushRequest.fromJson({
+        'protocolVersion': kProtocolVersion,
+        'records': const [],
+        'refusalScope': 'something-newer',
+      });
+      expect(request.refusalScope, PushRefusalScope.batch);
+    });
+
+    test('PushResponse round-trips per-record refusals', () {
+      final r = PushResponse(
+        results: const [PushResult(id: 'a', seq: 5, accepted: true)],
+        refused: const [
+          PushRefusal(id: 'b', reason: PushRefusalReason.accountQuota),
+        ],
+        latestSeq: 5,
+      );
+      final json = r.toJson();
+      expect(json['refused'], [
+        {'id': 'b', 'reason': 'account_quota_exceeded'},
+      ]);
+      final back = PushResponse.fromJson(json);
+      expect(back.results.single.id, 'a');
+      expect(back.refused.single.id, 'b');
+      expect(back.refused.single.reason, PushRefusalReason.accountQuota);
+    });
+
+    test('PushResponse without refusals keeps its old shape', () {
+      final json = const PushResponse(
+        results: [PushResult(id: 'a', seq: 1, accepted: true)],
+        latestSeq: 1,
+      ).toJson();
+      expect(json.keys, unorderedEquals(['results', 'latestSeq']));
+      expect(PushResponse.fromJson(json).refused, isEmpty);
+    });
+
+    test('PushResponse keeps a refusal whose reason it does not know', () {
+      final back = PushResponse.fromJson({
+        'results': const [],
+        'refused': const [
+          {'id': 'x', 'reason': 'something-newer'},
+        ],
+        'latestSeq': 0,
+      });
+      expect(back.refused.single.id, 'x');
+      expect(back.refused.single.reason, PushRefusalReason.unknown);
+    });
+
     test('SyncSessionInfo round-trips with current flags', () {
       final info = const SyncSessionInfo(
         id: 'sess-1',

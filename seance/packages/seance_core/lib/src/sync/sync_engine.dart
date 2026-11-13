@@ -143,6 +143,10 @@ class SyncOutcome {
 /// The server's error code for a push it refuses as too large to store.
 const String _payloadTooLarge = 'payload_too_large';
 
+/// The server's error code for a push that would pass the account's storage
+/// quota.
+const String _accountQuotaExceeded = 'account_quota_exceeded';
+
 /// One record the sync server refused to store because it is too large.
 class RefusedRecord {
   final String id;
@@ -175,43 +179,82 @@ class RefusedRecord {
   }
 }
 
-/// A sync run finished, except for records the server refused as too large.
+/// A sync run finished, except for records the server refused to store.
 ///
-/// Such a record is pushed alone (see [batchForPush]), so the refusal is its
-/// own and nothing else in the run has to pay for it: the run carries on and
-/// this is thrown at the end, with [outcome] describing what did happen. Only
-/// a refused push of that one record is put down to it: a refused batch of
-/// several records names no culprit, and it ends the run where it happens, as
-/// every other failure does.
+/// A record is refused for one of two reasons. [records] are too large: such
+/// a record is pushed alone (see [batchForPush]), so the refusal is its own.
+/// [awaitingSpace] would grow the account past its storage quota: a server
+/// with per-record refusals lists them while it stores the rest of the push.
+/// Either way nothing else in the run has to pay for them: the run carries on
+/// and this is thrown at the end, with [outcome] describing what did happen.
+/// Only a refused push of one record is put down to its size: a refused batch
+/// of several names no culprit, and it ends the run where it happens, as
+/// every other failure does, and so does a whole push an older server refuses
+/// for the quota.
 ///
-/// An [ApiError] with the server's own code, so a caller that handled the
-/// refusal before it was isolated still recognises it.
+/// An [ApiError] with the server's own code (`payload_too_large` when any
+/// record is too large, `account_quota_exceeded` otherwise), so a caller that
+/// handled the refusal before it was isolated still recognises it.
 class SyncRecordsRefused extends ApiError {
-  /// Every record refused, each still waiting to be pushed: it stays dirty, so
-  /// a later run retries it once it has shrunk or the limit has been raised.
+  /// Every record refused as too large, each still waiting to be pushed: it
+  /// stays dirty, so a later run retries it once it has shrunk or the limit
+  /// has been raised.
   final List<RefusedRecord> records;
+
+  /// Every record refused for the account's storage quota. Each stays dirty
+  /// and a later run offers it again, so it syncs once the account has room:
+  /// after a deletion here or on another device, or a raised quota.
+  final List<RefusedRecord> awaitingSpace;
 
   /// What the run achieved around the refused records.
   final SyncOutcome outcome;
 
-  SyncRecordsRefused(this.records, {required this.outcome})
-      : assert(records.isNotEmpty),
-        super(code: _payloadTooLarge, message: _describe(records));
+  SyncRecordsRefused(
+    this.records, {
+    this.awaitingSpace = const [],
+    required this.outcome,
+  })  : assert(records.isNotEmpty || awaitingSpace.isNotEmpty),
+        super(
+          code: records.isNotEmpty ? _payloadTooLarge : _accountQuotaExceeded,
+          message: _describe(records, awaitingSpace),
+        );
 
   List<String> get recordIds => [for (final record in records) record.id];
 
-  static String _describe(List<RefusedRecord> records) {
-    const tail = 'Everything else synced.';
+  List<String> get awaitingSpaceIds =>
+      [for (final record in awaitingSpace) record.id];
+
+  static String _describe(
+    List<RefusedRecord> tooLarge,
+    List<RefusedRecord> awaitingSpace,
+  ) {
+    return [
+      if (tooLarge.isNotEmpty) _describeTooLarge(tooLarge),
+      if (awaitingSpace.isNotEmpty)
+        _describeAwaitingSpace(awaitingSpace.length),
+      'Everything else synced.',
+    ].join(' ');
+  }
+
+  static String _describeTooLarge(List<RefusedRecord> records) {
     if (records.length == 1) {
       final what = records.single._described;
       return '${what[0].toUpperCase()}${what.substring(1)} is too large for '
           'the sync server, so it stays on this device until you make it '
-          'smaller. $tail';
+          'smaller.';
     }
     return '${records.length} records are too large for the sync server, so '
         'they stay on this device until you make them smaller: '
-        '${records.map((r) => r._described).join(', ')}. $tail';
+        '${records.map((r) => r._described).join(', ')}.';
   }
+
+  /// A count rather than names: a full account can hold back many records,
+  /// and the remedy (free space on the account) is the same for each.
+  static String _describeAwaitingSpace(int count) => count == 1
+      ? '1 record waits for space on the sync server. It stays on this '
+          'device and syncs once the account has room.'
+      : '$count records wait for space on the sync server. They stay on '
+          'this device and sync once the account has room.';
 
   /// The message alone: it is written for the person reading the sync status.
   @override
@@ -257,6 +300,10 @@ class SyncEngine {
     // [maxRounds] times only to be refused each time. Per run rather than on
     // the engine for the reason the limits are (see [_pullOnce]).
     final refused = <String>{};
+    // Ids the server refused for the account quota during this run. Each is
+    // sent once per run for the same reason: within one run nothing is
+    // likely to free space, and the next run offers it again.
+    final awaitingSpace = <String>{};
     while (round < maxRounds) {
       round++;
       final ({int applied, PushLimits limits}) pulled;
@@ -303,6 +350,7 @@ class SyncEngine {
         api,
         pulled.limits,
         refused,
+        awaitingSpace,
         runLocal: locally,
         refreshLocal: refreshLocal,
       );
@@ -323,19 +371,25 @@ class SyncEngine {
     }
     final outcome = SyncOutcome(
         pulled: totalPulled, pushed: totalPushed, rounds: round);
-    if (refused.isEmpty) return outcome;
+    if (refused.isEmpty && awaitingSpace.isEmpty) return outcome;
     // A later round may have adopted another device's winning copy of a
     // refused record, which settles it; only the ones still owed are news.
     final owed = await locally(() async {
       await refreshLocal?.call(SyncLocalRefreshMode.normal);
       return {for (final record in await store.dirtyRecords()) record.id};
     });
-    final stillRefused = [
-      for (final id in refused)
-        if (owed.contains(id)) RefusedRecord(id),
-    ];
-    if (stillRefused.isEmpty) return outcome;
-    throw SyncRecordsRefused(stillRefused, outcome: outcome);
+    List<RefusedRecord> stillOwed(Set<String> ids) => [
+          for (final id in ids)
+            if (owed.contains(id)) RefusedRecord(id),
+        ];
+    final stillRefused = stillOwed(refused);
+    final stillWaiting = stillOwed(awaitingSpace);
+    if (stillRefused.isEmpty && stillWaiting.isEmpty) return outcome;
+    throw SyncRecordsRefused(
+      stillRefused,
+      awaitingSpace: stillWaiting,
+      outcome: outcome,
+    );
   }
 
   /// Applies a pull and reports how this round's push may be sized.
@@ -419,12 +473,14 @@ class SyncEngine {
   /// cover the whole dirty set but for the records in [refused], which is what
   /// [sync]'s no-progress guard reads.
   ///
-  /// Records in [refused] are skipped, and a record the server refuses as too
-  /// large is added to it.
+  /// Records in [refused] and [awaitingSpace] are skipped. A record the
+  /// server refuses as too large is added to [refused], and one it refuses
+  /// for the account quota to [awaitingSpace].
   Future<({int accepted, int rejected})> _pushOnce(
     SyncApi api,
     PushLimits limits,
-    Set<String> refused, {
+    Set<String> refused,
+    Set<String> awaitingSpace, {
     required SyncLocalRunner runLocal,
     required SyncLocalRefresh? refreshLocal,
   }) async {
@@ -436,7 +492,9 @@ class SyncEngine {
         await refreshLocal?.call(SyncLocalRefreshMode.normal);
         final dirty = [
           for (final record in await store.dirtyRecords())
-            if (!refused.contains(record.id)) record,
+            if (!refused.contains(record.id) &&
+                !awaitingSpace.contains(record.id))
+              record,
         ];
         remainingIds ??= [for (final record in dirty) record.id];
         final byId = {for (final record in dirty) record.id: record};
@@ -495,6 +553,18 @@ class SyncEngine {
             // that winner; assigning its seq to our payload would mislabel it.
             rejected++;
           }
+        }
+        // Not stored, and nothing newer is on the server to pull: the record
+        // stays dirty, exactly as this device wrote it. The quota is the only
+        // per-record refusal; a reason newer than this build is still a
+        // record the server does not hold, so it waits the same way.
+        for (final refusal in resp.refused) {
+          if (!sentById.containsKey(refusal.id)) {
+            throw StateError(
+              'Sync server refused unsent record ${refusal.id}',
+            );
+          }
+          awaitingSpace.add(refusal.id);
         }
       });
       remainingIds!.removeWhere(sentById.containsKey);

@@ -326,6 +326,29 @@ metadata. A write that would exceed either ceiling changes nothing. An account
 already beyond a newly lowered ceiling may replace or delete data only when the
 over-limit dimension does not grow, allowing it to shrink back under the cap.
 
+A push that would exceed a ceiling is refused whole with `413
+account_quota_exceeded` unless the request opts in to per-record refusals with
+`"refusalScope": "record"` beside `protocolVersion` and `records`. An opted-in
+push that fits is stored whole, exactly as before. One that does not is applied
+entry by entry in the same transaction: entries in list order, then the entries
+refused on that first pass once more, so a deletion anywhere in the push makes
+room for a new id. An entry is refused when it would grow a dimension past its
+ceiling, which means a new id or a revived tombstone for the record count and
+a larger replacement for the bytes. Edits that do not grow a full dimension,
+and every deletion, are stored. The response is still `200` with the usual
+`results` and `latestSeq`, plus `refused`, a list of
+`{"id": "...", "reason": "account_quota_exceeded"}` with one entry per record
+not stored. A refused record has no `results` entry and takes no sequence
+number, and the server holds no newer copy of it to pull: the client still
+owes it. `refused` is sent only when it is non-empty, and `accepted: false` in
+`results` keeps its one meaning, a write that lost last-write-wins. A server
+that predates the field ignores it and refuses the whole push, and a request
+without it gets that answer from every server, so old clients and old servers
+behave exactly as they did. Current clients always opt in; they mark what was
+stored as synced, keep refused records queued without retrying them within
+the same sync, and report "N records wait for space on the sync server"
+until a later sync finds room.
+
 SQLite uses `BEGIN IMMEDIATE` for writes and a read transaction for snapshots.
 Transaction lock contention returns `503 storage_busy` without committing the
 batch; retry later. There is no synchronous wait or non-atomic fallback.
