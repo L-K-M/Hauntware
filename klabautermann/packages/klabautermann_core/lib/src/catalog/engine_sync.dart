@@ -350,8 +350,7 @@ final class EngineSync {
     final prefs = _klabautermannRecords.prefs();
     return {
       for (final server in synced)
-        if (!server.excludeFromSync)
-          if (prefs[server.id] case final serverPrefs?) server.id: serverPrefs,
+        if (!server.excludeFromSync) server.id: ?prefs[server.id],
     };
   }
 

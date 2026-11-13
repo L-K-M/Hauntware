@@ -187,7 +187,7 @@ Map<String, Object?> encodeSyncedRule(SyncedRule rule) => {
   _typeKey: KlabautermannRecordType.rule.name,
   _versionKey: _payloadVersion,
   _idKey: KlabautermannRecordType.rule.idOf(rule.id),
-  if (rule.target case final target?) 'target': target,
+  'target': ?rule.target,
 };
 
 /// Reads a `rule` payload strictly ([ThresholdRule.fromJson]); the rule's
@@ -308,8 +308,7 @@ final class KlabautermannRecordStore {
       if (parseKlabautermannId(key) case (type: 'pref', key: final serverId))
         if (value.readable case final payload?
             when payload[_removedKey] != true)
-          if (_tryDecode(() => decodeServerPrefs(payload)) case final p?)
-            serverId: p,
+          serverId: ?_tryDecode(() => decodeServerPrefs(payload)),
   };
 
   /// Every live `rule` record's rule, by rule id, read as [prefs] reads
@@ -319,7 +318,7 @@ final class KlabautermannRecordStore {
       if (parseKlabautermannId(key)?.type == 'rule')
         if (value.readable case final payload?
             when payload[_removedKey] != true)
-          if (_tryDecode(() => decodeSyncedRule(payload)) case final r?) r,
+          ?_tryDecode(() => decodeSyncedRule(payload)),
   ];
 
   /// Materializes [payload] for [recordId] under [tuple]. A payload of
@@ -373,7 +372,7 @@ final class KlabautermannRecordStore {
           _updatedAtKey: _entries[id]!.tuple.updatedAt,
           _deviceIdKey: _entries[id]!.tuple.deviceId,
           _payloadKey: _entries[id]!.payload,
-          if (_entries[id]!.applied case final applied?) _appliedKey: applied,
+          _appliedKey: ?_entries[id]!.applied,
         },
     },
   });

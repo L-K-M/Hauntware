@@ -288,7 +288,7 @@ class SqliteStorage implements Storage {
       final rows = _db.select(
         '$selection ${rowId == null ? '' : 'AND rowid > ? '} '
         'ORDER BY rowid LIMIT 1',
-        [if (rowId != null) rowId],
+        [?rowId],
       );
       return rows.isEmpty ? null : rows.single;
     }
@@ -1084,7 +1084,7 @@ class SqliteStorage implements Storage {
     final cursor = statement.selectCursor([
       username,
       kLegacyRecordEnvelopeVersion,
-      if (afterId != null) afterId,
+      ?afterId,
     ]);
     final records = <EncryptedRecord>[];
     var recordBytes = 0;
@@ -1364,7 +1364,7 @@ class SqliteStorage implements Storage {
                 'ORDER BY seq ASC'
           : 'SELECT * FROM records WHERE username = ? AND seq > ? '
                 'AND seq <= ? ORDER BY seq ASC',
-      [username, since, if (through != null) through],
+      [username, since, ?through],
     );
     return rows.map(_rowToRecord).toList();
   }
@@ -1632,7 +1632,7 @@ class SqliteStorage implements Storage {
       'SELECT app_id, item_id, received, blob FROM inbox_items '
       'WHERE username = ? AND received > ? ORDER BY received ASC'
       '${limit == null ? '' : ' LIMIT ?'}',
-      [username, since, if (limit != null) limit],
+      [username, since, ?limit],
     );
     return [
       for (final r in rows)

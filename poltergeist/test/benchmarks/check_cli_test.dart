@@ -3595,7 +3595,7 @@ Map<String, Object?> _rowJson({
   'repetition': repetition,
   'status': status,
   if (status == 'ok') ...{'value': value, 'unit': unit},
-  if (error != null) 'error': error,
+  'error': ?error,
   // Rows default to their scenario's tier-A fixture config (null for
   // tier B) so plain fixtures stay self-consistent with the catalog
   // helper's default per-scenario calibration.

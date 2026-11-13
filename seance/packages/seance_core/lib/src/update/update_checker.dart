@@ -156,8 +156,8 @@ class UpdateChecker {
   static Map<String, ReleaseAsset> _assets(Object? json) {
     if (json is! List) return const {};
     return Map.unmodifiable({
-      for (final entry in json)
-        if (ReleaseAsset.tryParse(entry) case final asset?) asset.name: asset,
+      for (final asset in json.map(ReleaseAsset.tryParse).nonNulls)
+        asset.name: asset,
     });
   }
 }

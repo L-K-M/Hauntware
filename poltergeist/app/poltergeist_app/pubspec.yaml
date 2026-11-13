@@ -33,7 +33,7 @@ dependencies:
   # The OS-keystore plugin behind ghost_keystore's MasterKeyManager, pinned
   # here so the plugin's native code and default options stay what this
   # app shipped with.
-  flutter_secure_storage: 10.3.1
+  flutter_secure_storage: 10.3.4
   intl: 0.20.3
   macos_window_utils: 1.9.1
   # The running build's version for the D19 update check (07 §3.10) —
@@ -42,7 +42,7 @@ dependencies:
   path: 1.9.1
   path_provider: 2.1.6
   # Applies owner-only mode bits to path-bearing local audit files.
-  posix: 6.5.2
+  posix: 6.5.4
   # Share the editor and document layer directly; no host-owned fork.
   planchette_editor:
     path: ../../../planchette/packages/planchette_editor
@@ -84,7 +84,7 @@ dependencies:
   # Hands URLs to the OS: the Help menu's releases and issues pages, the
   # update check's release page (on Android the user can instead download
   # and install the release APK, 00 D23) and Séance links.
-  url_launcher: 6.3.2
+  url_launcher: 6.3.3
   uuid: 4.6.0
   window_manager: 0.5.2
   pdfrx: 2.6.1

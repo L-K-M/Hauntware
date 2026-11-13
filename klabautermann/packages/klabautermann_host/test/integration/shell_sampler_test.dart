@@ -38,8 +38,7 @@ String? _shellPath(String name) {
 }
 
 final _shells = <String, String>{
-  for (final name in ['dash', 'bash'])
-    if (_shellPath(name) case final p?) name: p,
+  for (final name in ['dash', 'bash']) name: ?_shellPath(name),
 };
 
 /// One assembled run: the READY version, the replies by request
