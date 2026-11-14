@@ -138,9 +138,9 @@ class EditorController extends ChangeNotifier {
   /// forms. A fold that changes the *document's* length cannot be applied,
   /// because matches are located in the folded text and their offsets would
   /// stop addressing the original; the search then compares exactly and says
-  /// so through [caseFoldingLimited]. Expanding `ß` to `ss` — what Unicode
-  /// *full* case folding does — needs a folded-offset map, not a different
-  /// fold, so do not promise it here.
+  /// so through [caseFoldingLimited]. The search itself expands the common
+  /// Latin full folds (`ß` to `ss`, `ﬁ` to `fi`) with a folded-offset map
+  /// before this fold runs, so a host fold need not and cannot add them.
   final CaseFolder _fold;
 
   static String _defaultCaseFolder(String value) => value.toLowerCase();

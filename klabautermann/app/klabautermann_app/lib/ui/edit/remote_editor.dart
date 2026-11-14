@@ -21,7 +21,7 @@ import 'package:planchette_editor/planchette_editor.dart'
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show OperationsScope;
-import '../actions/action_preview.dart' show startAction;
+import '../actions/action_preview.dart' show planRefusedText, startAction;
 import '../admin_mode_chip.dart' show TurnOnAdminModeButton;
 import '../docker/containers_panel.dart' show DockerNotice;
 import '../editor_strings.dart' show KlabautermannEditorStrings;
@@ -355,7 +355,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
     });
   }
 
-  void _refused(ActionRefusalReason reason) {
+  void _refused(ActionRefusalReason reason, String? detail) {
     if (!mounted) return;
     if (reason == ActionRefusalReason.targetChanged) {
       unawaited(_conflict());
@@ -364,7 +364,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
     final overlay = Overlay.of(context, rootOverlay: true);
     showTopToast(
       overlay,
-      message: AppLocalizations.of(context).actionRefused(reason.name),
+      message: planRefusedText(AppLocalizations.of(context), reason, detail),
     );
   }
 

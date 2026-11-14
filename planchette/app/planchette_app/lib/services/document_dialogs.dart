@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path/path.dart' as paths;
 
+import '../l10n/app_localizations.dart';
 import 'android_documents.dart';
 import 'document_windows.dart';
 import 'document_workspace.dart';
@@ -19,6 +20,15 @@ final class AppDocumentDialogs implements DocumentDialogs {
   /// several asks the runner for a dialog owned by its own view instead.
   final WindowPickers? pickers;
 
+  /// The window's strings. A native picker can be asked for before the
+  /// navigator has a context; its button then reads in English, the
+  /// catalog's template locale.
+  AppLocalizations get _l10n {
+    final context = navigatorKey.currentContext;
+    if (context == null) return lookupAppLocalizations(const Locale('en'));
+    return AppLocalizations.of(context);
+  }
+
   // file_selector shows each platform's own dialog. On Linux that is GTK's
   // chooser, which goes through the desktop portal only where GTK would, so
   // Open and Save As work on desktops that run no portal service.
@@ -30,14 +40,14 @@ final class AppDocumentDialogs implements DocumentDialogs {
     if (window != null && window.available) {
       return window.pickOpenFiles();
     }
-    final files = await openFiles(confirmButtonText: 'Open');
+    final files = await openFiles(confirmButtonText: _l10n.actionOpen);
     return [for (final file in files) file.path];
   }
 
   Future<String?> pickDirectory() {
     final window = pickers;
     if (window != null && window.available) return window.pickDirectory();
-    return getDirectoryPath(confirmButtonText: 'Open Folder');
+    return getDirectoryPath(confirmButtonText: _l10n.pickerOpenFolder);
   }
 
   /// Key picking shares the window-owned dialog and bounded UTF-8 reader.
@@ -45,7 +55,7 @@ final class AppDocumentDialogs implements DocumentDialogs {
     final selected = await pickOpenFiles();
     if (selected.isEmpty) return null;
     if (selected.length != 1) {
-      throw const FormatException('Choose one private-key file.');
+      throw FormatException(_l10n.pickerOneKeyFile);
     }
     return (await LocalDocumentStore().load(selected.single)).text;
   }
@@ -70,7 +80,7 @@ final class AppDocumentDialogs implements DocumentDialogs {
       initialDirectory: paths.isAbsolute(suggestedName)
           ? paths.dirname(suggestedName)
           : null,
-      confirmButtonText: 'Save',
+      confirmButtonText: _l10n.actionSave,
     );
     return location?.path;
   }
@@ -82,18 +92,18 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Replace “${paths.basename(path)}”?'),
-            content: const Text(
-              'The existing file will be replaced with this document.',
+            title: Text(
+              AppLocalizations.of(context).replaceTitle(paths.basename(path)),
             ),
+            content: Text(AppLocalizations.of(context).replaceBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(context).actionCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Replace'),
+                child: Text(AppLocalizations.of(context).replaceAction),
               ),
             ],
           ),
@@ -108,13 +118,12 @@ final class AppDocumentDialogs implements DocumentDialogs {
     assert(names.length > 1, 'the bulk close question covers several files');
     final context = navigatorKey.currentContext;
     if (context == null) return BulkCloseChoice.cancel;
+    final l10n = AppLocalizations.of(context);
     final choice = await showGhostCloseDialog(
       context,
-      title: 'Save changes to ${names.length} documents?',
-      body:
-          '${_listed(names)}\n\n'
-          'Your changes will be lost if you close without saving them.',
-      saveLabel: 'Save All',
+      title: l10n.bulkCloseTitle(names.length),
+      body: l10n.bulkCloseBody(_listed(names, l10n)),
+      saveLabel: l10n.bulkCloseSaveAll,
     );
     return switch (choice) {
       GhostCloseChoice.save => BulkCloseChoice.saveAll,
@@ -128,11 +137,11 @@ final class AppDocumentDialogs implements DocumentDialogs {
   Future<CloseChoice> chooseClose(String name) async {
     final context = navigatorKey.currentContext;
     if (context == null) return CloseChoice.cancel;
+    final l10n = AppLocalizations.of(context);
     final choice = await showGhostCloseDialog(
       context,
-      title: 'Save changes to “$name”?',
-      body:
-          'Your changes will be lost if you close this document without saving.',
+      title: l10n.closeTitle(name),
+      body: l10n.closeBody,
     );
     return switch (choice) {
       GhostCloseChoice.save => CloseChoice.save,
@@ -149,25 +158,22 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return await showDialog<ReadOnlyChoice>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('“$name” is read-only'),
-            content: const Text(
-              'Saving replaces the file anyway and keeps it read-only. You '
-              'can save your changes as a new file instead.',
-            ),
+            title: Text(AppLocalizations.of(context).readOnlyTitle(name)),
+            content: Text(AppLocalizations.of(context).readOnlyBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, ReadOnlyChoice.cancel),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(context).actionCancel),
               ),
               TextButton(
                 onPressed: () =>
                     Navigator.pop(context, ReadOnlyChoice.saveAnyway),
-                child: const Text('Save Anyway'),
+                child: Text(AppLocalizations.of(context).readOnlySaveAnyway),
               ),
               FilledButton(
                 autofocus: true,
                 onPressed: () => Navigator.pop(context, ReadOnlyChoice.saveAs),
-                child: const Text('Save As…'),
+                child: Text(AppLocalizations.of(context).actionSaveAs),
               ),
             ],
           ),
@@ -182,17 +188,17 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Revert “$name” to its saved version?'),
-            content: const Text('Your unsaved changes will be lost.'),
+            title: Text(AppLocalizations.of(context).revertTitle(name)),
+            content: Text(AppLocalizations.of(context).revertBody),
             actions: [
               TextButton(
                 autofocus: true,
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(context).actionCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Revert'),
+                child: Text(AppLocalizations.of(context).revertAction),
               ),
             ],
           ),
@@ -207,21 +213,17 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Delete the recovery copy “$name”?'),
-            content: const Text(
-              'It holds the earlier contents of a document Planchette could '
-              'not save. If you keep it, it opens again the next time you '
-              'start Planchette.',
-            ),
+            title: Text(AppLocalizations.of(context).recoveryDeleteTitle(name)),
+            content: Text(AppLocalizations.of(context).recoveryDeleteBody),
             actions: [
               TextButton(
                 autofocus: true,
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Keep'),
+                child: Text(AppLocalizations.of(context).actionKeep),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
+                child: Text(AppLocalizations.of(context).actionDelete),
               ),
             ],
           ),
@@ -236,21 +238,19 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Save “$name” somewhere else?'),
+            title: Text(AppLocalizations.of(context).saveElsewhereTitle(name)),
             content: Text(
-              'The folder $folder does not let Planchette create the '
-              'temporary file a safe save needs, so the file cannot be saved '
-              'there. You can save a copy in another folder instead.',
+              AppLocalizations.of(context).saveElsewhereBody(folder),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(context).actionCancel),
               ),
               FilledButton(
                 autofocus: true,
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Save As…'),
+                child: Text(AppLocalizations.of(context).actionSaveAs),
               ),
             ],
           ),
@@ -268,28 +268,27 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return await showDialog<SaveSiblingChoice>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Files left by an interrupted save of “$name”'),
+            title: Text(AppLocalizations.of(context).siblingsTitle(name)),
             content: Text(
-              'An earlier save of this document stopped before it finished '
-              'and left ${siblings.length == 1 ? 'this file' : 'these files'} '
-              'beside it. Each holds a version of its text: the one before '
-              'that save or the one it was writing. Open them to compare, or '
-              'delete them if you do not need them.\n\n${_listed(siblings)}',
+              AppLocalizations.of(context).siblingsBody(
+                siblings.length,
+                _listed(siblings, AppLocalizations.of(context)),
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () =>
                     Navigator.pop(context, SaveSiblingChoice.delete),
-                child: const Text('Delete'),
+                child: Text(AppLocalizations.of(context).actionDelete),
               ),
               TextButton(
                 autofocus: true,
                 onPressed: () => Navigator.pop(context, SaveSiblingChoice.keep),
-                child: const Text('Keep'),
+                child: Text(AppLocalizations.of(context).actionKeep),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, SaveSiblingChoice.open),
-                child: const Text('Open'),
+                child: Text(AppLocalizations.of(context).actionOpen),
               ),
             ],
           ),
@@ -299,9 +298,8 @@ final class AppDocumentDialogs implements DocumentDialogs {
 }
 
 /// A short list of file names for a prompt: a long selection still fits.
-String _listed(List<String> names) {
+String _listed(List<String> names, AppLocalizations l10n) {
   const shown = 8;
   if (names.length <= shown) return names.join('\n');
-  return '${names.take(shown).join('\n')}\n'
-      'and ${names.length - shown} more';
+  return l10n.listedMore(names.take(shown).join('\n'), names.length - shown);
 }

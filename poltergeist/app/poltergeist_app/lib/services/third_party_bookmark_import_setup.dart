@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
@@ -238,24 +237,35 @@ void _runThirdPartyBookmarkImportPreview(
 Future<List<ThirdPartyBookmarkImportFile>?> pickThirdPartyBookmarkFiles(
   ThirdPartyBookmarkFormat format,
 ) async {
-  final result = await FilePicker.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: switch (format) {
-      ThirdPartyBookmarkFormat.fileZilla => const ['xml'],
-      ThirdPartyBookmarkFormat.winScp => const ['ini'],
-      ThirdPartyBookmarkFormat.cyberduck => const ['duck'],
-    },
-    allowMultiple: format == ThirdPartyBookmarkFormat.cyberduck,
-    withReadStream: true,
-    lockParentWindow: true,
-  );
-  if (result == null || result.files.isEmpty) return null;
+  final allowedExtensions = switch (format) {
+    ThirdPartyBookmarkFormat.fileZilla => const ['xml'],
+    ThirdPartyBookmarkFormat.winScp => const ['ini'],
+    ThirdPartyBookmarkFormat.cyberduck => const ['duck'],
+  };
+  const windowsOptions = WindowsOptions(lockParentWindow: true);
+  // Cyberduck keeps one bookmark per file, so only it picks several.
+  final List<PlatformFile> picked;
+  if (format == ThirdPartyBookmarkFormat.cyberduck) {
+    picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: allowedExtensions,
+      windowsOptions: windowsOptions,
+    );
+  } else {
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: allowedExtensions,
+      windowsOptions: windowsOptions,
+    );
+    picked = [?file];
+  }
+  if (picked.isEmpty) return null;
 
-  return readThirdPartyBookmarkImportFiles(result.files);
+  return readThirdPartyBookmarkImportFiles(picked);
 }
 
 /// Applies the core bounds before and during streaming so picker buffers cannot
-/// bypass them. Desktop paths cover macOS, where file_picker has no streams.
+/// bypass them. The reported length is only a hint; the stream is bounded.
 Future<List<ThirdPartyBookmarkImportFile>> readThirdPartyBookmarkImportFiles(
   List<PlatformFile> pickedFiles,
 ) async {
@@ -270,14 +280,16 @@ Future<List<ThirdPartyBookmarkImportFile>> readThirdPartyBookmarkImportFiles(
   for (final file in pickedFiles) {
     final sourceName = ThirdPartyBookmarkImportFile.normalizeName(file.name);
 
-    if (file.size > thirdPartyBookmarkImportMaxFileBytes) {
+    // Unknown counts as 0 here; the bounded stream still catches it.
+    final reported = file.lengthSync() ?? 0;
+    if (reported > thirdPartyBookmarkImportMaxFileBytes) {
       throw ThirdPartyBookmarkImportException(
         ThirdPartyBookmarkImportFailure.fileTooLarge,
         sourceName: sourceName,
       );
     }
-    if (file.size > 0 &&
-        totalBytes + file.size > thirdPartyBookmarkImportMaxTotalBytes) {
+    if (reported > 0 &&
+        totalBytes + reported > thirdPartyBookmarkImportMaxTotalBytes) {
       throw const ThirdPartyBookmarkImportException(
         ThirdPartyBookmarkImportFailure.totalSizeExceeded,
       );
@@ -296,7 +308,7 @@ Future<Uint8List> _readPickedBookmarkFile(
   String sourceName,
   int previousBytes,
 ) async {
-  final stream = file.readStream ?? _fallbackPickedFileStream(file, sourceName);
+  final stream = file.readAsByteStream();
   final bytes = BytesBuilder(copy: false);
 
   await for (final chunk in stream) {
@@ -317,17 +329,4 @@ Future<Uint8List> _readPickedBookmarkFile(
   }
 
   return bytes.takeBytes();
-}
-
-Stream<List<int>> _fallbackPickedFileStream(
-  PlatformFile file,
-  String sourceName,
-) {
-  final path = file.path;
-  if (path != null) return File(path).openRead();
-
-  final bytes = file.bytes;
-  if (bytes != null) return Stream.value(bytes);
-
-  throw StateError('the file picker returned no content for $sourceName');
 }

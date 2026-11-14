@@ -807,6 +807,13 @@ requires the file to be unchanged since it was found, and a backup is kept
 while its document is missing. Still open: a missing target (nothing opens, so
 nothing is offered), A2's journal, and the two-process test.
 
+**Status (2026-11-14, branch `planchette/deferred-4`):** the missing-target
+case stays with A2, whose journal is to record interrupted publication; on
+its own it needs a decision on where a vanished document's recovery is offered
+(Open Recent currently drops a missing file). The two-process test was not
+added: the age rule reads only the file's mtime, which the existing fresh-file
+test already sets, so another process adds no new path.
+
 ### B11. Explain or defer quit during saving — S (inherited read)
 `_confirmQuit` returns false while a tab is busy/saving, and the window treats
 false as doing nothing. Reproduce Cmd+Q during a gated save. Queue quit until
@@ -1165,6 +1172,12 @@ once. Not covered: Unicode's other full-fold expansions (Greek iota subscript,
 Armenian ligatures, `ŉ`), which need the Unicode data table and its licence
 text, and regex mode, which still uses `RegExp(caseSensitive: false)`.
 
+**Status (2026-11-14, branch `planchette/deferred-4`):** both leftovers need
+a decision. The other expansions need Unicode's CaseFolding data, which is
+under the Unicode License v3 and would need a license chunk (a licensing
+decision). Full folding in regex mode would need a regex engine of our own,
+since Dart's `RegExp` folds one character to one.
+
 ## 4. Performance
 
 ### P1. O(document) work per keystroke — L (structural)
@@ -1302,6 +1315,13 @@ The entry asks for profile-mode measurements before any structural change,
 and none could be taken in this environment; open PR #744 also reworks the
 editor controller and view this would touch.
 
+**Status (2026-11-14, branch `planchette/deferred-4`):** candidate step 2 is
+done in core: `foldDocumentForSearch` keeps the last folded document for the
+identical string and fold, so typing a query or stepping through matches
+over an unchanged document folds it once. A 4 MiB no-hit search went from
+38 ms to 12 ms (AOT standalone VM, same machine). Steps 1, 3 and 4 still wait
+for the profile-mode measurements above, which cannot be taken here.
+
 ### P2. `IndexedStack` lays out every tab — M (read, Flutter source)
 `RenderIndexedStack` lays out all children and paints one. Resizing the
 window relays out every open document's full text. **Plan:** keep
@@ -1368,6 +1388,16 @@ because nominal digests match.
 (`loadTextDocument`, `LocalDocumentStore.load`) and the write path are being
 rewritten by open PR #743 (encodings), so an offload now would conflict with
 it. Do it after #743 merges, and measure first as above.
+
+**Status (2026-11-14, branch `planchette/deferred-4`):** done in core. From
+256 KiB up, `loadTextDocument` verifies the in-memory digest, decodes, scans
+for NUL, counts and folds line endings in `Isolate.run`, and saves normalize
+and encode there; smaller files stay inline. File I/O, the injected
+`sha256Of` and the guarded order are unchanged, as are the safety tests. The
+three-pass digest question above is untouched. Measured with a 1 ms timer on
+the caller's isolate (AOT standalone VM, 4 MiB CRLF file): the longest stall
+went from 57 to 82 ms to 3 to 6 ms on load and from 37 to 52 ms to 3 to 6 ms
+on save, with total time unchanged. Not measured: a Flutter profile build.
 
 ### P5. Stream Replace All and preflight expansion — M (read)
 `editor_controller.dart:399` allocates an uncapped match list before constructing
@@ -1710,6 +1740,14 @@ exit; put its setting in A1.
 keeps the paths; restoring them as a session, and the dirty-buffer journal,
 remain the design work described above.
 
+**Status (2026-11-14, branch `planchette/deferred-4`):** deferred for product
+decisions: whether quitting with unsaved edits still asks or keeps them
+silently (hot exit), how long journals are kept and whether unsaved text may
+be written to disk at all for files a user opened from a protected location,
+and what Android restores after a process kill. The journal design, the
+interrupted-publication record (B10's missing target) and the
+forced-termination tests follow from those answers.
+
 ### A3. Open Recent and a recent list in the empty state — M
 Keep the last 20 paths in settings. Show them in File › Open Recent (on
 macOS, prefer `NSDocumentController`'s recents) and in the empty state.
@@ -1728,6 +1766,12 @@ is gone is removed and reported; one whose folder is also gone stays, with a
 message to connect the disk or share. Android and server copies are not
 listed. Not done: macOS `NSDocumentController` recents (native, unverified
 here) and the per-type Save As directory.
+
+**Status (2026-11-14, branch `planchette/deferred-4`):** both leftovers
+deferred. The per-type Save As directory needs the precedence decision above
+(the last directory for the type against the current document's). macOS
+`NSDocumentController` recents need native work and a macOS build, which
+cannot be made or verified here.
 
 ### A4. Verify native file-drop intake after #43 — M
 #43 reports a `DragTarget<String>` around the shell, newline-separated path
@@ -1971,6 +2015,12 @@ attribute support, is left behind and the save still succeeds. Verified on
 Linux (ext4); macOS not runtime-verified. Still open: owner/group, other hard
 links, macOS ACLs (not xattrs), Windows streams and DACLs.
 
+**Status (2026-11-14, branch `planchette/deferred-4`):** unchanged. Other hard
+links need a decision first: a guarded save replaces the file, which detaches
+other links, and the alternative is a warning or an in-place write without
+the guard. Owner and group need a per-platform `stat` through FFI, macOS ACLs
+and Windows streams need those platforms; none can be verified here.
+
 ### I4. Directory write permission — S
 A writable file in a read-only directory can't be saved, because the
 temp sibling can't be created. Explain this in the error, and offer
@@ -1996,6 +2046,20 @@ updates never appear on GNOME/Wayland — and the window title is the only
 dirty indicator outside the tab strip. **In review at #63:** `notify::title`
 syncs the header bar; traditional decorations already follow. Manual
 GNOME/Wayland verification still open after merge.
+
+### I7. Localize the standalone app (s07 F7) — L
+The app hard-codes its English strings, while Poltergeist and Klabautermann
+route theirs through ARB. Move them into `lib/l10n/app_en.arb`, extend the
+contract test (`test/localization_contract_test.dart`) as each part moves,
+and feed `EditorStrings` from the catalog as the hosts do.
+
+**Status (2026-11-14, branch `planchette/deferred-4-2`):** phases 1 and 2
+done. The catalog and the contract cover the server dialogs (`lib/ui`), every
+widget (`lib/widgets`), the document dialogs and the settings dialog. Still
+English: the shell's menus and banners (`planchette_app.dart`,
+`document_workspace.dart`), the other services' messages (catalog, settings
+store, Android documents, remote files) and the `EditorStrings` feed, about
+500 literals in all. They are split off so each review stays small.
 
 ## 8. Visual design and theming
 
@@ -2974,6 +3038,10 @@ Deferred from the pass, each with its reason:
 - Export as HTML highlights the whole document on the UI isolate with no cap.
   **Status (2026-11-12, branch `planchette/deferred-3`):** the page is now tokenized and built in `Isolate.run`
   (`highlightedHtmlInBackground`); no frame measurement was taken.
+  **Status (2026-11-14, branch `planchette/deferred-4`):** a Flutter profile
+  build cannot be measured here; it is still open. Pages now have their own
+  32 MiB bound (`htmlExportMaximumBytes`), so the editing limit no longer
+  refuses exports of documents over about 1 MB (s07 F4).
 - #48's display-width status column stays with B8: the editor renders a tab as
   one cell, so a width-aware column would disagree with Go to Line.
 - From the review rounds, each confirmed but not worth another round:

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_app/services/document_store.dart';
+import 'package:planchette_core/planchette_core.dart';
 
 // Save As resolves a chosen symbolic link to the file it names, as opening
 // one does, and refuses a link that names no regular file with the reason.
@@ -72,4 +73,37 @@ void main() {
       );
     });
   }, skip: Platform.isWindows ? 'Creating links needs privileges.' : null);
+
+  test('a write takes a larger bound only when asked', () async {
+    final page = 'p' * (textDocumentMaximumBytes + 1);
+
+    await expectLater(
+      store.write(
+        path: at('page.html'),
+        text: page,
+        source: null,
+        expectedSha256: null,
+      ),
+      throwsA(isA<TextDocumentException>()),
+    );
+    expect(File(at('page.html')).existsSync(), isFalse);
+
+    final created = await store.write(
+      path: at('page.html'),
+      text: page,
+      source: null,
+      expectedSha256: null,
+      maximumBytes: htmlExportMaximumBytes,
+    );
+    final replaced = await store.write(
+      path: at('page.html'),
+      text: '${page}q',
+      source: null,
+      expectedSha256: created.sha256,
+      maximumBytes: htmlExportMaximumBytes,
+    );
+
+    expect(await File(at('page.html')).length(), page.length + 1);
+    expect(replaced.sha256, isNot(created.sha256));
+  });
 }

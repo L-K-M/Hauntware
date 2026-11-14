@@ -663,7 +663,7 @@ void main() {
                         state: state,
                         pending: state.inboxPending.single,
                         onBack: () => Navigator.pop(dialogContext),
-                        runProposal: (_, __) => result.future,
+                        runProposal: (_, _) => result.future,
                       ),
                     ),
                   ),

@@ -739,7 +739,6 @@ void main() {
           'Appearance',
           'Sync',
           'Servers',
-          'Docker',
           'Safety',
           'Alerts',
         ],

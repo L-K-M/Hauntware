@@ -10,6 +10,7 @@
 library;
 
 export 'src/adapters.dart';
+export 'src/file_reveal.dart';
 export 'src/geometry.dart';
 export 'src/lifecycle.dart';
 export 'src/macos_toolbar_band.dart';

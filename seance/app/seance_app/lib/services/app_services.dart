@@ -836,7 +836,7 @@ class AppServices {
     final result = _syncOperationTail.then((_) => operation());
     _syncOperationTail = result.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return result;
   }

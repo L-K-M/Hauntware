@@ -188,6 +188,55 @@ void main() {
     expect(find.textContaining('counting failed'), findsOneWidget);
   });
 
+  testWidgets('Retry after a preparation error counts again', (
+    tester,
+  ) async {
+    final attempts = <Completer<DeleteConfirmation?>>[];
+    DeleteDecision? decision;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              decision = await showDeleteConfirmDialog(
+                context,
+                locationLabel: 'prod-web',
+                prepare: (_) {
+                  final attempt = Completer<DeleteConfirmation?>();
+                  attempts.add(attempt);
+                  return attempt.future;
+                },
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('delete.retry')), findsNothing);
+
+    attempts.single.completeError(StateError('counting failed'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('delete.retry')));
+    await tester.pump();
+    // The second count runs with the progress mark back and no stale error.
+    expect(attempts, hasLength(2));
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.textContaining('counting failed'), findsNothing);
+    expect(find.byKey(const ValueKey('delete.retry')), findsNothing);
+
+    attempts.last.complete(_confirmation());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('delete.headline')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('delete.confirm')));
+    await tester.pumpAndSettle();
+    expect(decision, isA<DeleteConfirmed>());
+  });
+
   testWidgets('disposing the navigator cancels pending preparation', (
     tester,
   ) async {

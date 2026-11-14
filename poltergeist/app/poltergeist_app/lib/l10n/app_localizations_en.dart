@@ -85,6 +85,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hostKeyPreviousLabel => 'Previously trusted';
 
   @override
+  String hostKeyTypeChanged(String previousType, String presentedType) {
+    return 'Key algorithm changed from $previousType to $presentedType.';
+  }
+
+  @override
   String get hostKeyCancel => 'Cancel';
 
   @override
@@ -951,6 +956,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editSelectAllLabel => 'Select All';
+
+  @override
+  String get editDeselectAllLabel => 'Deselect All';
 
   @override
   String get editInvertSelectionLabel => 'Invert Selection';
@@ -6611,7 +6619,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverEditorStartDirectoryInvalid =>
-      'Use an absolute path such as /var/www, or one in your own home such as ~/sites.';
+      'Remove control characters, and write ~/ for your own home rather than ~name.';
 
   @override
   String get serverEditorLoginScript => 'Login script (optional)';
@@ -7515,6 +7523,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String deleteDialogPrepareFailed(String error) {
     return 'Couldn\'t prepare the delete: $error';
   }
+
+  @override
+  String get deleteDialogRetry => 'Retry';
 
   @override
   String deleteDialogDeleteCount(int count, String size, String location) {

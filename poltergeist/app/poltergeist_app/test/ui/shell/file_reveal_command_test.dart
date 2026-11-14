@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show GhostFileRevealer;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
-import 'package:poltergeist_app/services/file_manager_reveal.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
@@ -64,7 +64,7 @@ void main() {
     return context;
   }
 
-  RegisteredCommand reveal(FileManagerRevealer revealer) => buildShellCommands(
+  RegisteredCommand reveal(GhostFileRevealer revealer) => buildShellCommands(
     workspace: workspace,
     dropDelegate: () => null,
     openConnect: () async {},
@@ -79,9 +79,9 @@ void main() {
   testWidgets('a reveal nothing could start says so', (tester) async {
     final context = await pumpHost(tester);
     final command = reveal(
-      FileManagerRevealer(
+      GhostFileRevealer(
         operatingSystem: 'linux',
-        run: (executable, arguments) async =>
+        run: (executable, arguments, {timeout}) async =>
             throw ProcessException(executable, arguments, 'not found', 2),
       ),
     );
@@ -100,11 +100,11 @@ void main() {
     final context = await pumpHost(tester);
     final launched = <String>[];
     final command = reveal(
-      FileManagerRevealer(
+      GhostFileRevealer(
         operatingSystem: 'linux',
-        run: (executable, arguments) async {
+        run: (executable, arguments, {timeout}) async {
           launched.add(executable);
-          return 0;
+          return (exitCode: 0, stderr: '');
         },
       ),
     );

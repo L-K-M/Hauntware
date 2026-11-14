@@ -53,7 +53,7 @@ void main() {
     return harness;
   }
 
-  testWidgets('shows the seven planned tabs', (tester) async {
+  testWidgets('shows the six tabs', (tester) async {
     await openSettings(tester);
 
     expect(find.byType(SettingsPage), findsOneWidget);
@@ -63,12 +63,13 @@ void main() {
       'Appearance',
       'Sync',
       'Servers',
-      'Docker',
       'Safety',
       'Alerts',
     ]) {
       expect(find.text(tab), findsOneWidget);
     }
+    // Docker's settings live in each server's Docker tab.
+    expect(find.text('Docker'), findsNothing);
   });
 
   testWidgets('the Appearance tab switches the theme mode', (tester) async {

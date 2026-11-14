@@ -115,4 +115,28 @@ void main() {
       );
     });
   });
+
+  group('the folded document is reused (P1)', () {
+    test('for the identical text and fold, and refolded otherwise', () {
+      final folded = <String>[];
+      String counting(String value) {
+        folded.add(value);
+        return value.toLowerCase();
+      }
+
+      final text = 'Alpha Beta ${'x' * 8}';
+      searchText(text, 'alpha', fold: counting);
+      searchText(text, 'beta', fold: counting);
+      expect(folded, [text, 'alpha', 'beta']);
+
+      final edited = '$text!';
+      expect(searchText(edited, 'BETA', fold: counting).matches, [
+        const TextMatch(start: 6, end: 10),
+      ]);
+      expect(folded.where((value) => value == edited), hasLength(1));
+
+      // Another fold never sees the first fold's result.
+      expect(searchText(edited, 'beta', fold: (value) => value).matches, []);
+    });
+  });
 }

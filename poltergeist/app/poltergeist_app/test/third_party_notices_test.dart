@@ -47,43 +47,22 @@ void main() {
     expect(Uri.decodeComponent(release!), config['release']);
   });
 
-  // file_picker's iOS build resolves Swift packages that no pub package
-  // carries the licenses of, so they are chunks of this app's LICENSE.
-  test("LICENSE carries the Swift packages file_picker's iOS build uses", () {
-    final chunks = File('LICENSE').readAsStringSync().split('\n${'-' * 80}\n');
-    final byName = {
-      for (final chunk in chunks)
-        chunk.substring(0, chunk.indexOf('\n\n')): chunk,
-    };
+  // file_picker 12 dropped DKImagePickerController and the packages it
+  // resolved, whose texts were chunks of this app's LICENSE; a package its
+  // Darwin manifest names again needs its license text there.
+  test("file_picker's iOS build resolves no Swift packages", () {
     final manifest = _packageFile(
-      'file_picker',
-      'ios/file_picker/Package.swift',
+      'file_picker_darwin',
+      'darwin/file_picker_darwin/Package.swift',
     );
 
-    expect(byName['poltergeist_app'], contains('unlicense.org'));
-    // The chunks record this dependency and what it resolves; a change
-    // here needs the new packages' texts.
+    expect(manifest, isNot(contains('.package(url:')));
     expect(
-      RegExp(
-        r'\.package\(url: "([^"]+)"',
-      ).allMatches(manifest).map((match) => match[1]),
-      ['https://github.com/zhangao0086/DKImagePickerController'],
+      File('LICENSE').readAsStringSync(),
+      allOf(contains('unlicense.org'), isNot(contains('DKImagePicker'))),
     );
-    expect(manifest, contains('branch: "4.3.9"'));
-    for (final name in _swiftPackageChunks) {
-      expect(byName[name], contains('Permission is hereby granted'));
-    }
   });
 }
-
-/// The LICENSE chunks for DKImagePickerController and the packages it
-/// resolves, by the names each opens with.
-const _swiftPackageChunks = [
-  'DKImagePickerController\nDKCamera\nDKPhotoGallery',
-  'TOCropViewController',
-  'SwiftyGif',
-  'SDWebImage',
-];
 
 /// [path] inside the resolved [package], found through the package config.
 String _packageFile(String package, String path) {

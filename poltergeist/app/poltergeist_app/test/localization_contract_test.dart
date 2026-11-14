@@ -597,7 +597,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${parts[1]}'",
     "'third-party-bookmark-import'",
     r"'$stackTrace'",
-    r"'the file picker returned no content for $sourceName'",
   },
   'lib/ui/adaptive_shell.dart': {
     "'primary-pane'",
@@ -1127,6 +1126,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'edit.undoSelection'",
     "'edit.redoSelection'",
     "'edit.selectAll'",
+    "'edit.deselectAll'",
     "'edit.invertSelection'",
     "'selection.quickSelect'",
     "'view.filter'",
@@ -1726,6 +1726,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'delete.dialog'",
     "'delete.cancel'",
     "'delete.confirm'",
+    "'delete.retry'",
     "'delete.headline'",
     "'delete.serverTrash'",
     "'delete.trashUnavailable'",
@@ -2421,32 +2422,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'serverEditor.transferLimit'",
     r"'$files'",
   },
-  // D32 §11's platform integration: Dock progress diagnostics and the
-  // file-manager reveal's process arguments (never user-facing copy).
+  // D32 §11's platform integration: Dock progress diagnostics (never
+  // user-facing copy).
   'lib/services/dock_progress.dart': {
     r"'Dock progress disabled: $error\n$stack'",
     r"'Dock progress unavailable: $error\n$stack'",
-  },
-  'lib/services/file_manager_reveal.dart': {
-    "'macos'",
-    "'windows'",
-    "'linux'",
-    "'open'",
-    "'-R'",
-    r"""'explorer.exe /select,"$path"'""",
-    "'dbus-send'",
-    "'--session'",
-    "'--print-reply'",
-    "'--dest=org.freedesktop.FileManager1'",
-    "'--type=method_call'",
-    "'/org/freedesktop/FileManager1'",
-    "'org.freedesktop.FileManager1.ShowItems'",
-    r"'array:string:$uri'",
-    "'string:'",
-    "','",
-    "'%2C'",
-    "'xdg-open'",
-    "'gio'",
   },
   // OS drag-out's channel protocol (00 D14's amendment): method names,
   // argument keys, item kinds, the channel name, and the English
@@ -2541,6 +2521,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'.json'",
     "'application/json'",
     "'secrets-export-'",
+    // The URI scheme of an iOS save location, never rendered.
+    "'file'",
     r"'${directory.path}/$fileName'",
     "'That file could not be read.'",
     // A fixed protocol diagnostic; the settings UI renders ARB copy.

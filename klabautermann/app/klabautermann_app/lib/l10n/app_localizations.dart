@@ -1054,12 +1054,6 @@ abstract class AppLocalizations {
   /// **'Servers'**
   String get settingsTabServers;
 
-  /// No description provided for @settingsTabDocker.
-  ///
-  /// In en, this message translates to:
-  /// **'Docker'**
-  String get settingsTabDocker;
-
   /// No description provided for @settingsTabSafety.
   ///
   /// In en, this message translates to:
@@ -1803,6 +1797,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Command line unavailable'**
   String get processesCommandUnavailable;
+
+  /// Under a process's command line that the server's read cut at its per-file byte cap (D48).
+  ///
+  /// In en, this message translates to:
+  /// **'The server cut this command line at its read limit, so its end is missing.'**
+  String get processesCommandTruncated;
 
   /// A process's kernel name in place of a command line the server did not give.
   ///
@@ -7497,6 +7497,12 @@ abstract class AppLocalizations {
   /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} userWritableDirectory{Another account can change this folder, so Klabautermann does not write there as root.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
+  /// Toast for a refused plan whose engine named the failed step; message is the actionRefused text, detail the step, exit code and error output in the server's own words, not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'{message} Details: {detail}'**
+  String actionRefusedDetail(String message, String detail);
+
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
   ///
   /// In en, this message translates to:
@@ -7899,10 +7905,10 @@ abstract class AppLocalizations {
   /// **'Result'**
   String get activityColumnResult;
 
-  /// An activity log row's action; action is the engine's intent type name.
+  /// An activity log row's action; action is the engine's action key (actionKeyOf), its intent type's name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} RunCronJob{Run cron job now} RunSnippet{Run snippet} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} StackComposeAction{Stack compose action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -12300,7 +12306,7 @@ abstract class AppLocalizations {
   /// Validation error when the start folder contains control characters or names another user's home (~name). The field is hidden in Klabautermann.
   ///
   /// In en, this message translates to:
-  /// **'Use an absolute path such as /var/www, or one in your own home such as ~/sites.'**
+  /// **'Remove control characters, and write ~/ for your own home rather than ~name.'**
   String get serverEditorStartDirectoryInvalid;
 
   /// Label of the login-script field: a command Séance types into the server's shell after connecting. Klabautermann stores and syncs it but never runs it.

@@ -140,9 +140,13 @@ final class _Columns {
   double get sideWidth => sizeWidth + (dates ? dateWidth + 8 : 0);
 }
 
-/// The item table. Stateless: the view passes the filtered rows and its
-/// selection/focus/collapse state and receives every gesture back.
-final class SyncPlanTable extends StatelessWidget {
+/// A section header's fixed height; rows use the chrome's row extent.
+const double _sectionHeaderExtent = 28;
+
+/// The item table. The view passes the filtered rows and its
+/// selection/focus/collapse state and receives every gesture back; the
+/// table owns only its scroll position, which follows the focused row.
+final class SyncPlanTable extends StatefulWidget {
   const SyncPlanTable({
     super.key,
     required this.controller,
@@ -179,9 +183,89 @@ final class SyncPlanTable extends StatelessWidget {
   final DateTime? now;
 
   @override
+  State<SyncPlanTable> createState() => _SyncPlanTableState();
+}
+
+class _SyncPlanTableState extends State<SyncPlanTable> {
+  final _scroll = ScrollController();
+
+  @override
+  void didUpdateWidget(SyncPlanTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focused != null &&
+        !identical(widget.focused, oldWidget.focused)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _revealFocused());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Scrolls the least distance that shows the focused row whole, so
+  /// keyboard focus never leaves the viewport (P4-12). Every entry has a
+  /// fixed extent, which gives the row's offset without layout.
+  void _revealFocused({int attempt = 0}) {
+    final focused = widget.focused;
+    if (!mounted || focused == null || !_scroll.hasClients) return;
+    final rowExtent = PoltergeistChrome.of(
+      context,
+      poltergeistThemeStyle,
+    ).rowExtent;
+    var top = 0.0;
+    for (final group in syncSections(widget.items)) {
+      top += _sectionHeaderExtent;
+      if (widget.collapsed.contains(group.section)) continue;
+      final index = group.items.indexWhere(
+        (item) => identical(item, focused),
+      );
+      if (index >= 0) {
+        top += index * rowExtent;
+        _scrollToShow(top, top + rowExtent, attempt: attempt);
+        return;
+      }
+      top += group.items.length * rowExtent;
+    }
+  }
+
+  /// The list's end is an estimate until its last rows have been laid
+  /// out, so a target past it jumps to the estimate and tries again
+  /// after that layout, a bounded number of times.
+  static const _maxRevealAttempts = 4;
+
+  void _scrollToShow(double top, double bottom, {required int attempt}) {
+    final position = _scroll.position;
+    final offset = position.pixels;
+    final viewport = position.viewportDimension;
+    final double target;
+    if (top < offset) {
+      target = top;
+    } else if (bottom > offset + viewport) {
+      target = bottom - viewport;
+    } else {
+      return;
+    }
+    final end = position.maxScrollExtent;
+    _scroll.jumpTo(target.clamp(position.minScrollExtent, end));
+    if (target > end && attempt < _maxRevealAttempts) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _revealFocused(attempt: attempt + 1),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final collapsed = widget.collapsed;
     final l10n = AppLocalizations.of(context);
-    final sections = syncSections(items);
+    final rowExtent = PoltergeistChrome.of(
+      context,
+      poltergeistThemeStyle,
+    ).rowExtent;
+    final sections = syncSections(widget.items);
     final entries = <Object>[
       for (final group in sections) ...[
         group,
@@ -198,7 +282,12 @@ final class SyncPlanTable extends StatelessWidget {
             Expanded(
               child: ListView.builder(
                 key: const ValueKey('sync.plan.table'),
+                controller: _scroll,
                 itemCount: entries.length,
+                itemExtentBuilder: (index, _) => index < entries.length &&
+                        entries[index] is SyncItem
+                    ? rowExtent
+                    : _sectionHeaderExtent,
                 itemBuilder: (context, index) => switch (entries[index]) {
                   final ({SyncSection section, List<SyncItem> items}) group =>
                     _SectionHeader(
@@ -210,26 +299,29 @@ final class SyncPlanTable extends StatelessWidget {
                       items: group.items,
                       collapsed: collapsed.contains(group.section),
                       mutationsBlocked: controller.planMutationsBlocked,
-                      onToggleCollapsed: () => onToggleCollapsed(group.section),
-                      onSetIncluded: onSetIncluded,
+                      onToggleCollapsed: () =>
+                          widget.onToggleCollapsed(group.section),
+                      onSetIncluded: widget.onSetIncluded,
                     ),
                   final SyncItem item => _SyncItemRow(
                     key: ValueKey('sync.row.${item.relativePath}'),
                     item: item,
                     pair: controller.pair,
                     columns: columns,
-                    selected: selected.contains(item),
-                    focused: identical(item, focused),
-                    tableFocused: tableFocused,
+                    selected: widget.selected.contains(item),
+                    focused: identical(item, widget.focused),
+                    tableFocused: widget.tableFocused,
                     mutationsBlocked: controller.planMutationsBlocked,
-                    now: now,
-                    onTap: () => onRowTap(item),
+                    now: widget.now,
+                    onTap: () => widget.onRowTap(item),
                     onDoubleTap: syncRowComparable(item)
-                        ? () => onRowDoubleTap(item)
+                        ? () => widget.onRowDoubleTap(item)
                         : null,
-                    onGlyphTap: () => onGlyphTap(item),
-                    onContextMenu: (position) => onContextMenu(position, item),
-                    onSetIncluded: (include) => onSetIncluded([item], include),
+                    onGlyphTap: () => widget.onGlyphTap(item),
+                    onContextMenu: (position) =>
+                        widget.onContextMenu(position, item),
+                    onSetIncluded: (include) =>
+                        widget.onSetIncluded([item], include),
                   ),
                   _ => const SizedBox.shrink(),
                 },
@@ -335,7 +427,7 @@ class _SectionHeader extends StatelessWidget {
       container: true,
       label: l10n.syncSectionSemantics(label, items.length),
       child: Container(
-        height: 28,
+        height: _sectionHeaderExtent,
         color: chrome.headerBackground,
         padding: const EdgeInsets.only(left: 12, right: 12),
         child: Row(

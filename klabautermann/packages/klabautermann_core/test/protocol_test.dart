@@ -43,6 +43,29 @@ const _webEntry = FleetEntry(
 );
 
 void main() {
+  test('an action key is its intent type\'s name, written out so stored '
+      'records read the same in any build', () {
+    final intents = <ActionIntent>[
+      const KillProcess('srv-1', pid: 1, startTicks: 2),
+      const RunCronJob('srv-1', source: 'crontab:deploy', raw: '* * * * * x'),
+      const RunSnippet('srv-1', title: 'Disk', command: 'df -h'),
+      const StackComposeAction(
+        'srv-1',
+        project: 'app',
+        verb: StackComposeVerb.down,
+      ),
+    ];
+    expect(intents.map(actionKeyOf), [
+      for (final intent in intents) '${intent.runtimeType}',
+    ]);
+    expect(intents.map(actionKeyOf), [
+      'KillProcess',
+      'RunCronJob',
+      'RunSnippet',
+      'StackComposeAction',
+    ]);
+  });
+
   group('engine protocol (03 §10.1)', () {
     late Isolate echo;
     late SendPort toEcho;

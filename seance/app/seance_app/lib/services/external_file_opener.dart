@@ -389,18 +389,17 @@ class ExternalFileOpener {
         launchTarget: bundleIdentifier,
       );
     }
-    final result = await FilePicker.pickFiles(
+    final picked = await FilePicker.pickFile(
       dialogTitle: 'Choose an editor application',
-      allowMultiple: false,
       type: platform == EditorHostPlatform.windows
           ? FileType.custom
           : FileType.any,
       allowedExtensions: platform == EditorHostPlatform.windows
           ? const ['exe']
           : null,
-      lockParentWindow: platform == EditorHostPlatform.windows,
+      windowsOptions: const WindowsOptions(lockParentWindow: true),
     );
-    final path = result?.files.single.path;
+    final path = picked?.path;
     if (path == null) return null;
     final file = File(path);
     final type = await FileSystemEntity.type(path);

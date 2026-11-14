@@ -677,9 +677,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTabServers => 'Servers';
 
   @override
-  String get settingsTabDocker => 'Docker';
-
-  @override
   String get settingsTabSafety => 'Safety';
 
   @override
@@ -1231,6 +1228,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get processesCommandUnavailable => 'Command line unavailable';
+
+  @override
+  String get processesCommandTruncated =>
+      'The server cut this command line at its read limit, so its end is missing.';
 
   @override
   String processesCommandUnavailableOf(String name) {
@@ -5958,6 +5959,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String actionRefusedDetail(String message, String detail) {
+    return '$message Details: $detail';
+  }
+
+  @override
   String get processTerminate => 'Terminate';
 
   @override
@@ -6245,6 +6251,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'StartTimer': 'Run timer now',
       'RefreshPackageLists': 'Refresh package lists',
       'PowerAction': 'Reboot or shut down',
+      'RunCronJob': 'Run cron job now',
+      'RunSnippet': 'Run snippet',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
       'ContainerBulkAction': 'Containers action',
@@ -6255,6 +6263,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'PruneDocker': 'Prune',
       'PullImage': 'Pull image',
       'StackAction': 'Stack action',
+      'StackComposeAction': 'Stack compose action',
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
       'ContainerShell': 'Container shell',
@@ -9698,7 +9707,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverEditorStartDirectoryInvalid =>
-      'Use an absolute path such as /var/www, or one in your own home such as ~/sites.';
+      'Remove control characters, and write ~/ for your own home rather than ~name.';
 
   @override
   String get serverEditorLoginScript => 'Login script (optional)';

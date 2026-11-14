@@ -106,7 +106,7 @@ class ChatSession extends ChangeNotifier {
 
   List<ChatEntry> get entries => List.unmodifiable([
     for (final turn in _turns) ...turn.entries,
-    if (_pendingUser case final pending?) pending,
+    ?_pendingUser,
   ]);
   bool get sending => _sending;
   String? get error => _error;

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
+import '../l10n/app_localizations.dart';
+
 /// Clickable status for the app shell. The shared editor keeps its passive
 /// default; this bar uses [PlanchetteEditor.statusBuilder] instead.
 ///
@@ -28,6 +30,7 @@ class DocumentStatusBar extends StatelessWidget {
 
   Widget _bar(BuildContext context) {
     final style = Theme.of(context).textTheme.labelSmall;
+    final l10n = AppLocalizations.of(context);
     final (line, column) = controller.caretLineColumn;
     final selected = controller.selectionStats;
     final passive = [
@@ -74,11 +77,11 @@ class DocumentStatusBar extends StatelessWidget {
               Text(label, maxLines: 1, style: style),
             ],
             const SizedBox(width: 8),
-            _lineEnding(style),
+            _lineEnding(style, l10n),
             const SizedBox(width: 8),
-            _encoding(style),
+            _encoding(style, l10n),
             const SizedBox(width: 8),
-            _indentation(style),
+            _indentation(style, l10n),
           ],
         ),
       ),
@@ -86,10 +89,10 @@ class DocumentStatusBar extends StatelessWidget {
   }
 
   /// Line endings take effect on the next save, not in the buffer.
-  Widget _lineEnding(TextStyle? style) {
+  Widget _lineEnding(TextStyle? style, AppLocalizations l10n) {
     final metadata = controller.metadata;
     return PopupMenuButton<LineEnding>(
-      tooltip: 'Line endings apply on next save',
+      tooltip: l10n.statusLineEndingTooltip,
       enabled: controller.canChangeMetadata,
       onSelected: (ending) => controller.setMetadata(
         controller.metadata.copyWith(lineEnding: ending),
@@ -110,10 +113,10 @@ class DocumentStatusBar extends StatelessWidget {
   /// next save, not the buffer; a character the new encoding cannot hold
   /// blocks that save with its position. Reading a file in another
   /// encoding is Reopen with Encoding, on a refused open's banner.
-  Widget _encoding(TextStyle? style) {
+  Widget _encoding(TextStyle? style, AppLocalizations l10n) {
     final metadata = controller.metadata;
     return PopupMenuButton<TextDocumentMetadata>(
-      tooltip: 'Encoding applies on next save, a UTF-8 BOM adds 3 bytes',
+      tooltip: l10n.statusEncodingTooltip,
       enabled: controller.canChangeMetadata,
       onSelected: controller.setMetadata,
       itemBuilder: (_) => [
@@ -151,14 +154,14 @@ class DocumentStatusBar extends StatelessWidget {
     (TextEncoding.windows1252, Utf8Bom.absent),
   ];
 
-  Widget _indentation(TextStyle? style) {
+  Widget _indentation(TextStyle? style, AppLocalizations l10n) {
     final current = controller.indentation;
     final tabsRequired =
         requiredIndentationFor(controller.displayPath)?.style ==
         IndentStyle.tabs;
     final canEdit = controller.canEditText;
     return PopupMenuButton<_IndentChoice>(
-      tooltip: 'Indentation',
+      tooltip: l10n.statusIndentationTooltip,
       enabled: controller.canChangeMetadata,
       onSelected: _chooseIndent,
       itemBuilder: (_) => [
@@ -167,12 +170,12 @@ class DocumentStatusBar extends StatelessWidget {
           checked: current.style == IndentStyle.spaces,
           // A tab-mandated format never takes spaces.
           enabled: !tabsRequired,
-          child: const Text('Spaces'),
+          child: Text(l10n.indentSpaces),
         ),
         CheckedPopupMenuItem(
           value: _IndentChoice.tabs,
           checked: current.style == IndentStyle.tabs,
-          child: const Text('Tabs'),
+          child: Text(l10n.indentTabs),
         ),
         const PopupMenuDivider(),
         for (final width in _IndentChoice.widths)
@@ -182,18 +185,18 @@ class DocumentStatusBar extends StatelessWidget {
             // Width keeps the current style, so it is spaces only when
             // spaces are allowed.
             enabled: !tabsRequired || current.style == IndentStyle.tabs,
-            child: Text('Width ${width.width}'),
+            child: Text(l10n.statusIndentWidth(width.width)),
           ),
         const PopupMenuDivider(),
         PopupMenuItem(
           value: _IndentChoice.convertSpaces,
           enabled: canEdit && !tabsRequired,
-          child: const Text('Convert to Spaces'),
+          child: Text(l10n.statusConvertToSpaces),
         ),
         PopupMenuItem(
           value: _IndentChoice.convertTabs,
           enabled: canEdit,
-          child: const Text('Convert to Tabs'),
+          child: Text(l10n.statusConvertToTabs),
         ),
       ],
       child: Text(strings.indentation(current), maxLines: 1, style: style),

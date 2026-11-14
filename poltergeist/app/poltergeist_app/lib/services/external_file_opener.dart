@@ -524,18 +524,17 @@ final class ExternalFileOpener {
     EditorHostPlatform platform,
     String dialogTitle,
   ) async {
-    final result = await FilePicker.pickFiles(
+    final picked = await FilePicker.pickFile(
       dialogTitle: dialogTitle,
-      allowMultiple: false,
       type: platform == EditorHostPlatform.windows
           ? FileType.custom
           : FileType.any,
       allowedExtensions: platform == EditorHostPlatform.windows
           ? const ['exe']
           : null,
-      lockParentWindow: platform == EditorHostPlatform.windows,
+      windowsOptions: const WindowsOptions(lockParentWindow: true),
     );
-    return result?.files.single.path;
+    return picked?.path;
   }
 }
 

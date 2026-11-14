@@ -126,7 +126,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         UnitListFormat,
         UnitsSnapshot;
 // The System tab's Updates section (PKG-01 to PKG-04): what a
-// PackagesReport's or a RestartReport's check found.
+// PackagesReport's or a RestartReport's check found, and the `sort -V`
+// order its version columns sort in.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show
         KernelState,
@@ -137,6 +138,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RebootState,
         RestartCheck,
         RestartTool,
+        compareVersions,
         kPackageUpdatesKept;
 // The System tab's Firewall section (NET-06): what a FirewallReport
 // read.

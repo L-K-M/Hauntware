@@ -2,6 +2,15 @@ import 'dart:isolate';
 
 import 'editor_syntax.dart';
 
+/// The largest HTML page an export writes, in bytes. Markup and escaping
+/// make a page larger than its source: about twice for ordinary code, and
+/// up to five times for dense operators or markup, so a 4 MiB document
+/// (the editing limit) can make a 20 MiB page. A page is never edited, so
+/// the document limit does not apply to it; this bound only keeps the page
+/// a size browsers and the Android document provider handle in memory.
+/// The Android runner holds the same ceiling (`DocumentIo.kt`).
+const int htmlExportMaximumBytes = 32 * 1024 * 1024;
+
 /// CSS colors for [highlightedHtml], such as `#1f7a54` or `rgb(31 122 84)`.
 /// They are written into a style block, so [highlightedHtml] rejects a value
 /// with any character that could end a declaration or the block.

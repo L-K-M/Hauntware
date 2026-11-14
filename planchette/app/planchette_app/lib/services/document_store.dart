@@ -57,6 +57,11 @@ abstract interface class DocumentStore {
   /// Whether the file at [path] is marked read-only. A save would still
   /// replace it, so the workspace asks first.
   Future<bool> isWriteProtected(String path);
+
+  /// Writes [text] to [path]. [maximumBytes] bounds the encoded text: the
+  /// editing limit for documents, a larger bound for generated pages such
+  /// as an HTML export (see [htmlExportMaximumBytes]). Only local writes
+  /// take a bound other than the editing limit.
   Future<TextDocument> write({
     required String path,
     required String text,
@@ -64,6 +69,7 @@ abstract interface class DocumentStore {
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
     DocumentWriteTarget target = DocumentWriteTarget.local,
+    int maximumBytes = textDocumentMaximumBytes,
   });
 }
 
@@ -192,7 +198,16 @@ final class LocalDocumentStore implements DocumentStore {
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
     DocumentWriteTarget target = DocumentWriteTarget.local,
+    int maximumBytes = textDocumentMaximumBytes,
   }) async {
+    if (target == DocumentWriteTarget.managedRemote &&
+        maximumBytes != textDocumentMaximumBytes) {
+      throw ArgumentError.value(
+        maximumBytes,
+        'maximumBytes',
+        'Managed remote copies keep the editing limit.',
+      );
+    }
     if (target == DocumentWriteTarget.managedRemote && expectedSha256 == null) {
       throw const TextDocumentException(
         'The managed copy has no verified baseline. Reload it or save a local copy before retrying.',
@@ -220,6 +235,7 @@ final class LocalDocumentStore implements DocumentStore {
             hasUtf8Bom: bom,
             lineEnding: ending,
             encoding: encoding,
+            maximumBytes: maximumBytes,
           )
         : await saveTextDocument(
             file,
@@ -228,6 +244,7 @@ final class LocalDocumentStore implements DocumentStore {
             hasUtf8Bom: bom,
             lineEnding: ending,
             encoding: encoding,
+            maximumBytes: maximumBytes,
           );
     return TextDocument(
       file: file,

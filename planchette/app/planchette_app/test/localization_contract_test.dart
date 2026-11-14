@@ -6,10 +6,11 @@ import 'package:l10n_contract/l10n_contract.dart';
 
 // Planchette's localization contract (s07 F7), on the suite's shared
 // scanner (`tool/l10n_contract`) as in Poltergeist and Klabautermann. It
-// covers the directories already routed through the ARB catalog; the shell,
-// the workspace services, the dialogs service and the widgets still hold
-// English literals and join [_scannedDirectories] as they move to the
-// catalog. The allowlist holds technical literals only, reviewed per file.
+// covers the directories and the service files already routed through the
+// ARB catalog. The shell, the workspace services and the editor's
+// `EditorStrings` feed still hold English literals and join the scan as
+// they move to the catalog. The allowlist holds technical literals only,
+// reviewed per file.
 
 const _generatedLocalizationPrefix = 'lib/l10n/app_localizations';
 const _generatedLocalizationPaths = {
@@ -17,11 +18,57 @@ const _generatedLocalizationPaths = {
   '${_generatedLocalizationPrefix}_en.dart',
 };
 
-const _scannedDirectories = ['lib/ui'];
+const _scannedDirectories = ['lib/ui', 'lib/widgets'];
+
+/// Files routed through the catalog in directories that are not yet whole.
+const _scannedFiles = [
+  'lib/services/document_dialogs.dart',
+  'lib/services/settings_dialog.dart',
+];
 
 const _allowedTechnicalLiterals = <String, Set<String>>{
   // The login home, the default remote folder a path field starts at.
   'lib/ui/workspace_remote_folder_dialog.dart': {"'~'"},
+  'lib/services/document_dialogs.dart': {
+    // The assertion message of an internal invariant, never shown.
+    "'the bulk close question covers several files'",
+    // File names, one per line.
+    r"'\n'",
+    // The template locale, for a picker opened before any window context.
+    "'en'",
+  },
+  'lib/services/settings_dialog.dart': {
+    // The product name the license page shows above the notices.
+    "'Planchette'",
+    // Widget keys.
+    "'settings.licenses'",
+    "'settings.font'",
+    // An empty family stands for the default font.
+    "''",
+    // A slider's value as a number.
+    r"'$value'",
+  },
+  'lib/widgets/disk_notice.dart': {
+    // A programming error: no notice is built for a current file.
+    r"'Nothing to tell about $name.'",
+  },
+  'lib/widgets/document_status_bar.dart': {
+    // Text tool identifiers.
+    "'convertIndentationToSpaces'",
+    "'convertIndentationToTabs'",
+  },
+  'lib/widgets/folder_browser.dart': {
+    // A focus node's debug label and widget keys.
+    "'Workspace files'",
+    "'folder-browser'",
+    "'workspace-divider'",
+  },
+  'lib/widgets/tab_strip.dart': {
+    // Widget keys.
+    r"'tab-${tab.id}'",
+    r"'close-${item.id}'",
+    r"'dirty-${item.id}'",
+  },
   'lib/ui/workspace_servers_dialog.dart': {
     // An empty filter and empty form fields.
     "''",
@@ -52,7 +99,14 @@ void main() {
   });
 
   test('authors user-facing strings only in ARB', () {
-    final findings = contract.scan();
+    final findings = [
+      ...contract.scan(),
+      for (final path in _scannedFiles)
+        ...contract.findDisallowedLiterals(
+          path: path,
+          source: File(path).readAsStringSync(),
+        ),
+    ];
 
     expect(findings, isEmpty, reason: findings.join('\n'));
   });

@@ -1160,7 +1160,8 @@ RunnerFacts _runner(DockerPlanContext c) => RunnerFacts(
       : RunnerCredentials.session,
 );
 
-PlanAttempt _planned(OperationPlan plan) => (plan: plan, refusal: null);
+PlanAttempt _planned(OperationPlan plan) =>
+    (plan: plan, refusal: null, detail: null);
 
 PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason);
+    (plan: null, refusal: reason, detail: null);

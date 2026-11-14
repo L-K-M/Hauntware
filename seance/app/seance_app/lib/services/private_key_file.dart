@@ -15,15 +15,11 @@ const int maxPrivateKeyFileBytes = 64 * 1024;
 /// Throws [FormatException] for a file that is too large or not text.
 Future<String?> pickPrivateKeyText() async {
   // A wrong pick must not allocate the whole file before applying the limit.
-  final result = await FilePicker.pickFiles(withReadStream: true);
-  // Some platforms answer a cancel with an empty result rather than null.
-  if (result == null || result.files.isEmpty) return null;
+  final file = await FilePicker.pickFile();
+  if (file == null) return null;
   final Uint8List bytes;
   try {
-    bytes = await readPickedFileBytes(
-      result.files.single,
-      maxBytes: maxPrivateKeyFileBytes,
-    );
+    bytes = await readPickedFileBytes(file, maxBytes: maxPrivateKeyFileBytes);
   } on PickedFileTooLargeException {
     throw const FormatException('That file is too large to be a private key.');
   } on FileSystemException {

@@ -2362,8 +2362,8 @@ re-push (c1 §2.4).
   unchecked.
   As built (M5 plan M07): the assertion is stored in
   `sync_enrollment.json` as `seance56Asserted: <release>` and names the
-  release in `kPinPublicationRelease`, which stays null until a suite
-  release carries the fix (M5 plan Q1). While it is null the engine
+  release in `kPinPublicationRelease`: 1.9.3, the first suite release
+  whose Séance carries the fix (M5 plan Q1). While it is null the engine
   offers no assertion, refuses `SetPinPublication` and publishes
   nothing. With the assertion, each pin the user confirms on a link (a
   first-seen key accepted, or a changed key trusted) is published on the
@@ -3753,6 +3753,10 @@ the guarded kill needs it.
   the export fails, times out or is too large, the folder fell outside
   its parent's largest entries, or Read again is pressed on a folder
   below the mount point. Read again on the mount point exports again.
+  A new export (Read again, another mount or reader) cancels the one it
+  replaces while that one still runs, and closes its process, as does
+  forgetting the server, so two exports never scan one host at once; the
+  folders that waited on the cancelled one read with `du`.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
@@ -5646,6 +5650,13 @@ OperationPlan {
     checks the safety policy, the confirmation (a typed phrase must equal
     the target name) and, for an admin plan, admin mode, each a typed
     `ActionRefused`. A refused run needs a new preview.
+  - A refused plan's `ActionRefused.detail` names, where a planner knows
+    it, the step that failed in the server's or engine's words: an edit
+    plan's backup directory, manifest or root-only directory check with
+    its exit code and error output (never its standard output), the
+    read's or transport's error, or the error a planner threw. It is
+    not localized; control characters are stripped and it is cut at 300
+    characters. The app's refusal toast adds it after its own words.
   - The runner re-validates each `Revalidation` the planner listed:
     `UnitLoaded` reads `systemctl show --property=LoadState`;
     `ProcessStarted` reads field 22 of `/proc/<pid>/stat`;
@@ -6626,7 +6637,7 @@ shows there.
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below), `SetDockerProgram(serverId, program?)` (M6 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
-| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
+| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId, detail)` |
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
 | `ReadHistory(serverId, tier, requestId)` (7.20, M6 N52a) | `HistoryRead(requestId, serverId, tier, range)`: the tier's buckets and gaps within its span, the filling bucket included |
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
@@ -6659,7 +6670,11 @@ the engine in `engine_isolate.dart` beside it):
 - **Version.** `Hello` carries `kEngineProtocolVersion`; the engine
   answers `EngineReady` with its own version, or `RequestRejected` on a
   mismatch, so an app and engine built apart fail before any feature
-  traffic. These lifecycle messages, `Shutdown`, and `RequestRejected`
+  traffic. An engine whose startup failed (a store that would not open)
+  stays up and answers `Hello`, and every later request but `Shutdown`,
+  with `RequestRejected` naming the error ("engine failed to start:
+  ..."), which the app's engine-failed screen shows. These lifecycle
+  messages, `Shutdown`, and `RequestRejected`
   (also the answer to rows whose milestone has not landed) are not table
   rows. Version 2 replaced v1's opaque record map in `CatalogReplaced`
   with typed entries and added the import row.
@@ -7535,8 +7550,9 @@ the engine in `engine_isolate.dart` beside it):
   `GhostCommandSpec` registry (`PlatformMenuBar` on macOS, a menu bar
   elsewhere). Settings in a second window on desktop through
   `GhostSettingsWindowHost` with a typed `SettingsLinkMethod` enum (tabs:
-  General, Appearance, Sync, Servers, Docker, Safety, Alerts), a route on
-  mobile. The three native settings-window runners are copied and renamed
+  General, Appearance, Sync, Servers, Safety, Alerts; Docker's choices,
+  the engine endpoint and program, sit in each server's Docker tab), a
+  route on mobile. The three native settings-window runners are copied and renamed
   with a ledger entry (D32).
 - As built in M4 (E26, owner question Q3): About Klabautermann is a
   registry command on every desktop, first in the macOS application menu
@@ -7929,6 +7945,9 @@ subscribes while it shows:
   shows its time on the day of the reading, else its date, and
   "unknown" where the engine could not date it (7.2). A row with no
   command line shows the kernel's name and "command line unavailable".
+  A command line the host's per-file byte cap cut (`cmdline_cap`,
+  `ProcessRow.argumentsTruncated`) ends in an ellipsis, and the details
+  say that its end is missing.
 - The filter needs every term in the PID, name, user or shown command
   line. It draws and searches at most 4,096 characters of a command
   line or argument, which can fill the 1 MiB section.

@@ -1,6 +1,6 @@
 /// The platform image picker behind ghost_marks' mark picker
-/// (`ServerMarkImageReader`), for the apps on file_picker 11: Séance and
-/// Poltergeist pass [pickServerMarkImage] as `readImage`.
+/// (`ServerMarkImageReader`), over file_picker: Séance and Poltergeist pass
+/// [pickServerMarkImage] as `readImage`.
 library;
 
 import 'dart:typed_data';
@@ -42,25 +42,15 @@ import 'package:ghost_ui/ghost_ui.dart'
 }
 
 /// The bytes of an image chosen from the platform picker, or null if the user
-/// cancelled. `withData` because the bytes are re-encoded rather than kept:
-/// there is nothing to stream to, and on Android a document provider may have
-/// no path at all (see AGENTS.md on file_picker).
+/// cancelled. Read whole because the bytes are re-encoded rather than kept:
+/// there is nothing to stream to, and the picked file's own reader covers a
+/// document provider with no path at all (see AGENTS.md on file_picker).
 Future<Uint8List?> pickServerMarkImage() async {
   final filter = serverMarkImageFilter(defaultTargetPlatform);
-  final result = await FilePicker.pickFiles(
+  final file = await FilePicker.pickFile(
     type: filter.type,
     allowedExtensions: filter.extensions,
-    withData: true,
   );
-  final files = result?.files ?? const [];
-  if (files.isEmpty) return null;
-  final bytes = files.first.bytes;
-  if (bytes == null) {
-    // `withData` was asked for and the picker produced a file without any:
-    // reported on some Android document providers. Returning null here would
-    // be read as a cancel and the dialog would sit there having silently done
-    // nothing, so it is raised for the caller's handler to show.
-    throw Exception('the file picker returned no image bytes');
-  }
-  return bytes;
+  if (file == null) return null;
+  return file.readAsBytes();
 }

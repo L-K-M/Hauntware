@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+import '../l10n/app_localizations.dart';
 import '../services/app_settings.dart' show AppSettings;
 import '../services/folder_workspace.dart';
 import 'mono_text_style.dart';
@@ -45,13 +46,14 @@ class WorkspaceSidebarToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final platform = Theme.of(context).platform;
-    final label = '${visible ? 'Hide' : 'Show'} sidebar';
+    final l10n = AppLocalizations.of(context);
+    final label = visible ? l10n.sidebarHide : l10n.sidebarShow;
     final keys = formatShortcutActivator(sidebarShortcut(platform), platform);
     // view_sidebar draws its panel on the reading direction's end: the
     // browser sits at the start, so the glyph mirrors in LTR.
     final ltr = Directionality.of(context) == TextDirection.ltr;
     return IconButton(
-      tooltip: keys == null ? label : '$label $keys',
+      tooltip: keys == null ? label : l10n.tooltipWithShortcut(label, keys),
       visualDensity: visualDensity,
       onPressed: onToggle,
       icon: Transform.flip(
@@ -158,6 +160,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
     }
     final enabled = widget.enabled && !workspace.loading;
     final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     return Material(
       key: const ValueKey('folder-browser'),
       color: scheme.surfaceContainerLow,
@@ -187,7 +190,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Close folder workspace',
+                  tooltip: l10n.folderClose,
                   onPressed: enabled
                       ? () => unawaited(workspace.close())
                       : null,
@@ -211,14 +214,14 @@ class _FolderBrowserState extends State<FolderBrowser> {
           Row(
             children: [
               IconButton(
-                tooltip: 'Workspace root',
+                tooltip: l10n.folderRoot,
                 onPressed: enabled
                     ? () => unawaited(workspace.navigate(workspace.root!))
                     : null,
                 icon: const Icon(Icons.home_outlined, size: 18),
               ),
               IconButton(
-                tooltip: 'Parent folder',
+                tooltip: l10n.folderParent,
                 onPressed: enabled && workspace.canGoUp
                     ? () {
                         _focus.requestFocus();
@@ -228,7 +231,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
                 icon: const Icon(Icons.arrow_upward, size: 18),
               ),
               IconButton(
-                tooltip: 'Refresh folder',
+                tooltip: l10n.folderRefresh,
                 onPressed: enabled
                     ? () => unawaited(workspace.refresh())
                     : null,
@@ -236,8 +239,8 @@ class _FolderBrowserState extends State<FolderBrowser> {
               ),
               IconButton(
                 tooltip: workspace.showHidden
-                    ? 'Hide hidden files'
-                    : 'Show hidden files',
+                    ? l10n.folderHideHidden
+                    : l10n.folderShowHidden,
                 isSelected: workspace.showHidden,
                 onPressed: enabled ? workspace.toggleHidden : null,
                 icon: const Icon(Icons.visibility_outlined, size: 18),
@@ -271,7 +274,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
                 behavior: HitTestBehavior.opaque,
                 onPointerDown: (_) => _focus.requestFocus(),
                 child: entries.isEmpty && !workspace.loading
-                    ? const Center(child: Text('This folder is empty'))
+                    ? Center(child: Text(l10n.folderEmpty))
                     : ListView.builder(
                         controller: _scroll,
                         itemExtent: scaledGhostFileRowExtent(context),
@@ -456,7 +459,7 @@ class _WorkspaceSplitViewState extends State<WorkspaceSplitView> {
               width: _handleWidth,
               child: GhostResizeHandle(
                 key: const ValueKey('workspace-divider'),
-                label: 'File browser width',
+                label: AppLocalizations.of(context).folderBrowserWidth,
                 width: width,
                 minimumWidth: _minimumBrowserWidth,
                 maximumWidth: maximum,
@@ -468,7 +471,9 @@ class _WorkspaceSplitViewState extends State<WorkspaceSplitView> {
                 onDelta: _onDelta,
                 onEnd: _onEnd,
                 handleWidth: _handleWidth,
-                valueText: (width) => '${width.round()} pixels',
+                valueText: (width) => AppLocalizations.of(
+                  context,
+                ).folderBrowserWidthValue(width.round()),
               ),
             ),
         ],

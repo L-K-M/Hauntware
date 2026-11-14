@@ -410,6 +410,21 @@ void main() {
     expect(left.selectedCount, 2);
     expect(right.selectedCount, 0, reason: 'the inactive pane never changes');
 
+    // Deselect All clears the active pane only, and is off with nothing
+    // selected (P4-16).
+    final deselectAll = commands.firstWhere(
+      (command) => command.id == kEditDeselectAllCommandId,
+    );
+    expect(deselectAll.menuPlacement?.menu, AppMenuId.edit);
+    expect(deselectAll.enabled(), isTrue);
+    await deselectAll.run(context);
+    await tester.pump();
+    expect(left.selectedCount, 0);
+    expect(deselectAll.enabled(), isFalse);
+    await selectAll.run(context);
+    await tester.pump();
+    expect(left.selectedCount, 2);
+
     // The distinguishing case: the ACTIVE pane's verbs fail while the
     // inactive pane stays verb-enabled — an any-pane OR gate would
     // still report enabled here.

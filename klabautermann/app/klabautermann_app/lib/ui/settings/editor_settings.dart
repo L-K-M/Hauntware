@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ghost_fonts/ghost_fonts.dart';
-import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize, editorDefaultFont;
 
 import '../../controllers/editor_display.dart';
 import '../../l10n/app_localizations.dart';
+import 'setting_write.dart';
 
 /// Settings → Appearance's file editor section (03 §8.5): the font family,
 /// whether its ligatures draw, and the text size, written through
@@ -66,29 +66,20 @@ class _EditorSettingsSectionState extends State<EditorSettingsSection> {
   Future<void> _write(EditorDisplay display) async {
     if (display == (_pending ?? widget.model.value)) return;
 
-    final l10n = AppLocalizations.of(context);
-    final overlay = Overlay.of(context, rootOverlay: true);
     final write = ++_writes;
     setState(() => _pending = display);
-    try {
-      await widget.model.setEditorDisplay(display);
-    } on EditorDisplayNotSavedException catch (error) {
-      debugPrint('$error');
-      if (!mounted || write != _writes) return;
-      // Show what the editors draw in: the model keeps a change it could
-      // not save, and the next write carries it.
-      setState(() => _pending = null);
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsEditorDisplayNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (!mounted || write != _writes) return;
-      setState(() => _pending = null);
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsEditorDisplayNotChanged);
-      }
-    }
+    bool current() => mounted && write == _writes;
+    final outcome = await writeSetting<EditorDisplayNotSavedException>(
+      context,
+      () => widget.model.setEditorDisplay(display),
+      notSaved: (l10n) => l10n.settingsEditorDisplayNotSaved,
+      notChanged: (l10n) => l10n.settingsEditorDisplayNotChanged,
+      report: current,
+    );
+    if (outcome == SettingWrite.saved || !current()) return;
+    // Show what the editors draw in: the model keeps a change it could
+    // not save, and the next write carries it.
+    setState(() => _pending = null);
   }
 
   @override
