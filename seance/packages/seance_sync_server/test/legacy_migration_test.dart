@@ -382,7 +382,7 @@ void main() {
           jsonEncode(const Argon2Params().toJson()),
           null,
         ]);
-        legacy.dispose();
+        legacy.close();
 
         final storage = SqliteStorage.open(path);
         expect((await storage.getAccount('old'))!.recordEnvelopeFloor, 1);

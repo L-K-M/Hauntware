@@ -24,6 +24,7 @@ import 'package:test/test.dart';
 import 'support/actions.dart';
 import 'support/docker_host.dart';
 import 'support/fixture.dart';
+import 'support/link_meter.dart';
 
 /// The image seed_docker.sh tags, which the scratch container runs.
 const _image = 'klabautermann-fixture/busybox:1.37';
@@ -86,7 +87,18 @@ void main() {
       ]),
     );
 
-    final engine = await FixtureEngine.startDocker(fixture, 'inventory');
+    // Exercise a real detached redeploy when its SSH exit status is lost.
+    // The meter only removes a successful status after observing the PID.
+    final meter = LinkMeter(
+      captureDetachedLaunches: true,
+      simulateMissingSetsidStatus: true,
+    );
+    addTearDown(meter.close);
+    final engine = await FixtureEngine.startDocker(
+      fixture,
+      'inventory',
+      entryPoint: meter.entryPoint,
+    );
     manage(engine, [dockerServer]);
     await engine.connect(dockerServer, hostKeys);
 
@@ -187,11 +199,44 @@ void main() {
     // The detached redeploy: it outlives the session's sshd processes,
     // the engine finds it again over a new link, and acknowledging its
     // result deletes its files.
-    final started = await planAndRun(
+    final redeploy = await plan(
       engine,
       const RedeployStack(dockerServer, project: 'redeploy'),
     );
-    final id = started.operationId!;
+    final answer = await run(engine, redeploy);
+    if (answer is! ActionFinished ||
+        answer.outcome != ActionOutcome.succeeded) {
+      try {
+        engine.note('detached launch diagnostics: ${await meter.read()}');
+      } on Object catch (error) {
+        // A failed diagnostic must not hide the original action failure.
+        engine.note(
+          'detached launch diagnostics unavailable: ${error.runtimeType}',
+        );
+      }
+    }
+    expectSucceeded(answer);
+    final readings = await meter.read();
+    final links = readings['links']! as List;
+    final launches = [
+      for (final link in links)
+        for (final run in (link as Map)['detachedRuns'] as List)
+          if ((run as Map)['kind'] == 'setsid') run,
+    ];
+    expect(
+      launches,
+      hasLength(1),
+      reason: 'a missing SSH status must not launch the operation twice',
+    );
+    final launch = launches.single;
+    expect(
+      launch['stdoutIsPid'] == true &&
+          launch['truncated'] == false &&
+          (launch['statusSimulated'] == true || launch['exitCode'] == null),
+      isTrue,
+      reason: 'the real setsid launch must exercise the missing-status path',
+    );
+    final id = (answer as ActionFinished).operationId!;
     await engine.until<OperationsChanged>(
       (e) => e.serverId == dockerServer && e.operations.any((o) => o.id == id),
     );

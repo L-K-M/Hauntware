@@ -199,7 +199,7 @@ void main() {
       );
     ''');
 
-    database.dispose();
+    database.close();
 
     var storage = SqliteStorage.open(path);
     final generation = (await storage.getAccount('partial'))!.generation;
