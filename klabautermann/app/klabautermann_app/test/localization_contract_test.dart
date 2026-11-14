@@ -432,8 +432,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'editor.ligatures'",
     "'editor.textSize'",
     "''",
-    r"'$error'",
   },
+  // A setting write's error, a diagnostic for the debug log.
+  'lib/ui/settings/setting_write.dart': {r"'$error'"},
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
   'lib/ui/actions/activity_page.dart': {"'activity'", r"'\n'"},

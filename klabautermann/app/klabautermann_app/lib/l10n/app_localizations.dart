@@ -1054,12 +1054,6 @@ abstract class AppLocalizations {
   /// **'Servers'**
   String get settingsTabServers;
 
-  /// No description provided for @settingsTabDocker.
-  ///
-  /// In en, this message translates to:
-  /// **'Docker'**
-  String get settingsTabDocker;
-
   /// No description provided for @settingsTabSafety.
   ///
   /// In en, this message translates to:

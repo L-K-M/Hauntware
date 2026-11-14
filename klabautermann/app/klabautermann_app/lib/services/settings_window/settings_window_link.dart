@@ -60,7 +60,7 @@ const MethodChannel settingsWindowLinkChannel = MethodChannel(
 const String settingsWindowArgument = '--klabautermann-settings-window';
 
 /// The settings tabs, in order (03 §10.2). They cross the link by name.
-enum SettingsTab { general, appearance, sync, servers, docker, safety, alerts }
+enum SettingsTab { general, appearance, sync, servers, safety, alerts }
 
 /// Opens the desktop settings window on a tab; false when there is no
 /// window to open (a runner without one, or a test), and the caller shows
