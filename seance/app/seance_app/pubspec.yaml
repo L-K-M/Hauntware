@@ -78,26 +78,26 @@ dependencies:
   # The running app version, compared against the latest GitHub release to
   # offer an update notification. Nothing downloads until the user chooses
   # Update, on Android only (ghost_apk_update above).
-  package_info_plus: ^8.0.0
+  package_info_plus: ^10.2.2
   # Streams Android document-provider selections through a cached file instead
   # of requiring a stable filesystem path or loading the whole file into Dart.
-  file_picker: ^11.0.2
+  file_picker: ^13.3.3
   cross_file: ^0.3.5+4
   # Hashes managed local edits without loading them into memory.
   crypto: ^3.0.6
   # Local-file drops on desktop (and Android drag/drop where the OS provides it).
-  desktop_drop: ^0.7.1
+  desktop_drop: ^0.8.0
   # Opens a downloaded cache file with the platform's associated application.
   open_file: ^4.0.0
   # Native share sheets for exported remote files.
-  share_plus: ^12.0.2
+  share_plus: ^13.3.1
   # Opens http(s) links in the browser: links in terminal output
   # (services/web_links.dart) and the releases page when an update is
   # available.
-  url_launcher: ^6.3.0
+  url_launcher: ^6.3.3
   # Delivers seance://connect links to the link intake (lib/services/
   # link_intake.dart). Pinned to the version Poltergeist runs.
-  app_links: 7.2.1
+  app_links: 7.2.2
   # Persists/restores the desktop window's frame, monitor, and maximized/
   # full-screen state across launches (lib/services/window_state.dart).
   window_manager: ^0.5.2
@@ -125,7 +125,7 @@ dev_dependencies:
   # Stands in for the system's default app, so tests that open a file
   # there never launch one.
   open_file_platform_interface: ^1.1.0
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   # Regenerates every platform's launcher icon from media-sources/seance-icon.png
   # (config in flutter_launcher_icons.yaml): dart run flutter_launcher_icons
   flutter_launcher_icons: ^0.14.0
