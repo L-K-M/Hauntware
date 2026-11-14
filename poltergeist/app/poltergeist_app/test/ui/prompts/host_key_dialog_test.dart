@@ -43,20 +43,15 @@ class _HarnessState extends State<_Harness> {
           child: Builder(
             // The dialog needs a context *below* MaterialApp for
             // Localizations; the State's own context sits above it.
-            builder:
-                (context) =>
-                    result == null
-                        ? FilledButton(
-                          onPressed: () async {
-                            result = await showHostKeyDialog(
-                              context,
-                              widget.data,
-                            );
-                            if (mounted) setState(() {});
-                          },
-                          child: const Text('open'),
-                        )
-                        : Text('result:$result'),
+            builder: (context) => result == null
+                ? FilledButton(
+                    onPressed: () async {
+                      result = await showHostKeyDialog(context, widget.data);
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('open'),
+                  )
+                : Text('result:$result'),
           ),
         ),
       ),
@@ -138,6 +133,32 @@ void main() {
 
     await tester.tap(find.text('Trust the new key'));
     expect(await _settleResult(tester), isTrue);
+  });
+
+  testWidgets('a changed key algorithm names both types (S06-05)', (
+    tester,
+  ) async {
+    await _open(
+      tester,
+      const HostKeyPromptData(
+        host: 'example.com',
+        port: 2222,
+        keyType: 'ecdsa-sha2-nistp256',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedFingerprintSha256: 'SHA256:original',
+        pinnedKeyType: 'ssh-ed25519',
+      ),
+    );
+
+    expect(
+      find.text(
+        'Key algorithm changed from ssh-ed25519 to ecdsa-sha2-nistp256.',
+      ),
+      findsOneWidget,
+    );
+    // The pinned fingerprint carries its own type, not the presented one.
+    expect(find.text('ssh-ed25519\nSHA256:original'), findsOneWidget);
+    expect(find.text('ecdsa-sha2-nistp256\nSHA256:changed'), findsOneWidget);
   });
 
   testWidgets('the dialog cannot be dismissed by tapping outside', (

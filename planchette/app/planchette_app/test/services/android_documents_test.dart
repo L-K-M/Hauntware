@@ -101,6 +101,36 @@ void main() {
     },
   );
 
+  test('an export bound reaches the provider and the core check', () async {
+    await documents.pickOpenFiles();
+    final original = await documents.load(path);
+    final page = 'p' * (textDocumentMaximumBytes + 1);
+
+    await expectLater(
+      documents.write(
+        path: path,
+        text: page,
+        source: null,
+        expectedSha256: original.sha256,
+      ),
+      throwsA(isA<TextDocumentException>()),
+    );
+    expect(writes, isEmpty);
+
+    await documents.write(
+      path: path,
+      text: page,
+      source: null,
+      expectedSha256: original.sha256,
+      maximumBytes: htmlExportMaximumBytes,
+    );
+    expect(
+      (writes.single.arguments as Map)['maximumBytes'],
+      htmlExportMaximumBytes,
+    );
+    expect(providerBytes.length, page.length);
+  });
+
   test('invalid input never reaches the document provider', () async {
     providerBytes = Uint8List.fromList([0xff]);
     await expectLater(

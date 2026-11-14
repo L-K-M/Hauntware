@@ -6,6 +6,7 @@
 // needs review. Everything reads through [SyncPlanController]; this
 // file is layout, filters, selection, and dialogs only.
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -353,16 +354,28 @@ class _SyncPlanViewState extends State<SyncPlanView> {
       _setIncluded(targets, !syncRowIncluded(row));
       return KeyEventResult.handled;
     }
-    final step = key == LogicalKeyboardKey.arrowDown
-        ? 1
-        : key == LogicalKeyboardKey.arrowUp
-        ? -1
-        : 0;
-    if (step == 0 || _rowOrder.isEmpty) return KeyEventResult.ignored;
+    if (_rowOrder.isEmpty) return KeyEventResult.ignored;
+    final last = _rowOrder.length - 1;
+    final page = _pageRows(node);
+    final step = switch (key) {
+      LogicalKeyboardKey.arrowDown => 1,
+      LogicalKeyboardKey.arrowUp => -1,
+      LogicalKeyboardKey.pageDown => page,
+      LogicalKeyboardKey.pageUp => -page,
+      // Far enough to clamp at either end.
+      LogicalKeyboardKey.end => _rowOrder.length,
+      LogicalKeyboardKey.home => -_rowOrder.length,
+      _ => 0,
+    };
+    if (step == 0) return KeyEventResult.ignored;
     final current = _focusedRow == null ? -1 : _rowOrder.indexOf(_focusedRow!);
-    final next = current < 0
-        ? (step > 0 ? 0 : _rowOrder.length - 1)
-        : (current + step).clamp(0, _rowOrder.length - 1);
+    final next = switch (key) {
+      // Home and End name an end of the table even before a row has focus.
+      LogicalKeyboardKey.home => 0,
+      LogicalKeyboardKey.end => last,
+      _ when current < 0 => step > 0 ? 0 : last,
+      _ => (current + step).clamp(0, last),
+    };
     final row = _rowOrder[next];
     setState(() {
       _focusedRow = row;
@@ -373,6 +386,18 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     });
     _controller.setComparisonTarget(row);
     return KeyEventResult.handled;
+  }
+
+  /// Rows a Page Up/Down moves: a viewport less one row, so the row at
+  /// the edge stays in view, as in the panes' listing (02 §2.5).
+  int _pageRows(FocusNode node) {
+    final height = node.context?.size?.height;
+    if (height == null) return 1;
+    final rowExtent = PoltergeistChrome.of(
+      node.context!,
+      poltergeistThemeStyle,
+    ).rowExtent;
+    return math.max(1, (height / rowExtent).floor() - 1);
   }
 
   List<SyncItem> _visibleItems(List<SyncItem> items) {
@@ -1042,8 +1067,8 @@ final class _DocrootNotices extends StatelessWidget {
                                 ),
                           child: Text(
                             l10n.syncDocrootWarningUseSaferPath,
-                            semanticsLabel:
-                                l10n.syncDocrootWarningUseSaferPathForSide(
+                            semanticsLabel: l10n
+                                .syncDocrootWarningUseSaferPathForSide(
                                   warning.side == SyncSide.left
                                       ? l10n.syncSideLeft
                                       : l10n.syncSideRight,
@@ -1451,10 +1476,7 @@ class _FilterBar extends StatelessWidget {
 
 /// §7's bulk conflict bar — mounts while conflict rows exist.
 class _ConflictBar extends StatelessWidget {
-  const _ConflictBar({
-    required this.controller,
-    required this.l10n,
-  });
+  const _ConflictBar({required this.controller, required this.l10n});
 
   final SyncPlanController controller;
   final AppLocalizations l10n;

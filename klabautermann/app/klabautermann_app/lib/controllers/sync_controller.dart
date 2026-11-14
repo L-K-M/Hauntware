@@ -144,9 +144,7 @@ final class SyncController extends ChangeNotifier
     try {
       _engine.send(const ReadPinConflicts());
     } on StateError {
-      _pinRequests.removeWhere(
-        (pending) => identical(pending.$2, answered),
-      );
+      _pinRequests.removeWhere((pending) => identical(pending.$2, answered));
       return Future.value();
     }
     return answered.future.catchError((Object _) {});
@@ -179,9 +177,7 @@ final class SyncController extends ChangeNotifier
         ),
       );
     } on StateError {
-      _pinRequests.removeWhere(
-        (pending) => identical(pending.$2, answered),
-      );
+      _pinRequests.removeWhere((pending) => identical(pending.$2, answered));
       _resolving.remove(conflict.locator);
       notifyListeners();
       throw const PinConflictNotResolvedException('The engine stopped');
@@ -226,9 +222,10 @@ final class SyncController extends ChangeNotifier
           when requestName == 'ResolvePinConflict' ||
               requestName == 'ReadPinConflicts':
         if (_pinRequests.isNotEmpty) {
-          _pinRequests.removeAt(0).$2.completeError(
-            PinConflictNotResolvedException(reason),
-          );
+          _pinRequests
+              .removeAt(0)
+              .$2
+              .completeError(PinConflictNotResolvedException(reason));
         }
       case _:
     }

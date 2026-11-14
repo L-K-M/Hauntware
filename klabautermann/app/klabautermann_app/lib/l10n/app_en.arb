@@ -759,7 +759,6 @@
   "settingsTabAppearance": "Appearance",
   "settingsTabSync": "Sync",
   "settingsTabServers": "Servers",
-  "settingsTabDocker": "Docker",
   "settingsTabSafety": "Safety",
   "settingsTabAlerts": "Alerts",
   "themeSystem": "System",
@@ -11693,7 +11692,7 @@
   "@serverEditorStartDirectoryNote": {
     "description": "Explainer under the start-folder field, which Klabautermann does not show."
   },
-  "serverEditorStartDirectoryInvalid": "Use an absolute path such as /var/www, or one in your own home such as ~/sites.",
+  "serverEditorStartDirectoryInvalid": "Remove control characters, and write ~/ for your own home rather than ~name.",
   "@serverEditorStartDirectoryInvalid": {
     "description": "Validation error when the start folder contains control characters or names another user's home (~name). The field is hidden in Klabautermann."
   },

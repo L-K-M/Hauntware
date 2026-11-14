@@ -375,8 +375,8 @@ void main() {
       expect(delegate.saved, isNull);
       expect(
         find.text(
-          'Use an absolute path such as /var/www, or one in your own home '
-          'such as ~/sites.',
+          'Remove control characters, and write ~/ for your own home '
+          'rather than ~name.',
         ),
         findsOneWidget,
       );

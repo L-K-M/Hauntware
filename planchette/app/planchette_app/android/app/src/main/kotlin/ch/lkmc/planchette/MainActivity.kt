@@ -68,17 +68,19 @@ class MainActivity : FlutterActivity() {
                 // ACTION_CREATE_DOCUMENT has already created an empty document.
                 // Keep it a new save target, guarded by its picker-time digest.
                 if (created.containsKey(path)) return null
-                return try { DocumentIo.digest(read(uri)) } catch (_: FileNotFoundException) { null }
+                return try { DocumentIo.digest(input(uri)) } catch (_: FileNotFoundException) { null }
             }
             "write" -> {
                 require(uri.scheme == "content") { "Use Save As to save a recovery copy." }
                 val bytes = requireNotNull(call.argument<ByteArray>("bytes")) { "Missing document bytes." }
                 val expected = call.argument<String>("expectedSha256") ?: created[path]
                     ?: throw IOException("The document no longer exists. Use Save As.")
+                val maximumBytes = call.argument<Int>("maximumBytes") ?: DocumentIo.MAXIMUM_BYTES
                 DocumentIo(recoveryDirectory).write(bytes, expected, File(path).name,
                     openInput = { input(uri) },
                     openOutput = { contentResolver.openOutputStream(uri, "wt")
-                        ?: throw IOException("The document provider refused the write.") })
+                        ?: throw IOException("The document provider refused the write.") },
+                    maximumBytes = maximumBytes)
                 created.remove(path)
                 return null
             }

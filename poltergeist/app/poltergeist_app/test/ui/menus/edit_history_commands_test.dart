@@ -56,6 +56,13 @@ void main() {
     ]);
   });
 
+  test('a held chord steps change by change, as the suite apps do', () {
+    // Klabautermann's AppCommand.repeats and Seance's stepsHistory both
+    // let a held Cmd+Z keep stepping; GhostUndoHistory serializes steps.
+    expect(undo.repeatable, isTrue);
+    expect(redo.repeatable, isTrue);
+  });
+
   test('disabled with a reason while empty; the label names the change', () {
     expect(undo.enabled(), isFalse);
     expect(redo.enabled(), isFalse);

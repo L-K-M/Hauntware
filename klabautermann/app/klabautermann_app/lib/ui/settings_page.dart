@@ -34,6 +34,7 @@ import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
 import 'settings/recovery_settings.dart';
+import 'settings/setting_write.dart';
 import 'pin_conflict_card.dart';
 import 'server_editing.dart';
 import 'thresholds_tab.dart';
@@ -185,7 +186,6 @@ class _SettingsPageState extends State<SettingsPage>
     SettingsTab.appearance => l10n.settingsTabAppearance,
     SettingsTab.sync => l10n.settingsTabSync,
     SettingsTab.servers => l10n.settingsTabServers,
-    SettingsTab.docker => l10n.settingsTabDocker,
     SettingsTab.safety => l10n.settingsTabSafety,
     SettingsTab.alerts => l10n.settingsTabAlerts,
   };
@@ -289,21 +289,12 @@ class GeneralTab extends StatelessWidget {
   /// As [AppearanceTab._setMode]: the switch moves only once the app took
   /// the change, and a change it took but could not save says so.
   Future<void> _set(BuildContext context, bool announce) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await announcements.setAnnounceThresholdBands(announce);
-    } on AnnouncementNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsAnnounceNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsAnnounceNotChanged);
-      }
-    }
+    await writeSetting<AnnouncementNotSavedException>(
+      context,
+      () => announcements.setAnnounceThresholdBands(announce),
+      notSaved: (l10n) => l10n.settingsAnnounceNotSaved,
+      notChanged: (l10n) => l10n.settingsAnnounceNotChanged,
+    );
   }
 
   /// As [_set], for the polling budget.
@@ -312,21 +303,12 @@ class GeneralTab extends StatelessWidget {
     CadenceSettings cadence,
     CadencePreset preset,
   ) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await cadence.setCadence(preset);
-    } on CadenceNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsCadenceNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsCadenceNotChanged);
-      }
-    }
+    await writeSetting<CadenceNotSavedException>(
+      context,
+      () => cadence.setCadence(preset),
+      notSaved: (l10n) => l10n.settingsCadenceNotSaved,
+      notChanged: (l10n) => l10n.settingsCadenceNotChanged,
+    );
   }
 
   /// As [_set], for the log display.
@@ -335,21 +317,12 @@ class GeneralTab extends StatelessWidget {
     LogDisplaySettings logDisplay,
     LogDisplay display,
   ) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await logDisplay.setLogDisplay(display);
-    } on LogDisplayNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsLogDisplayNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsLogDisplayNotChanged);
-      }
-    }
+    await writeSetting<LogDisplayNotSavedException>(
+      context,
+      () => logDisplay.setLogDisplay(display),
+      notSaved: (l10n) => l10n.settingsLogDisplayNotSaved,
+      notChanged: (l10n) => l10n.settingsLogDisplayNotChanged,
+    );
   }
 
   /// As [_set], for the time display.
@@ -358,21 +331,12 @@ class GeneralTab extends StatelessWidget {
     TimeDisplaySettings timeDisplay,
     TimeDisplay display,
   ) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await timeDisplay.setTimeDisplay(display);
-    } on TimeDisplayNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsServerTimesNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsServerTimesNotChanged);
-      }
-    }
+    await writeSetting<TimeDisplayNotSavedException>(
+      context,
+      () => timeDisplay.setTimeDisplay(display),
+      notSaved: (l10n) => l10n.settingsServerTimesNotSaved,
+      notChanged: (l10n) => l10n.settingsServerTimesNotChanged,
+    );
   }
 
   /// As [_set], for the update check.
@@ -547,9 +511,8 @@ class GeneralTab extends StatelessWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: updateChecks.enabled,
-              onChanged: (enabled) => unawaited(
-                _setUpdateChecks(context, updateChecks, enabled),
-              ),
+              onChanged: (enabled) =>
+                  unawaited(_setUpdateChecks(context, updateChecks, enabled)),
               title: Text(l10n.updateCheckEnabledLabel),
               subtitle: Text(l10n.updateCheckEnabledSubtitle),
             ),
@@ -620,21 +583,12 @@ class _DeviceNameFieldState extends State<DeviceNameField> {
   }
 
   Future<void> _set() async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await widget.deviceName.setDeviceName(_text.text);
-    } on DeviceNameNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsDeviceNameNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsDeviceNameNotChanged);
-      }
-    }
+    await writeSetting<DeviceNameNotSavedException>(
+      context,
+      () => widget.deviceName.setDeviceName(_text.text),
+      notSaved: (l10n) => l10n.settingsDeviceNameNotSaved,
+      notChanged: (l10n) => l10n.settingsDeviceNameNotChanged,
+    );
     // The name in force: trimmed, the default for a blank one, or the old
     // one when the change was not taken.
     if (mounted) _text.text = widget.deviceName.value;
@@ -773,21 +727,12 @@ class SyncTab extends StatelessWidget {
 
   /// As [GeneralTab._set].
   Future<void> _set(BuildContext context, bool enabled) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await syncSecrets.setSyncSecrets(enabled);
-    } on SyncSecretsNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsSyncSecretsNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsSyncSecretsNotChanged);
-      }
-    }
+    await writeSetting<SyncSecretsNotSavedException>(
+      context,
+      () => syncSecrets.setSyncSecrets(enabled),
+      notSaved: (l10n) => l10n.settingsSyncSecretsNotSaved,
+      notChanged: (l10n) => l10n.settingsSyncSecretsNotChanged,
+    );
   }
 
   @override
@@ -892,21 +837,12 @@ class ServersTab extends StatelessWidget {
     String serverId, {
     required bool remembered,
   }) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await memory.setRemembered(serverId, remembered: remembered);
-    } on AdminMemoryNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsAdminMemoryNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsAdminMemoryNotChanged);
-      }
-    }
+    await writeSetting<AdminMemoryNotSavedException>(
+      context,
+      () => memory.setRemembered(serverId, remembered: remembered),
+      notSaved: (l10n) => l10n.settingsAdminMemoryNotSaved,
+      notChanged: (l10n) => l10n.settingsAdminMemoryNotChanged,
+    );
   }
 
   /// Caps [serverId] at [cap] and says in a toast when that applied but
@@ -917,21 +853,12 @@ class ServersTab extends StatelessWidget {
     String serverId,
     CadenceCap? cap,
   ) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await caps.setCap(serverId, cap);
-    } on CadenceNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsCadenceCapNotSaved);
-      }
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.settingsCadenceCapNotChanged);
-      }
-    }
+    await writeSetting<CadenceNotSavedException>(
+      context,
+      () => caps.setCap(serverId, cap),
+      notSaved: (l10n) => l10n.settingsCadenceCapNotSaved,
+      notChanged: (l10n) => l10n.settingsCadenceCapNotChanged,
+    );
   }
 
   @override
@@ -1222,19 +1149,10 @@ Future<void> changeSafetyWithFeedback(
   BuildContext context,
   Future<void> Function() change,
 ) async {
-  final overlay = Overlay.of(context, rootOverlay: true);
-  final l10n = AppLocalizations.of(context);
-  try {
-    await change();
-  } on SafetyNotSavedException catch (error) {
-    debugPrint('$error');
-    if (overlay.mounted) {
-      showTopToast(overlay, message: l10n.settingsSafetyNotSaved);
-    }
-  } on Exception catch (error) {
-    debugPrint('$error');
-    if (overlay.mounted) {
-      showTopToast(overlay, message: l10n.settingsSafetyNotChanged);
-    }
-  }
+  await writeSetting<SafetyNotSavedException>(
+    context,
+    change,
+    notSaved: (l10n) => l10n.settingsSafetyNotSaved,
+    notChanged: (l10n) => l10n.settingsSafetyNotChanged,
+  );
 }

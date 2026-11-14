@@ -5,15 +5,15 @@
 import 'dart:typed_data';
 import 'dart:ui' show Locale;
 
-import 'package:file_picker/file_picker.dart';
 // The plugin's static API delegates here; swapping it keeps real open logic.
-// ignore: implementation_imports
-import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
+import 'package:file_picker/file_picker.dart' show FilePickerPlatform;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/secrets_recovery.dart';
 import 'package:poltergeist_app/services/secure_master_key.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
+
+import '../support/fake_file_picker.dart';
 
 Secret _secret(String id, [String? value]) =>
     Secret(id: id, kind: SecretKind.password, value: value ?? 'value-$id');
@@ -30,26 +30,6 @@ final class _Device {
   final List<int> key;
   late final SecretVault vault;
   late final SecretsRecovery recovery;
-}
-
-class _ExportPicker extends FilePickerPlatform {
-  FilePickerResult? result;
-
-  @override
-  Future<FilePickerResult?> pickFiles({
-    String? dialogTitle,
-    String? initialDirectory,
-    FileType type = FileType.any,
-    List<String>? allowedExtensions,
-    Function(FilePickerStatus)? onFileLoading,
-    int compressionQuality = 0,
-    bool allowMultiple = false,
-    bool withData = false,
-    bool withReadStream = false,
-    bool lockParentWindow = false,
-    bool readSequential = false,
-    bool cancelUploadOnWindowBlur = true,
-  }) async => result;
 }
 
 void main() {
@@ -233,11 +213,11 @@ void main() {
 
   group('picked export size limit', () {
     late FilePickerPlatform previousPicker;
-    late _ExportPicker picker;
+    late FakeFilePicker picker;
 
     setUp(() {
       previousPicker = FilePickerPlatform.instance;
-      FilePickerPlatform.instance = picker = _ExportPicker();
+      FilePickerPlatform.instance = picker = FakeFilePicker();
     });
 
     tearDown(() => FilePickerPlatform.instance = previousPicker);
@@ -257,13 +237,13 @@ void main() {
         yield const [1];
       }
 
-      picker.result = FilePickerResult([
-        PlatformFile(
-          name: 'too-large.json',
-          size: SecretsExport.maxBytes + 1,
-          readStream: source(),
+      picker.picked = [
+        FakePickedFile.stream(
+          'too-large.json',
+          source,
+          reportedLength: SecretsExport.maxBytes + 1,
         ),
-      ]);
+      ];
 
       await expectLater(PlatformSecretsExportFiles().open(), oversized());
       expect(read, isFalse);
@@ -271,13 +251,13 @@ void main() {
 
     test('reads a pathless provider through its stream', () async {
       const contents = [123, 125]; // {} without a filesystem path.
-      picker.result = FilePickerResult([
-        PlatformFile(
-          name: 'export.json',
-          size: contents.length,
-          readStream: Stream.value(contents),
+      picker.picked = [
+        FakePickedFile.bytes(
+          'export.json',
+          contents,
+          reportedLength: contents.length,
         ),
-      ]);
+      ];
 
       expect(await PlatformSecretsExportFiles().open(), contents);
     });
@@ -294,9 +274,7 @@ void main() {
         }
       }
 
-      picker.result = FilePickerResult([
-        PlatformFile(name: 'export.json', size: 0, readStream: source()),
-      ]);
+      picker.picked = [FakePickedFile.stream('export.json', source)];
 
       await expectLater(PlatformSecretsExportFiles().open(), oversized());
       expect(cancelled, isTrue);

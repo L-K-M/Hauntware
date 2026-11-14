@@ -126,7 +126,13 @@ class MemoryDocuments implements DocumentStore {
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
     DocumentWriteTarget target = DocumentWriteTarget.local,
+    int maximumBytes = textDocumentMaximumBytes,
   }) async {
+    // The real stores refuse text over the bound before writing anything.
+    if (textDocumentByteCount(text, const TextDocumentMetadata()) >
+        maximumBytes) {
+      throw const TextDocumentException('Over the store limit.');
+    }
     writes.add((path: path, text: text, digest: expectedSha256));
     _activeWrites++;
     if (_activeWrites > 1) sawOverlappingWrite = true;
@@ -869,20 +875,31 @@ void main() {
       expect(workspace.error, contains('open in a tab'));
     });
 
-    test('a page over the size limit is refused with its own reason', () async {
+    test('a page over the document limit is still exported', () async {
       // Escaping and token markup make the page several times the buffer,
-      // so a buffer well under the limit can produce a page over it. The
-      // store's own refusal spoke of an edited file instead.
+      // so a buffer well under the document limit can produce a page over
+      // it. That limit is for editable text, not for generated pages.
       tab.editor.text.text = '<' * (textDocumentMaximumBytes ~/ 4 + 1);
       dialogs.savePath = testPath('big.html');
-      expect(await workspace.exportHtml(tab, palette), isFalse);
-      expect(
-        workspace.error,
-        'main.dart is too large to export as HTML: the page would be 4.0 MB, '
-        'over the 4 MB limit.',
-      );
-      expect(store.writes, isEmpty);
+      expect(await workspace.exportHtml(tab, palette), isTrue);
+      expect(workspace.error, isNull);
+      expect(store.writes.single.text, contains('&lt;' * 64));
     });
+
+    test(
+      'a page over the export limit is refused with its own reason',
+      () async {
+        tab.editor.text.text = '<' * (htmlExportMaximumBytes ~/ 4 + 1);
+        dialogs.savePath = testPath('big.html');
+        expect(await workspace.exportHtml(tab, palette), isFalse);
+        expect(
+          workspace.error,
+          'main.dart is too large to export as HTML: the page would be 32.0 MB, '
+          'over the 32 MB limit.',
+        );
+        expect(store.writes, isEmpty);
+      },
+    );
 
     test('review fix: exporting over a read-only file asks first', () async {
       store.files[testPath('locked.html')] = document('locked.html', 'keep');

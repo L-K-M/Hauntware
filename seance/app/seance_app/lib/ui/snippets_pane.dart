@@ -109,7 +109,7 @@ class _SnippetsPaneState extends State<SnippetsPane> {
                   ? const _NoMatches()
                   : ListView.separated(
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final s = filtered[i];
                         final count = s.placeholders.length;

@@ -7550,8 +7550,9 @@ the engine in `engine_isolate.dart` beside it):
   `GhostCommandSpec` registry (`PlatformMenuBar` on macOS, a menu bar
   elsewhere). Settings in a second window on desktop through
   `GhostSettingsWindowHost` with a typed `SettingsLinkMethod` enum (tabs:
-  General, Appearance, Sync, Servers, Docker, Safety, Alerts), a route on
-  mobile. The three native settings-window runners are copied and renamed
+  General, Appearance, Sync, Servers, Safety, Alerts; Docker's choices,
+  the engine endpoint and program, sit in each server's Docker tab), a
+  route on mobile. The three native settings-window runners are copied and renamed
   with a ledger entry (D32).
 - As built in M4 (E26, owner question Q3): About Klabautermann is a
   registry command on every desktop, first in the macOS application menu

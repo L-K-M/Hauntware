@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart' show getSaveLocation;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -874,27 +875,24 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
 
   Future<void> _pickUploads() async {
     try {
-      final result = await FilePicker.pickFiles(
-        allowMultiple: true,
-        withReadStream: true,
-      );
-      if (result == null) return;
+      // Several files at once; each is streamed, never loaded whole.
+      final picked = await FilePicker.pickFiles();
+      if (picked.isEmpty) return;
       final targetDirectory = widget.controller.currentPath;
       if (targetDirectory == null) return;
       final existingNames = {
         for (final entry in widget.controller.entries) entry.name,
       };
-      for (final file in result.files) {
-        final stream = file.readStream;
-        final path = file.path;
-        if (stream == null && path == null) {
+      for (final file in picked) {
+        final length = file.lengthSync() ?? await file.length();
+        if (length == null) {
           _showError('The selected document could not be read.');
           continue;
         }
         await _uploadSource(
           name: file.name,
-          length: file.size,
-          openRead: () => stream ?? File(path!).openRead(),
+          length: length,
+          openRead: file.readAsByteStream,
           targetDirectory: targetDirectory,
           destinationExists: existingNames.contains(file.name),
         );
@@ -1366,10 +1364,13 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       staged = await _stageRemoteFile(entry);
       final service = FileExportService(
         desktopSave: (file) async {
-          final destination = await FilePicker.saveFile(
-            fileName: file.fileName,
+          // Only the destination: file_picker's own save needs the whole
+          // file in memory and writes it before returning.
+          final location = await getSaveLocation(
+            suggestedName: file.fileName,
           );
-          if (destination == null) return null;
+          if (location == null) return null;
+          final destination = location.path;
           await _copyExportAtomically(file.file, File(destination));
           await _provenance.markDownloaded(destination);
           return destination;

@@ -597,7 +597,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${parts[1]}'",
     "'third-party-bookmark-import'",
     r"'$stackTrace'",
-    r"'the file picker returned no content for $sourceName'",
   },
   'lib/ui/adaptive_shell.dart': {
     "'primary-pane'",
@@ -1127,6 +1126,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'edit.undoSelection'",
     "'edit.redoSelection'",
     "'edit.selectAll'",
+    "'edit.deselectAll'",
     "'edit.invertSelection'",
     "'selection.quickSelect'",
     "'view.filter'",
@@ -1726,6 +1726,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'delete.dialog'",
     "'delete.cancel'",
     "'delete.confirm'",
+    "'delete.retry'",
     "'delete.headline'",
     "'delete.serverTrash'",
     "'delete.trashUnavailable'",
@@ -2520,6 +2521,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'.json'",
     "'application/json'",
     "'secrets-export-'",
+    // The URI scheme of an iOS save location, never rendered.
+    "'file'",
     r"'${directory.path}/$fileName'",
     "'That file could not be read.'",
     // A fixed protocol diagnostic; the settings UI renders ARB copy.

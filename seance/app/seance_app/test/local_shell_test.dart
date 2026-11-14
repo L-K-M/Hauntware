@@ -32,7 +32,7 @@ void main() {
   }) => LocalShellService(
     platform: platform,
     environment: environment,
-    launch: (_, __) async => throw StateError('not started in tests'),
+    launch: (_, _) async => throw StateError('not started in tests'),
   );
 
   group('availability', () {

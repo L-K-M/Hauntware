@@ -60,8 +60,7 @@ GhostProbeState? ghostProbeOf(ProbeStatus? probe) => switch (probe) {
 };
 
 /// The engine's host-key prompt as the shared dialog shows it, field for
-/// field. The payload names no pinned key type, so a changed key's pinned
-/// fingerprint shows without a type line.
+/// field, so a changed key's pinned fingerprint carries the pinned type.
 GhostHostKeyPrompt ghostHostKeyPromptOf(HostKeyPromptData data) =>
     GhostHostKeyPrompt(
       host: data.host,
@@ -69,6 +68,7 @@ GhostHostKeyPrompt ghostHostKeyPromptOf(HostKeyPromptData data) =>
       keyType: data.keyType,
       fingerprintSha256: data.fingerprintSha256,
       pinnedFingerprintSha256: data.pinnedFingerprintSha256,
+      pinnedKeyType: data.pinnedKeyType,
     );
 
 /// The host-key prompt's words in ARB.
@@ -82,6 +82,7 @@ GhostHostKeyStrings poltergeistHostKeyStrings(AppLocalizations l10n) =>
       fingerprintLabel: l10n.hostKeyFingerprintLabel,
       newKeyLabel: l10n.hostKeyNewLabel,
       previousLabel: l10n.hostKeyPreviousLabel,
+      keyTypeChanged: l10n.hostKeyTypeChanged,
       cancel: l10n.hostKeyCancel,
       trustConnect: l10n.hostKeyTrustConnect,
       trustNewKey: l10n.hostKeyTrustNewKey,

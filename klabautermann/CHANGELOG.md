@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Settings no longer shows an empty Docker tab; Docker's choices sit in
+  each server's Docker tab.
 - When the engine cannot finish starting, it says why in the error
   screen instead of stopping without an answer.
 - Read again on a disk's top folder stops the whole-disk scan still

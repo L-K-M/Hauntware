@@ -111,6 +111,7 @@ final class AndroidDocuments implements DocumentStore, RecoveryCopies {
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
     DocumentWriteTarget target = DocumentWriteTarget.local,
+    int maximumBytes = textDocumentMaximumBytes,
   }) async {
     if (target != DocumentWriteTarget.local) {
       throw const TextDocumentException(
@@ -127,11 +128,13 @@ final class AndroidDocuments implements DocumentStore, RecoveryCopies {
         hasUtf8Bom: format.utf8Bom == Utf8Bom.present,
         lineEnding: format.lineEnding,
         encoding: format.encoding,
+        maximumBytes: maximumBytes,
       );
       await _invoke<void>('write', {
         'path': path,
         'bytes': await file.readAsBytes(),
         'expectedSha256': expectedSha256,
+        'maximumBytes': maximumBytes,
       });
       final recovery = source?.file.path;
       if (recovery != null &&
