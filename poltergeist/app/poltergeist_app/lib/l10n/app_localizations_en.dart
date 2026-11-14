@@ -953,6 +953,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editSelectAllLabel => 'Select All';
 
   @override
+  String get editDeselectAllLabel => 'Deselect All';
+
+  @override
   String get editInvertSelectionLabel => 'Invert Selection';
 
   @override

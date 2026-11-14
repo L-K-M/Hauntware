@@ -1127,6 +1127,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'edit.undoSelection'",
     "'edit.redoSelection'",
     "'edit.selectAll'",
+    "'edit.deselectAll'",
     "'edit.invertSelection'",
     "'selection.quickSelect'",
     "'view.filter'",

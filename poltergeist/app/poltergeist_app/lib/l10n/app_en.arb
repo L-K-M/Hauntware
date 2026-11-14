@@ -1313,6 +1313,10 @@
   "@editSelectAllLabel": {
     "description": "Command label: select every row of the focused pane's listing (edit.selectAll, 02 §2.5)."
   },
+  "editDeselectAllLabel": "Deselect All",
+  "@editDeselectAllLabel": {
+    "description": "Command label: clear the focused pane's selection (edit.deselectAll, 02 §8.2)."
+  },
   "editInvertSelectionLabel": "Invert Selection",
   "@editInvertSelectionLabel": {
     "description": "Command label: replace the focused pane's selection with its complement (edit.invertSelection, 02 §2.5)."

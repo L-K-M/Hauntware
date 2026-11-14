@@ -1568,6 +1568,12 @@ abstract class AppLocalizations {
   /// **'Select All'**
   String get editSelectAllLabel;
 
+  /// Command label: clear the focused pane's selection (edit.deselectAll, 02 §8.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect All'**
+  String get editDeselectAllLabel;
+
   /// Command label: replace the focused pane's selection with its complement (edit.invertSelection, 02 §2.5).
   ///
   /// In en, this message translates to:
