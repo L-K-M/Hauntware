@@ -3,7 +3,9 @@
 /// runs, and run the intercepted close path. Hosts own their persistence
 /// format and their product-specific hooks through the adapter interfaces.
 /// Hosts with extra windows also route misaddressed accessibility actions
-/// to their views through [semanticsActionView]. On macOS,
+/// to their views through [semanticsActionView]. Hosts storing the window
+/// state in a file of its own use [GhostWindowStateFile]. On macOS,
+/// [installMacosTitlebar] makes the titlebar part of the app and
 /// [MacosToolbarBandChannel] reports the toolbar band a header draws under.
 /// A desktop Settings window on a second engine keeps in step with the app
 /// through [GhostSettingsWindowHost] and [GhostSettingsWindowClient].
@@ -12,7 +14,9 @@ library;
 export 'src/adapters.dart';
 export 'src/geometry.dart';
 export 'src/lifecycle.dart';
+export 'src/macos_titlebar.dart';
 export 'src/macos_toolbar_band.dart';
 export 'src/semantics_routing.dart';
 export 'src/settings_link.dart';
 export 'src/snapshot.dart';
+export 'src/window_state_file.dart';

@@ -95,10 +95,9 @@ dependencies:
   # The bundled monospace fonts behind the siblings' code stack.
   ghost_fonts:
     path: ../../../planchette/packages/ghost_fonts
-  # The macOS integrated titlebar: a transparent titlebar over full-size
-  # content with an empty unified toolbar (lib/services/macos_titlebar.dart).
-  # Pinned to the version Séance and Poltergeist run, whose titlebar this
-  # one follows.
+  # The header's MacosToolbarPassthrough under the integrated titlebar,
+  # which ghost_desktop installs. Pinned to the version ghost_desktop,
+  # Séance and Poltergeist run.
   macos_window_utils: 1.9.1
   # File > Quit on Linux and Windows asks the main window to close, the
   # path its close button takes (lib/ui/menus/app_commands.dart). Already

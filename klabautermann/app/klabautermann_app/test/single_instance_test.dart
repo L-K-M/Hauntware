@@ -2,12 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/testing.dart';
 import 'package:klabautermann_app/services/instance_guard.dart';
 import 'package:klabautermann_app/services/window_state.dart';
 import 'package:klabautermann_app/ui/already_running_app.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
-import 'support/fake_window.dart';
 import 'support/harness.dart';
 import 'support/native_sources.dart';
 
@@ -114,13 +114,13 @@ void main() {
   group('a second instance\'s window', () {
     test('is shown on macOS where the runner placed it, with no window '
         'state read or written', () async {
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
       await showMainWindowUnrestored(
         platform: TargetPlatform.macOS,
         window: window,
       );
       expect(window.calls, ['ensureInitialized', 'show', 'focus']);
-      expect(window.listening, isFalse);
+      expect(window.listenerRegistered, isFalse);
     });
 
     for (final platform in [
@@ -130,7 +130,7 @@ void main() {
       TargetPlatform.iOS,
     ]) {
       test('is left to the runner on ${platform.name}', () async {
-        final window = FakeWindow();
+        final window = FakeWindowAdapter();
         await showMainWindowUnrestored(platform: platform, window: window);
         expect(window.calls, isEmpty);
       });
@@ -138,7 +138,7 @@ void main() {
 
     test('stays as it is when the window plugin fails, without '
         'throwing', () async {
-      final window = FakeWindow()..failEnsureInitialized = true;
+      final window = FakeWindowAdapter()..failEnsureInitialized = true;
       await showMainWindowUnrestored(
         platform: TargetPlatform.macOS,
         window: window,

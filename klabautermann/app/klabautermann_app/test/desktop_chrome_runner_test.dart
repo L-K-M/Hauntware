@@ -78,7 +78,9 @@ void main() {
     test('the app installs it before the window is shown, and the settings '
         'window\'s engine never does', () {
       final branch = main.indexOf('await runSettingsWindow();');
-      final install = main.indexOf('await installMacosTitlebar()');
+      final install = main.indexOf(
+        'await installMacosTitlebar(channelName: windowChannelName)',
+      );
       final restore = main.indexOf('await restoreMainWindow(');
       expect(branch, isNonNegative);
       expect(install, greaterThan(branch));

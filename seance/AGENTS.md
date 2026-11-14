@@ -574,7 +574,7 @@ Do not "simplify" these away — they are load-bearing:
   `MacOSWindowUtilsViewController` (the package's passthrough code
   force-casts to it), with `SeanceFlutterViewController` inside so the
   accessibility guard stays. `MainFlutterWindowManipulator.start` resets the
-  window to a standard titlebar, so `MacosTitlebar.install()` re-applies it
+  window to a standard titlebar, so `installMacosTitlebar` re-applies it
   from `main()` *before* `restoreAndTrack()` shows the hidden window. Never
   also pass `titleBarStyle` to window_manager: its `setTitleBarStyle`
   rewrites the same window properties. In full screen the runner hides the

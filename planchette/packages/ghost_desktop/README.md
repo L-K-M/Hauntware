@@ -32,6 +32,17 @@ format, close guards, and native hooks kept in its own thin adapter.
   band through `MediaQuery`, and the claim gives it back to the shell whose
   header draws under it. `windowedWithoutScope` keeps a host's windowed
   layout banded when it has no runner report (Poltergeist).
+- `GhostWindowStateFile` — `window_state.json` in the snapshot's JSON
+  shape, tolerant on load and one save at a time, through the host's own
+  atomic writer (each host keeps its settings file's encoding).
+- `installMacosTitlebar` / `MacosTitlebarAdapter` — the integrated macOS
+  titlebar over macos_window_utils (transparent titlebar over full-size
+  content, hidden title, empty unified toolbar) with a fallback to the
+  standard titlebar, returning the host's `MacosToolbarBandChannel`.
+  Poltergeist runs the same install from the lifecycle's macOS prepare
+  step.
+- `package:ghost_desktop/testing.dart` — scripted window, display,
+  persistence and debounce fakes for the lifecycle and its hosts' tests.
 - `GhostSettingsWindowHost` / `GhostSettingsWindowClient` — the desktop
   Settings window's link between the app's engine and the window's second
   engine: the `hello` handshake, coalesced and deduplicated snapshots,
@@ -77,8 +88,9 @@ format, close guards, and native hooks kept in its own thin adapter.
 - Used by `app/seance_app` (`WindowStateService` delegates while keeping the
   pre-`runApp` entry and file location) and `app/poltergeist_app`
   (`DesktopWindowLifecycle` is a facade over `GhostWindowLifecycle`).
-- `app/planchette_app`: `WindowStateStore` implements
-  `GhostWindowPersistence` (`window_state.json` beside `settings.json`) and
+- `app/planchette_app`: `windowStateFile` writes `window_state.json` beside
+  `settings.json` through `GhostWindowStateFile`, as Séance and
+  Klabautermann do, and
   `DesktopWindow` drives `GhostWindowLifecycle` for the primary window —
   restore runs before `runWidget` so the frame lands before the runners'
   first-frame show; macOS hides the window at launch. Planchette's document

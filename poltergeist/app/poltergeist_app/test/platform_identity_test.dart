@@ -382,10 +382,16 @@ void main() {
 
   test('preserves the configured macOS titlebar during show', () {
     final lifecycle = _read('lib/services/desktop_window_lifecycle.dart');
+    // The install itself is ghost_desktop's, shared with Séance and
+    // Klabautermann.
+    final titlebar = _read(
+      '../../../planchette/packages/ghost_desktop/lib/src/macos_titlebar.dart',
+    );
 
-    expect(lifecycle, contains('enableFullSizeContentView()'));
-    expect(lifecycle, contains('makeTitlebarTransparent()'));
-    expect(lifecycle, contains('hideTitle()'));
+    expect(lifecycle, contains('MacosTitlebarAdapter()).install'));
+    expect(titlebar, contains('enableFullSizeContentView()'));
+    expect(titlebar, contains('makeTitlebarTransparent()'));
+    expect(titlebar, contains('hideTitle()'));
     expect(lifecycle, isNot(contains('titleBarStyle: TitleBarStyle.normal')));
   });
 

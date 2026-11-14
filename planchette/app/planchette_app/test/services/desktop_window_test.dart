@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:ghost_desktop/testing.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/desktop_window.dart';
 import 'package:planchette_app/services/document_windows.dart';
@@ -12,115 +13,9 @@ import 'package:planchette_app/theme/planchette_theme.dart';
 import 'document_windows_test.dart' show FakeWindowHost;
 import 'document_workspace_test.dart' show MemoryDocuments, FakeDialogs;
 
-/// The native window, scripted: every call lands in [events], and
-/// [emitClose]/[emitMove] deliver the callbacks window_manager would.
-final class FakeWindowAdapter implements GhostWindowAdapter {
-  final events = <String>[];
-  var bounds = const Rect.fromLTWH(100, 100, 1080, 760);
-  var minimized = false;
-  var maximized = false;
-  var fullScreen = false;
-  var preventClose = false;
-  var failDestroy = false;
-  var failReady = false;
-  var destroyCalls = 0;
-  GhostWindowOptions? readyOptions;
-  GhostWindowListener? _listener;
-
-  void emitClose() => _listener?.onWindowClose();
-  void emitMove() => _listener?.onWindowMove();
-  void emitShow() => _listener?.onWindowShow();
-
-  @override
-  Future<void> ensureInitialized() async => events.add('ensureInitialized');
-  @override
-  Future<void> waitUntilReadyToShow(GhostWindowOptions? options) async {
-    if (failReady) throw StateError('ready failed');
-    readyOptions = options;
-    events.add('waitUntilReadyToShow');
-  }
-
-  @override
-  Future<void> setBounds(Rect? bounds, {Offset? position}) async {
-    if (bounds != null) this.bounds = bounds;
-    if (position != null) {
-      this.bounds = position & this.bounds.size;
-    }
-    events.add('setBounds');
-  }
-
-  @override
-  Future<Rect> getBounds() async => bounds;
-  @override
-  Future<void> setMinimumSize(Size size) async {}
-  @override
-  double getDevicePixelRatio() => 1;
-  @override
-  Future<bool> isMinimized() async => minimized;
-  @override
-  Future<bool> isMaximized() async => maximized;
-  @override
-  Future<bool> isFullScreen() async => fullScreen;
-  @override
-  Future<void> maximize() async => events.add('maximize');
-  @override
-  Future<void> setFullScreen(bool value) async {
-    fullScreen = value;
-    events.add('setFullScreen');
-  }
-
-  @override
-  Future<void> show() async => events.add('show');
-  @override
-  Future<void> focus() async => events.add('focus');
-  @override
-  Future<void> setPreventClose(bool prevent) async {
-    preventClose = prevent;
-    events.add('preventClose');
-  }
-
-  @override
-  Future<void> destroy() async {
-    if (failDestroy) throw StateError('native close failed');
-    destroyCalls++;
-    events.add('destroy');
-  }
-
-  @override
-  void addListener(GhostWindowListener listener) => _listener = listener;
-  @override
-  void removeListener(GhostWindowListener listener) => _listener = null;
-}
-
-final class FakeDisplayAdapter implements GhostDisplayAdapter {
-  FakeDisplayAdapter(this.workAreas);
-
-  final List<Rect> workAreas;
-
-  @override
-  Future<GhostDisplay> primaryDisplay() async =>
-      GhostDisplay(workArea: workAreas.first);
-
-  @override
-  Future<List<GhostDisplay>> displays() async => [
-    for (final area in workAreas) GhostDisplay(workArea: area),
-  ];
-}
-
-/// The remembered frame, in memory.
-final class FakeWindowPersistence implements GhostWindowPersistence {
-  FakeWindowPersistence([this.stored]);
-
-  GhostWindowSnapshot? stored;
-  var saveCalls = 0;
-
-  @override
-  Future<GhostWindowSnapshot?> load() async => stored;
-  @override
-  Future<void> save(GhostWindowSnapshot snapshot) async {
-    saveCalls++;
-    stored = snapshot;
-  }
+extension on FakeWindowAdapter {
+  /// Destroys that went through; a failed one leaves the window up.
+  int get destroyCalls => events.where((event) => event == 'destroy').length;
 }
 
 DesktopWindow desktopFor({
@@ -142,10 +37,11 @@ DesktopWindow desktopFor({
     onFocus: onFocus,
     closeInstead: closeInstead,
     windowBackgroundColor: windowBackgroundColor,
-    persistence: persistence ?? FakeWindowPersistence(),
+    persistence: persistence ?? MemoryPersistence(),
     window: window ?? FakeWindowAdapter(),
     displays:
-        displays ?? FakeDisplayAdapter(const [Rect.fromLTWH(0, 0, 2560, 1440)]),
+        displays ??
+        FakeDisplayAdapter.workAreas(const [Rect.fromLTWH(0, 0, 2560, 1440)]),
     platform: platform ?? GhostDesktopPlatform.macos,
     scheduleDebounce: scheduleDebounce,
     setWindowTitle: setWindowTitle,
@@ -178,7 +74,7 @@ void main() {
       );
       await desktop.requestQuit();
       expect(workspace.interactionLocked, isFalse);
-      expect(workspace.error, contains('native close failed'));
+      expect(workspace.error, contains('destroy failed'));
       expect(workspace.documents, [tab]);
       await desktop.requestQuit();
       expect(window.destroyCalls, 0);
@@ -241,7 +137,7 @@ void main() {
     final window = FakeWindowAdapter();
     final desktop = desktopFor(
       window: window,
-      persistence: FakeWindowPersistence(
+      persistence: MemoryPersistence(
         const GhostWindowSnapshot(bounds: remembered),
       ),
       platform: GhostDesktopPlatform.macos,
@@ -254,10 +150,10 @@ void main() {
     // only then does the window come forward.
     expect(window.bounds, remembered);
     expect(
-      window.events.indexOf('setBounds'),
-      lessThan(window.events.indexOf('show')),
+      window.calls.indexOf('setBounds'),
+      lessThan(window.calls.indexOf('show')),
     );
-    expect(window.events, contains('focus'));
+    expect(window.calls, contains('focus'));
     expect(window.readyOptions?.placement, GhostWindowPlacement.restored);
   });
 
@@ -268,7 +164,7 @@ void main() {
 
     await desktop.initialize();
 
-    expect(window.events, isNot(contains('setBounds')));
+    expect(window.calls, isNot(contains('setBounds')));
     expect(window.readyOptions?.placement, GhostWindowPlacement.centered);
     expect(window.readyOptions?.size, const Size(1080, 760));
   });
@@ -276,7 +172,7 @@ void main() {
   test('a moved window saves the new frame after the debounce', () async {
     final pending = <Future<void> Function()>[];
     final window = FakeWindowAdapter();
-    final persistence = FakeWindowPersistence();
+    final persistence = MemoryPersistence();
     final desktop = desktopFor(
       window: window,
       persistence: persistence,
@@ -290,14 +186,14 @@ void main() {
 
     window.bounds = const Rect.fromLTWH(40, 30, 800, 500);
     window.emitMove();
-    expect(persistence.saveCalls, 0);
+    expect(persistence.writes.length, 0);
     await pending.single();
     expect(persistence.stored?.bounds, window.bounds);
   });
 
   test('a maximized window is remembered without its frame', () async {
     final window = FakeWindowAdapter();
-    final persistence = FakeWindowPersistence();
+    final persistence = MemoryPersistence();
     final pending = <Future<void> Function()>[];
     final desktop = desktopFor(
       window: window,
@@ -331,7 +227,7 @@ void main() {
   test(
     'a restore failure still lets initialize return for runWidget',
     () async {
-      final window = FakeWindowAdapter()..failReady = true;
+      final window = FakeWindowAdapter()..failReadyToShow = true;
       final errors = <Object>[];
       final desktop = desktopFor(window: window, onQuitFailed: errors.add);
       addTearDown(desktop.dispose);
@@ -342,7 +238,7 @@ void main() {
       // onError rather than escaping as a blank-window crash.
       await desktop.initialize();
 
-      expect(window.events, contains('show'));
+      expect(window.calls, contains('show'));
       expect(errors.single, isA<StateError>());
     },
   );
@@ -351,7 +247,7 @@ void main() {
     'the close button with other windows up neither quits nor saves',
     () async {
       final window = FakeWindowAdapter();
-      final persistence = FakeWindowPersistence();
+      final persistence = MemoryPersistence();
       var confirmCalls = 0;
       final desktop = desktopFor(
         window: window,
@@ -374,7 +270,7 @@ void main() {
 
       expect(window.destroyCalls, 0);
       expect(confirmCalls, 0);
-      expect(persistence.saveCalls, 0);
+      expect(persistence.writes.length, 0);
     },
   );
 
@@ -399,27 +295,27 @@ void main() {
     final window = FakeWindowAdapter();
     final desktop = desktopFor(
       window: window,
-      setWindowTitle: (title) async => window.events.add('title $title'),
+      setWindowTitle: (title) async => window.calls.add('title $title'),
     );
     desktop
       ..setTitle('Planchette')
       ..setTitle('Untitled — Planchette');
     await Future<void>.delayed(Duration.zero);
-    expect(window.events, isEmpty);
+    expect(window.calls, isEmpty);
 
     await desktop.initialize();
-    expect(window.events, contains('title Untitled — Planchette'));
-    expect(window.events, isNot(contains('title Planchette')));
+    expect(window.calls, contains('title Untitled — Planchette'));
+    expect(window.calls, isNot(contains('title Planchette')));
     expect(
-      window.events.indexOf('title Untitled — Planchette'),
-      greaterThan(window.events.indexOf('waitUntilReadyToShow')),
+      window.calls.indexOf('title Untitled — Planchette'),
+      greaterThan(window.calls.indexOf('waitUntilReadyToShow')),
     );
   });
 
   test('a window that never got ready is never sent a title', () async {
     final titles = <String>[];
     final desktop = desktopFor(
-      window: FakeWindowAdapter()..failReady = true,
+      window: FakeWindowAdapter()..failReadyToShow = true,
       setWindowTitle: (title) async => titles.add(title),
     );
     desktop.setTitle('a — Planchette');

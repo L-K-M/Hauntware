@@ -340,8 +340,12 @@ over the rail, and a header across the terminal and the side panel
 - **Source:** Poltergeist `app/poltergeist_app/lib/ui/shell/macos_toolbar_band.dart`
   and `lib/services/macos_toolbar_band_channel.dart` @ `dc478e6`, the
   runner's full-screen handling in `macos/Runner/MainFlutterWindow.swift`,
-  and `_MacTitlebarAdapter` in `lib/services/desktop_window_lifecycle.dart`.
-- **Copy:** `lib/services/macos_titlebar.dart` (the installer). The band
+  and `_MacTitlebarAdapter` in `lib/services/desktop_window_lifecycle.dart`
+  (now ghost_desktop's `MacosTitlebarAdapter`).
+- **Copy:** none now: the installer is `ghost_desktop`'s
+  `installMacosTitlebar` (`lib/src/macos_titlebar.dart`), shared with
+  Poltergeist and Klabautermann; `lib/services/macos_titlebar.dart` keeps
+  only the channel name. The band
   widgets themselves (`macosToolbarBandHeight`, `MacosToolbarBandScope`,
   `ReserveMacosToolbarBand`, `ClaimMacosToolbarBand`,
   `withMacosToolbarBand`) are `ghost_desktop`'s
