@@ -3753,6 +3753,10 @@ the guarded kill needs it.
   the export fails, times out or is too large, the folder fell outside
   its parent's largest entries, or Read again is pressed on a folder
   below the mount point. Read again on the mount point exports again.
+  A new export (Read again, another mount or reader) cancels the one it
+  replaces while that one still runs, and closes its process, as does
+  forgetting the server, so two exports never scan one host at once; the
+  folders that waited on the cancelled one read with `du`.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill

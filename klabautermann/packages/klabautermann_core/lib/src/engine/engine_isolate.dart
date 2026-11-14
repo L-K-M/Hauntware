@@ -1971,13 +1971,14 @@ void engineMain(
               root,
               elevated: elevated,
               fresh: fresh,
-              read: () => lendSession(
+              read: (cancelled) => lendSession(
                 serverId,
                 () => readDiskUsageTree(
                   root,
                   tool: tool,
                   link: link,
                   session: session,
+                  cancelled: cancelled,
                 ),
               ),
             );

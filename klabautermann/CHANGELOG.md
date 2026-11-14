@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Read again on a disk's top folder stops the whole-disk scan still
+  running from before, so two scans no longer run on the server at once.
 - The Updates table sorts its installed and available versions as
   versions, so 1.10 follows 1.9.
 - Activity and the detached operations list name cron job runs, snippet
