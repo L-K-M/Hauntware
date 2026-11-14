@@ -9264,7 +9264,7 @@ abstract class AppLocalizations {
   /// Validation error when the start folder contains control characters or names another user's home (~name).
   ///
   /// In en, this message translates to:
-  /// **'Use an absolute path such as /var/www, or one in your own home such as ~/sites.'**
+  /// **'Remove control characters, and write ~/ for your own home rather than ~name.'**
   String get serverEditorStartDirectoryInvalid;
 
   /// Label of the login-script field — a command typed into the server's shell after connecting (executed by Séance; stored and synced here).

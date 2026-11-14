@@ -6619,7 +6619,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverEditorStartDirectoryInvalid =>
-      'Use an absolute path such as /var/www, or one in your own home such as ~/sites.';
+      'Remove control characters, and write ~/ for your own home rather than ~name.';
 
   @override
   String get serverEditorLoginScript => 'Login script (optional)';
