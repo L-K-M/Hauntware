@@ -29,6 +29,29 @@ class DocumentIoTest {
         }
     }
 
+    @Test fun streamedDigestsMatchAndIgnoreTheReadLimit() {
+        val large = ByteArray(DocumentIo.MAXIMUM_BYTES + 1) { it.toByte() }
+        assertEquals(DocumentIo.digest(large), DocumentIo.digest(ByteArrayInputStream(large)))
+    }
+
+    @Test fun exportWritesTakeTheirOwnBound() {
+        val recovery = temporary.newFolder()
+        var provider = ByteArray(DocumentIo.MAXIMUM_BYTES + 1)
+        val page = ByteArray(DocumentIo.MAXIMUM_BYTES + 2) { 'a'.code.toByte() }
+        fun write(bytes: ByteArray, maximumBytes: Int) =
+            DocumentIo(recovery).write(bytes, DocumentIo.digest(provider), "page.html",
+                { ByteArrayInputStream(provider) },
+                { object : ByteArrayOutputStream() {
+                    override fun close() { provider = toByteArray() }
+                } },
+                maximumBytes)
+        assertThrows(IllegalArgumentException::class.java) { write(page, DocumentIo.MAXIMUM_BYTES) }
+        assertThrows(IllegalArgumentException::class.java) { write(page, DocumentIo.EXPORT_MAXIMUM_BYTES + 1) }
+        write(page, DocumentIo.EXPORT_MAXIMUM_BYTES)
+        assertArrayEquals(page, provider)
+        assertTrue(recovery.listFiles()!!.isEmpty())
+    }
+
     @Test fun changedDocumentsAreNeverOpenedForWriting() {
         val recovery = temporary.newFolder()
         var openedForWrite = false

@@ -17,18 +17,36 @@ internal class DocumentIo(private val recoveryDirectory: File) {
         // The cross-language document limit, matching planchette_core.
         const val MAXIMUM_BYTES = 4 * 1024 * 1024
 
-        fun digest(bytes: ByteArray): String =
-            MessageDigest.getInstance("SHA-256").digest(bytes)
-                .joinToString("") { "%02x".format(it) }
+        // The largest generated page a write accepts, matching
+        // planchette_core's htmlExportMaximumBytes. A page is never edited,
+        // so the document limit does not apply to it.
+        const val EXPORT_MAXIMUM_BYTES = 32 * 1024 * 1024
 
-        fun read(input: InputStream): ByteArray = input.use {
+        fun digest(bytes: ByteArray): String = hex(MessageDigest.getInstance("SHA-256").digest(bytes))
+
+        /** Hashes a provider stream of any size without holding it, so the
+         * digest of an existing save target never trips a read limit. */
+        fun digest(input: InputStream): String = input.use {
+            val sha256 = MessageDigest.getInstance("SHA-256")
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = it.read(buffer)
+                if (count < 0) break
+                sha256.update(buffer, 0, count)
+            }
+            hex(sha256.digest())
+        }
+
+        private fun hex(digest: ByteArray): String = digest.joinToString("") { "%02x".format(it) }
+
+        fun read(input: InputStream, maximumBytes: Int = MAXIMUM_BYTES): ByteArray = input.use {
             val output = ByteArrayOutputStream()
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
             while (true) {
                 val count = it.read(buffer)
                 if (count < 0) break
-                if (output.size() + count > MAXIMUM_BYTES) {
-                    throw IOException("The built-in editor supports text files up to 4 MB.")
+                if (output.size() + count > maximumBytes) {
+                    throw IOException("The built-in editor supports text files up to ${maximumBytes / (1024 * 1024)} MB.")
                 }
                 output.write(buffer, 0, count)
             }
@@ -36,15 +54,20 @@ internal class DocumentIo(private val recoveryDirectory: File) {
         }
     }
 
+    /** [maximumBytes] bounds both the new bytes and the original they
+     * replace: the document limit, or up to [EXPORT_MAXIMUM_BYTES] for a
+     * generated page. */
     fun write(
         bytes: ByteArray,
         expectedSha256: String,
         name: String,
         openInput: () -> InputStream,
         openOutput: () -> OutputStream,
+        maximumBytes: Int = MAXIMUM_BYTES,
     ) {
-        require(bytes.size <= MAXIMUM_BYTES) { "The edited file exceeds the 4 MB limit." }
-        val original = read(openInput())
+        require(maximumBytes in 0..EXPORT_MAXIMUM_BYTES) { "Unsupported write limit: $maximumBytes bytes." }
+        require(bytes.size <= maximumBytes) { "The edited file exceeds the ${maximumBytes / (1024 * 1024)} MB limit." }
+        val original = read(openInput(), maximumBytes)
         if (digest(original) != expectedSha256) {
             throw IOException("The document changed in another app. Reload it before saving.")
         }
@@ -63,7 +86,7 @@ internal class DocumentIo(private val recoveryDirectory: File) {
         }
         try {
             openOutput().use { it.write(bytes) }
-            if (!read(openInput()).contentEquals(bytes)) {
+            if (!read(openInput(), maximumBytes).contentEquals(bytes)) {
                 throw IOException("The document provider did not retain the saved bytes.")
             }
         } catch (error: Exception) {
