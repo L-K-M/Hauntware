@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/third_party_bookmark_import_setup.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../support/fake_bookmark_store.dart';
+import '../support/fake_file_picker.dart';
 
 void main() {
   test('keeps the caller bookmark store and picker', () async {
@@ -112,11 +112,7 @@ void main() {
 
   test('picker stream is copied into bounded input', () async {
     final files = await readThirdPartyBookmarkImportFiles([
-      PlatformFile(
-        name: 'site.duck',
-        size: 3,
-        readStream: Stream.value(const [1, 2, 3]),
-      ),
+      FakePickedFile.bytes('site.duck', const [1, 2, 3], reportedLength: 3),
     ]);
 
     expect(files.single.name, 'site.duck');
@@ -133,10 +129,10 @@ void main() {
 
     await expectLater(
       readThirdPartyBookmarkImportFiles([
-        PlatformFile(
-          name: 'oversized.duck',
-          size: thirdPartyBookmarkImportMaxFileBytes + 1,
-          readStream: stream,
+        FakePickedFile.stream(
+          'oversized.duck',
+          () => stream,
+          reportedLength: thirdPartyBookmarkImportMaxFileBytes + 1,
         ),
       ]),
       throwsA(
@@ -160,10 +156,10 @@ void main() {
 
       await expectLater(
         readThirdPartyBookmarkImportFiles([
-          PlatformFile(
-            name: rawName,
-            size: thirdPartyBookmarkImportMaxFileBytes + 1,
-            readStream: const Stream.empty(),
+          FakePickedFile.stream(
+            rawName,
+            Stream.empty,
+            reportedLength: thirdPartyBookmarkImportMaxFileBytes + 1,
           ),
         ]),
         throwsA(
@@ -191,13 +187,13 @@ void main() {
 
     await expectLater(
       readThirdPartyBookmarkImportFiles([
-        PlatformFile(
-          name: 'underreported.duck',
-          size: 1,
-          readStream: Stream.fromIterable([
+        FakePickedFile.stream(
+          'underreported.duck',
+          () => Stream.fromIterable([
             chunk,
             const [0],
           ]),
+          reportedLength: 1,
         ),
       ]),
       throwsA(
@@ -229,20 +225,20 @@ void main() {
     await expectLater(
       readThirdPartyBookmarkImportFiles([
         for (var index = 0; index < fullFileCount; index++)
-          PlatformFile(
-            name: 'underreported-$index.duck',
-            size: 1,
-            readStream: Stream.value(fullFile),
+          FakePickedFile.bytes(
+            'underreported-$index.duck',
+            fullFile,
+            reportedLength: 1,
           ),
-        PlatformFile(
-          name: 'crosses-total.duck',
-          size: 1,
-          readStream: Stream.value(Uint8List(crossingFileBytes)),
+        FakePickedFile.bytes(
+          'crosses-total.duck',
+          Uint8List(crossingFileBytes),
+          reportedLength: 1,
         ),
-        PlatformFile(
-          name: 'must-not-read.duck',
-          size: 1,
-          readStream: trailingStream,
+        FakePickedFile.stream(
+          'must-not-read.duck',
+          () => trailingStream,
+          reportedLength: 1,
         ),
       ]),
       throwsA(

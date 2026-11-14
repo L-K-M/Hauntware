@@ -68,12 +68,10 @@ final class ServerEditorBackend extends ServerEditorDelegate {
 
   @override
   Future<String?> pickIdentityFile() async {
-    final result = await FilePicker.pickFiles();
-    final files = result?.files ?? const [];
-    if (files.isEmpty) return null;
-    // No withData: the path is what is stored — "reference, don't store"
-    // reads the key at connect, so there is nothing to do with bytes here.
-    return files.single.path;
+    final file = await FilePicker.pickFile();
+    // Only the path is stored — "reference, don't store" reads the key at
+    // connect, so nothing is read here.
+    return file?.path;
   }
 
   @override

@@ -597,7 +597,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${parts[1]}'",
     "'third-party-bookmark-import'",
     r"'$stackTrace'",
-    r"'the file picker returned no content for $sourceName'",
   },
   'lib/ui/adaptive_shell.dart': {
     "'primary-pane'",
