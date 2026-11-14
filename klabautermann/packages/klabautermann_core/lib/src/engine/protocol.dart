@@ -6139,6 +6139,36 @@ sealed class ActionIntent {
   final String serverId;
 }
 
+/// [intent]'s kind as the audit log and the operation records store it,
+/// and the app words it (`activityAction`). The keys are the intent
+/// types' names, written out so that stored records stay readable however
+/// the build names its types; never change one.
+String actionKeyOf(ActionIntent intent) => switch (intent) {
+  KillProcess() => 'KillProcess',
+  UnitAction() => 'UnitAction',
+  StartTimer() => 'StartTimer',
+  RefreshPackageLists() => 'RefreshPackageLists',
+  PowerAction() => 'PowerAction',
+  RunCronJob() => 'RunCronJob',
+  RunSnippet() => 'RunSnippet',
+  ContainerAction() => 'ContainerAction',
+  ContainerBulkAction() => 'ContainerBulkAction',
+  ContainerExec() => 'ContainerExec',
+  RemoveContainer() => 'RemoveContainer',
+  RemoveImage() => 'RemoveImage',
+  CreateVolume() => 'CreateVolume',
+  RemoveVolume() => 'RemoveVolume',
+  RemoveNetwork() => 'RemoveNetwork',
+  PullImage() => 'PullImage',
+  PruneDocker() => 'PruneDocker',
+  StackAction() => 'StackAction',
+  StackComposeAction() => 'StackComposeAction',
+  RedeployStack() => 'RedeployStack',
+  EditFile() => 'EditFile',
+  KeepLastBackups() => 'KeepLastBackups',
+  RemoveBackups() => 'RemoveBackups',
+};
+
 /// Signals process [pid] (PRC-02), only while its start time still reads
 /// [startTicks], so a reused PID is never hit (03 §8.5).
 final class KillProcess extends ActionIntent {

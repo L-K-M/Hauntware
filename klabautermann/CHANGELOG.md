@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Activity and the detached operations list name cron job runs, snippet
+  runs and stack compose actions instead of reading "Action".
 - When the server refuses to plan an action because a step failed, such
   as reading the backup manifest, the refusal names the step, its exit
   code and its error output.

@@ -7911,10 +7911,10 @@ abstract class AppLocalizations {
   /// **'Result'**
   String get activityColumnResult;
 
-  /// An activity log row's action; action is the engine's intent type name.
+  /// An activity log row's action; action is the engine's action key (actionKeyOf), its intent type's name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} RunCronJob{Run cron job now} RunSnippet{Run snippet} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} StackComposeAction{Stack compose action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
