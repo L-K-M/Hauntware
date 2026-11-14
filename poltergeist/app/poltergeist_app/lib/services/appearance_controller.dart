@@ -1,7 +1,6 @@
-import 'package:flutter/foundation.dart';
-
 import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
+import 'persisted_value_controller.dart';
 import 'settings_models.dart';
 
 /// This device's theme in the app's isolate: what the MaterialApp is drawn
@@ -13,31 +12,16 @@ import 'settings_models.dart';
 /// nothing else.
 ///
 /// Applies a change before persisting it, as Séance's settings backend
-/// does, rather than persist-first like the General switch: the section
-/// writes through on every change, a corner drag included, and the app
-/// repainting only after the disk caught up would make each edit lag by a
-/// save. A failed write keeps the change on screen and throws, so the
-/// section can say it was not saved; the next write carries it.
-final class AppearanceController extends ChangeNotifier
+/// does, rather than persist-first like the General switch
+/// ([PersistedValueController]).
+final class AppearanceController extends PersistedValueController<AppAppearance>
     implements AppearanceSettingsModel {
-  AppearanceController({AppAppearance? initial, this._save})
-    : _value = initial ?? poltergeistInitialAppearance;
-
-  AppAppearance _value;
-  final Future<void> Function(AppAppearance appearance)? _save;
-
-  @override
-  AppAppearance get value => _value;
+  AppearanceController({
+    AppAppearance? initial,
+    Future<void> Function(AppAppearance appearance)? save,
+  }) : super(initial ?? poltergeistInitialAppearance, save);
 
   @override
-  Future<void> setAppearance(
-    ThemePalette palette,
-    ThemeModePreference mode,
-  ) async {
-    final next = AppAppearance(palette: palette, mode: mode);
-    if (next == _value) return;
-    _value = next;
-    notifyListeners();
-    await _save?.call(next);
-  }
+  Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode) =>
+      write(AppAppearance(palette: palette, mode: mode));
 }

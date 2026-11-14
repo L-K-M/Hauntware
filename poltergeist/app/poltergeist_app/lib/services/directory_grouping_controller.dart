@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
 
+import 'persisted_value_controller.dart';
 import 'settings_models.dart';
 import 'view_preferences_store.dart';
 
@@ -11,15 +11,14 @@ import 'view_preferences_store.dart';
 /// persists as [ViewPreferencesStore]'s default rather than as a preference of
 /// its own; per-folder overrides do not exist yet.
 ///
-/// Applies a change before persisting it, like [EditorTextSizeController]:
-/// open lists re-sort at once. A failed write keeps the change on screen and
-/// throws; the next write carries it.
-final class DirectoryGroupingController extends ChangeNotifier
+/// Open lists re-sort at once ([PersistedValueController]).
+final class DirectoryGroupingController
+    extends PersistedValueController<DirectoryGrouping>
     implements DirectoryGroupingModel {
   DirectoryGroupingController({
     DirectoryGrouping initial = DirectoryGrouping.first,
-    this._save,
-  }) : _value = initial;
+    Future<void> Function(DirectoryGrouping grouping)? save,
+  }) : super(initial, save);
 
   /// The stored default, or [DirectoryGrouping.first] when [store] cannot be
   /// read: a damaged or newer view schema must not stop the app opening.
@@ -44,17 +43,6 @@ final class DirectoryGroupingController extends ChangeNotifier
         (defaults) => defaults.copyWith(directories: grouping),
       );
 
-  DirectoryGrouping _value;
-  final Future<void> Function(DirectoryGrouping grouping)? _save;
-
   @override
-  DirectoryGrouping get value => _value;
-
-  @override
-  Future<void> setGrouping(DirectoryGrouping grouping) async {
-    if (grouping == _value) return;
-    _value = grouping;
-    notifyListeners();
-    await _save?.call(grouping);
-  }
+  Future<void> setGrouping(DirectoryGrouping grouping) => write(grouping);
 }
