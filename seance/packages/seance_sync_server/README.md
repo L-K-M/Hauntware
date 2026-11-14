@@ -169,13 +169,16 @@ pointing somewhere the port isn't published (see the section above).
 dart pub get
 dart run packages/seance_sync_server/bin/seance_sync_server.dart \
   --port 8787 --db ./seance.sqlite --open-registration
-# or compile a native binary:
-dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o seance-sync
-./seance-sync --help
+# or build a native bundle (bin/ holds the executable, lib/ SQLite):
+(cd packages/seance_sync_server && dart build cli -o ../../build/seance-sync)
+build/seance-sync/bundle/bin/seance_sync_server --help
 ```
 
-SQLite mode needs `libsqlite3` at runtime (`libsqlite3-0` on Debian/Ubuntu).
-Omit `--db` for an ephemeral in-memory store.
+The build bundles SQLite: package:sqlite3's build hook downloads its
+prebuilt, hash-checked library, so no system `libsqlite3` is needed. Keep
+`bin/` and `lib/` together; the executable loads the library from `../lib`.
+`dart compile exe` refuses the build hook. Omit `--db` for an ephemeral
+in-memory store.
 
 ## Configuration
 

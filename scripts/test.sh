@@ -64,15 +64,17 @@ if [[ "$scope" != flutter ]]; then
     run dart test packages/planchette_core
   )
 
-  # ---- Séance: protocol, core, sync server. The server's SQLite
-  # storage test loads libsqlite3 at runtime (CI installs it).
+  # ---- Séance: protocol, core, sync server. The server's tests run in
+  # its own directory: build hooks run only for the package under test,
+  # and package:sqlite3's hook bundles the SQLite library.
   (
     cd seance
     run dart pub get
     run dart analyze \
       packages/seance_protocol packages/seance_core packages/seance_sync_server
-    run dart test \
-      packages/seance_protocol packages/seance_core packages/seance_sync_server
+    run dart test packages/seance_protocol packages/seance_core
+    cd packages/seance_sync_server
+    run dart test
   )
 
   # ---- Poltergeist: workspace packages plus its remaining tooling
@@ -180,10 +182,10 @@ if [[ "$scope" != dart ]]; then
                packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update packages/ghost_keepalive \
-               packages/ghost_licenses packages/ghost_update \
-               app/planchette_app; do
+               packages/ghost_licenses packages/ghost_update; do
       (cd "$dir" && run flutter pub get)
     done
+    (cd app/planchette_app && run flutter pub get --enforce-lockfile)
     for dir in packages/ghost_ui packages/ghost_fonts packages/planchette_editor \
                packages/ghost_desktop packages/ghost_marks \
                packages/ghost_marks_picker packages/ghost_theme \

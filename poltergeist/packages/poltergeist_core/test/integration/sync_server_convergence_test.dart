@@ -15,10 +15,10 @@ import 'package:test/test.dart';
 /// pinned `HttpSyncClient` speaking the real protocol over a socket to the
 /// real server build, never a fake. Run one with:
 ///
-///   dart compile exe \
-///     SEANCE_CHECKOUT/packages/seance_sync_server/bin/seance_sync_server.dart
+///   (cd SEANCE_CHECKOUT/packages/seance_sync_server &&
+///     dart build cli -o /tmp/sync)
 ///   SEANCE_OPEN_REGISTRATION=1 SEANCE_BIND=127.0.0.1 SEANCE_PORT=8799 \
-///     ./seance-sync   # omit --db: in-memory storage needs no libsqlite3
+///     /tmp/sync/bundle/bin/seance_sync_server   # omit --db: in-memory
 ///
 ///   POLTERGEIST_SYNC_SERVER=http://127.0.0.1:8799 \
 ///     dart test --tags integration \

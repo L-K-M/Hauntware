@@ -417,14 +417,18 @@ final class FixtureEngine {
   /// Starts an engine as [start] does that imports
   /// [Fixture._dockerSshConfig] instead: [dockerServer] and
   /// [noSocketServer].
-  static Future<FixtureEngine> startDocker(Fixture fixture, String name) =>
-      launch(
-        name: name,
-        runtimeDirectory: fixture._runtimeDirectory,
-        sshConfig: fixture._dockerSshConfig,
-        hosts: 2,
-        evidenceDirectory: fixture._evidenceDirectory,
-      );
+  static Future<FixtureEngine> startDocker(
+    Fixture fixture,
+    String name, {
+    void Function(EngineStart start) entryPoint = engineMain,
+  }) => launch(
+    name: name,
+    runtimeDirectory: fixture._runtimeDirectory,
+    sshConfig: fixture._dockerSshConfig,
+    hosts: 2,
+    evidenceDirectory: fixture._evidenceDirectory,
+    entryPoint: entryPoint,
+  );
 
   /// Starts an engine as [start] does that imports one host,
   /// [variantServer]: [service], one of the Docker host's sshd services,
