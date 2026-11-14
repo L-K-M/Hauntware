@@ -16,11 +16,13 @@ final class PlanReady extends PlanAnswer {
   final ActionPreview preview;
 }
 
-/// The engine would not plan the intent, for [reason].
+/// The engine would not plan the intent, for [reason], with what the
+/// failed step said where the engine knows it ([ActionRefused.detail]).
 final class PlanRefused extends PlanAnswer {
-  const PlanRefused(this.reason);
+  const PlanRefused(this.reason, {this.detail});
 
   final ActionRefusalReason reason;
+  final String? detail;
 }
 
 /// Where a run the user confirmed stands.
@@ -280,8 +282,8 @@ final class OperationsController extends ChangeNotifier {
         _answer(PlanReady(planId, preview));
       case ActionRefused(:final reason, :final planId?):
         _end(planId, RunRefused(reason));
-      case ActionRefused(:final reason):
-        _answer(PlanRefused(reason));
+      case ActionRefused(:final reason, :final detail):
+        _answer(PlanRefused(reason, detail: detail));
       case ActionProgress(:final planId, :final stepIndex, :final stepCount):
         _runs[planId] = RunInProgress(stepIndex, stepCount);
         notifyListeners();

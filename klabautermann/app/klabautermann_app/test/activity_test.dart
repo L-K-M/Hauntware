@@ -38,6 +38,15 @@ AuditRecord _record(
 );
 
 void main() {
+  test('every action the engine plans has its own words, cron runs, '
+      'snippets and compose actions too', () {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    final fallback = l10n.activityAction('NoSuchAction');
+    for (final key in ['RunCronJob', 'RunSnippet', 'StackComposeAction']) {
+      expect(l10n.activityAction(key), isNot(fallback), reason: key);
+    }
+  });
+
   test('audit reads answer in order per server, and a stopped engine '
       'answers none', () async {
     final engine = FakeEngineClient();

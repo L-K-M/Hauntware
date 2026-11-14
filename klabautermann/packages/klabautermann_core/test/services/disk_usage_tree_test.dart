@@ -158,6 +158,24 @@ void main() {
     expect(fromTree('/etc', root: '/'), isTrue);
   });
 
+  test('a cancelled export closes its process and answers no tree, not '
+      'the part it read', () async {
+    final link = ScriptedLink();
+    final cancel = Completer<void>();
+    final read = readDiskUsageTree(
+      '/srv',
+      tool: DiskUsageExportTool.ncdu,
+      link: link,
+      cancelled: cancel.future,
+    );
+    final process = await link.process(0);
+    process.emitText(_export.substring(0, 40));
+    cancel.complete();
+
+    expect(await read, isNull);
+    expect(process.closeCalls, greaterThanOrEqualTo(1));
+  });
+
   group('DiskUsageTrees', () {
     var now = DateTime.utc(2026, 11, 9, 12);
     late DiskUsageTrees trees;
@@ -176,7 +194,7 @@ void main() {
       root,
       elevated: elevated,
       fresh: fresh,
-      read: () async {
+      read: (_) async {
         reads++;
         return (answer ?? () => tree(root))();
       },
@@ -227,6 +245,55 @@ void main() {
       expect(reads, 3);
     });
 
+    test('a new read cancels the running one it replaces, and forgetting '
+        'the server cancels its running read; an ended one is left', () async {
+      final cancels = <Future<void>>[];
+      final running = Completer<DiskUsageTree?>();
+      Future<DiskUsageTree?> start(String root, {bool fresh = false}) =>
+          trees.tree(
+            'srv-1',
+            root,
+            elevated: false,
+            fresh: fresh,
+            read: (cancelled) {
+              cancels.add(cancelled);
+              return running.future;
+            },
+          );
+      var first = false;
+      var second = false;
+
+      unawaited(start('/srv'));
+      unawaited(cancels[0].then((_) => first = true));
+      unawaited(start('/srv', fresh: true));
+      unawaited(cancels[1].then((_) => second = true));
+      await pumpEventQueue();
+      expect((first, second), (true, false));
+
+      trees.forget(['srv-1']);
+      await pumpEventQueue();
+      expect(second, isTrue);
+
+      // An ended read has nothing to stop.
+      var ended = false;
+      await get('/var');
+      final done = trees.tree(
+        'srv-1',
+        '/var',
+        elevated: false,
+        fresh: true,
+        read: (cancelled) {
+          unawaited(cancelled.then((_) => ended = true));
+          return Future.value(tree('/var'));
+        },
+      );
+      await done;
+      await get('/var', fresh: true);
+      await pumpEventQueue();
+      expect(ended, isFalse);
+      running.complete(null);
+    });
+
     test('the lifetime counts from when the export ends', () async {
       final done = Completer<DiskUsageTree?>();
       final first = trees.tree(
@@ -234,7 +301,7 @@ void main() {
         '/srv',
         elevated: false,
         fresh: false,
-        read: () {
+        read: (_) {
           reads++;
           return done.future;
         },

@@ -55,6 +55,19 @@ OperationPlan _plan({
 );
 
 void main() {
+  test('a refusal detail is stripped of control characters, trimmed and '
+      'cut without splitting a surrogate pair', () {
+    expect(refusalDetail(null), isNull);
+    expect(refusalDetail(' \n '), isNull);
+    expect(refusalDetail('exit 1: \x1b[31mno\x07 \n'), 'exit 1: [31mno');
+    expect(
+      refusalDetail('a' * (kRefusalDetailMaxChars + 10)),
+      '${'a' * kRefusalDetailMaxChars}…',
+    );
+    final pair = '${'a' * (kRefusalDetailMaxChars - 1)}\u{1F600}';
+    expect(refusalDetail(pair), '${'a' * (kRefusalDetailMaxChars - 1)}…');
+  });
+
   group('PlanStep', () {
     test('a shell step is the exact quoted command line the shell runs', () {
       final step = ShellStep(['systemctl', 'restart', "it's.service"]);

@@ -1997,6 +1997,20 @@ dirty indicator outside the tab strip. **In review at #63:** `notify::title`
 syncs the header bar; traditional decorations already follow. Manual
 GNOME/Wayland verification still open after merge.
 
+### I7. Localize the standalone app (s07 F7) — L
+The app hard-codes its English strings, while Poltergeist and Klabautermann
+route theirs through ARB. Move them into `lib/l10n/app_en.arb`, extend the
+contract test (`test/localization_contract_test.dart`) as each part moves,
+and feed `EditorStrings` from the catalog as the hosts do.
+
+**Status (2026-11-14, branch `planchette/deferred-4-2`):** phases 1 and 2
+done. The catalog and the contract cover the server dialogs (`lib/ui`), every
+widget (`lib/widgets`), the document dialogs and the settings dialog. Still
+English: the shell's menus and banners (`planchette_app.dart`,
+`document_workspace.dart`), the other services' messages (catalog, settings
+store, Android documents, remote files) and the `EditorStrings` feed, about
+500 literals in all. They are split off so each review stays small.
+
 ## 8. Visual design and theming
 
 ### V1. Verify curated themes and expose preferences (after #41) — M

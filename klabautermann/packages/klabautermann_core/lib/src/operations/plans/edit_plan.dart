@@ -83,8 +83,8 @@ Future<PlanAttempt> planEdit(
     };
   } on HostCommandError {
     return _refused(ActionRefusalReason.invalidTarget);
-  } on RemoteCommandException {
-    return _refused(ActionRefusalReason.noLink);
+  } on RemoteCommandException catch (error) {
+    return _refused(ActionRefusalReason.noLink, detail: error.message);
   }
 }
 
@@ -163,17 +163,23 @@ Future<PlanAttempt> _planFile(
   // through a symlink that could be swapped between steps.
   var target = current.resolvedPath ?? path;
   if (privileged) {
-    final (:resolved, :refusal) = await _rootOnlyPath(target, c);
-    if (resolved == null) return _refused(refusal);
+    final (:resolved, :refusal, :detail) = await _rootOnlyPath(target, c);
+    if (resolved == null) return _refused(refusal, detail: detail);
     target = resolved;
   }
   final temp = EditCommands.tempPathFor(target, token);
   final checkArgv = check?.call(temp);
 
-  final backups = privileged ? kRootBackupsDir : await _userBackupsDir(c);
-  if (backups == null) return _refused(ActionRefusalReason.noLink);
+  final (dir: backups, :failure) = privileged
+      ? (dir: kRootBackupsDir, failure: null)
+      : await _userBackupsDir(c);
+  if (backups == null) {
+    return _refused(ActionRefusalReason.noLink, detail: failure);
+  }
   final manifest = await _manifestStep(c, root: privileged, backups: backups);
-  if (manifest case _ManifestRefused(:final reason)) return _refused(reason);
+  if (manifest case _ManifestRefused(:final reason, :final detail)) {
+    return _refused(reason, detail: detail);
+  }
   final relabel = await _selinuxEnforcing(c);
   // A unit file is checked as its unit before the rename where the
   // host's systemd can load the temp under the unit's name; elsewhere the
@@ -244,10 +250,16 @@ Future<PlanAttempt> _planCrontab(
     return _readRefusal(current);
   }
 
-  final backups = own ? await _userBackupsDir(c) : kRootBackupsDir;
-  if (backups == null) return _refused(ActionRefusalReason.noLink);
+  final (dir: backups, :failure) = own
+      ? await _userBackupsDir(c)
+      : (dir: kRootBackupsDir, failure: null);
+  if (backups == null) {
+    return _refused(ActionRefusalReason.noLink, detail: failure);
+  }
   final manifest = await _manifestStep(c, root: !own, backups: backups);
-  if (manifest case _ManifestRefused(:final reason)) return _refused(reason);
+  if (manifest case _ManifestRefused(:final reason, :final detail)) {
+    return _refused(reason, detail: detail);
+  }
   final name = own ? (c.profile.user ?? 'login user') : user;
   final crontabUser = own ? null : user;
 
@@ -286,22 +298,29 @@ Future<PlanAttempt> _planCrontab(
 }
 
 /// Why a read at planning time means no plan: the target changed since
-/// the editor read it, or the read itself failed.
-PlanAttempt _readRefusal(EditReadResult current) => _refused(switch (current) {
-  EditContent() => ActionRefusalReason.targetChanged,
-  EditReadFailed(:final failure) => switch (failure) {
-    EditReadFailure.adminRequired => ActionRefusalReason.adminRequired,
-    EditReadFailure.noLink ||
-    EditReadFailure.failed => ActionRefusalReason.noLink,
-    EditReadFailure.invalidTarget ||
-    EditReadFailure.tooLarge ||
-    EditReadFailure.notText => ActionRefusalReason.invalidTarget,
-    // The editor read a file there; none, or a link, is a changed target.
-    EditReadFailure.notFound ||
-    EditReadFailure.symlink => ActionRefusalReason.targetChanged,
-    EditReadFailure.stackUnverified => ActionRefusalReason.stackUnverified,
+/// the editor read it, or the read itself failed, with what the read
+/// said.
+PlanAttempt _readRefusal(EditReadResult current) => _refused(
+  detail: switch (current) {
+    EditReadFailed(:final detail) => detail,
+    EditContent() => null,
   },
-});
+  switch (current) {
+    EditContent() => ActionRefusalReason.targetChanged,
+    EditReadFailed(:final failure) => switch (failure) {
+      EditReadFailure.adminRequired => ActionRefusalReason.adminRequired,
+      EditReadFailure.noLink ||
+      EditReadFailure.failed => ActionRefusalReason.noLink,
+      EditReadFailure.invalidTarget ||
+      EditReadFailure.tooLarge ||
+      EditReadFailure.notText => ActionRefusalReason.invalidTarget,
+      // The editor read a file there; none, or a link, is a changed target.
+      EditReadFailure.notFound ||
+      EditReadFailure.symlink => ActionRefusalReason.targetChanged,
+      EditReadFailure.stackUnverified => ActionRefusalReason.stackUnverified,
+    },
+  },
+);
 
 /// What the plan does about the manifest (03 §8.11): nothing while it
 /// already lists [backups], else writes it with the backup directory's
@@ -321,9 +340,12 @@ final class _ManifestWrite extends _Manifest {
 }
 
 final class _ManifestRefused extends _Manifest {
-  const _ManifestRefused(this.reason);
+  const _ManifestRefused(this.reason, {this.detail});
 
   final ActionRefusalReason reason;
+
+  /// The failed step and what it said.
+  final String? detail;
 }
 
 /// Reads the [root] or login user's manifest and says whether the plan
@@ -349,13 +371,19 @@ Future<_Manifest> _manifestStep(
     final resolved = await run(EditCommands.userManifestPath());
     final userPath = resolved.stdout.trim();
     if (resolved.exitCode != 0 || !userPath.startsWith('/')) {
-      return const _ManifestRefused(ActionRefusalReason.noLink);
+      return _ManifestRefused(
+        ActionRefusalReason.noLink,
+        detail: _stepFailure('manifest path', resolved),
+      );
     }
     path = userPath;
   }
   final read = await run(EditCommands.manifestRead(path));
   if (read.exitCode != 0) {
-    return const _ManifestRefused(ActionRefusalReason.noLink);
+    return _ManifestRefused(
+      ActionRefusalReason.noLink,
+      detail: _stepFailure('manifest read', read),
+    );
   }
   final parsed = parseFootprintManifest(read.stdout);
   // The rewrite keeps only the rows the parser understood, so a manifest
@@ -387,30 +415,38 @@ Future<_Manifest> _manifestStep(
 /// [path] under its directory with every symlink resolved, when only
 /// root can change that directory or any above it; otherwise why a root
 /// edit there is refused ([refusal] means nothing once [resolved] is
-/// set). The check runs as root, which can search any directory.
-Future<({String? resolved, ActionRefusalReason refusal})> _rootOnlyPath(
-  String path,
-  EditContext c,
-) async {
+/// set), with the failed check's output as [detail]. The check runs as
+/// root, which can search any directory.
+Future<({String? resolved, ActionRefusalReason refusal, String? detail})>
+_rootOnlyPath(String path, EditContext c) async {
   final admin = c.admin!;
   final result = await admin.executor.run(
     EditCommands.rootOnlyDirectory(path),
     password: admin.password,
   );
   if (result.exitCode == EditExit.userWritableDirectory) {
-    return (resolved: null, refusal: ActionRefusalReason.userWritableDirectory);
+    return (
+      resolved: null,
+      refusal: ActionRefusalReason.userWritableDirectory,
+      detail: null,
+    );
   }
   final directory = result.stdout.endsWith('\n')
       ? result.stdout.substring(0, result.stdout.length - 1)
       : '';
   if (result.exitCode != 0 || !directory.startsWith('/')) {
-    return (resolved: null, refusal: ActionRefusalReason.noLink);
+    return (
+      resolved: null,
+      refusal: ActionRefusalReason.noLink,
+      detail: _stepFailure('root-only directory check', result),
+    );
   }
   final name = path.substring(path.lastIndexOf('/') + 1);
   // The caller's tempPathFor validates the result as a path.
   return (
     resolved: directory == '/' ? '/$name' : '$directory/$name',
     refusal: ActionRefusalReason.noLink,
+    detail: null,
   );
 }
 
@@ -428,8 +464,9 @@ Future<bool> _selinuxEnforcing(EditContext c) async {
   return result.exitCode == 0 && result.stdout.trim() == '1';
 }
 
-/// The login user's backup directory, resolved in its login shell.
-Future<String?> _userBackupsDir(EditContext c) async {
+/// The login user's backup directory, resolved in its login shell, or
+/// null with the failed step.
+Future<({String? dir, String? failure})> _userBackupsDir(EditContext c) async {
   final result = await c.link.run(
     HostCommands.commandLine(
       EditCommands.userBackupsDir(),
@@ -438,8 +475,17 @@ Future<String?> _userBackupsDir(EditContext c) async {
     stdin: const [],
   );
   final dir = result.stdout.trim();
-  return result.exitCode == 0 && dir.startsWith('/') ? dir : null;
+  if (result.exitCode == 0 && dir.startsWith('/')) {
+    return (dir: dir, failure: null);
+  }
+  return (dir: null, failure: _stepFailure('backup directory', result));
 }
+
+/// A planning step that failed on the host, for [PlanAttempt.detail]:
+/// its name, exit code and error output. Never its standard output, which
+/// may hold a file's content.
+String _stepFailure(String step, RemoteCommandResult result) =>
+    '$step: exit ${result.exitCode}: ${result.stderr}';
 
 String _token(Random random) => [
   for (var i = 0; i < 8; i++)
@@ -453,7 +499,8 @@ RunnerFacts _runner(EditContext c, {required bool elevated}) => RunnerFacts(
       : RunnerCredentials.session,
 );
 
-PlanAttempt _planned(OperationPlan plan) => (plan: plan, refusal: null);
+PlanAttempt _planned(OperationPlan plan) =>
+    (plan: plan, refusal: null, detail: null);
 
-PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason);
+PlanAttempt _refused(ActionRefusalReason reason, {String? detail}) =>
+    (plan: null, refusal: reason, detail: detail);

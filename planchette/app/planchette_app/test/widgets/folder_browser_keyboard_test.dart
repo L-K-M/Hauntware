@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/ghost_fonts.dart' show ghostMonoFontFamily;
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path/path.dart' as paths;
+import 'package:planchette_app/l10n/app_localizations.dart';
 import 'package:planchette_app/services/folder_workspace.dart';
 import 'package:planchette_app/widgets/folder_browser.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -49,6 +50,7 @@ void main() {
     await workspace.openLocal(root);
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: Scaffold(
           body: SizedBox(
             width: 400,

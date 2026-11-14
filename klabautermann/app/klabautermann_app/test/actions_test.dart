@@ -400,6 +400,27 @@ void main() {
       findsOneWidget,
     );
     await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    // A refusal whose engine named the failed step adds its words.
+    await tester.tap(find.text('restart'));
+    await tester.pump();
+    engine.emit(
+      const ActionRefused(
+        ActionRefusalReason.noLink,
+        intent: _intent,
+        detail: 'manifest read: exit 1: cat: Permission denied',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Connect to the server first. Details: manifest read: exit 1: '
+        'cat: Permission denied',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
   });
 
   test('planCommandsText writes a pasteable script: sudo for an '

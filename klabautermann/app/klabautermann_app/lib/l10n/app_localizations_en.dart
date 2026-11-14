@@ -1233,6 +1233,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesCommandUnavailable => 'Command line unavailable';
 
   @override
+  String get processesCommandTruncated =>
+      'The server cut this command line at its read limit, so its end is missing.';
+
+  @override
   String processesCommandUnavailableOf(String name) {
     return '$name (command line unavailable)';
   }
@@ -5958,6 +5962,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String actionRefusedDetail(String message, String detail) {
+    return '$message Details: $detail';
+  }
+
+  @override
   String get processTerminate => 'Terminate';
 
   @override
@@ -6245,6 +6254,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'StartTimer': 'Run timer now',
       'RefreshPackageLists': 'Refresh package lists',
       'PowerAction': 'Reboot or shut down',
+      'RunCronJob': 'Run cron job now',
+      'RunSnippet': 'Run snippet',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
       'ContainerBulkAction': 'Containers action',
@@ -6255,6 +6266,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'PruneDocker': 'Prune',
       'PullImage': 'Pull image',
       'StackAction': 'Stack action',
+      'StackComposeAction': 'Stack compose action',
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
       'ContainerShell': 'Container shell',

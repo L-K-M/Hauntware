@@ -1389,6 +1389,10 @@
   "@processesCommandUnavailable": {
     "description": "In place of a command line the server did not give, as for a kernel thread (03 §7.2)."
   },
+  "processesCommandTruncated": "The server cut this command line at its read limit, so its end is missing.",
+  "@processesCommandTruncated": {
+    "description": "Under a process's command line that the server's read cut at its per-file byte cap (D48)."
+  },
   "processesCommandUnavailableOf": "{name} (command line unavailable)",
   "@processesCommandUnavailableOf": {
     "description": "A process's kernel name in place of a command line the server did not give.",
@@ -7184,6 +7188,18 @@
       }
     }
   },
+  "actionRefusedDetail": "{message} Details: {detail}",
+  "@actionRefusedDetail": {
+    "description": "Toast for a refused plan whose engine named the failed step; message is the actionRefused text, detail the step, exit code and error output in the server's own words, not translated.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
   "processTerminate": "Terminate",
   "@processTerminate": {
     "description": "Process action (PRC-02): sends SIGTERM, asking the process to end."
@@ -7533,9 +7549,9 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} RunCronJob{Run cron job now} RunSnippet{Run snippet} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} StackComposeAction{Stack compose action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
-    "description": "An activity log row's action; action is the engine's intent type name.",
+    "description": "An activity log row's action; action is the engine's action key (actionKeyOf), its intent type's name.",
     "placeholders": {
       "action": {
         "type": "String"
