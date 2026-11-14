@@ -26,7 +26,11 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         kRootBackupsDir,
         kRootManifestPath;
 import 'package:seance_core/seance_core.dart'
-    show ElevatedExecutor, ElevationProbe;
+    show
+        ElevatedExecutor,
+        ElevationProbe,
+        RemoteCommandException,
+        RemoteCommandResult;
 import 'package:test/test.dart';
 
 import '../support/edit_host.dart';
@@ -359,6 +363,59 @@ void main() {
         }
       },
     );
+
+    test('a planning step that fails on the host names itself, its exit '
+        'code and its error output in the refusal', () async {
+      host.files['/home/deploy/a'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'x\n',
+        rootOnly: false,
+      );
+      Future<PlanAttempt> attempt() =>
+          plan(const FileTarget('/home/deploy/a'), 'y\n', _sha('x\n'));
+
+      host.answers['XDG_STATE_HOME'] = const RemoteCommandResult(
+        exitCode: 127,
+        stderr: 'sh: 1: mkdir: not found\n',
+      );
+      final backups = await attempt();
+      expect(backups.refusal, ActionRefusalReason.noLink);
+      expect(
+        backups.detail,
+        'backup directory: exit 127: sh: 1: mkdir: not found\n',
+      );
+
+      host.answers
+        ..clear()
+        ..['klabautermann-read-if-present'] = const RemoteCommandResult(
+          exitCode: 1,
+          stderr: 'cat: Permission denied\n',
+        );
+      final manifest = await attempt();
+      expect(manifest.refusal, ActionRefusalReason.noLink);
+      expect(
+        manifest.detail,
+        'manifest read: exit 1: cat: Permission denied\n',
+      );
+    });
+
+    test('a link lost while planning names the transport error', () async {
+      host.files['/home/deploy/a'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'x\n',
+        rootOnly: false,
+      );
+      host.lost = const RemoteCommandException('channel closed');
+      final lost = await plan(
+        const FileTarget('/home/deploy/a'),
+        'y\n',
+        _sha('x\n'),
+      );
+      expect(lost.refusal, ActionRefusalReason.noLink);
+      expect(lost.detail, 'channel closed');
+    });
 
     test('the manifest write is against the manifest the plan read', () async {
       host.files['/home/deploy/a'] = (

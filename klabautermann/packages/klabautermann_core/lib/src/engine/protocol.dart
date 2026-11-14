@@ -3269,10 +3269,16 @@ enum RevalidationFailure {
 /// one carries the request it answers, so the app matches it to what it
 /// asked. Nothing ran.
 final class ActionRefused extends EngineEvent {
-  const ActionRefused(this.reason, {this.intent, this.planId})
+  const ActionRefused(this.reason, {this.intent, this.planId, this.detail})
     : assert((intent == null) != (planId == null), 'one of intent, planId');
 
   final ActionRefusalReason reason;
+
+  /// What the failed planning step said, in the server's or engine's
+  /// words and not localized: the step, its exit code and error output,
+  /// or the error a planner threw. Null where the reason says it all.
+  /// Control characters stripped, at most `kRefusalDetailMaxChars`.
+  final String? detail;
 
   /// The refused [PlanAction]'s intent.
   final ActionIntent? intent;

@@ -66,7 +66,11 @@ import '../operations/detached_runner.dart';
 import '../operations/edit_reader.dart';
 import '../operations/footprint.dart';
 import '../operations/operation_plan.dart'
-    show DockerTargetUnchanged, PlanAttempt, StackConfigUnchanged;
+    show
+        DockerTargetUnchanged,
+        PlanAttempt,
+        StackConfigUnchanged,
+        refusalDetail;
 import '../operations/operation_runner.dart';
 import '../operations/operation_tracker.dart';
 import '../operations/operations_shown.dart';
@@ -1570,8 +1574,14 @@ void engineMain(
       case RemoveRule(:final requestId):
         runWrite(requestId, () => sync.removeRule(message));
       case PlanAction(:final intent):
-        void refuse(ActionRefusalReason reason) =>
-            uiPort.send(ActionRefused(reason, intent: intent));
+        void refuse(ActionRefusalReason reason, {String? detail}) =>
+            uiPort.send(
+              ActionRefused(
+                reason,
+                intent: intent,
+                detail: refusalDetail(detail),
+              ),
+            );
         // The policy first (M4 plan M4).
         if (safetyRefusal(safetyPolicy, intent.serverId) case final reason?) {
           refuse(reason);
@@ -1648,9 +1658,10 @@ void engineMain(
                   )),
                 )
                 .catchError(
-                  (Object _) => (
+                  (Object error) => (
                     plan: null,
                     refusal: ActionRefusalReason.engineUnavailable,
+                    detail: '$error',
                   ),
                 );
           case RedeployStack() || StackComposeAction() || PullImage():
@@ -1700,9 +1711,10 @@ void engineMain(
                     };
                   }),
                 ).catchError(
-                  (Object _) => (
+                  (Object error) => (
                     plan: null,
                     refusal: ActionRefusalReason.engineUnavailable,
+                    detail: '$error',
                   ),
                 );
           case KeepLastBackups() || RemoveBackups():
@@ -1733,15 +1745,16 @@ void engineMain(
         unawaited(
           attempt
               .catchError(
-                (Object _) => (
+                (Object error) => (
                   plan: null,
                   refusal: ActionRefusalReason.engineUnavailable,
+                  detail: '$error',
                 ),
               )
               .then((attempt) {
                 final plan = attempt.plan;
                 if (plan == null) {
-                  refuse(attempt.refusal!);
+                  refuse(attempt.refusal!, detail: attempt.detail);
                   return;
                 }
                 // The switch and name as they are now, when the user sees

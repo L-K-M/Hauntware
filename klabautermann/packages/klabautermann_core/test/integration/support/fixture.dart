@@ -783,6 +783,8 @@ String _describe(EngineEvent event) => switch (event) {
         '${fullRelist ? ' full' : ''} ${payload.runtimeType}',
   DockerResult(:final serverId, :final queryId, :final payload) =>
     'DockerResult $serverId $queryId ${payload.runtimeType}',
+  ActionRefused(:final reason, :final detail) =>
+    'ActionRefused ${reason.name}${detail == null ? '' : ' ($detail)'}',
   _ => '${event.runtimeType}',
 };
 

@@ -5962,6 +5962,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String actionRefusedDetail(String message, String detail) {
+    return '$message Details: $detail';
+  }
+
+  @override
   String get processTerminate => 'Terminate';
 
   @override

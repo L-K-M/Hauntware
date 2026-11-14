@@ -3,7 +3,7 @@
 // steps, so what the user confirmed is what runs; the danger findings come
 // from the same steps' words.
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show DetachedRunner, UnitManager;
+    show DetachedRunner, UnitManager, stripControlChars;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
@@ -176,8 +176,34 @@ final class OperationPlan {
   );
 }
 
-/// A plan, or why there is none.
-typedef PlanAttempt = ({OperationPlan? plan, ActionRefusalReason? refusal});
+/// A plan, or why there is none: [refusal] with, where a planner knows
+/// it, a [detail] in the server's or engine's words naming the step that
+/// failed (an exit code, a command's error output), for the app to show
+/// after its own words for the refusal.
+typedef PlanAttempt = ({
+  OperationPlan? plan,
+  ActionRefusalReason? refusal,
+  String? detail,
+});
+
+/// The most an [ActionRefused.detail] keeps of a failed step's text: its
+/// start, which names the step. Long enough for an exit code and a line
+/// of error output, short enough for a toast.
+const kRefusalDetailMaxChars = 300;
+
+/// [text] as an [ActionRefused.detail]: control characters stripped,
+/// trimmed and cut at [kRefusalDetailMaxChars] without splitting a
+/// surrogate pair; null when nothing is left.
+String? refusalDetail(String? text) {
+  if (text == null) return null;
+  final clean = stripControlChars(text).trim();
+  if (clean.isEmpty) return null;
+  if (clean.length <= kRefusalDetailMaxChars) return clean;
+
+  var end = kRefusalDetailMaxChars;
+  if ((clean.codeUnitAt(end - 1) & 0xFC00) == 0xD800) end--;
+  return '${clean.substring(0, end)}…';
+}
 
 /// What the runner checks again right before a plan's first step (03
 /// §8.5). Each holds what the preview saw.

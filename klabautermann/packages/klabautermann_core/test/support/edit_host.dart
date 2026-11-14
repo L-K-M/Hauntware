@@ -7,7 +7,8 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart' show EditExit;
-import 'package:seance_core/seance_core.dart' show RemoteCommandResult;
+import 'package:seance_core/seance_core.dart'
+    show RemoteCommandException, RemoteCommandResult;
 
 import 'scripted_link.dart';
 
@@ -54,6 +55,13 @@ final class EditHost extends TestLinkBase {
   /// would, with no output.
   final failing = <String>{};
 
+  /// What a run whose command contains the key answers instead, checked
+  /// before anything else: a step that fails with its own error output.
+  final answers = <String, RemoteCommandResult>{};
+
+  /// What every run throws while set, as a link lost mid-plan would.
+  RemoteCommandException? lost;
+
   @override
   Future<RemoteCommandResult> run(
     String command, {
@@ -62,6 +70,10 @@ final class EditHost extends TestLinkBase {
     List<int>? stdin,
   }) async {
     commands.add(command);
+    if (lost case final error?) throw error;
+    for (final MapEntry(:key, :value) in answers.entries) {
+      if (command.contains(key)) return value;
+    }
     final elevated = command.contains(' elevate ');
     // Paths are matched as quoted words, which an elevated command line
     // carries too, inside the prelude's own.

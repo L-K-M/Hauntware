@@ -5646,6 +5646,13 @@ OperationPlan {
     checks the safety policy, the confirmation (a typed phrase must equal
     the target name) and, for an admin plan, admin mode, each a typed
     `ActionRefused`. A refused run needs a new preview.
+  - A refused plan's `ActionRefused.detail` names, where a planner knows
+    it, the step that failed in the server's or engine's words: an edit
+    plan's backup directory, manifest or root-only directory check with
+    its exit code and error output (never its standard output), the
+    read's or transport's error, or the error a planner threw. It is
+    not localized; control characters are stripped and it is cut at 300
+    characters. The app's refusal toast adds it after its own words.
   - The runner re-validates each `Revalidation` the planner listed:
     `UnitLoaded` reads `systemctl show --property=LoadState`;
     `ProcessStarted` reads field 22 of `/proc/<pid>/stat`;
@@ -6626,7 +6633,7 @@ shows there.
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below), `SetDockerProgram(serverId, program?)` (M6 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
-| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
+| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId, detail)` |
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
 | `ReadHistory(serverId, tier, requestId)` (7.20, M6 N52a) | `HistoryRead(requestId, serverId, tier, range)`: the tier's buckets and gaps within its span, the filling bucket included |
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |

@@ -7188,6 +7188,18 @@
       }
     }
   },
+  "actionRefusedDetail": "{message} Details: {detail}",
+  "@actionRefusedDetail": {
+    "description": "Toast for a refused plan whose engine named the failed step; message is the actionRefused text, detail the step, exit code and error output in the server's own words, not translated.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
   "processTerminate": "Terminate",
   "@processTerminate": {
     "description": "Process action (PRC-02): sends SIGTERM, asking the process to end."

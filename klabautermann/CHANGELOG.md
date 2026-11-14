@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- When the server refuses to plan an action because a step failed, such
+  as reading the backup manifest, the refusal names the step, its exit
+  code and its error output.
 - Settings > Sync offers to publish the host keys you confirm once every
   device on the account runs Séance 1.9.3 or later, the first release
   that checks pulled keys for conflicts.
