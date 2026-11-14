@@ -100,14 +100,19 @@ DiskUsageExportTool? diskUsageExportToolOf(HostProfile? profile) {
 /// streams, through [session] when given, else as the login user over
 /// [link]. Null when the export does not start, fails, runs past
 /// [timeout] or holds more than the reader keeps: the explorer then reads
-/// folder by folder with `du`. Never throws.
+/// folder by folder with `du`. Null too once [cancelled] completes, which
+/// closes the export's process, so a replaced read stops scanning the
+/// host. Never throws.
 Future<DiskUsageTree?> readDiskUsageTree(
   String root, {
   required DiskUsageExportTool tool,
   required SshLink link,
   AdminSession? session,
   Duration timeout = kDiskUsageTimeout,
+  Future<void>? cancelled,
 }) async {
+  var stopped = false;
+  unawaited(cancelled?.then((_) => stopped = true));
   final List<String> argv;
   try {
     argv = HostCommands.diskUsageExport(root, tool);
@@ -132,6 +137,13 @@ Future<DiskUsageTree?> readDiskUsageTree(
     return null;
   }
 
+  // Closing the process ends its output, so the read below returns.
+  unawaited(cancelled?.then((_) => process.close()).catchError((Object _) {}));
+  if (stopped) {
+    unawaited(process.close().catchError((Object _) {}));
+    return null;
+  }
+
   final reader = DiskUsageExportReader(root);
   // What the tool says on stderr is not read; draining it keeps a long
   // complaint from stalling the channel.
@@ -141,6 +153,8 @@ Future<DiskUsageTree?> readDiskUsageTree(
         .transform(const Utf8Decoder(allowMalformed: true))
         .forEach(reader.add)
         .timeout(timeout);
+    // A cut export is not the whole tree.
+    if (stopped) return null;
     return reader.close();
   } on Object {
     // Not an export, too large, past its time, or the channel failed.
@@ -184,12 +198,15 @@ final class DiskUsageTrees {
   /// [serverId]'s tree of [root] read as root when [elevated]: the held
   /// one while it is the same, younger than [kDiskUsageTreeLifetime] and
   /// not [fresh], else a new one from [read], which reads that run share.
+  /// A new read cancels the one it replaces: [read] gets a future that
+  /// completes when its own read is replaced or its server forgotten, and
+  /// stops its export then, so two exports never scan one host at once.
   Future<DiskUsageTree?> tree(
     String serverId,
     String root, {
     required bool elevated,
     required bool fresh,
-    required Future<DiskUsageTree?> Function() read,
+    required Future<DiskUsageTree?> Function(Future<void> cancelled) read,
   }) {
     final held = _trees[serverId];
     if (!fresh &&
@@ -203,15 +220,21 @@ final class DiskUsageTrees {
     // folders after it read with du at once rather than each waiting on
     // another whole-filesystem scan; an error reads as a failure, never
     // reaching the engine unhandled.
+    held?.cancel();
     final entry = _HeldTree(root, elevated);
-    entry.tree = Future.sync(read)
+    entry.tree = Future.sync(() => read(entry._cancelled.future))
         .then<DiskUsageTree?>((tree) => tree, onError: (Object _) => null)
         .whenComplete(() => entry.ended = _now());
     _trees[serverId] = entry;
     return entry.tree;
   }
 
-  void forget(Iterable<String> serverIds) => serverIds.forEach(_trees.remove);
+  /// Drops [serverIds]' trees, cancelling a read still running.
+  void forget(Iterable<String> serverIds) {
+    for (final serverId in serverIds) {
+      _trees.remove(serverId)?.cancel();
+    }
+  }
 }
 
 final class _HeldTree {
@@ -224,6 +247,13 @@ final class _HeldTree {
   /// When the export ended; the lifetime counts from then, so a long
   /// scan answers for the whole of it.
   DateTime? ended;
+
+  final _cancelled = Completer<void>();
+
+  /// Stops the read while it runs; an ended one has nothing to stop.
+  void cancel() {
+    if (ended == null && !_cancelled.isCompleted) _cancelled.complete();
+  }
 
   /// Still answering at [now]: running, or ended within the lifetime.
   bool current(DateTime now) => switch (ended) {

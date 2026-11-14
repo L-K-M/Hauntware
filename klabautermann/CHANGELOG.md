@@ -4,6 +4,22 @@
 
 - Settings no longer shows an empty Docker tab; Docker's choices sit in
   each server's Docker tab.
+- When the engine cannot finish starting, it says why in the error
+  screen instead of stopping without an answer.
+- Read again on a disk's top folder stops the whole-disk scan still
+  running from before, so two scans no longer run on the server at once.
+- The Updates table sorts its installed and available versions as
+  versions, so 1.10 follows 1.9.
+- Activity and the detached operations list name cron job runs, snippet
+  runs and stack compose actions instead of reading "Action".
+- When the server refuses to plan an action because a step failed, such
+  as reading the backup manifest, the refusal names the step, its exit
+  code and its error output.
+- Settings > Sync offers to publish the host keys you confirm once every
+  device on the account runs Séance 1.9.3 or later, the first release
+  that checks pulled keys for conflicts.
+- A process whose command line the server cut at its read limit ends in
+  an ellipsis, and its details say the end is missing.
 - Klabautermann checks the suite's GitHub releases once per launch and
   offers a newer version in a banner: every platform links to the release
   page, and on Android the banner downloads and installs the release APK

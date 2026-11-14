@@ -13,6 +13,8 @@ import 'package:klabautermann_app/ui/actions/action_entry.dart'
     show OperationsScope;
 import 'package:klabautermann_app/ui/admin_mode_chip.dart' show AdminScope;
 import 'package:klabautermann_app/ui/server_safety.dart';
+import 'package:klabautermann_app/ui/sortable_table.dart'
+    show TableSort, TableSortDirection, sortTableRows;
 import 'package:klabautermann_app/ui/updates.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -21,6 +23,28 @@ import 'support/fake_engine.dart';
 const _server = 'srv-1';
 
 void main() {
+  test('the version columns sort as versions, so 1.10 follows 1.9, and an '
+      'unknown installed version sorts last', () {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    final columns = updateColumns(l10n, wide: true);
+    const updates = [
+      PackageUpdate(name: 'a', available: '1.10.0', current: '1.9.2'),
+      PackageUpdate(name: 'b', available: '1.9.3', current: '1.10.1'),
+      PackageUpdate(name: 'c', available: '1.2.0'),
+    ];
+    List<String> names(String column) => [
+      for (final update in sortTableRows(
+        updates,
+        columns,
+        TableSort(column, TableSortDirection.ascending),
+      ))
+        update.name,
+    ];
+
+    expect(names(UpdateColumn.available.name), ['c', 'b', 'a']);
+    expect(names(UpdateColumn.installed.name), ['a', 'b', 'c']);
+  });
+
   late FakeEngineClient engine;
   late PackageReads reads;
 

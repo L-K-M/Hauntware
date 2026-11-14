@@ -457,7 +457,8 @@ Future<String?> _read(SshLink link, List<String> argv) async {
   return result.exitCode == 0 ? result.stdout.trim() : null;
 }
 
-PlanAttempt _planned(OperationPlan plan) => (plan: plan, refusal: null);
+PlanAttempt _planned(OperationPlan plan) =>
+    (plan: plan, refusal: null, detail: null);
 
 PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason);
+    (plan: null, refusal: reason, detail: null);

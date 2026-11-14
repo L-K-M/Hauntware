@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../services/document_workspace.dart';
 
 /// Tells the user that another program changed or removed a document's file,
@@ -35,33 +36,33 @@ class DiskNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     final keepMine = onKeepMine;
     final (icon, message, actions) = switch (state) {
       DiskState.changed => (
         Icons.sync_problem_outlined,
         keepMine == null
-            ? '$name changed on disk. Reload it to see the new version.'
-            : '$name changed on disk. Reload it, or keep your edits and '
-                  'replace it when you save.',
+            ? l10n.diskChanged(name)
+            : l10n.diskChangedWithEdits(name),
         [
           if (keepMine != null)
             TextButton(
               onPressed: enabled ? keepMine : null,
-              child: const Text('Keep Mine'),
+              child: Text(l10n.diskKeepMine),
             ),
           FilledButton.tonal(
             onPressed: enabled ? onReload : null,
-            child: const Text('Reload'),
+            child: Text(l10n.diskReload),
           ),
         ],
       ),
       DiskState.missing => (
         Icons.report_outlined,
-        '$name was deleted or moved. Save to create it again.',
+        l10n.diskMissing(name),
         [
           FilledButton.tonal(
             onPressed: enabled ? onSave : null,
-            child: const Text('Save'),
+            child: Text(l10n.actionSave),
           ),
         ],
       ),

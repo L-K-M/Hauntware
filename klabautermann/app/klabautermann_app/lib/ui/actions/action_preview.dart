@@ -23,7 +23,7 @@ void startAction(
   BuildContext context,
   ActionIntent intent, {
   void Function(String planId, ActionPreview preview)? onRun,
-  ValueChanged<ActionRefusalReason>? onRefused,
+  void Function(ActionRefusalReason reason, String? detail)? onRefused,
 }) {
   final operations = OperationsScope.maybeOf(context);
   if (operations == null || operations.planning) return;
@@ -52,7 +52,7 @@ Future<void> previewAndRun(
   OperationsController operations,
   ActionIntent intent, {
   void Function(String planId, ActionPreview preview)? onRun,
-  ValueChanged<ActionRefusalReason>? onRefused,
+  void Function(ActionRefusalReason reason, String? detail)? onRefused,
 }) async {
   final overlay = Overlay.of(context, rootOverlay: true);
   final l10n = AppLocalizations.of(context);
@@ -62,11 +62,11 @@ Future<void> previewAndRun(
     if (!context.mounted) return;
 
     switch (answer) {
-      case PlanRefused(:final reason) when onRefused != null:
-        onRefused(reason);
-      case PlanRefused(:final reason):
+      case PlanRefused(:final reason, :final detail) when onRefused != null:
+        onRefused(reason, detail);
+      case PlanRefused(:final reason, :final detail):
         if (overlay.mounted) {
-          showTopToast(overlay, message: l10n.actionRefused(reason.name));
+          showTopToast(overlay, message: planRefusedText(l10n, reason, detail));
         }
       case PlanReady(:final planId, :final preview):
         ActionIntent? switched;
@@ -90,6 +90,18 @@ Future<void> previewAndRun(
         }
     }
   }
+}
+
+/// The words for a refused plan: the app's own for [reason], then the
+/// engine's [detail] of the step that failed, where it gave one.
+String planRefusedText(
+  AppLocalizations l10n,
+  ActionRefusalReason reason,
+  String? detail,
+) {
+  final message = l10n.actionRefused(reason.name);
+  if (detail == null) return message;
+  return l10n.actionRefusedDetail(message, detail);
 }
 
 /// Shows [preview] as a dialog on wide windows and a bottom sheet on

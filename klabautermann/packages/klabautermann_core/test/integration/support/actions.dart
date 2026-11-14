@@ -48,7 +48,9 @@ Future<EngineEvent> planAnswer(
 /// Plans [intent]; a refusal fails the test.
 Future<ActionPlanned> plan(FixtureEngine engine, ActionIntent intent) async {
   final answer = await planAnswer(engine, intent);
-  if (answer case ActionRefused(:final reason)) fail('refused: $reason');
+  if (answer case ActionRefused(:final reason, :final detail)) {
+    fail('refused: $reason${detail == null ? '' : ' ($detail)'}');
+  }
   return answer as ActionPlanned;
 }
 

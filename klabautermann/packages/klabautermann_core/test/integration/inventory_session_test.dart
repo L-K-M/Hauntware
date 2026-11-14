@@ -299,12 +299,12 @@ void main() {
       baseSha256: content.sha256,
     );
     final planned = await planAnswer(engine, edit);
-    if (planned case ActionRefused(:final reason)) {
+    if (planned case ActionRefused(:final reason, :final detail)) {
       // A noLink refusal here once followed the redial on CI and has not
-      // reproduced locally; the engine reports only the reason, so record
+      // reproduced locally; record the failed step the engine names and
       // what the host and sshd say before failing.
       fail(
-        'planning the edit was refused: $reason\n'
+        'planning the edit was refused: $reason ($detail)\n'
         '${await _diagnoseEditRefusal(fixture, engine, edit)}',
       );
     }
@@ -349,7 +349,9 @@ Future<String> _diagnoseEditRefusal(
 
   await step('the edit planned again', () async {
     final answer = await planAnswer(engine, edit);
-    return answer is ActionRefused ? 'refused: ${answer.reason}' : 'planned';
+    return answer is ActionRefused
+        ? 'refused: ${answer.reason} (${answer.detail})'
+        : 'planned';
   });
 
   SshLink? link;

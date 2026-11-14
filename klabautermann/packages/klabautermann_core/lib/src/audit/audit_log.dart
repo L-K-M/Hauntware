@@ -71,7 +71,7 @@ final class AuditLog {
     return append(
       AuditRecord(
         serverId: plan.intent.serverId,
-        action: '${plan.intent.runtimeType}',
+        action: actionKeyOf(plan.intent),
         targetName: plan.targetName,
         steps: [for (final step in plan.steps) _redactor.redact(step.display)],
         tier: plan.tier,

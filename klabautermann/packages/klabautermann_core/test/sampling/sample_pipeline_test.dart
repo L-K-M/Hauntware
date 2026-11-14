@@ -777,6 +777,19 @@ void main() {
     );
   });
 
+  test('a command line the host cut at its byte cap says so (D48)', () {
+    final rows = procsResult(
+      ProcsSnapshot(
+        processes: [
+          ProcEntry(pid: 1, argv: const ['java', '-cp'], argvTruncated: true),
+          ProcEntry(pid: 2, argv: const ['sh']),
+        ],
+      ),
+    ).processes;
+
+    expect(rows.map((r) => r.argumentsTruncated), [true, false]);
+  });
+
   test('the rows of one procs reading share one masking budget, so many '
       'processes cannot multiply the work (8.9)', () {
     final half = [for (var i = 0; i < kArgumentTokensMasked ~/ 2; i++) 'a'];

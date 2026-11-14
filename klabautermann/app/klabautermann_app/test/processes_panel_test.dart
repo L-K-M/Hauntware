@@ -653,6 +653,34 @@ void main() {
     expect(panel.engine.sentOfType<HostQuery>(), hasLength(sent));
   });
 
+  testWidgets('a command line the server cut says so in the details (D48)', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.all(
+      tester,
+      ProcsResult([
+        ProcessRow(
+          pid: 901,
+          name: 'java',
+          arguments: [MaskedValue.plain('java'), MaskedValue.plain('-cp')],
+          argumentsTruncated: true,
+        ),
+      ]),
+    );
+
+    expect(find.text('java -cp…'), findsOneWidget);
+    await tester.tap(_row(901));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'The server cut this command line at its read limit, so its end '
+        'is missing.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a long masked argument reads cut, as it draws', (tester) async {
     final panel = await _pump(tester);
     final script = '${'x' * 5000} TOKEN=';

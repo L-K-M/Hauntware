@@ -11,7 +11,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show SecretRedactor;
 
 import '../catalog/sync_state_file.dart';
-import '../engine/protocol.dart' show ConfirmationTier;
+import '../engine/protocol.dart' show ConfirmationTier, actionKeyOf;
 import 'operation_plan.dart';
 import '../settings/device_settings_store.dart' show writeFileAtomically;
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
@@ -39,7 +39,7 @@ final class OperationLaunch {
     OperationPlan plan, {
     required DateTime startedAt,
   }) => OperationLaunch(
-    action: '${plan.intent.runtimeType}',
+    action: actionKeyOf(plan.intent),
     targetName: plan.targetName,
     steps: [for (final step in plan.steps) _redactor.redact(step.display)],
     tier: plan.tier,

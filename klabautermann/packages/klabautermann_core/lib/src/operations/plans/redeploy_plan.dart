@@ -357,6 +357,7 @@ Future<PlanAttempt> planHostPull(
         hostWrites: const [HostWriteRow.engineState],
       ),
       refusal: null,
+      detail: null,
     );
   }
 
@@ -388,6 +389,7 @@ Future<PlanAttempt> planHostPull(
       warnings: [if (choice.mayDieAtLogout) PlanWarning.mayDieAtLogout],
     ),
     refusal: null,
+    detail: null,
   );
 }
 
@@ -502,6 +504,7 @@ Future<PlanAttempt> _composePlan(
       ],
     ),
     refusal: null,
+    detail: null,
   );
 }
 
@@ -556,4 +559,4 @@ String _nameOf(ContainerSummary container) {
 }
 
 PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason);
+    (plan: null, refusal: reason, detail: null);

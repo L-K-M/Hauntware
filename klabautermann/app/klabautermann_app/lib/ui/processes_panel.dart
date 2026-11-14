@@ -868,6 +868,8 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           l10n.processesRevealNote(kRevealDuration.inSeconds),
           style: theme.textTheme.bodySmall,
         ),
+      if (arguments.isNotEmpty && row.argumentsTruncated)
+        Text(l10n.processesCommandTruncated, style: theme.textTheme.bodySmall),
     ];
     final details = _detail;
     final variables = details is ProcessDetails
