@@ -1726,6 +1726,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'delete.dialog'",
     "'delete.cancel'",
     "'delete.confirm'",
+    "'delete.retry'",
     "'delete.headline'",
     "'delete.serverTrash'",
     "'delete.trashUnavailable'",

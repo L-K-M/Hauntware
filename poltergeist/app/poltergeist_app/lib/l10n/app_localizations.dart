@@ -10617,6 +10617,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t prepare the delete: {error}'**
   String deleteDialogPrepareFailed(String error);
 
+  /// Delete dialog button that counts the items to delete again after preparing the delete failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get deleteDialogRetry;
+
   /// 02 §10 permanent delete headline with the walk's count and size.
   ///
   /// In en, this message translates to:

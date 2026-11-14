@@ -7517,6 +7517,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get deleteDialogRetry => 'Retry';
+
+  @override
   String deleteDialogDeleteCount(int count, String size, String location) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

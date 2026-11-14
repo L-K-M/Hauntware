@@ -9677,6 +9677,10 @@
       }
     }
   },
+  "deleteDialogRetry": "Retry",
+  "@deleteDialogRetry": {
+    "description": "Delete dialog button that counts the items to delete again after preparing the delete failed."
+  },
   "deleteDialogDeleteCount": "{count, plural, =1{Delete 1 item ({size}) from {location}?} other{Delete {count} items ({size}) from {location}?}}",
   "@deleteDialogDeleteCount": {
     "description": "02 §10 permanent delete headline with the walk's count and size.",
