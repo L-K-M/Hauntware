@@ -103,7 +103,7 @@ void main() {
     await tester.enterText(field('Username'), 'owner');
     await tester.enterText(field('Account password'), 'authentication');
     await tester.enterText(field('Encryption passphrase'), 'encryption');
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
     expect(catalog.enrollment, (
       'https://suite.example',
@@ -121,7 +121,7 @@ void main() {
       final catalog = _Catalog(enrolled: true);
       addTearDown(catalog.dispose);
       await open(tester, catalog);
-      await tester.tap(find.widgetWithText(TextButton, 'Sign In'));
+      await tester.tap(find.widgetWithText(TextButton, 'Sign in'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(field('Server URL')).readOnly, isTrue);
       expect(tester.widget<TextField>(field('Username')).readOnly, isTrue);
@@ -134,7 +134,7 @@ void main() {
       await tester.ensureVisible(find.byType(SwitchListTile));
       await tester.tap(find.byType(SwitchListTile));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
       await tester.pumpAndSettle();
       expect(catalog.enrollment?.$1, 'https://suite.example');
       expect(catalog.enrollment?.$2, 'owner');
@@ -236,14 +236,14 @@ void main() {
     );
   });
 
-  testWidgets('Sign In stays disabled until the form is filled', (
+  testWidgets('Sign in stays disabled until the form is filled', (
     tester,
   ) async {
     final catalog = _Catalog();
     addTearDown(catalog.dispose);
     await open(tester, catalog);
     FilledButton button() => tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Sign In'),
+      find.widgetWithText(FilledButton, 'Sign in'),
     );
     expect(button().onPressed, isNull);
     await tester.enterText(field('Server URL'), 'https://suite.example');
@@ -283,7 +283,7 @@ void main() {
     await tester.enterText(field('Username'), 'owner');
     await tester.enterText(field('Account password'), 'authentication');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
     expect(find.text('Check your encryption passphrase.'), findsOneWidget);
     expect(find.text('Encryption passphrase'), findsOneWidget);
@@ -291,7 +291,7 @@ void main() {
     await tester.pump();
     expect(
       tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Sign In'))
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Sign in'))
           .onPressed,
       isNull,
     );

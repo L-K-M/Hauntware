@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
+import '../l10n/app_localizations.dart';
 import 'app_settings.dart';
 
 /// Settings: what the app looks like and how new documents indent.
@@ -60,10 +61,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   Widget _dialog(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final indentation = _value.indentation;
     final tabs = indentation.style == IndentStyle.tabs;
     return AlertDialog(
-      title: const Text('Settings'),
+      title: Text(l10n.settingsTitle),
       content: SizedBox(
         width: 380,
         child: SingleChildScrollView(
@@ -71,35 +73,41 @@ class _SettingsDialogState extends State<SettingsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _section(theme, 'Appearance'),
+              _section(theme, l10n.settingsAppearance),
               SegmentedButton<ThemeMode>(
-                segments: const [
-                  ButtonSegment(value: ThemeMode.system, label: Text('System')),
-                  ButtonSegment(value: ThemeMode.light, label: Text('Light')),
-                  ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
+                segments: [
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    label: Text(l10n.settingsThemeSystem),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    label: Text(l10n.settingsThemeLight),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    label: Text(l10n.settingsThemeDark),
+                  ),
                 ],
                 selected: {_value.themeMode},
                 onSelectionChanged: (selection) =>
                     _apply(_value.copyWith(themeMode: selection.first)),
               ),
               const SizedBox(height: 16),
-              _section(theme, 'Text'),
+              _section(theme, l10n.settingsText),
               _slider(
                 theme: theme,
-                label: 'Size',
+                label: l10n.settingsTextSize,
                 value: _value.fontSize,
                 min: AppSettings.minimumFontSize,
                 max: AppSettings.maximumFontSize,
                 onChanged: (size) => _apply(_value.copyWith(fontSize: size)),
               ),
-              _fontMenu(theme),
+              _fontMenu(theme, l10n),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Ligatures'),
-                subtitle: const Text(
-                  'Join character pairs such as -> and != into one symbol, '
-                  'in fonts that draw them.',
-                ),
+                title: Text(l10n.settingsLigatures),
+                subtitle: Text(l10n.settingsLigaturesDetail),
                 value: _value.ligatures == EditorLigatures.on,
                 onChanged: (on) => _apply(
                   _value.copyWith(
@@ -108,22 +116,25 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              _section(theme, 'Indentation for new documents'),
+              _section(theme, l10n.settingsIndentation),
               OverflowBar(
                 alignment: MainAxisAlignment.spaceBetween,
                 spacing: 16,
                 overflowSpacing: 8,
                 children: [
-                  Text('Indent with', style: theme.textTheme.bodyMedium),
+                  Text(
+                    l10n.settingsIndentWith,
+                    style: theme.textTheme.bodyMedium,
+                  ),
                   SegmentedButton<IndentStyle>(
-                    segments: const [
+                    segments: [
                       ButtonSegment(
                         value: IndentStyle.spaces,
-                        label: Text('Spaces'),
+                        label: Text(l10n.indentSpaces),
                       ),
                       ButtonSegment(
                         value: IndentStyle.tabs,
-                        label: Text('Tabs'),
+                        label: Text(l10n.indentTabs),
                       ),
                     ],
                     selected: {indentation.style},
@@ -139,7 +150,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               _slider(
                 theme: theme,
-                label: 'Width',
+                label: l10n.settingsIndentWidth,
                 value: indentation.width,
                 min: 1,
                 max: AppSettings.maximumIndentWidth,
@@ -154,16 +165,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  'A file that already indents, or a format that requires '
-                  'tabs, keeps its own.',
+                  l10n.settingsIndentationDetail,
                   style: theme.textTheme.bodySmall,
                 ),
               ),
               const SizedBox(height: 16),
-              _section(theme, 'Saving'),
+              _section(theme, l10n.settingsSaving),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Trim trailing whitespace on save'),
+                title: Text(l10n.settingsTrimWhitespace),
                 value:
                     _value.saveOptions.trailingWhitespace ==
                     TrailingWhitespacePolicy.trim,
@@ -180,7 +190,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Ensure final newline on save'),
+                title: Text(l10n.settingsFinalNewline),
                 value:
                     _value.saveOptions.finalNewline ==
                     FinalNewlinePolicy.ensure,
@@ -196,14 +206,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              _section(theme, 'About'),
+              _section(theme, l10n.settingsAbout),
               // The running build, so a bug report can name it; the licenses
               // page repeats it under the app name.
-              Text(
-                widget.appVersion == null
-                    ? 'Version unknown'
-                    : 'Version ${widget.appVersion}',
-              ),
+              Text(switch (widget.appVersion) {
+                null => l10n.settingsVersionUnknown,
+                final version => l10n.settingsVersion(version),
+              }),
               const SizedBox(height: 8),
               // The notices of everything Planchette includes: Flutter's
               // NOTICES, plus the APK's Maven libraries on Android
@@ -211,19 +220,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ListTile(
                 key: const ValueKey('settings.licenses'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Open-source licenses'),
-                subtitle: const Text(
-                  'Public domain (Unlicense). The libraries, fonts and engine '
-                  'it includes keep their own licenses.',
-                ),
+                title: Text(l10n.settingsLicenses),
+                subtitle: Text(l10n.settingsLicensesDetail),
                 onTap: () => showLicensePage(
                   context: context,
                   applicationName: 'Planchette',
                   applicationVersion: widget.appVersion,
-                  applicationLegalese:
-                      "Planchette's own code is public domain (Unlicense). It "
-                      'includes third-party components that keep their own '
-                      'licenses, listed here.',
+                  applicationLegalese: l10n.settingsLicensesLegalese,
                 ),
               ),
               if (widget.settings.error case final error?)
@@ -241,10 +244,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _cancel, child: const Text('Cancel')),
+        TextButton(onPressed: _cancel, child: Text(l10n.actionCancel)),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Done'),
+          child: Text(l10n.actionDone),
         ),
       ],
     );
@@ -261,7 +264,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     ),
   );
 
-  Widget _fontMenu(ThemeData theme) {
+  Widget _fontMenu(ThemeData theme, AppLocalizations l10n) {
     final stored = _value.fontFamily;
     final bundled = stored == null
         ? editorDefaultFont
@@ -270,7 +273,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       children: [
         SizedBox(
           width: 64,
-          child: Text('Font', style: theme.textTheme.bodyMedium),
+          child: Text(l10n.settingsFont, style: theme.textTheme.bodyMedium),
         ),
         Expanded(
           child: OutlinedButton.icon(
@@ -278,7 +281,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
             icon: const Icon(Icons.font_download_outlined),
             label: Text(
               bundled == editorDefaultFont
-                  ? '${editorDefaultFont.displayName} (default)'
+                  ? l10n.settingsFontDefault(editorDefaultFont.displayName)
                   : bundled?.displayName ?? stored!,
               overflow: TextOverflow.ellipsis,
             ),
@@ -333,7 +336,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
           max: max.toDouble(),
           divisions: max - min,
           label: '$value',
-          semanticFormatterCallback: (value) => '$label ${value.round()}',
+          semanticFormatterCallback: (value) => AppLocalizations.of(
+            context,
+          ).settingsSliderValue(label, value.round()),
           onChanged: (value) => onChanged(value.round()),
         ),
       ),

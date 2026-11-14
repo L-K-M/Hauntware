@@ -121,7 +121,7 @@ abstract class AppLocalizations {
   /// Shows or submits the catalog sign-in form.
   ///
   /// In en, this message translates to:
-  /// **'Sign In'**
+  /// **'Sign in'**
   String get actionSignIn;
 
   /// Title of the dialog that lists the synced server catalog.
@@ -279,6 +279,486 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connect'**
   String get credentialConnect;
+
+  /// Notice above an unedited document whose file another program changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed on disk. Reload it to see the new version.'**
+  String diskChanged(String name);
+
+  /// Notice above an edited document whose file another program changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed on disk. Reload it, or keep your edits and replace it when you save.'**
+  String diskChangedWithEdits(String name);
+
+  /// Keeps the edits in the editor and replaces the changed file on the next save.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep Mine'**
+  String get diskKeepMine;
+
+  /// Reads the changed file into the editor, dropping the editor copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get diskReload;
+
+  /// Notice above a document whose file is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was deleted or moved. Save to create it again.'**
+  String diskMissing(String name);
+
+  /// Saves the document, or confirms a save location.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get actionSave;
+
+  /// Tooltip of the status bar line ending menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Line endings apply on next save'**
+  String get statusLineEndingTooltip;
+
+  /// Tooltip of the status bar encoding menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Encoding applies on next save, a UTF-8 BOM adds 3 bytes'**
+  String get statusEncodingTooltip;
+
+  /// Tooltip of the status bar indentation menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Indentation'**
+  String get statusIndentationTooltip;
+
+  /// Indents with spaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Spaces'**
+  String get indentSpaces;
+
+  /// Indents with tabs.
+  ///
+  /// In en, this message translates to:
+  /// **'Tabs'**
+  String get indentTabs;
+
+  /// Sets the indentation width in columns.
+  ///
+  /// In en, this message translates to:
+  /// **'Width {width}'**
+  String statusIndentWidth(int width);
+
+  /// Rewrites the document indentation as spaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert to Spaces'**
+  String get statusConvertToSpaces;
+
+  /// Rewrites the document indentation as tabs.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert to Tabs'**
+  String get statusConvertToTabs;
+
+  /// Tooltip of the button that hides the folder sidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide sidebar'**
+  String get sidebarHide;
+
+  /// Tooltip of the button that shows the folder sidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'Show sidebar'**
+  String get sidebarShow;
+
+  /// A tooltip naming an action and its keyboard shortcut, such as Ctrl+B.
+  ///
+  /// In en, this message translates to:
+  /// **'{action} {shortcut}'**
+  String tooltipWithShortcut(String action, String shortcut);
+
+  /// Tooltip of the button that closes the open folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Close folder workspace'**
+  String get folderClose;
+
+  /// Tooltip of the button that returns to the open folder itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace root'**
+  String get folderRoot;
+
+  /// Tooltip of the button that goes up one folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Parent folder'**
+  String get folderParent;
+
+  /// Tooltip of the button that lists the folder again.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh folder'**
+  String get folderRefresh;
+
+  /// Tooltip of the toggle while hidden files are shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide hidden files'**
+  String get folderHideHidden;
+
+  /// Tooltip of the toggle while hidden files are hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Show hidden files'**
+  String get folderShowHidden;
+
+  /// Shown in the file browser for an empty folder.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty'**
+  String get folderEmpty;
+
+  /// Screen reader label of the handle that resizes the file browser.
+  ///
+  /// In en, this message translates to:
+  /// **'File browser width'**
+  String get folderBrowserWidth;
+
+  /// Screen reader value of the file browser resize handle.
+  ///
+  /// In en, this message translates to:
+  /// **'{pixels} pixels'**
+  String folderBrowserWidthValue(int pixels);
+
+  /// Tooltip and screen reader action of a tab close button.
+  ///
+  /// In en, this message translates to:
+  /// **'Close {name}'**
+  String tabClose(String name);
+
+  /// Screen reader label of a tab whose document has unsaved edits.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, unsaved changes'**
+  String tabUnsaved(String name);
+
+  /// Title of the settings dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// Settings section heading for the theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
+  /// Follows the system light or dark theme.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get settingsThemeSystem;
+
+  /// Always uses the light theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsThemeLight;
+
+  /// Always uses the dark theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsThemeDark;
+
+  /// Settings section heading for the editor text.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get settingsText;
+
+  /// Label of the editor text size slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get settingsTextSize;
+
+  /// Switch that turns font ligatures on.
+  ///
+  /// In en, this message translates to:
+  /// **'Ligatures'**
+  String get settingsLigatures;
+
+  /// Explains the ligatures switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Join character pairs such as -> and != into one symbol, in fonts that draw them.'**
+  String get settingsLigaturesDetail;
+
+  /// Settings section heading for default indentation.
+  ///
+  /// In en, this message translates to:
+  /// **'Indentation for new documents'**
+  String get settingsIndentation;
+
+  /// Label of the spaces or tabs choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Indent with'**
+  String get settingsIndentWith;
+
+  /// Label of the indentation width slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get settingsIndentWidth;
+
+  /// Explains when the default indentation applies.
+  ///
+  /// In en, this message translates to:
+  /// **'A file that already indents, or a format that requires tabs, keeps its own.'**
+  String get settingsIndentationDetail;
+
+  /// Settings section heading for save options.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving'**
+  String get settingsSaving;
+
+  /// Switch that removes spaces at line ends when saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Trim trailing whitespace on save'**
+  String get settingsTrimWhitespace;
+
+  /// Switch that ends a saved file with a line break.
+  ///
+  /// In en, this message translates to:
+  /// **'Ensure final newline on save'**
+  String get settingsFinalNewline;
+
+  /// Settings section heading for the version and licenses.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAbout;
+
+  /// Shown when the running version cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Version unknown'**
+  String get settingsVersionUnknown;
+
+  /// The running app version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String settingsVersion(String version);
+
+  /// Opens the third-party license list.
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source licenses'**
+  String get settingsLicenses;
+
+  /// Summarizes the app license. Keep it consistent with the README license statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Public domain (Unlicense). The libraries, fonts and engine it includes keep their own licenses.'**
+  String get settingsLicensesDetail;
+
+  /// Legal line at the top of the license list. Keep it consistent with the README license statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Planchette\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed here.'**
+  String get settingsLicensesLegalese;
+
+  /// Closes the settings dialog, keeping the changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get actionDone;
+
+  /// Label of the editor font picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Font'**
+  String get settingsFont;
+
+  /// The default editor font in the font picker button.
+  ///
+  /// In en, this message translates to:
+  /// **'{font} (default)'**
+  String settingsFontDefault(String font);
+
+  /// Screen reader value of a settings slider, such as Size 14.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {value}'**
+  String settingsSliderValue(String label, int value);
+
+  /// Confirm button of the folder picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Folder'**
+  String get pickerOpenFolder;
+
+  /// Shown when more than one key file was picked.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose one private-key file.'**
+  String get pickerOneKeyFile;
+
+  /// Asks before a save replaces an existing file.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace “{name}”?'**
+  String replaceTitle(String name);
+
+  /// Explains the replace question.
+  ///
+  /// In en, this message translates to:
+  /// **'The existing file will be replaced with this document.'**
+  String get replaceBody;
+
+  /// Replaces the existing file.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get replaceAction;
+
+  /// Asks before closing several unsaved documents.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes to {count} documents?'**
+  String bulkCloseTitle(int count);
+
+  /// Lists the unsaved documents, one per line, before the warning.
+  ///
+  /// In en, this message translates to:
+  /// **'{names}\n\nYour changes will be lost if you close without saving them.'**
+  String bulkCloseBody(String names);
+
+  /// Saves every listed document, then closes.
+  ///
+  /// In en, this message translates to:
+  /// **'Save All'**
+  String get bulkCloseSaveAll;
+
+  /// Asks before closing an unsaved document.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes to “{name}”?'**
+  String closeTitle(String name);
+
+  /// Explains the close question.
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes will be lost if you close this document without saving.'**
+  String get closeBody;
+
+  /// Title shown before saving over a read-only file.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is read-only'**
+  String readOnlyTitle(String name);
+
+  /// Explains the read-only save question.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving replaces the file anyway and keeps it read-only. You can save your changes as a new file instead.'**
+  String get readOnlyBody;
+
+  /// Replaces the read-only file.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Anyway'**
+  String get readOnlySaveAnyway;
+
+  /// Saves the document under a new name.
+  ///
+  /// In en, this message translates to:
+  /// **'Save As…'**
+  String get actionSaveAs;
+
+  /// Asks before discarding unsaved edits.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert “{name}” to its saved version?'**
+  String revertTitle(String name);
+
+  /// Explains the revert question.
+  ///
+  /// In en, this message translates to:
+  /// **'Your unsaved changes will be lost.'**
+  String get revertBody;
+
+  /// Discards the edits and reads the saved file.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert'**
+  String get revertAction;
+
+  /// Asks before deleting a recovery copy of a document that could not be saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the recovery copy “{name}”?'**
+  String recoveryDeleteTitle(String name);
+
+  /// Explains the recovery copy question.
+  ///
+  /// In en, this message translates to:
+  /// **'It holds the earlier contents of a document Planchette could not save. If you keep it, it opens again the next time you start Planchette.'**
+  String get recoveryDeleteBody;
+
+  /// Keeps the file and closes the question.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep'**
+  String get actionKeep;
+
+  /// Deletes the named file or files.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get actionDelete;
+
+  /// Offered when the document folder refuses a save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save “{name}” somewhere else?'**
+  String saveElsewhereTitle(String name);
+
+  /// Explains why a save into the folder failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The folder {folder} does not let Planchette create the temporary file a safe save needs, so the file cannot be saved there. You can save a copy in another folder instead.'**
+  String saveElsewhereBody(String folder);
+
+  /// Offered when files from an interrupted save sit beside an opened document.
+  ///
+  /// In en, this message translates to:
+  /// **'Files left by an interrupted save of “{name}”'**
+  String siblingsTitle(String name);
+
+  /// Explains the leftover files, followed by their names, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'An earlier save of this document stopped before it finished and left {count, plural, =1{this file} other{these files}} beside it. Each holds a version of its text: the one before that save or the one it was writing. Open them to compare, or delete them if you do not need them.\n\n{files}'**
+  String siblingsBody(int count, String files);
+
+  /// A shortened list of file names, one per line, and how many were left out.
+  ///
+  /// In en, this message translates to:
+  /// **'{names}\nand {count} more'**
+  String listedMore(String names, int count);
 }
 
 class _AppLocalizationsDelegate
