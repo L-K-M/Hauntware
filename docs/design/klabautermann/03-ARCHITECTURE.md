@@ -2362,8 +2362,8 @@ re-push (c1 §2.4).
   unchecked.
   As built (M5 plan M07): the assertion is stored in
   `sync_enrollment.json` as `seance56Asserted: <release>` and names the
-  release in `kPinPublicationRelease`, which stays null until a suite
-  release carries the fix (M5 plan Q1). While it is null the engine
+  release in `kPinPublicationRelease`: 1.9.3, the first suite release
+  whose Séance carries the fix (M5 plan Q1). While it is null the engine
   offers no assertion, refuses `SetPinPublication` and publishes
   nothing. With the assertion, each pin the user confirms on a link (a
   first-seen key accepted, or a changed key trusted) is published on the

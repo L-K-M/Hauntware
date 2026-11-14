@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Settings > Sync offers to publish the host keys you confirm once every
+  device on the account runs Séance 1.9.3 or later, the first release
+  that checks pulled keys for conflicts.
+- A process whose command line the server cut at its read limit ends in
+  an ellipsis, and its details say the end is missing.
 - Klabautermann checks the suite's GitHub releases once per launch and
   offers a newer version in a banner: every platform links to the release
   page, and on Android the banner downloads and installs the release APK
