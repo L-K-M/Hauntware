@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/engine/engine_isolate.dart'
+    show engineMain;
 import 'package:test/test.dart';
 
 void main() {
@@ -25,6 +27,26 @@ void main() {
     expect(() => client.send(const RunSyncRound()), throwsStateError);
   });
 
+  test('a real engine whose startup fails refuses Hello with the error, '
+      'rather than dying unhandled', () async {
+    await expectLater(
+      IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        entryPoint: _engineFailingAtStartup,
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          startsWith(
+            'engine refused Hello: engine failed to start: '
+            'FileSystemException: store unreadable',
+          ),
+        ),
+      ),
+    );
+  });
+
   test('spawn names the error an engine met while starting', () async {
     await expectLater(
       IsolateEngineClient.spawn(
@@ -41,6 +63,13 @@ void main() {
     );
   });
 }
+
+/// The real engine, whose last startup step throws as a store that
+/// cannot open would.
+void _engineFailingAtStartup(EngineStart start) => engineMain(
+  start,
+  onSupportWrites: (_) => throw const FileSystemException('store unreadable'),
+);
 
 /// An engine whose startup work fails unhandled after it hands over its
 /// command port, before it answers [Hello].

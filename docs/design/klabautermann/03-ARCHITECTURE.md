@@ -6670,7 +6670,11 @@ the engine in `engine_isolate.dart` beside it):
 - **Version.** `Hello` carries `kEngineProtocolVersion`; the engine
   answers `EngineReady` with its own version, or `RequestRejected` on a
   mismatch, so an app and engine built apart fail before any feature
-  traffic. These lifecycle messages, `Shutdown`, and `RequestRejected`
+  traffic. An engine whose startup failed (a store that would not open)
+  stays up and answers `Hello`, and every later request but `Shutdown`,
+  with `RequestRejected` naming the error ("engine failed to start:
+  ..."), which the app's engine-failed screen shows. These lifecycle
+  messages, `Shutdown`, and `RequestRejected`
   (also the answer to rows whose milestone has not landed) are not table
   rows. Version 2 replaced v1's opaque record map in `CatalogReplaced`
   with typed entries and added the import row.

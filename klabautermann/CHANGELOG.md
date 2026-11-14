@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- When the engine cannot finish starting, it says why in the error
+  screen instead of stopping without an answer.
 - Read again on a disk's top folder stops the whole-disk scan still
   running from before, so two scans no longer run on the server at once.
 - The Updates table sorts its installed and available versions as

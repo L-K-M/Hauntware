@@ -2470,93 +2470,104 @@ void engineMain(
     }
   }
 
+  // What stopped the startup below, if anything. The engine then stays
+  // up and refuses every request with it, Hello first, so the app names
+  // the error instead of seeing the isolate die unhandled.
+  Object? startupFailure;
+
   // One request at a time, in arrival order, each to completion: an
   // import's save finishes before the next request runs, so answers keep
   // request order and saves never overlap, and nothing is handled before
   // the store is open.
   Future<void> queue =
       SshConfigImportStore.open(
-        File(
-          '${start.supportDirectory}${Platform.pathSeparator}'
-          '$sshConfigImportsFileName',
-        ),
-      ).then((store) async {
-        imports = store;
-        // 90 days [E] (03 §8.10); a prune that fails leaves the old
-        // records for the next start.
-        await audit.prune().catchError((Object _) {});
-        sync = await EngineSync.open(
-          supportDirectory: Directory(start.supportDirectory),
-          access: start.supportDirectoryAccess,
-          deviceId: start.deviceId,
-          hostKeys: hostKeys,
-          keystore: keystore,
-          vault: vault,
-          transport: syncTransport,
-        );
-        syncOpened = true;
-        syncedServers = await sync.servers();
-        synced = await listSynced(syncedServers);
-        trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
-        if (links != null) {
-          final link = links;
-          operations = OperationTracker(
-            linkFor: link.link,
-            sessionFor: (id) => admin?.session(id),
-            readOps: (id) => scheduler?.readOps(id),
-            store: await OperationsShownStore.open(
+            File(
+              '${start.supportDirectory}${Platform.pathSeparator}'
+              '$sshConfigImportsFileName',
+            ),
+          )
+          .then((store) async {
+            imports = store;
+            // 90 days [E] (03 §8.10); a prune that fails leaves the old
+            // records for the next start.
+            await audit.prune().catchError((Object _) {});
+            sync = await EngineSync.open(
+              supportDirectory: Directory(start.supportDirectory),
+              access: start.supportDirectoryAccess,
+              deviceId: start.deviceId,
+              hostKeys: hostKeys,
+              keystore: keystore,
+              vault: vault,
+              transport: syncTransport,
+            );
+            syncOpened = true;
+            syncedServers = await sync.servers();
+            synced = await listSynced(syncedServers);
+            trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
+            if (links != null) {
+              final link = links;
+              operations = OperationTracker(
+                linkFor: link.link,
+                sessionFor: (id) => admin?.session(id),
+                readOps: (id) => scheduler?.readOps(id),
+                store: await OperationsShownStore.open(
+                  Directory(start.supportDirectory),
+                  access: start.supportDirectoryAccess,
+                ),
+                audit: audit,
+                emit: uiPort.send,
+                deviceId: start.deviceId,
+              );
+            }
+            refreshFleet();
+            capabilities = await CapabilityCache.open(
               Directory(start.supportDirectory),
               access: start.supportDirectoryAccess,
-            ),
-            audit: audit,
-            emit: uiPort.send,
-            deviceId: start.deviceId,
-          );
-        }
-        refreshFleet();
-        capabilities = await CapabilityCache.open(
-          Directory(start.supportDirectory),
-          access: start.supportDirectoryAccess,
-          fleet: fleetIds,
-          // A store left as it is saves no import this run, so its fleet
-          // says nothing about which servers the user removed.
-          purge: switch (store.issue?.kind) {
-            ImportStoreIssueKind.leftAsIs ||
-            ImportStoreIssueKind.newerVersion => CachePurge.never,
-            ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
-          },
-        );
-        history = await HistoryStore.open(
-          Directory(start.supportDirectory),
-          access: start.supportDirectoryAccess,
-          fleet: fleetIds,
-          purge: switch (store.issue?.kind) {
-            ImportStoreIssueKind.leftAsIs ||
-            ImportStoreIssueKind.newerVersion => CachePurge.never,
-            ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
-          },
-        );
-        // Tests run the engine in their own isolate, where Shutdown cannot
-        // exit it, so they drain the stores' queued writes before deleting
-        // the support directory.
-        onSupportWrites?.call(() async {
-          await capabilities?.idle;
-          await history?.idle;
-        });
-        // Only a confirmed endpoint is dialed, so a profile cached for a
-        // synced server not confirmed now describes another machine. One
-        // whose pins could not be read keeps it until they read.
-        final unconfirmed = {
-          for (final entry in synced.entries)
-            if (entry.endpoint != EndpointConfirmation.confirmed &&
-                !synced.unreadableIds.contains(entry.serverId))
-              entry.serverId,
-        };
-        if (unconfirmed.isNotEmpty) {
-          unawaited(capabilities!.forget(unconfirmed));
-          unawaited(history!.forget(unconfirmed));
-        }
-      });
+              fleet: fleetIds,
+              // A store left as it is saves no import this run, so its fleet
+              // says nothing about which servers the user removed.
+              purge: switch (store.issue?.kind) {
+                ImportStoreIssueKind.leftAsIs ||
+                ImportStoreIssueKind.newerVersion => CachePurge.never,
+                ImportStoreIssueKind.recovered ||
+                null => CachePurge.removedServers,
+              },
+            );
+            history = await HistoryStore.open(
+              Directory(start.supportDirectory),
+              access: start.supportDirectoryAccess,
+              fleet: fleetIds,
+              purge: switch (store.issue?.kind) {
+                ImportStoreIssueKind.leftAsIs ||
+                ImportStoreIssueKind.newerVersion => CachePurge.never,
+                ImportStoreIssueKind.recovered ||
+                null => CachePurge.removedServers,
+              },
+            );
+            // Tests run the engine in their own isolate, where Shutdown cannot
+            // exit it, so they drain the stores' queued writes before deleting
+            // the support directory.
+            onSupportWrites?.call(() async {
+              await capabilities?.idle;
+              await history?.idle;
+            });
+            // Only a confirmed endpoint is dialed, so a profile cached for a
+            // synced server not confirmed now describes another machine. One
+            // whose pins could not be read keeps it until they read.
+            final unconfirmed = {
+              for (final entry in synced.entries)
+                if (entry.endpoint != EndpointConfirmation.confirmed &&
+                    !synced.unreadableIds.contains(entry.serverId))
+                  entry.serverId,
+            };
+            if (unconfirmed.isNotEmpty) {
+              unawaited(capabilities!.forget(unconfirmed));
+              unawaited(history!.forget(unconfirmed));
+            }
+          })
+          .catchError((Object error) {
+            startupFailure = error;
+          });
   commands.listen((message) {
     // Answered at once rather than queued: the sync operation that asked
     // waits on it, and a slow request ahead in the queue, such as an
@@ -2568,8 +2579,20 @@ void engineMain(
     // A handler that throws costs its own request, not the engine: left
     // in the chain, the error would skip every later request and, being
     // unhandled, end the isolate with every link and shell.
-    queue = queue.then(
-      (_) => handle(message).catchError((Object error) {
+    queue = queue.then((_) {
+      // Shutdown still ends the isolate; its stores are each optional.
+      if (startupFailure case final failure? when message is! Shutdown) {
+        uiPort.send(
+          RequestRejected(
+            message is EngineRequest
+                ? message.runtimeType.toString()
+                : '<unknown>',
+            'engine failed to start: $failure',
+          ),
+        );
+        return null;
+      }
+      return handle(message).catchError((Object error) {
         uiPort.send(
           RequestRejected(
             message is EngineRequest
@@ -2578,7 +2601,7 @@ void engineMain(
             'engine error: $error',
           ),
         );
-      }),
-    );
+      });
+    });
   });
 }
