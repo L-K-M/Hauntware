@@ -407,7 +407,10 @@ void main() {
         keys.getApiKey('sync.token'),
         throwsA(isA<AppLockException>()),
       );
-      await expectLater(keys.probeKeystore(hasExistingVault: false), throwsA(isA<AppLockException>()));
+      await expectLater(
+        keys.probeKeystore(hasExistingVault: false),
+        throwsA(isA<AppLockException>()),
+      );
       await expectLater(
         keys.readKeystoreKey(),
         throwsA(isA<AppLockException>()),
