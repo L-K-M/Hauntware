@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
@@ -233,10 +234,51 @@ Future<TextDocument> loadTextDocument(
   final bytes = builder.takeBytes();
   final after = await digestOf(file);
   await _requireRegularFile(file);
-  if (before != after || crypto.sha256.convert(bytes).toString() != after) {
-    throw const TextDocumentException(
-      'The file changed while it was being opened.',
-    );
+  if (before != after) throw _changedWhileOpening;
+
+  final read = await _offUiIsolateWhenLarge(bytes.length, _readTextBytes, (
+    bytes: bytes,
+    encoding: encoding,
+    normalization: normalization,
+    expectedSha256: after,
+  ), debugName: 'loadTextDocument');
+  return TextDocument(
+    file: file,
+    text: read.text,
+    hasUtf8Bom: read.utf8Bom,
+    lineEnding: read.lineEnding,
+    sha256: after,
+    encoding: read.encoding,
+  );
+}
+
+const _changedWhileOpening = TextDocumentException(
+  'The file changed while it was being opened.',
+);
+
+/// What loading makes of a file's bytes, computed by [_readTextBytes].
+typedef _ReadText = ({
+  String text,
+  bool utf8Bom,
+  LineEnding lineEnding,
+  TextEncoding encoding,
+});
+
+/// The pure, CPU-bound half of a load: verifies that [bytes] are the
+/// snapshot both file digests saw, decodes them, rejects binary content and
+/// folds line endings. It touches no file, so it may run in another isolate.
+_ReadText _readTextBytes(
+  ({
+    Uint8List bytes,
+    TextEncoding? encoding,
+    TextNormalization normalization,
+    String expectedSha256,
+  })
+  input,
+) {
+  final (:bytes, :encoding, :normalization, :expectedSha256) = input;
+  if (crypto.sha256.convert(bytes).toString() != expectedSha256) {
+    throw _changedWhileOpening;
   }
 
   final decoded = decodeTextBytes(bytes, encoding);
@@ -246,14 +288,38 @@ Future<TextDocument> loadTextDocument(
       'This file appears to be binary, not editable text.',
     );
   }
-  return TextDocument(
-    file: file,
+  return (
     text: normalization == TextNormalization.preserve ? raw : _foldToLf(raw),
-    hasUtf8Bom: decoded.utf8Bom,
+    utf8Bom: decoded.utf8Bom,
     lineEnding: _dominantLineEnding(raw),
-    sha256: after,
     encoding: decoded.encoding,
   );
+}
+
+/// Below this size the pure steps of a load or save take a few
+/// milliseconds, less than starting an isolate costs, so they run inline.
+/// Above it they would hold a host's UI isolate for whole frames: a 4 MiB
+/// file stalled it for about 75 ms on load and 45 ms on save (P4).
+const _backgroundWorkThreshold = 256 * 1024;
+
+/// Runs [work] on [input] in a short-lived isolate when [size] (bytes or
+/// UTF-16 code units) reaches [_backgroundWorkThreshold], and inline
+/// otherwise. File I/O and the injected digests stay on the caller's
+/// isolate, so the guarded ordering of reads, checks and renames is
+/// unchanged; only work that touches no file moves. Its exceptions reach
+/// the caller unchanged.
+///
+/// [work] is a top-level function and [input] a record of sendable values,
+/// so what crosses to the isolate is explicit: never the caller's streams
+/// or injected callbacks, which cannot be sent.
+Future<T> _offUiIsolateWhenLarge<I, T>(
+  int size,
+  T Function(I input) work,
+  I input, {
+  required String debugName,
+}) {
+  if (size < _backgroundWorkThreshold) return Future.sync(() => work(input));
+  return Isolate.run(() => work(input), debugName: debugName);
 }
 
 /// Counts each break once (a CRLF is not also a CR and an LF) and applies
@@ -363,31 +429,14 @@ Future<String> _writeTextDocument(
       'Only UTF-8 takes an optional byte order mark.',
     );
   }
-  // Loading rejects NUL as binary; writing it would produce a file this
-  // editor can never reopen. Reject before publication, while the original
-  // destination is still untouched. Scan the input, not the normalized
-  // text: normalization never adds or removes a NUL, and this keeps the
-  // reported offset pointing into the text the caller actually edited.
-  final nulIndex = _firstNulIndex(text);
-  if (nulIndex >= 0) {
-    throw TextDocumentException(
-      'The edited text contains a NUL character at code unit $nulIndex. '
-      'Loading treats that as binary content, so saving it would create a '
-      'file the editor cannot reopen.',
-    );
-  }
-  final normalized = normalization == TextNormalization.preserve
-      ? text
-      : _normalizeLineEndings(text, lineEnding);
-  // An unrepresentable character throws here, before anything is written.
-  final bytes = encodeText(normalized, encoding, utf8Bom: hasUtf8Bom);
-  if (bytes.length > maximumBytes) {
-    throw TextDocumentException(
-      'The edited file exceeds the '
-      '${(maximumBytes / (1024 * 1024)).toStringAsFixed(0)} MB built-in editor '
-      'limit.',
-    );
-  }
+  final bytes = await _offUiIsolateWhenLarge(text.length, _encodeForWrite, (
+    text: text,
+    lineEnding: lineEnding,
+    encoding: encoding,
+    normalization: normalization,
+    hasUtf8Bom: hasUtf8Bom,
+    maximumBytes: maximumBytes,
+  ), debugName: 'saveTextDocument');
   final temporary = _recoverySibling(file, temporaryPrefix, 'edit');
   final backup = _recoverySibling(file, temporaryPrefix, 'backup');
   RandomAccessFile? handle;
@@ -504,6 +553,56 @@ Future<String> _writeTextDocument(
     await handle?.close();
     if (!retainTemporary && await temporary.exists()) await temporary.delete();
   }
+}
+
+/// The pure, CPU-bound half of a write: rejects NUL, applies [lineEnding]
+/// and encodes, all before anything touches the disk. It may run in
+/// another isolate.
+Uint8List _encodeForWrite(
+  ({
+    String text,
+    LineEnding lineEnding,
+    TextEncoding encoding,
+    TextNormalization normalization,
+    bool hasUtf8Bom,
+    int maximumBytes,
+  })
+  input,
+) {
+  final (
+    :text,
+    :lineEnding,
+    :encoding,
+    :normalization,
+    :hasUtf8Bom,
+    :maximumBytes,
+  ) = input;
+  // Loading rejects NUL as binary; writing it would produce a file this
+  // editor can never reopen. Reject before publication, while the original
+  // destination is still untouched. Scan the input, not the normalized
+  // text: normalization never adds or removes a NUL, and this keeps the
+  // reported offset pointing into the text the caller actually edited.
+  final nulIndex = _firstNulIndex(text);
+  if (nulIndex >= 0) {
+    throw TextDocumentException(
+      'The edited text contains a NUL character at code unit $nulIndex. '
+      'Loading treats that as binary content, so saving it would create a '
+      'file the editor cannot reopen.',
+    );
+  }
+  final normalized = normalization == TextNormalization.preserve
+      ? text
+      : _normalizeLineEndings(text, lineEnding);
+  // An unrepresentable character throws here, before anything is written.
+  final bytes = encodeText(normalized, encoding, utf8Bom: hasUtf8Bom);
+  if (bytes.length > maximumBytes) {
+    throw TextDocumentException(
+      'The edited file exceeds the '
+      '${(maximumBytes / (1024 * 1024)).toStringAsFixed(0)} MB built-in editor '
+      'limit.',
+    );
+  }
+  return bytes;
 }
 
 /// The document's folder refused the staging file a guarded write needs,

@@ -1166,18 +1166,18 @@ final class DocumentWorkspace extends ChangeNotifier {
       // A revert confirmed while the page rendered discarded the text it
       // shows.
       if (reverting()) return false;
-      // The store holds every write to the document limit. Markup and
-      // escaping make a page several times its buffer, so name the page
+      // Markup and escaping make a page several times its buffer, so the
+      // page has its own bound rather than the editing limit. Name the page
       // rather than let the store speak of an edited file.
       final pageBytes = textDocumentByteCount(
         page,
         const TextDocumentMetadata(),
       );
-      if (pageBytes > textDocumentMaximumBytes) {
+      if (pageBytes > htmlExportMaximumBytes) {
         _reportError(
           '${tab.name} is too large to export as HTML: the page would be '
           '${_megabytes(pageBytes, digits: 1)} MB, over the '
-          '${_megabytes(textDocumentMaximumBytes)} MB limit.',
+          '${_megabytes(htmlExportMaximumBytes)} MB limit.',
           scope: scope,
         );
         return false;
@@ -1187,6 +1187,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         text: page,
         source: null,
         expectedSha256: digest,
+        maximumBytes: htmlExportMaximumBytes,
       );
       // A remote document's export is remote-sourced; a local document's
       // page is locally authored and stays unmarked.

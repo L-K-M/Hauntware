@@ -109,10 +109,31 @@ final class FoldedSearchText {
 /// characters whose full fold is longer. Null when [fold] itself changes the
 /// length of a run of text: its offsets cannot be mapped back, so the
 /// search compares exactly and says so.
+///
+/// The last result is kept for the identical text and fold (P1). Typing a
+/// query, stepping through matches and repainting them search the same
+/// unchanged document again and again, and folding it was two thirds of
+/// each search: a 4 MiB search took 38 ms with it and takes 12 ms without.
+/// Strings are immutable, so the identity check is exact and costs
+/// nothing; an edit makes a new string and folds again. The memo holds one
+/// document and its folded copy per isolate until the next search.
 FoldedSearchText? foldDocumentForSearch(
   String text,
   String Function(String) fold,
 ) {
+  final last = _lastFolded;
+  if (last != null && identical(last.text, text) && last.fold == fold) {
+    return last.result;
+  }
+  final result = _foldDocument(text, fold);
+  _lastFolded = (text: text, fold: fold, result: result);
+  return result;
+}
+
+({String text, String Function(String) fold, FoldedSearchText? result})?
+_lastFolded;
+
+FoldedSearchText? _foldDocument(String text, String Function(String) fold) {
   if (!_hasExpansion(text)) {
     final folded = fold(text);
     return folded.length == text.length
