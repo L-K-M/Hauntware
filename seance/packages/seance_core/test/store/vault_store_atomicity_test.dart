@@ -1,10 +1,12 @@
+// Moved from the Séance app's test of the same name with its
+// FileVaultStore copy, which this store replaced.
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/services/file_stores.dart';
+import 'package:seance_core/catalog.dart' show FileVaultStore;
 import 'package:seance_core/seance_core.dart';
+import 'package:test/test.dart';
 
-import 'support/atomic_write_blocker.dart';
+import '../support/atomic_write_blocker.dart';
 
 Future<void> blockWrites(File file) =>
     AtomicWriteBlocker(file).create().then((_) {});

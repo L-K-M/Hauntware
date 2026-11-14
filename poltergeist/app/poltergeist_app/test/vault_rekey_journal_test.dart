@@ -3,6 +3,7 @@
 // (startup settle lives in main.dart, the re-key driver in
 // SecureSyncCredentialStore). The FileVaultStore journal cases moved to
 // seance_core's test/store/vault_rekey_journal_test.dart with the store.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -166,6 +167,39 @@ void main() {
       expect(stagedAtWrite, isNotNull);
       expect(stagedAtWrite, contains(RegExp(r'"version"\s*:\s*1')));
       expect((await SecretVault(vaultStore, newKey).getSecret('a'))!.value,
+          'value-a');
+      expect(await journalFile.exists(), isFalse);
+    });
+
+    test('a vault read while the keystore write is pending leaves the '
+        're-key to finish', () async {
+      await enrolled();
+      // The keystore write can take seconds (a locked login keyring waits
+      // on its unlock prompt), and every vault access settles the journal
+      // through openSettledVault. A read in that window used to settle
+      // against the old key: the old generation won, the journal was
+      // cleared, and the new key the keystore then took opened nothing.
+      final writing = Completer<void>();
+      final release = Completer<void>();
+      keystore.onWrite = () async {
+        writing.complete();
+        await release.future;
+      };
+
+      final rekey = credentials.writeVaultKey(newKey);
+      await writing.future;
+      final during = await openSettledVault(
+          poltergeistMasterKeyManager(keystore), vaultStore);
+      expect((await during!.getSecret('a'))!.value, 'value-a');
+      expect(await journalFile.exists(), isTrue);
+
+      release.complete();
+      await rekey;
+
+      expect(
+          (await SecretVault(FileVaultStore(vaultFile), newKey)
+                  .getSecret('a'))!
+              .value,
           'value-a');
       expect(await journalFile.exists(), isFalse);
     });

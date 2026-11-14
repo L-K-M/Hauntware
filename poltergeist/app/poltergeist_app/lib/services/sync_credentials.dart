@@ -124,21 +124,30 @@ final class SecureSyncCredentialStore implements SyncCredentialStore {
     // produce: fail like the locked vault rather than stage a generation
     // built from entries nothing could read.
     if (current == null) throw const VaultLockedException();
-    await journal.stageRekey(currentKey: current, newKey: vaultKey);
+    // Until this re-key settles or is released, vault reads that settle
+    // the journal leave it alone: the keystore still holds the old key.
+    final staged = await journal.stageRekey(
+      currentKey: current,
+      newKey: vaultKey,
+    );
     try {
-      await _keys.setKeystoreKey(vaultKey);
-    } catch (_) {
-      // The keystore threw — but it may still have kept the new key
-      // (a keyring can store and then fail its own verdict). Read back
-      // what it actually holds and settle against that; a keyring that
-      // cannot testify leaves the journal staged rather than guess. The
-      // read never mints: a key neither generation matches would settle
-      // by discarding the journal and strand the vault.
-      final installed = await _keys.readKeystoreKey();
-      if (installed != null) await journal.settleRekey(installed);
-      rethrow;
+      try {
+        await _keys.setKeystoreKey(vaultKey);
+      } catch (_) {
+        // The keystore threw — but it may still have kept the new key
+        // (a keyring can store and then fail its own verdict). Read back
+        // what it actually holds and settle against that; a keyring that
+        // cannot testify leaves the journal staged rather than guess. The
+        // read never mints: a key neither generation matches would settle
+        // by discarding the journal and strand the vault.
+        final installed = await _keys.readKeystoreKey();
+        if (installed != null) await staged.settle(installed);
+        rethrow;
+      }
+      await staged.settle(vaultKey);
+    } finally {
+      staged.release();
     }
-    await journal.settleRekey(vaultKey);
   }
 }
 

@@ -205,12 +205,8 @@ Future<void> main(List<String> args) async {
   // dynamic vault and CRED-05's recovery service share this one guarded
   // provider, so recovery exports, restores and code replacement keep the
   // same boundary.
-  Future<SecretVault?> guardedVault() => appLock.read(() async {
-    final key = await probeVaultKey(masterKeys, vaultStore.file);
-    if (key == null) return null;
-    await vaultStore.settleRekey(key);
-    return SecretVault(vaultStore, key);
-  });
+  Future<SecretVault?> guardedVault() =>
+      appLock.read(() => openSettledVault(masterKeys, vaultStore));
 
   final dynamicVault = DynamicSecretVault(
     vaultStore,

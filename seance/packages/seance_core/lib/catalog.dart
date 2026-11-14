@@ -82,7 +82,11 @@ export 'src/sync/sync_engine.dart' show SyncCursorRejectedException;
 // app's own stores until the app switches.
 export 'src/store/file_host_key_store.dart' show FileHostKeyStore;
 export 'src/store/file_vault_store.dart'
-    show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
+    show
+        FileVaultStore,
+        StagedVaultRekey,
+        VaultRekeyJournal,
+        VaultRekeyOutcome;
 // CRED-05's recovery-code operations over a vault store, shared by every
 // app's credential vault.
 export 'src/vault/vault_recovery.dart'
