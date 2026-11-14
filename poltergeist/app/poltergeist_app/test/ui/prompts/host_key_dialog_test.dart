@@ -140,6 +140,31 @@ void main() {
     expect(await _settleResult(tester), isTrue);
   });
 
+  testWidgets('a changed key algorithm names both types (S06-05)', (
+    tester,
+  ) async {
+    await _open(
+      tester,
+      const HostKeyPromptData(
+        host: 'example.com',
+        port: 2222,
+        keyType: 'ecdsa-sha2-nistp256',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedFingerprintSha256: 'SHA256:original',
+        pinnedKeyType: 'ssh-ed25519',
+      ),
+    );
+
+    expect(
+      find.text(
+        'Key algorithm changed from ssh-ed25519 to ecdsa-sha2-nistp256.',
+      ),
+      findsOneWidget,
+    );
+    // The pinned fingerprint carries its own type, not the presented one.
+    expect(find.textContaining('ssh-ed25519'), findsWidgets);
+  });
+
   testWidgets('the dialog cannot be dismissed by tapping outside', (
     tester,
   ) async {

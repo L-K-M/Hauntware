@@ -85,6 +85,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hostKeyPreviousLabel => 'Previously trusted';
 
   @override
+  String hostKeyTypeChanged(String previousType, String presentedType) {
+    return 'Key algorithm changed from $previousType to $presentedType.';
+  }
+
+  @override
   String get hostKeyCancel => 'Cancel';
 
   @override

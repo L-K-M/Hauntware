@@ -232,6 +232,12 @@ abstract class AppLocalizations {
   /// **'Previously trusted'**
   String get hostKeyPreviousLabel;
 
+  /// Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.
+  ///
+  /// In en, this message translates to:
+  /// **'Key algorithm changed from {previousType} to {presentedType}.'**
+  String hostKeyTypeChanged(String previousType, String presentedType);
+
   /// Declines the host-key dialog.
   ///
   /// In en, this message translates to:

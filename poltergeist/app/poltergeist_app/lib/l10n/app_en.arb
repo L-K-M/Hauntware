@@ -110,6 +110,20 @@
   "@hostKeyPreviousLabel": {
     "description": "Label above the changed dialog's pinned fingerprint."
   },
+  "hostKeyTypeChanged": "Key algorithm changed from {previousType} to {presentedType}.",
+  "@hostKeyTypeChanged": {
+    "description": "Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.",
+    "placeholders": {
+      "previousType": {
+        "type": "String",
+        "example": "ssh-ed25519"
+      },
+      "presentedType": {
+        "type": "String",
+        "example": "ecdsa-sha2-nistp256"
+      }
+    }
+  },
   "hostKeyCancel": "Cancel",
   "@hostKeyCancel": {
     "description": "Declines the host-key dialog."
