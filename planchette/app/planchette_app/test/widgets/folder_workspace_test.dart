@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostResizeHandle, formatShortcutActivator;
 import 'package:path/path.dart' as paths;
+import 'package:planchette_app/l10n/app_localizations.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/app_settings.dart';
 import 'package:planchette_app/services/document_workspace.dart';
@@ -456,6 +457,7 @@ void main() {
         addTearDown(() => tester.binding.setSurfaceSize(null));
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
             home: WorkspaceSplitView(
               browser: const SizedBox.expand(key: ValueKey('split-browser')),
               editor: const SizedBox.expand(),
@@ -499,6 +501,7 @@ void main() {
       final settled = <double>[];
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           home: WorkspaceSplitView(
             browser: const SizedBox.expand(key: ValueKey('split-browser')),
             editor: const SizedBox.expand(),
@@ -531,6 +534,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           home: WorkspaceSplitView(
             browser: const SizedBox.expand(key: ValueKey('split-browser')),
             editor: const SizedBox.expand(key: ValueKey('split-editor')),

@@ -8,7 +8,7 @@
   "@actionClose": {"description": "Closes the workspace servers dialog."},
   "actionOpen": "Open",
   "@actionOpen": {"description": "Opens the chosen remote folder."},
-  "actionSignIn": "Sign In",
+  "actionSignIn": "Sign in",
   "@actionSignIn": {"description": "Shows or submits the catalog sign-in form."},
   "serversTitle": "Workspace servers",
   "@serversTitle": {"description": "Title of the dialog that lists the synced server catalog."},
@@ -70,5 +70,234 @@
   "credentialRetry": "That passphrase did not open the key. Try again. It is used for this workspace session and never saved.",
   "@credentialRetry": {"description": "Shown when a key passphrase was wrong."},
   "credentialConnect": "Connect",
-  "@credentialConnect": {"description": "Submits a server credential."}
+  "@credentialConnect": {"description": "Submits a server credential."},
+  "diskChanged": "{name} changed on disk. Reload it to see the new version.",
+  "@diskChanged": {
+    "description": "Notice above an unedited document whose file another program changed.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "diskChangedWithEdits": "{name} changed on disk. Reload it, or keep your edits and replace it when you save.",
+  "@diskChangedWithEdits": {
+    "description": "Notice above an edited document whose file another program changed.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "diskKeepMine": "Keep Mine",
+  "@diskKeepMine": {"description": "Keeps the edits in the editor and replaces the changed file on the next save."},
+  "diskReload": "Reload",
+  "@diskReload": {"description": "Reads the changed file into the editor, dropping the editor copy."},
+  "diskMissing": "{name} was deleted or moved. Save to create it again.",
+  "@diskMissing": {
+    "description": "Notice above a document whose file is gone.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "actionSave": "Save",
+  "@actionSave": {"description": "Saves the document, or confirms a save location."},
+  "statusLineEndingTooltip": "Line endings apply on next save",
+  "@statusLineEndingTooltip": {"description": "Tooltip of the status bar line ending menu."},
+  "statusEncodingTooltip": "Encoding applies on next save, a UTF-8 BOM adds 3 bytes",
+  "@statusEncodingTooltip": {"description": "Tooltip of the status bar encoding menu."},
+  "statusIndentationTooltip": "Indentation",
+  "@statusIndentationTooltip": {"description": "Tooltip of the status bar indentation menu."},
+  "indentSpaces": "Spaces",
+  "@indentSpaces": {"description": "Indents with spaces."},
+  "indentTabs": "Tabs",
+  "@indentTabs": {"description": "Indents with tabs."},
+  "statusIndentWidth": "Width {width}",
+  "@statusIndentWidth": {
+    "description": "Sets the indentation width in columns.",
+    "placeholders": {"width": {"type": "int"}}
+  },
+  "statusConvertToSpaces": "Convert to Spaces",
+  "@statusConvertToSpaces": {"description": "Rewrites the document indentation as spaces."},
+  "statusConvertToTabs": "Convert to Tabs",
+  "@statusConvertToTabs": {"description": "Rewrites the document indentation as tabs."},
+  "sidebarHide": "Hide sidebar",
+  "@sidebarHide": {"description": "Tooltip of the button that hides the folder sidebar."},
+  "sidebarShow": "Show sidebar",
+  "@sidebarShow": {"description": "Tooltip of the button that shows the folder sidebar."},
+  "tooltipWithShortcut": "{action} {shortcut}",
+  "@tooltipWithShortcut": {
+    "description": "A tooltip naming an action and its keyboard shortcut, such as Ctrl+B.",
+    "placeholders": {"action": {"type": "String"}, "shortcut": {"type": "String"}}
+  },
+  "folderClose": "Close folder workspace",
+  "@folderClose": {"description": "Tooltip of the button that closes the open folder."},
+  "folderRoot": "Workspace root",
+  "@folderRoot": {"description": "Tooltip of the button that returns to the open folder itself."},
+  "folderParent": "Parent folder",
+  "@folderParent": {"description": "Tooltip of the button that goes up one folder."},
+  "folderRefresh": "Refresh folder",
+  "@folderRefresh": {"description": "Tooltip of the button that lists the folder again."},
+  "folderHideHidden": "Hide hidden files",
+  "@folderHideHidden": {"description": "Tooltip of the toggle while hidden files are shown."},
+  "folderShowHidden": "Show hidden files",
+  "@folderShowHidden": {"description": "Tooltip of the toggle while hidden files are hidden."},
+  "folderEmpty": "This folder is empty",
+  "@folderEmpty": {"description": "Shown in the file browser for an empty folder."},
+  "folderBrowserWidth": "File browser width",
+  "@folderBrowserWidth": {"description": "Screen reader label of the handle that resizes the file browser."},
+  "folderBrowserWidthValue": "{pixels} pixels",
+  "@folderBrowserWidthValue": {
+    "description": "Screen reader value of the file browser resize handle.",
+    "placeholders": {"pixels": {"type": "int"}}
+  },
+  "tabClose": "Close {name}",
+  "@tabClose": {
+    "description": "Tooltip and screen reader action of a tab close button.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "tabUnsaved": "{name}, unsaved changes",
+  "@tabUnsaved": {
+    "description": "Screen reader label of a tab whose document has unsaved edits.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {"description": "Title of the settings dialog."},
+  "settingsAppearance": "Appearance",
+  "@settingsAppearance": {"description": "Settings section heading for the theme."},
+  "settingsThemeSystem": "System",
+  "@settingsThemeSystem": {"description": "Follows the system light or dark theme."},
+  "settingsThemeLight": "Light",
+  "@settingsThemeLight": {"description": "Always uses the light theme."},
+  "settingsThemeDark": "Dark",
+  "@settingsThemeDark": {"description": "Always uses the dark theme."},
+  "settingsText": "Text",
+  "@settingsText": {"description": "Settings section heading for the editor text."},
+  "settingsTextSize": "Size",
+  "@settingsTextSize": {"description": "Label of the editor text size slider."},
+  "settingsLigatures": "Ligatures",
+  "@settingsLigatures": {"description": "Switch that turns font ligatures on."},
+  "settingsLigaturesDetail": "Join character pairs such as -> and != into one symbol, in fonts that draw them.",
+  "@settingsLigaturesDetail": {"description": "Explains the ligatures switch."},
+  "settingsIndentation": "Indentation for new documents",
+  "@settingsIndentation": {"description": "Settings section heading for default indentation."},
+  "settingsIndentWith": "Indent with",
+  "@settingsIndentWith": {"description": "Label of the spaces or tabs choice."},
+  "settingsIndentWidth": "Width",
+  "@settingsIndentWidth": {"description": "Label of the indentation width slider."},
+  "settingsIndentationDetail": "A file that already indents, or a format that requires tabs, keeps its own.",
+  "@settingsIndentationDetail": {"description": "Explains when the default indentation applies."},
+  "settingsSaving": "Saving",
+  "@settingsSaving": {"description": "Settings section heading for save options."},
+  "settingsTrimWhitespace": "Trim trailing whitespace on save",
+  "@settingsTrimWhitespace": {"description": "Switch that removes spaces at line ends when saving."},
+  "settingsFinalNewline": "Ensure final newline on save",
+  "@settingsFinalNewline": {"description": "Switch that ends a saved file with a line break."},
+  "settingsAbout": "About",
+  "@settingsAbout": {"description": "Settings section heading for the version and licenses."},
+  "settingsVersionUnknown": "Version unknown",
+  "@settingsVersionUnknown": {"description": "Shown when the running version cannot be read."},
+  "settingsVersion": "Version {version}",
+  "@settingsVersion": {
+    "description": "The running app version.",
+    "placeholders": {"version": {"type": "String"}}
+  },
+  "settingsLicenses": "Open-source licenses",
+  "@settingsLicenses": {"description": "Opens the third-party license list."},
+  "settingsLicensesDetail": "Public domain (Unlicense). The libraries, fonts and engine it includes keep their own licenses.",
+  "@settingsLicensesDetail": {"description": "Summarizes the app license. Keep it consistent with the README license statement."},
+  "settingsLicensesLegalese": "Planchette's own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed here.",
+  "@settingsLicensesLegalese": {"description": "Legal line at the top of the license list. Keep it consistent with the README license statement."},
+  "actionDone": "Done",
+  "@actionDone": {"description": "Closes the settings dialog, keeping the changes."},
+  "settingsFont": "Font",
+  "@settingsFont": {"description": "Label of the editor font picker."},
+  "settingsFontDefault": "{font} (default)",
+  "@settingsFontDefault": {
+    "description": "The default editor font in the font picker button.",
+    "placeholders": {"font": {"type": "String"}}
+  },
+  "settingsSliderValue": "{label} {value}",
+  "@settingsSliderValue": {
+    "description": "Screen reader value of a settings slider, such as Size 14.",
+    "placeholders": {"label": {"type": "String"}, "value": {"type": "int"}}
+  },
+  "pickerOpenFolder": "Open Folder",
+  "@pickerOpenFolder": {"description": "Confirm button of the folder picker."},
+  "pickerOneKeyFile": "Choose one private-key file.",
+  "@pickerOneKeyFile": {"description": "Shown when more than one key file was picked."},
+  "replaceTitle": "Replace “{name}”?",
+  "@replaceTitle": {
+    "description": "Asks before a save replaces an existing file.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "replaceBody": "The existing file will be replaced with this document.",
+  "@replaceBody": {"description": "Explains the replace question."},
+  "replaceAction": "Replace",
+  "@replaceAction": {"description": "Replaces the existing file."},
+  "bulkCloseTitle": "Save changes to {count} documents?",
+  "@bulkCloseTitle": {
+    "description": "Asks before closing several unsaved documents.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "bulkCloseBody": "{names}\n\nYour changes will be lost if you close without saving them.",
+  "@bulkCloseBody": {
+    "description": "Lists the unsaved documents, one per line, before the warning.",
+    "placeholders": {"names": {"type": "String"}}
+  },
+  "bulkCloseSaveAll": "Save All",
+  "@bulkCloseSaveAll": {"description": "Saves every listed document, then closes."},
+  "closeTitle": "Save changes to “{name}”?",
+  "@closeTitle": {
+    "description": "Asks before closing an unsaved document.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "closeBody": "Your changes will be lost if you close this document without saving.",
+  "@closeBody": {"description": "Explains the close question."},
+  "readOnlyTitle": "“{name}” is read-only",
+  "@readOnlyTitle": {
+    "description": "Title shown before saving over a read-only file.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "readOnlyBody": "Saving replaces the file anyway and keeps it read-only. You can save your changes as a new file instead.",
+  "@readOnlyBody": {"description": "Explains the read-only save question."},
+  "readOnlySaveAnyway": "Save Anyway",
+  "@readOnlySaveAnyway": {"description": "Replaces the read-only file."},
+  "actionSaveAs": "Save As…",
+  "@actionSaveAs": {"description": "Saves the document under a new name."},
+  "revertTitle": "Revert “{name}” to its saved version?",
+  "@revertTitle": {
+    "description": "Asks before discarding unsaved edits.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "revertBody": "Your unsaved changes will be lost.",
+  "@revertBody": {"description": "Explains the revert question."},
+  "revertAction": "Revert",
+  "@revertAction": {"description": "Discards the edits and reads the saved file."},
+  "recoveryDeleteTitle": "Delete the recovery copy “{name}”?",
+  "@recoveryDeleteTitle": {
+    "description": "Asks before deleting a recovery copy of a document that could not be saved.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "recoveryDeleteBody": "It holds the earlier contents of a document Planchette could not save. If you keep it, it opens again the next time you start Planchette.",
+  "@recoveryDeleteBody": {"description": "Explains the recovery copy question."},
+  "actionKeep": "Keep",
+  "@actionKeep": {"description": "Keeps the file and closes the question."},
+  "actionDelete": "Delete",
+  "@actionDelete": {"description": "Deletes the named file or files."},
+  "saveElsewhereTitle": "Save “{name}” somewhere else?",
+  "@saveElsewhereTitle": {
+    "description": "Offered when the document folder refuses a save.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "saveElsewhereBody": "The folder {folder} does not let Planchette create the temporary file a safe save needs, so the file cannot be saved there. You can save a copy in another folder instead.",
+  "@saveElsewhereBody": {
+    "description": "Explains why a save into the folder failed.",
+    "placeholders": {"folder": {"type": "String"}}
+  },
+  "siblingsTitle": "Files left by an interrupted save of “{name}”",
+  "@siblingsTitle": {
+    "description": "Offered when files from an interrupted save sit beside an opened document.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "siblingsBody": "An earlier save of this document stopped before it finished and left {count, plural, =1{this file} other{these files}} beside it. Each holds a version of its text: the one before that save or the one it was writing. Open them to compare, or delete them if you do not need them.\n\n{files}",
+  "@siblingsBody": {
+    "description": "Explains the leftover files, followed by their names, one per line.",
+    "placeholders": {"count": {"type": "int"}, "files": {"type": "String"}}
+  },
+  "listedMore": "{names}\nand {count} more",
+  "@listedMore": {
+    "description": "A shortened list of file names, one per line, and how many were left out.",
+    "placeholders": {"names": {"type": "String"}, "count": {"type": "int"}}
+  }
 }

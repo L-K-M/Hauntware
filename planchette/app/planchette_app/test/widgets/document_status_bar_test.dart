@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_app/l10n/app_localizations.dart';
 import 'package:planchette_app/widgets/document_status_bar.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -30,6 +31,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: Scaffold(body: DocumentStatusBar(controller: editor)),
       ),
     );
@@ -245,6 +247,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           home: MediaQuery(
             data: const MediaQueryData(textScaler: TextScaler.linear(2)),
             child: Scaffold(body: DocumentStatusBar(controller: editor)),

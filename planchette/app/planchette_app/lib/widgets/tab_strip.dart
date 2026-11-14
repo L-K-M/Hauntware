@@ -4,6 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
+import '../l10n/app_localizations.dart';
+
 /// What the strip shows for one document.
 typedef TabStripItem = ({
   int id,
@@ -339,6 +341,7 @@ class _TabState extends State<_Tab> {
     final item = widget.item;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
     final canClose = widget.enabled && item.closable;
     // A hovered or focused tab offers its close button, and so does a clean
     // active tab; otherwise a dirty tab, the active one included, shows a dot
@@ -349,7 +352,7 @@ class _TabState extends State<_Tab> {
       child: offerClose
           ? IconButton(
               key: ValueKey('close-${item.id}'),
-              tooltip: 'Close ${item.name}',
+              tooltip: l10n.tabClose(item.name),
               padding: EdgeInsets.zero,
               iconSize: 14,
               onPressed: canClose ? widget.onClose : null,
@@ -374,12 +377,15 @@ class _TabState extends State<_Tab> {
     return Semantics(
       selected: widget.active,
       button: true,
-      label: item.dirty ? '${item.name}, unsaved changes' : item.name,
+      label: item.dirty ? l10n.tabUnsaved(item.name) : item.name,
       onTap: widget.enabled ? widget.onSelect : null,
       // While the dot stands in for the close button, which a screen
       // reader's cursor never hovers or focuses, the tab carries the action.
       customSemanticsActions: canClose && !offerClose
-          ? {CustomSemanticsAction(label: 'Close ${item.name}'): widget.onClose}
+          ? {
+              CustomSemanticsAction(label: l10n.tabClose(item.name)):
+                  widget.onClose,
+            }
           : null,
       child: FocusableActionDetector(
         enabled: widget.enabled,

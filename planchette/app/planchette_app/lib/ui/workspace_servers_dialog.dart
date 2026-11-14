@@ -46,7 +46,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
     _load();
   }
 
-  /// The Sign In gating follows what the fields hold, so every edit
+  /// The Sign in gating follows what the fields hold, so every edit
   /// rebuilds the actions.
   void _fieldsChanged() {
     if (mounted) setState(() {});
@@ -88,7 +88,7 @@ class _WorkspaceServersDialogState extends State<_WorkspaceServersDialog> {
     }
   }
 
-  /// Sign In's readiness: URL, username and password filled (the
+  /// Sign in's readiness: URL, username and password filled (the
   /// passphrase is optional) and nothing already in flight.
   bool get _canSignIn =>
       _baseUrl.text.trim().isNotEmpty &&

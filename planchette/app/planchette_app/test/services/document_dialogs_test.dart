@@ -2,6 +2,7 @@ import 'package:file_selector_platform_interface/file_selector_platform_interfac
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
+import 'package:planchette_app/l10n/app_localizations.dart';
 import 'package:planchette_app/services/document_dialogs.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -86,7 +87,11 @@ void main() {
     ) async {
       final navigator = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+        MaterialApp(
+          navigatorKey: navigator,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: const SizedBox(),
+        ),
       );
 
       final answer = AppDocumentDialogs(
@@ -107,7 +112,11 @@ void main() {
     ) async {
       final navigator = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+        MaterialApp(
+          navigatorKey: navigator,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: const SizedBox(),
+        ),
       );
 
       final answer = AppDocumentDialogs(
@@ -131,7 +140,11 @@ void main() {
     ) async {
       final navigator = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+        MaterialApp(
+          navigatorKey: navigator,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: const SizedBox(),
+        ),
       );
 
       final answer = AppDocumentDialogs(
@@ -157,7 +170,11 @@ void main() {
     ) async {
       final navigator = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+        MaterialApp(
+          navigatorKey: navigator,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: const SizedBox(),
+        ),
       );
 
       final answer = AppDocumentDialogs(navigator).chooseSaveSiblings(
@@ -192,7 +209,11 @@ void main() {
     ) async {
       final navigator = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+        MaterialApp(
+          navigatorKey: navigator,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: const SizedBox(),
+        ),
       );
 
       final answer = AppDocumentDialogs(
@@ -213,7 +234,11 @@ void main() {
   ) async {
     final navigator = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: navigator, home: const SizedBox()),
+      MaterialApp(
+        navigatorKey: navigator,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: const SizedBox(),
+      ),
     );
     final dialogs = AppDocumentDialogs(navigator);
     final names = [for (var i = 1; i <= 9; i++) 'doc$i.txt'];
