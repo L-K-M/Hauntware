@@ -14,9 +14,8 @@
 # that need their text: the OFL fonts every app bundles (ghost_fonts) and
 # the CC BY-SA credit for the Debian logo glyph in its 3270 font,
 # Séance's vendored xterm and flutter_pty, the NuGet libraries the Séance
-# and Klabautermann Windows builds compile in, the Swift packages
-# file_picker adds to the Séance and Poltergeist iOS builds, Poltergeist's
-# PDFium and the Unicode data tables. Exits 1 on any miss.
+# and Klabautermann Windows builds compile in, Poltergeist's PDFium and the
+# Unicode data tables. Exits 1 on any miss.
 set -euo pipefail
 
 [[ $# -ge 2 ]] || { echo "usage: $0 PRODUCT FILE..." >&2; exit 2; }
@@ -28,12 +27,10 @@ case "$product" in
   planchette) ;;
   seance)
     required+=('xterm' 'flutter_pty' 'Windows Implementation Libraries' 'C++/WinRT')
-    required+=('DKImagePickerController' 'SDWebImage')
     ;;
   klabautermann) required+=('Windows Implementation Libraries' 'C++/WinRT') ;;
   poltergeist)
     required+=('PDFium' 'PDFium: FreeType' 'UNICODE LICENSE V3')
-    required+=('DKImagePickerController' 'SDWebImage')
     ;;
   *) echo "unknown product: $product" >&2; exit 2 ;;
 esac

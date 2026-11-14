@@ -236,9 +236,9 @@ Future<String?> _pickSshConfigText(BuildContext context) async {
   final sshDirectory = home == null
       ? null
       : '$home${Platform.pathSeparator}.ssh';
-  final FilePickerResult? result;
+  final PlatformFile? picked;
   try {
-    result = await FilePicker.pickFiles(
+    picked = await FilePicker.pickFile(
       dialogTitle: 'Import SSH Config',
       initialDirectory:
           sshDirectory != null && Directory(sshDirectory).existsSync()
@@ -251,7 +251,7 @@ Future<String?> _pickSshConfigText(BuildContext context) async {
     }
     return null;
   }
-  final path = result?.files.single.path;
+  final path = picked?.path;
   if (path == null) return null;
   try {
     final read = await readSshConfigFile(File(path));

@@ -4,11 +4,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 /// local_auth_windows fetches two NuGet packages that compile into the
-/// Windows build: Microsoft's WIL and C++/WinRT; file_picker's iOS build
-/// resolves Swift packages. No pub package carries their licenses, so they
-/// are chunks of this app's LICENSE, which Flutter copies into NOTICES: it
-/// splits a package LICENSE on lines of 80 hyphens, and each chunk opens
-/// with the names it covers and a blank line.
+/// Windows build: Microsoft's WIL and C++/WinRT. No pub package carries
+/// their licenses, so they are chunks of this app's LICENSE, which Flutter
+/// copies into NOTICES: it splits a package LICENSE on lines of 80 hyphens,
+/// and each chunk opens with the names it covers and a blank line.
 void main() {
   final chunks = File('LICENSE').readAsStringSync().split('\n${'-' * 80}\n');
   final byName = {
@@ -43,35 +42,19 @@ void main() {
     );
   });
 
-  test("LICENSE carries the Swift packages file_picker's iOS build uses", () {
+  test("file_picker's iOS build resolves no Swift packages", () {
+    // file_picker 12 dropped DKImagePickerController and the packages it
+    // resolved, whose texts were chunks here; a package its Darwin manifest
+    // names again needs its license text in this LICENSE.
     final manifest = _packageFile(
-      'file_picker',
-      'ios/file_picker/Package.swift',
+      'file_picker_darwin',
+      'darwin/file_picker_darwin/Package.swift',
     );
 
-    // The chunks record this dependency and what it resolves; a change
-    // here needs the new packages' texts.
-    expect(
-      RegExp(
-        r'\.package\(url: "([^"]+)"',
-      ).allMatches(manifest).map((match) => match[1]),
-      ['https://github.com/zhangao0086/DKImagePickerController'],
-    );
-    expect(manifest, contains('branch: "4.3.9"'));
-    for (final name in _swiftPackageChunks) {
-      expect(byName[name], contains('Permission is hereby granted'));
-    }
+    expect(manifest, isNot(contains('.package(url:')));
+    expect(byName.keys, isNot(contains(startsWith('DKImagePickerController'))));
   });
 }
-
-/// The LICENSE chunks for DKImagePickerController and the packages it
-/// resolves, by the names each opens with.
-const _swiftPackageChunks = [
-  'DKImagePickerController\nDKCamera\nDKPhotoGallery',
-  'TOCropViewController',
-  'SwiftyGif',
-  'SDWebImage',
-];
 
 /// [path] inside the resolved [package], found through the package config.
 String _packageFile(String package, String path) {

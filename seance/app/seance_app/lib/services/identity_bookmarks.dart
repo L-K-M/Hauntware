@@ -48,12 +48,11 @@ class IdentityFileBookmarks {
         bookmark: result['bookmark'] as String?,
       );
     }
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       dialogTitle: 'Choose an SSH identity file',
-      allowMultiple: false,
       type: FileType.any,
     );
-    final path = result?.files.single.path;
+    final path = file?.path;
     return path == null ? null : PickedIdentityFile(path);
   }
 
