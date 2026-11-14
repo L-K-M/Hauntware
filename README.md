@@ -99,9 +99,7 @@ bundle third-party code that keeps its own licenses:
 - The Android apps also bundle AndroidX, Kotlin and other Maven libraries;
   Klabautermann's also bundles desugar_jdk_libs (GPL-2.0 with the Classpath
   Exception). Séance and Klabautermann for Windows also bundle Microsoft's
-  WIL and C++/WinRT. Séance and Poltergeist for iOS also bundle
-  DKImagePickerController, DKCamera, DKPhotoGallery, TOCropViewController,
-  SwiftyGif and SDWebImage, which file_picker pulls in.
+  WIL and C++/WinRT.
 - The Linux AppImages also carry the AppImage runtime, which statically
   links libfuse (LGPL-2.1), squashfuse, musl, zstd and zlib.
 - The sync server bundles the Dart runtime (with BoringSSL, ICU, zlib and
