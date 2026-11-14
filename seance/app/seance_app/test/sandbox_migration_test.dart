@@ -330,7 +330,7 @@ void main() {
         final run = SandboxMigration(
           support: support,
           legacySupport: legacy,
-          publish: (_, __) => throw const FileSystemException('ENOTEMPTY'),
+          publish: (_, _) => throw const FileSystemException('ENOTEMPTY'),
         );
         expect(await run.run(), SandboxMigrationOutcome.failed);
         expect(
@@ -383,7 +383,7 @@ void main() {
         final run = SandboxMigration(
           support: support,
           legacySupport: legacy,
-          publish: (_, __) {
+          publish: (_, _) {
             File('${support.path}/.DS_Store').writeAsStringSync('newcomer');
             throw const FileSystemException('ENOTEMPTY');
           },

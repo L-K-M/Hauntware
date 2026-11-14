@@ -349,7 +349,7 @@ void main() {
       final provider = _ModelProvider(models: ['z', 'a']);
       final modelBackend = LocalSettingsBackend(
         state,
-        modelProviderBuilder: (_, __) => provider,
+        modelProviderBuilder: (_, _) => provider,
       );
 
       expect(await modelBackend.fetchModels(query), ['a', 'z']);
@@ -360,7 +360,7 @@ void main() {
       final provider = _ModelProvider(error: StateError('offline'));
       final modelBackend = LocalSettingsBackend(
         state,
-        modelProviderBuilder: (_, __) => provider,
+        modelProviderBuilder: (_, _) => provider,
       );
 
       await expectLater(modelBackend.fetchModels(query), throwsStateError);

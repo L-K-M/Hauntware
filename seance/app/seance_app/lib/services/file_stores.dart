@@ -441,7 +441,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
     });
     // The queue has to outlive a failed operation, so swallow the error here
     // and hand it to the caller through [run] alone.
-    _pending = run.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _pending = run.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return run;
   }
 
