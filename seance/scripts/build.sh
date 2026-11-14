@@ -4,7 +4,8 @@
 # The single local entry point; CI builds the same targets in
 # .github/workflows/ci.yml and release.yml.
 #
-#   server — sync server as a native binary (dart compile exe) → build/seance-sync
+#   server — sync server bundle (dart build cli: bin/ plus lib/ with
+#            libsqlite3) → dist/seance-sync/
 #   docker — sync-server image (packages/seance_sync_server/Dockerfile, build
 #            context = repo root) → seance-sync:local
 #   app    — Flutter desktop app for THIS host (linux/macos/windows); platform
@@ -73,26 +74,30 @@ resolve_workspace() {
 
 # ---------------------------------------------------------------------------
 build_server() {
-  echo "== server (native sync-server binary) =="
+  echo "== server (native sync-server bundle) =="
   if ! have dart; then skip_or_fail server "Dart SDK (dart) not found"; return; fi
   if ! resolve_workspace; then
     echo "!! server: dart pub get failed" >&2
     record "server: FAILED (pub get)"; return 1
   fi
-  local exe="build/seance-sync"
-  [[ "$HOST" == "windows" ]] && exe="build/seance-sync.exe"
-  mkdir -p build
-  echo "-- dart compile exe → $exe"
-  if dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o "$exe"; then
-    if ! stage "$exe"; then
-      echo "!! server: copying the binary into dist/ failed" >&2
-      record "server: FAILED (copy to dist/)"; return 1
-    fi
-    record "server: built -> dist/$(basename "$exe")"
-  else
-    echo "!! server: dart compile exe failed" >&2
-    record "server: FAILED (compile)"; return 1
+  # `dart compile exe` refuses package:sqlite3's build hook. `dart build
+  # cli` writes bundle/bin (the executable) and bundle/lib (libsqlite3),
+  # and the executable loads the library from ../lib. It keeps its name:
+  # newer SDKs make it a launcher for lib/libdartaot<name>. Run it in the
+  # package so the hooks run; -o is relative for Git Bash on Windows.
+  local out="build/seance-sync" exe=seance_sync_server
+  [[ "$HOST" == "windows" ]] && exe=seance_sync_server.exe
+  rm -rf "$out"
+  echo "-- dart build cli → $out/bundle"
+  if ! (cd packages/seance_sync_server && dart build cli -o "../../$out"); then
+    echo "!! server: dart build cli failed" >&2
+    record "server: FAILED (build)"; return 1
   fi
+  if ! stage "$out/bundle" seance-sync; then
+    echo "!! server: copying the bundle into dist/ failed" >&2
+    record "server: FAILED (copy to dist/)"; return 1
+  fi
+  record "server: built -> dist/seance-sync/bin/$exe"
 }
 
 # ---------------------------------------------------------------------------

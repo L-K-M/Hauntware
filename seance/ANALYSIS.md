@@ -82,10 +82,11 @@ performance, or optional polish and hardening.
 export PATH=/opt/dart-sdk/bin:/opt/flutter/bin:$PATH
 dart pub get
 dart analyze packages/seance_protocol packages/seance_core packages/seance_sync_server
-dart test    packages/seance_protocol packages/seance_core packages/seance_sync_server
+dart test    packages/seance_protocol packages/seance_core
+(cd packages/seance_sync_server && dart test)   # its build hooks bundle SQLite
 (cd app/seance_app && flutter pub get && flutter analyze && flutter test)
 (cd third_party/xterm && flutter test)          # vendored fork, not analyze-gated
-dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o /tmp/seance-sync
+(cd packages/seance_sync_server && dart build cli -o /tmp/seance-sync)
 docker build -f packages/seance_sync_server/Dockerfile -t seance-sync .
 scripts/test-macos-accessibility.sh             # macOS, after flutter build macos
 ```

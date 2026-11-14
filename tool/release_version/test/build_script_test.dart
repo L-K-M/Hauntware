@@ -367,6 +367,10 @@ fi
 
     test('seance: the server binary cannot be copied into dist/', () async {
       final build = _realProductBuild(sandbox, 'seance', 'seance_app', 'Linux');
+      // The script runs `dart build cli` inside the server package.
+      Directory(
+        p.join(build.root, 'packages', 'seance_sync_server'),
+      ).createSync(recursive: true);
       File(p.join(build.root, 'dist')).writeAsStringSync('');
 
       final result = await build.run(['server']);
@@ -444,10 +448,12 @@ case "$2" in
        touch build/app/outputs/flutter-apk/app-release.apk ;;
 esac
 ''');
+  // `dart build cli -o <dir>` writes <dir>/bundle/{bin,lib}.
   File(p.join(bin, 'dart')).writeAsStringSync(r'''#!/usr/bin/env bash
-[[ "$1" == compile ]] || exit 0
+[[ "$1 $2" == "build cli" ]] || exit 0
 while [[ $# -gt 0 && "$1" != -o ]]; do shift; done
-touch "$2"
+mkdir -p "$2/bundle/bin" "$2/bundle/lib"
+touch "$2/bundle/bin/seance_sync_server"
 ''');
   Process.runSync('chmod', [
     '+x',

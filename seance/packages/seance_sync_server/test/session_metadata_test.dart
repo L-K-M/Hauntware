@@ -433,7 +433,7 @@ void main() {
         1000,
         10000,
       ]);
-      db.dispose();
+      db.close();
       var storage = SqliteStorage.open(path);
       await storage.createAccount(_account('alice'));
       var principal = await _principal(storage, token, 1000);
