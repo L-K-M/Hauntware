@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The Updates table sorts its installed and available versions as
+  versions, so 1.10 follows 1.9.
 - Activity and the detached operations list name cron job runs, snippet
   runs and stack compose actions instead of reading "Action".
 - When the server refuses to plan an action because a step failed, such
