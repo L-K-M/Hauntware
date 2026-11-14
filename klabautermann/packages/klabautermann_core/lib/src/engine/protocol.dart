@@ -1301,9 +1301,9 @@ final class SetDeviceName extends EngineRequest {
 
 /// The suite release whose Séance carries the #56 fix (D15, FL-22): the
 /// release a pin publication assertion names. 1.9.3 is the first tag
-/// whose Séance changelog lists the fix (M5 plan Q1). Null would offer no
-/// assertion, and the engine would publish no pin.
-const String? kPinPublicationRelease = '1.9.3';
+/// whose Séance changelog lists the fix (M5 plan Q1). An engine started
+/// with no release offers no assertion and publishes no pin.
+const String kPinPublicationRelease = '1.9.3';
 
 /// Asserts that every device on the account runs the release
 /// [PinPublicationState.release] names or later, or withdraws that with
