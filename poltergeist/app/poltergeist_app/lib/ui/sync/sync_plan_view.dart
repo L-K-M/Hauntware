@@ -369,9 +369,13 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     };
     if (step == 0) return KeyEventResult.ignored;
     final current = _focusedRow == null ? -1 : _rowOrder.indexOf(_focusedRow!);
-    final next = current < 0
-        ? (step > 0 ? 0 : last)
-        : (current + step).clamp(0, last);
+    final next = switch (key) {
+      // Home and End name an end of the table even before a row has focus.
+      LogicalKeyboardKey.home => 0,
+      LogicalKeyboardKey.end => last,
+      _ when current < 0 => step > 0 ? 0 : last,
+      _ => (current + step).clamp(0, last),
+    };
     final row = _rowOrder[next];
     setState(() {
       _focusedRow = row;
@@ -1063,8 +1067,8 @@ final class _DocrootNotices extends StatelessWidget {
                                 ),
                           child: Text(
                             l10n.syncDocrootWarningUseSaferPath,
-                            semanticsLabel:
-                                l10n.syncDocrootWarningUseSaferPathForSide(
+                            semanticsLabel: l10n
+                                .syncDocrootWarningUseSaferPathForSide(
                                   warning.side == SyncSide.left
                                       ? l10n.syncSideLeft
                                       : l10n.syncSideRight,
@@ -1472,10 +1476,7 @@ class _FilterBar extends StatelessWidget {
 
 /// §7's bulk conflict bar — mounts while conflict rows exist.
 class _ConflictBar extends StatelessWidget {
-  const _ConflictBar({
-    required this.controller,
-    required this.l10n,
-  });
+  const _ConflictBar({required this.controller, required this.l10n});
 
   final SyncPlanController controller;
   final AppLocalizations l10n;

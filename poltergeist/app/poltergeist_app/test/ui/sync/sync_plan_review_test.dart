@@ -275,6 +275,31 @@ void main() {
       await tester.pump();
       expect(items.first.effective, SyncActionType.skip);
     });
+
+    for (final (key, target) in [
+      (LogicalKeyboardKey.home, 0),
+      (LogicalKeyboardKey.end, 199),
+    ]) {
+      testWidgets('${key.keyLabel} before any row has focus goes to '
+          'row $target', (tester) async {
+        final items = [for (final n in names) _copy(n)];
+        await _ready(tester, testSyncPair(), items);
+        final pane = tester.widget<Focus>(
+          find.byWidgetPredicate(
+            (w) => w is Focus && w.focusNode?.debugLabel == 'sync.plan.table',
+          ),
+        );
+        pane.focusNode!.requestFocus();
+        await tester.pump();
+
+        await tester.sendKeyEvent(key);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        await tester.pump();
+        expect(items[target].effective, SyncActionType.skip);
+        await expectShown(tester, names[target]);
+      });
+    }
   });
 
   testWidgets('a selected row in the focused table keeps every mark '
@@ -359,10 +384,7 @@ void main() {
     final handle = tester.ensureSemantics();
     await _ready(tester, testSyncPair(), [_copy('a.txt')]);
     const rowLabel = 'a.txt: copy to “right”, only exists here';
-    final glyph = find.semantics
-        .byLabel('copy to “right”')
-        .evaluate()
-        .single;
+    final glyph = find.semantics.byLabel('copy to “right”').evaluate().single;
     expect(glyph.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
     glyph.owner!.performAction(glyph.id, SemanticsAction.tap);
     await tester.pumpAndSettle();

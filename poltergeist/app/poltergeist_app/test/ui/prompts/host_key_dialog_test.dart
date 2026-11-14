@@ -43,20 +43,15 @@ class _HarnessState extends State<_Harness> {
           child: Builder(
             // The dialog needs a context *below* MaterialApp for
             // Localizations; the State's own context sits above it.
-            builder:
-                (context) =>
-                    result == null
-                        ? FilledButton(
-                          onPressed: () async {
-                            result = await showHostKeyDialog(
-                              context,
-                              widget.data,
-                            );
-                            if (mounted) setState(() {});
-                          },
-                          child: const Text('open'),
-                        )
-                        : Text('result:$result'),
+            builder: (context) => result == null
+                ? FilledButton(
+                    onPressed: () async {
+                      result = await showHostKeyDialog(context, widget.data);
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('open'),
+                  )
+                : Text('result:$result'),
           ),
         ),
       ),
@@ -162,7 +157,8 @@ void main() {
       findsOneWidget,
     );
     // The pinned fingerprint carries its own type, not the presented one.
-    expect(find.textContaining('ssh-ed25519'), findsWidgets);
+    expect(find.text('ssh-ed25519\nSHA256:original'), findsOneWidget);
+    expect(find.text('ecdsa-sha2-nistp256\nSHA256:changed'), findsOneWidget);
   });
 
   testWidgets('the dialog cannot be dismissed by tapping outside', (
