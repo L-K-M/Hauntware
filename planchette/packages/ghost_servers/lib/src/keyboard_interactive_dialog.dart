@@ -12,6 +12,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'endpoint_host.dart';
+
 /// What the prompt shows: the trusted endpoint the challenge came from, and
 /// the server's own words, which are untrusted.
 final class GhostKeyboardPrompt {
@@ -78,13 +80,6 @@ final class GhostKeyboardInteractiveStrings {
 
 String _endpoint(String? username, String host, int port) =>
     username == null ? '$host:$port' : '$username@$host:$port';
-
-/// The host as the endpoint line shows it: a bare IPv6 address gains
-/// brackets, so its colons cannot be read as the port separator.
-String _displayHost(String host) =>
-    host.contains(':') && !(host.startsWith('[') && host.endsWith(']'))
-    ? '[$host]'
-    : host;
 
 /// Prompts for keyboard-interactive auth (e.g. a 2FA/TOTP code). Returns one
 /// answer per prompt, in order. An empty list cancels the attempt.
@@ -204,7 +199,7 @@ class _KeyboardInteractiveDialogState
           SelectableText(
             strings.endpoint(
               prompt.username,
-              _displayHost(prompt.host),
+              endpointDisplayHost(prompt.host),
               prompt.port,
             ),
             style: Theme.of(context).textTheme.titleSmall,

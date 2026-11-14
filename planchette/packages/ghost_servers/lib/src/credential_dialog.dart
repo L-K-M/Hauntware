@@ -16,6 +16,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:seance_protocol/seance_protocol.dart' show AuthMethod;
 
+import 'endpoint_host.dart';
+
 /// How the prompt takes a private key, and with it the rest of the form.
 ///
 /// [pastedPem] and [filePath] are each one app's form as it stood before
@@ -184,8 +186,8 @@ final class GhostCredentialStrings {
   /// none.
   final String? explanation;
 
-  /// The endpoint line, from the username where there is one, the host as
-  /// configured (no IPv6 brackets) and the port.
+  /// The endpoint line, from the username where there is one, the host (a
+  /// bare IPv6 address already bracketed) and the port.
   final String Function(String? username, String host, int port) endpoint;
 
   /// The banner shown when the host's vault could not be read.
@@ -479,7 +481,11 @@ class _CredentialDialogState extends State<_CredentialDialog> {
         if (strings.explanation case final explanation?) Text(explanation),
         if (host != null)
           SelectableText(
-            strings.endpoint(request.username, host, request.port!),
+            strings.endpoint(
+              request.username,
+              endpointDisplayHost(host),
+              request.port!,
+            ),
             style: mono,
           ),
         if (request.vaultUnavailable) ...[

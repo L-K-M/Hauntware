@@ -12,6 +12,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'endpoint_host.dart';
+
 /// What the prompt shows: the endpoint, the key it presented, and the
 /// fingerprint pinned for that endpoint when there is one.
 final class GhostHostKeyPrompt {
@@ -122,13 +124,6 @@ String _keyTypeChanged(String previous, String presented) =>
     'Key algorithm changed from $previous to $presented.';
 
 String _endpoint(String host, int port) => '$host:$port';
-
-/// The host as the endpoint line shows it: a bare IPv6 address gains
-/// brackets, so its colons cannot be read as the port separator.
-String _displayHost(String host) =>
-    host.contains(':') && !(host.startsWith('[') && host.endsWith(']'))
-    ? '[$host]'
-    : host;
 
 /// Shows the trust-on-first-use prompt. On a *changed* key this is a hard,
 /// visually alarming block that requires explicit re-pinning — never a
@@ -247,7 +242,9 @@ class _HostKeyDialogState extends State<_HostKeyDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(strings.endpoint(_displayHost(prompt.host), prompt.port)),
+              Text(
+                strings.endpoint(endpointDisplayHost(prompt.host), prompt.port),
+              ),
               if (changed) ...[
                 const SizedBox(height: 8),
                 Text(strings.changedReviewInstruction),

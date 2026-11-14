@@ -344,11 +344,12 @@ void main() {
       ),
       findsOneWidget,
     );
-    // The formatter receives the host as configured, without brackets.
-    expect(endpoints.toSet(), {('root', '2001:db8::1', 22)});
+    // A bare IPv6 host reaches the formatter bracketed, as on the host-key
+    // and keyboard-interactive dialogs.
+    expect(endpoints.toSet(), {('root', '[2001:db8::1]', 22)});
     for (final text in [
       'key title box',
-      '2001:db8::1 port 22 as root',
+      '[2001:db8::1] port 22 as root',
       'choose',
       'pem field',
       'pem hint',
@@ -385,6 +386,33 @@ void main() {
     );
 
     expect(find.text('example.com:2222'), findsOneWidget);
+  });
+
+  testWidgets('an IPv6 endpoint is bracketed before its port', (tester) async {
+    // Unbracketed, `fe80::1` on port 22 would read `fe80::1:22`, which is
+    // a different valid IPv6 address.
+    for (final (username, host, shown) in [
+      ('root', 'fe80::1', 'root@[fe80::1]:22'),
+      (null, 'fe80::1', '[fe80::1]:22'),
+      (null, '[fe80::1]', '[fe80::1]:22'),
+    ]) {
+      await openRequest(
+        tester,
+        GhostCredentialRequest(
+          authMethod: AuthMethod.password,
+          endpointLabel: 'box',
+          keyField: GhostKeyField.pastedPem,
+          username: username,
+          host: host,
+          port: 22,
+        ),
+        pickKeyText: () async => null,
+      );
+
+      expect(find.text(shown), findsOneWidget, reason: '$username $host');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    }
   });
 
   group('the identity-file form', () {

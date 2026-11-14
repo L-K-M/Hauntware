@@ -61,7 +61,7 @@ GhostProbeState? ghostProbeOf(ProbeStatus? probe) => switch (probe) {
 
 /// The engine's host-key prompt as the shared dialog shows it, field for
 /// field. The payload names no pinned key type, so a changed key's pinned
-/// fingerprint is labelled with the presented key's type.
+/// fingerprint shows without a type line.
 GhostHostKeyPrompt ghostHostKeyPromptOf(HostKeyPromptData data) =>
     GhostHostKeyPrompt(
       host: data.host,
@@ -119,8 +119,8 @@ GhostKeyboardInteractiveStrings poltergeistKeyboardInteractiveStrings(
 
 /// The engine's credential prompt as the shared dialog shows it: the
 /// identity-file form, prefilled with the config's path, and the vault
-/// offer only where the config names a secretRef (04 §2.1). The endpoint
-/// shows the host as configured, without IPv6 brackets.
+/// offer only where the config names a secretRef (04 §2.1). The dialog
+/// brackets a bare IPv6 host before the endpoint line's port.
 GhostCredentialRequest ghostCredentialRequestOf(
   CredentialPromptData data, {
   required bool vaultUnavailable,
