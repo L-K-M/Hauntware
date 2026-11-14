@@ -15,12 +15,11 @@ dependencies:
     path: ../seance_protocol
   shelf: ^1.4.3
   shelf_router: ^1.1.5
-  # Held on 2.x: 3.x loads SQLite through a build hook, which
-  # `dart compile exe` (the Dockerfile and the release server binaries)
-  # refuses, and it drops the runtime loader override that lets the slim
-  # image use libsqlite3.so.0. Moving needs `dart build cli` and a new
-  # artifact layout.
-  sqlite3: ^2.4.0
+  # 3.x loads SQLite through a build hook, which bundles the package's
+  # prebuilt, hash-checked libsqlite3 (public domain) beside the
+  # executable. `dart compile exe` refuses hooks: build the server with
+  # `dart build cli`, whose bundle/lib carries the library.
+  sqlite3: ^3.9.1
   args: ^2.5.0
 
 dev_dependencies:

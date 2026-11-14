@@ -252,16 +252,17 @@ jobs:
           dart pub get
           dart analyze
           dart test
-      - name: Install libsqlite3
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-0
+      # The sync server's tests run in its own directory: build hooks run
+      # only for the package under test, and package:sqlite3's hook
+      # bundles the SQLite library.
       - name: Séance — resolve, analyze, test pure-Dart packages
         working-directory: seance
         run: |
           dart pub get
           dart analyze \
             packages/seance_protocol packages/seance_core packages/seance_sync_server
-          dart test \
-            packages/seance_protocol packages/seance_core packages/seance_sync_server
+          dart test packages/seance_protocol packages/seance_core
+          (cd packages/seance_sync_server && dart test)
       - name: Klabautermann — resolve, analyze, test pure-Dart packages
         working-directory: klabautermann
         run: |
@@ -416,9 +417,11 @@ jobs:
           flutter analyze --no-pub
           flutter test --no-pub
 
-  # Sync-server binary per desktop platform (`dart compile exe` is
-  # host-native; there is no cross-compilation). Linux/macOS need
-  # libsqlite3 at runtime.
+  # Sync-server bundle per desktop platform (`dart build cli` is
+  # host-native; there is no cross-compilation). bin/ holds the
+  # executable (not renamed: newer SDKs load lib/libdartaot<name> by
+  # its name), lib/ the SQLite library package:sqlite3's build hook
+  # bundles; `dart compile exe` refuses that hook.
   server:
     name: Server binary (${{ matrix.platform }})
     needs: test
@@ -469,18 +472,19 @@ jobs:
       - name: Resolve workspace
         working-directory: seance
         run: dart pub get
-      - name: Compile
-        working-directory: seance
+      - name: Build
+        working-directory: seance/packages/seance_sync_server
         shell: bash
         run: |
-          mkdir -p dist
-          exe=seance-sync
-          if [ "${{ runner.os }}" = "Windows" ]; then exe=seance-sync.exe; fi
-          dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o "dist/$exe"
-      # Third-party notices beside the binary: the pub packages it compiles
+          dart build cli -o ../../build
+          rm -rf ../../dist
+          mv ../../build/bundle ../../dist
+          ../../dist/bin/seance_sync_server --help
+      # Third-party notices beside the bundle: the pub packages it compiles
       # in, the Dart SDK and the third-party code its AOT runtime embeds,
-      # fetched at this SDK's exact revision (the SDK floats). The
-      # generator fails on a package without license text.
+      # fetched at this SDK's exact revision (the SDK floats), and the
+      # bundled SQLite. The generator fails on a package without license
+      # text.
       - name: Third-party notices
         working-directory: seance
         shell: bash
@@ -490,6 +494,7 @@ jobs:
           "$py" scripts/licenses/dart-runtime-licenses.py --out "$RUNNER_TEMP/dart-runtime"
           "$py" scripts/licenses/go-dart-notices.py dart --workspace . \
             --package seance_sync_server --runtime-licenses "$RUNNER_TEMP/dart-runtime" \
+            --overrides scripts/licenses/seance-sync-overrides.json \
             --title seance-sync -o dist/Third-Party-Notices.txt
           cp LICENSE dist/LICENSE
       - name: Package
@@ -507,6 +512,8 @@ jobs:
           grep -q '^Dart SDK (runtime and core libraries) ' notices-check/Third-Party-Notices.txt
           grep -q '^BoringSSL ' notices-check/Third-Party-Notices.txt
           grep -q '^shelf ' notices-check/Third-Party-Notices.txt
+          grep -q '^SQLite$' notices-check/Third-Party-Notices.txt
+          ls notices-check/lib/*sqlite3*
       - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           # On a tag push these two resolve to the pushed tag (and the
@@ -1832,8 +1839,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       # ca-certificates is GPL-2.0-or-later with MPL-2.0 certificate data
-      # (its Debian copyright file); libsqlite3-0 comes with the base image,
-      # so it needs no label term.
+      # (its Debian copyright file).
       - name: Verify notices in the image
         run: |
           sh seance/scripts/licenses/check-image-notices.sh seance-sync:check \
@@ -1842,6 +1848,8 @@ jobs:
             --package 'ca-certificates=GPL-2.0-or-later AND MPL-2.0'
           docker run --rm --entrypoint grep seance-sync:check -q \
             '^Dart SDK (runtime and core libraries) ' /usr/share/doc/seance-sync/Third-Party-Notices.txt
+          docker run --rm --entrypoint grep seance-sync:check -q \
+            '^SQLite$' /usr/share/doc/seance-sync/Third-Party-Notices.txt
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (SHA-pinned)
         with:
           # Build context is the seance subtree root so its pub
