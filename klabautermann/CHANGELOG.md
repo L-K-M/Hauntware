@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Settings no longer shows an empty Docker tab; Docker's choices sit in
+  each server's Docker tab.
 - Klabautermann checks the suite's GitHub releases once per launch and
   offers a newer version in a banner: every platform links to the release
   page, and on Android the banner downloads and installs the release APK

@@ -677,9 +677,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTabServers => 'Servers';
 
   @override
-  String get settingsTabDocker => 'Docker';
-
-  @override
   String get settingsTabSafety => 'Safety';
 
   @override

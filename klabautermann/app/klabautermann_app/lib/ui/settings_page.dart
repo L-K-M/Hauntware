@@ -185,7 +185,6 @@ class _SettingsPageState extends State<SettingsPage>
     SettingsTab.appearance => l10n.settingsTabAppearance,
     SettingsTab.sync => l10n.settingsTabSync,
     SettingsTab.servers => l10n.settingsTabServers,
-    SettingsTab.docker => l10n.settingsTabDocker,
     SettingsTab.safety => l10n.settingsTabSafety,
     SettingsTab.alerts => l10n.settingsTabAlerts,
   };
