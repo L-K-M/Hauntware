@@ -205,6 +205,103 @@ void main() {
     expect(b.effective, SyncActionType.copyLeftToRight);
   });
 
+  group('keyboard focus stays on screen (P4-12)', () {
+    final names = [
+      for (var i = 0; i < 200; i++) 'f${i.toString().padLeft(3, '0')}.txt',
+    ];
+
+    Rect viewport(WidgetTester tester) =>
+        tester.getRect(find.byKey(const ValueKey('sync.plan.table')));
+
+    Future<void> expectShown(WidgetTester tester, String name) async {
+      // The reveal jumps after the frame that moved the focus.
+      await tester.pumpAndSettle();
+      final row = find.byKey(ValueKey('sync.row.$name'));
+      expect(row, findsOneWidget, reason: '$name is built');
+      final rect = tester.getRect(row);
+      final view = viewport(tester);
+      expect(rect.top, greaterThanOrEqualTo(view.top - 0.01), reason: name);
+      expect(rect.bottom, lessThanOrEqualTo(view.bottom + 0.01), reason: name);
+    }
+
+    testWidgets('Arrow Down 60 times keeps the focused row in view', (
+      tester,
+    ) async {
+      await _ready(tester, testSyncPair(), [for (final n in names) _copy(n)]);
+      await tester.tap(find.text(names.first));
+      await tester.pump();
+      for (var i = 0; i < 60; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+      }
+      await expectShown(tester, names[60]);
+      for (var i = 0; i < 60; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump();
+      }
+      await expectShown(tester, names.first);
+    });
+
+    testWidgets('End, Home and the page keys move and reveal the focus', (
+      tester,
+    ) async {
+      final items = [for (final n in names) _copy(n)];
+      await _ready(tester, testSyncPair(), items);
+      await tester.tap(find.text(names.first));
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pump();
+      await expectShown(tester, names.last);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.pump();
+      await expectShown(tester, names.first);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+      await tester.pump();
+      // A page moves by more than one row and keeps the focus visible.
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      final toggled = items.indexWhere(
+        (item) => item.effective == SyncActionType.skip,
+      );
+      expect(toggled, greaterThan(1));
+      await expectShown(tester, names[toggled]);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(items.first.effective, SyncActionType.skip);
+    });
+
+    for (final (key, target) in [
+      (LogicalKeyboardKey.home, 0),
+      (LogicalKeyboardKey.end, 199),
+    ]) {
+      testWidgets('${key.keyLabel} before any row has focus goes to '
+          'row $target', (tester) async {
+        final items = [for (final n in names) _copy(n)];
+        await _ready(tester, testSyncPair(), items);
+        final pane = tester.widget<Focus>(
+          find.byWidgetPredicate(
+            (w) => w is Focus && w.focusNode?.debugLabel == 'sync.plan.table',
+          ),
+        );
+        pane.focusNode!.requestFocus();
+        await tester.pump();
+
+        await tester.sendKeyEvent(key);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        await tester.pump();
+        expect(items[target].effective, SyncActionType.skip);
+        await expectShown(tester, names[target]);
+      });
+    }
+  });
+
   testWidgets('a selected row in the focused table keeps every mark '
       'legible on the selection fill', (tester) async {
     // On the active selection's fill the action tones (primary, tertiary,
@@ -287,10 +384,7 @@ void main() {
     final handle = tester.ensureSemantics();
     await _ready(tester, testSyncPair(), [_copy('a.txt')]);
     const rowLabel = 'a.txt: copy to “right”, only exists here';
-    final glyph = find.semantics
-        .byLabel('copy to “right”')
-        .evaluate()
-        .single;
+    final glyph = find.semantics.byLabel('copy to “right”').evaluate().single;
     expect(glyph.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
     glyph.owner!.performAction(glyph.id, SemanticsAction.tap);
     await tester.pumpAndSettle();

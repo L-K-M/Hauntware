@@ -110,6 +110,20 @@
   "@hostKeyPreviousLabel": {
     "description": "Label above the changed dialog's pinned fingerprint."
   },
+  "hostKeyTypeChanged": "Key algorithm changed from {previousType} to {presentedType}.",
+  "@hostKeyTypeChanged": {
+    "description": "Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.",
+    "placeholders": {
+      "previousType": {
+        "type": "String",
+        "example": "ssh-ed25519"
+      },
+      "presentedType": {
+        "type": "String",
+        "example": "ecdsa-sha2-nistp256"
+      }
+    }
+  },
   "hostKeyCancel": "Cancel",
   "@hostKeyCancel": {
     "description": "Declines the host-key dialog."
@@ -1312,6 +1326,10 @@
   "editSelectAllLabel": "Select All",
   "@editSelectAllLabel": {
     "description": "Command label: select every row of the focused pane's listing (edit.selectAll, 02 §2.5)."
+  },
+  "editDeselectAllLabel": "Deselect All",
+  "@editDeselectAllLabel": {
+    "description": "Command label: clear the focused pane's selection (edit.deselectAll, 02 §8.2)."
   },
   "editInvertSelectionLabel": "Invert Selection",
   "@editInvertSelectionLabel": {
@@ -8489,7 +8507,7 @@
   "@serverEditorStartDirectoryNote": {
     "description": "Explainer under the start-folder field."
   },
-  "serverEditorStartDirectoryInvalid": "Use an absolute path such as /var/www, or one in your own home such as ~/sites.",
+  "serverEditorStartDirectoryInvalid": "Remove control characters, and write ~/ for your own home rather than ~name.",
   "@serverEditorStartDirectoryInvalid": {
     "description": "Validation error when the start folder contains control characters or names another user's home (~name)."
   },
@@ -9676,6 +9694,10 @@
         "type": "String"
       }
     }
+  },
+  "deleteDialogRetry": "Retry",
+  "@deleteDialogRetry": {
+    "description": "Delete dialog button that counts the items to delete again after preparing the delete failed."
   },
   "deleteDialogDeleteCount": "{count, plural, =1{Delete 1 item ({size}) from {location}?} other{Delete {count} items ({size}) from {location}?}}",
   "@deleteDialogDeleteCount": {

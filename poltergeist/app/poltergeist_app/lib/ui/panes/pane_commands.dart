@@ -46,6 +46,7 @@ const kPaneSwapFocusCommandId = 'pane.swapFocus';
 const kEditUndoSelectionCommandId = 'edit.undoSelection';
 const kEditRedoSelectionCommandId = 'edit.redoSelection';
 const kEditSelectAllCommandId = 'edit.selectAll';
+const kEditDeselectAllCommandId = 'edit.deselectAll';
 const kEditInvertSelectionCommandId = 'edit.invertSelection';
 const kSelectionQuickSelectCommandId = 'selection.quickSelect';
 const kViewFilterCommandId = 'view.filter';
@@ -879,6 +880,27 @@ List<RegisteredCommand> buildPaneCommands({
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.edit,
         order: 60,
+        group: 2,
+      ),
+    ),
+    RegisteredCommand(
+      id: kEditDeselectAllCommandId,
+      scope: CommandScope.pane,
+      label: (l10n) => l10n.editDeselectAllLabel,
+      icon: Icons.deselect,
+      // No chord: Finder's ⌥⌘A is View ▸ Activity Panel here, and Esc's
+      // last tier already deselects from the keyboard.
+      enabled: () {
+        final pane = activeTab();
+        return pane != null && pane.verbsEnabled && pane.selectedCount > 0;
+      },
+      disabledReason: (l10n) => l10n.commandDisabledNoSelection,
+      run: (_) async {
+        activeTab()?.clearSelection();
+      },
+      menuPlacement: const CommandMenuPlacement(
+        menu: AppMenuId.edit,
+        order: 65,
         group: 2,
       ),
     ),

@@ -41,8 +41,8 @@ final class GhostServerEditorStrings {
         'Opens when you connect to this server. A relative path starts in '
         'your home folder. Blank opens your home folder.',
     this.startDirectoryInvalid =
-        'Use an absolute path such as /var/www, or one in your own home such '
-        'as ~/sites.',
+        'Remove control characters, and write ~/ for your own home rather '
+        'than ~name.',
     this.loginScript = 'Login script (optional)',
     this.loginScriptHint =
         'e.g. cd ~/work && tmux attach -t work || tmux new -s work',

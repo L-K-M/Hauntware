@@ -118,6 +118,15 @@ class _DeleteDialogState extends State<_DeleteDialog> {
     }
   }
 
+  /// Counts again after a settled error. The token stays the dialog's:
+  /// it is cancelled only when the dialog closes, so a retry cannot
+  /// outlive the route, and the failed walk has already ended.
+  void _retry() {
+    if (_error == null || _closing) return;
+    setState(() => _error = null);
+    unawaited(_run());
+  }
+
   @override
   void dispose() {
     // Navigator teardown need not complete a route's result future.
@@ -192,6 +201,12 @@ class _DeleteDialogState extends State<_DeleteDialog> {
             onPressed: _cancel,
             child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
           ),
+          if (_error != null)
+            TextButton(
+              key: const ValueKey('delete.retry'),
+              onPressed: _retry,
+              child: Text(l10n.deleteDialogRetry),
+            ),
         ],
       );
     }

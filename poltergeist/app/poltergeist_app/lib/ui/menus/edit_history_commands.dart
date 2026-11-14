@@ -45,6 +45,9 @@ List<RegisteredCommand> buildEditHistoryCommands({
       macOS: const [SingleActivator(LogicalKeyboardKey.keyZ, meta: true)],
       other: const [SingleActivator(LogicalKeyboardKey.keyZ, control: true)],
     ),
+    // A held chord steps back change by change, as in the suite's other
+    // apps; the history refuses a step while one is still running.
+    repeatable: true,
     enabled: () => history.undoName != null,
     disabledReason: (l10n) => l10n.commandDisabledNoUndo,
     run: (context) => stepEditHistory(
@@ -71,6 +74,7 @@ List<RegisteredCommand> buildEditHistoryCommands({
         SingleActivator(LogicalKeyboardKey.keyY, control: true),
       ],
     ),
+    repeatable: true,
     enabled: () => history.redoName != null,
     disabledReason: (l10n) => l10n.commandDisabledNoRedo,
     run: (context) => stepEditHistory(

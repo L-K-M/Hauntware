@@ -232,6 +232,12 @@ abstract class AppLocalizations {
   /// **'Previously trusted'**
   String get hostKeyPreviousLabel;
 
+  /// Warning in a changed-key review when the trusted and newly presented SSH key algorithms differ.
+  ///
+  /// In en, this message translates to:
+  /// **'Key algorithm changed from {previousType} to {presentedType}.'**
+  String hostKeyTypeChanged(String previousType, String presentedType);
+
   /// Declines the host-key dialog.
   ///
   /// In en, this message translates to:
@@ -1567,6 +1573,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select All'**
   String get editSelectAllLabel;
+
+  /// Command label: clear the focused pane's selection (edit.deselectAll, 02 §8.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect All'**
+  String get editDeselectAllLabel;
 
   /// Command label: replace the focused pane's selection with its complement (edit.invertSelection, 02 §2.5).
   ///
@@ -9252,7 +9264,7 @@ abstract class AppLocalizations {
   /// Validation error when the start folder contains control characters or names another user's home (~name).
   ///
   /// In en, this message translates to:
-  /// **'Use an absolute path such as /var/www, or one in your own home such as ~/sites.'**
+  /// **'Remove control characters, and write ~/ for your own home rather than ~name.'**
   String get serverEditorStartDirectoryInvalid;
 
   /// Label of the login-script field — a command typed into the server's shell after connecting (executed by Séance; stored and synced here).
@@ -10616,6 +10628,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t prepare the delete: {error}'**
   String deleteDialogPrepareFailed(String error);
+
+  /// Delete dialog button that counts the items to delete again after preparing the delete failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get deleteDialogRetry;
 
   /// 02 §10 permanent delete headline with the walk's count and size.
   ///
