@@ -9,37 +9,37 @@ class PickedFileTooLargeException implements Exception {
   const PickedFileTooLargeException();
 }
 
-/// Reads a file picked without eager data loading, bounded by [maxBytes].
-/// Provider-only files use their stream; macOS supplies a filesystem path.
-/// A missing source or failed filesystem read throws [FileSystemException].
+/// Reads a picked file, bounded by [maxBytes]. The picker's reported length
+/// is only a hint: the byte stream is bounded too, so a stale or missing size
+/// cannot load a huge file, and an oversized one stops at the first chunk past
+/// the limit. Android document-provider picks stream from the picker's cached
+/// copy rather than needing a filesystem path.
+/// Any failure to read throws [FileSystemException].
 Future<Uint8List> readPickedFileBytes(
   PlatformFile file, {
   required int maxBytes,
 }) async {
-  if (file.size > maxBytes) throw const PickedFileTooLargeException();
-
-  final bytes = file.bytes;
-  if (bytes != null) {
-    if (bytes.length > maxBytes) throw const PickedFileTooLargeException();
-    return bytes;
-  }
-
-  var source = file.readStream;
-  if (source == null) {
-    final path = file.path;
-    if (path == null) {
-      throw const FileSystemException('The picker provided no readable data');
-    }
-    // One extra byte detects overflow without reading the entire file.
-    source = File(path).openRead(0, maxBytes + 1);
+  final reported = file.lengthSync();
+  if (reported != null && reported > maxBytes) {
+    throw const PickedFileTooLargeException();
   }
 
   final contents = BytesBuilder(copy: false);
-  await for (final chunk in source) {
-    if (chunk.length > maxBytes - contents.length) {
-      throw const PickedFileTooLargeException();
+  try {
+    await for (final chunk in file.readAsByteStream()) {
+      if (chunk.length > maxBytes - contents.length) {
+        throw const PickedFileTooLargeException();
+      }
+      contents.add(chunk);
     }
-    contents.add(chunk);
+  } on PickedFileTooLargeException {
+    rethrow;
+  } on FileSystemException {
+    rethrow;
+  } on Object {
+    // A platform's own read error (an iOS photo-library reference, a
+    // provider that went away) reaches callers as the one documented type.
+    throw const FileSystemException('The picker provided no readable data');
   }
   return contents.takeBytes();
 }

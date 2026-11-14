@@ -1,9 +1,7 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 // The plugin's static API delegates here; swapping it keeps real open logic.
-// ignore: implementation_imports
-import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
+import 'package:file_picker/file_picker.dart' show FilePickerPlatform;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,33 +10,9 @@ import 'package:seance_app/services/secrets_recovery.dart';
 import 'package:seance_app/services/secure_master_key.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'support/fake_file_picker.dart';
+
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
-
-class _ExportPicker extends FilePickerPlatform {
-  FilePickerResult? result;
-  bool requestedData = false;
-  bool requestedStream = false;
-
-  @override
-  Future<FilePickerResult?> pickFiles({
-    String? dialogTitle,
-    String? initialDirectory,
-    FileType type = FileType.any,
-    List<String>? allowedExtensions,
-    Function(FilePickerStatus)? onFileLoading,
-    int compressionQuality = 0,
-    bool allowMultiple = false,
-    bool withData = false,
-    bool withReadStream = false,
-    bool lockParentWindow = false,
-    bool readSequential = false,
-    bool cancelUploadOnWindowBlur = true,
-  }) async {
-    requestedData = withData;
-    requestedStream = withReadStream;
-    return result;
-  }
-}
 
 /// One device's OS keystore: keeps what it is given, or is locked.
 class _Keystore extends FlutterSecureStorage {
@@ -345,12 +319,12 @@ void main() {
 
   group('picked export size limit', () {
     late FilePickerPlatform previousPicker;
-    late _ExportPicker picker;
+    late FakeFilePicker picker;
     const files = PlatformSecretsExportFiles();
 
     setUp(() {
       previousPicker = FilePickerPlatform.instance;
-      FilePickerPlatform.instance = picker = _ExportPicker();
+      FilePickerPlatform.instance = picker = FakeFilePicker();
     });
 
     tearDown(() => FilePickerPlatform.instance = previousPicker);
@@ -370,32 +344,29 @@ void main() {
         yield const [1];
       }
 
-      picker.result = FilePickerResult([
-        PlatformFile(
-          name: 'too-large.json',
-          size: SecretsExport.maxBytes + 1,
-          readStream: source(),
+      picker.picked = [
+        FakePickedFile.stream(
+          'too-large.json',
+          source,
+          reportedLength: SecretsExport.maxBytes + 1,
         ),
-      ]);
+      ];
 
       await expectLater(files.open(), oversized());
-      expect(picker.requestedData, isFalse);
       expect(read, isFalse);
     });
 
     test('reads a pathless provider through its stream', () async {
       const contents = [123, 125]; // {} without a filesystem path.
-      picker.result = FilePickerResult([
-        PlatformFile(
-          name: 'export.json',
-          size: contents.length,
-          readStream: Stream.value(contents),
-        ),
-      ]);
+      final file = FakePickedFile.bytes(
+        'export.json',
+        contents,
+        reportedLength: contents.length,
+      );
+      picker.picked = [file];
 
       expect(await files.open(), contents);
-      expect(picker.requestedData, isFalse);
-      expect(picker.requestedStream, isTrue);
+      expect(file.reads, 1);
     });
 
     test('bounds unknown or stale sizes and cancels the stream', () async {
@@ -410,9 +381,7 @@ void main() {
         }
       }
 
-      picker.result = FilePickerResult([
-        PlatformFile(name: 'export.json', size: 0, readStream: source()),
-      ]);
+      picker.picked = [FakePickedFile.stream('export.json', source)];
 
       await expectLater(files.open(), oversized());
       expect(cancelled, isTrue);
@@ -423,9 +392,9 @@ void main() {
       final handle = await file.open(mode: FileMode.write);
       await handle.truncate(SecretsExport.maxBytes + 1);
       await handle.close();
-      picker.result = FilePickerResult([
-        PlatformFile(name: 'export.json', path: file.path, size: 1),
-      ]);
+      picker.picked = [
+        FakePickedFile.path('export.json', file.path, reportedLength: 1),
+      ];
 
       await expectLater(files.open(), oversized());
     });

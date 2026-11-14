@@ -2,46 +2,19 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-// The static picker API has no public injection seam.
-// ignore: implementation_imports
-import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/private_key_file.dart';
 
-class _KeyPicker extends FilePickerPlatform {
-  FilePickerResult? result;
-  bool requestedData = false;
-  bool requestedStream = false;
-
-  @override
-  Future<FilePickerResult?> pickFiles({
-    String? dialogTitle,
-    String? initialDirectory,
-    FileType type = FileType.any,
-    List<String>? allowedExtensions,
-    Function(FilePickerStatus)? onFileLoading,
-    int compressionQuality = 0,
-    bool allowMultiple = false,
-    bool withData = false,
-    bool withReadStream = false,
-    bool lockParentWindow = false,
-    bool readSequential = false,
-    bool cancelUploadOnWindowBlur = true,
-  }) async {
-    requestedData = withData;
-    requestedStream = withReadStream;
-    return result;
-  }
-}
+import 'support/fake_file_picker.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late FilePickerPlatform previousPicker;
-  late _KeyPicker picker;
+  late FakeFilePicker picker;
 
   setUp(() {
     previousPicker = FilePickerPlatform.instance;
-    FilePickerPlatform.instance = picker = _KeyPicker();
+    FilePickerPlatform.instance = picker = FakeFilePicker();
   });
 
   tearDown(() => FilePickerPlatform.instance = previousPicker);
@@ -61,40 +34,31 @@ void main() {
       yield const [65];
     }
 
-    picker.result = FilePickerResult([
-      PlatformFile(
-        name: 'key',
-        size: maxPrivateKeyFileBytes + 1,
-        readStream: source(),
+    picker.picked = [
+      FakePickedFile.stream(
+        'key',
+        source,
+        reportedLength: maxPrivateKeyFileBytes + 1,
       ),
-    ]);
+    ];
 
     await expectLater(pickPrivateKeyText(), tooLarge());
-    expect(picker.requestedData, isFalse);
     expect(read, isFalse);
   });
 
   test('reads a key from a pathless provider stream', () async {
-    picker.result = FilePickerResult([
-      PlatformFile(
-        name: 'key',
-        size: 3,
-        readStream: Stream.value([65, 66, 67]),
-      ),
-    ]);
+    final file = FakePickedFile.bytes('key', [65, 66, 67], reportedLength: 3);
+    picker.picked = [file];
 
     expect(await pickPrivateKeyText(), 'ABC');
-    expect(picker.requestedData, isFalse);
-    expect(picker.requestedStream, isTrue);
+    expect(file.reads, 1);
   });
 
   test('reads the path-only result macOS returns', () async {
     final directory = await Directory.systemTemp.createTemp('seance-key-');
     addTearDown(() => directory.delete(recursive: true));
     final file = await File('${directory.path}/key').writeAsString('ABC');
-    picker.result = FilePickerResult([
-      PlatformFile(name: 'key', path: file.path, size: 3),
-    ]);
+    picker.picked = [FakePickedFile.path('key', file.path, reportedLength: 3)];
 
     expect(await pickPrivateKeyText(), 'ABC');
   });
@@ -111,30 +75,28 @@ void main() {
       }
     }
 
-    picker.result = FilePickerResult([
-      PlatformFile(name: 'key', size: 0, readStream: source()),
-    ]);
+    picker.picked = [FakePickedFile.stream('key', source)];
 
     await expectLater(pickPrivateKeyText(), tooLarge());
     expect(cancelled, isTrue);
   });
 
   test('bounds returned bytes even when the reported size is stale', () async {
-    picker.result = FilePickerResult([
-      PlatformFile(
-        name: 'key',
-        size: 1,
-        bytes: Uint8List(maxPrivateKeyFileBytes + 1),
+    picker.picked = [
+      FakePickedFile.bytes(
+        'key',
+        Uint8List(maxPrivateKeyFileBytes + 1),
+        reportedLength: 1,
       ),
-    ]);
+    ];
 
     await expectLater(pickPrivateKeyText(), tooLarge());
   });
 
   test('rejects non-text bytes with the existing message', () async {
-    picker.result = FilePickerResult([
-      PlatformFile(name: 'key', size: 1, bytes: Uint8List.fromList([0xFF])),
-    ]);
+    picker.picked = [
+      FakePickedFile.bytes('key', [0xFF], reportedLength: 1),
+    ];
 
     await expectLater(
       pickPrivateKeyText(),
@@ -148,9 +110,24 @@ void main() {
     );
   });
 
-  test('both cancellation results return nothing', () async {
-    expect(await pickPrivateKeyText(), isNull);
-    picker.result = FilePickerResult([]);
+  test('a platform read failure reads as an unreadable file', () async {
+    picker.picked = [
+      FakePickedFile.stream('key', () => Stream.error(StateError('gone'))),
+    ];
+
+    await expectLater(
+      pickPrivateKeyText(),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'That file could not be read.',
+        ),
+      ),
+    );
+  });
+
+  test('a cancelled pick returns nothing', () async {
     expect(await pickPrivateKeyText(), isNull);
   });
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart' show getSaveLocation;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
@@ -79,10 +80,16 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
     if (Platform.isAndroid) return _saveThroughSaf(bytes, fileName);
     if (Platform.isIOS) {
       // The document picker writes the bytes itself.
-      return FilePicker.saveFile(fileName: fileName, bytes: bytes);
+      final saved = await FilePicker.saveFile(fileName: fileName, bytes: bytes);
+      if (saved == null) return null;
+      return saved.isScheme('file') ? saved.toFilePath() : saved.toString();
     }
-    final destination = await FilePicker.saveFile(fileName: fileName);
-    if (destination == null) return null;
+    // Only the destination comes from the panel: file_picker's own save
+    // writes before returning, which would truncate an earlier export before
+    // the owner-only replacement below commits.
+    final location = await getSaveLocation(suggestedName: fileName);
+    if (location == null) return null;
+    final destination = location.path;
     // Encrypted, but still the whole vault: kept from other local accounts
     // like vault.json itself.
     await writeStringAtomically(
@@ -123,13 +130,10 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
   /// entire contents. Metadata can be missing or stale, so bound the read too.
   @override
   Future<Uint8List?> open() async {
-    final result = await FilePicker.pickFiles(withReadStream: true);
-    if (result == null || result.files.isEmpty) return null;
+    final file = await FilePicker.pickFile();
+    if (file == null) return null;
     try {
-      return await readPickedFileBytes(
-        result.files.single,
-        maxBytes: SecretsExport.maxBytes,
-      );
+      return await readPickedFileBytes(file, maxBytes: SecretsExport.maxBytes);
     } on PickedFileTooLargeException {
       throw const SecretsExportException(
         SecretsExportFailure.tooLarge,
