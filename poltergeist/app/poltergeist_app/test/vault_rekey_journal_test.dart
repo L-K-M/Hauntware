@@ -279,8 +279,8 @@ void main() {
       keystore.locked = false;
       keystore.lockAfterWrite = false;
       final reopened = FileVaultStore(vaultFile);
-      final installed =
-          await poltergeistMasterKeyManager(keystore).probeKeystore();
+      final installed = await poltergeistMasterKeyManager(keystore)
+          .probeKeystore(hasExistingVault: true);
       expect(await reopened.settleRekey(installed!),
           VaultRekeyOutcome.adopted);
       expect((await SecretVault(reopened, newKey).getSecret('a'))!.value,

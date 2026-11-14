@@ -67,7 +67,7 @@ void main() {
       final storage = _ToggleableKeystore();
       final keys = poltergeistMasterKeyManager(storage);
 
-      await keys.probeKeystore();
+      await keys.probeKeystore(hasExistingVault: false);
       expect(storage._map.keys, contains('poltergeist.vault.masterKey.v1'));
     });
   });

@@ -118,7 +118,8 @@ final class SecureSyncCredentialStore implements SyncCredentialStore {
     // MasterKeyUnavailableException rather than mint a replacement.
     final current = journal is FileVaultStore
         ? await probeVaultKey(_keys, journal.file)
-        : await _keys.probeKeystore();
+        // A journal means a vault to re-seal: never mint over it.
+        : await _keys.probeKeystore(hasExistingVault: true);
     if (current != null) await journal.settleRekey(current);
     // Staging re-seals every stored entry, which a keyless vault cannot
     // produce: fail like the locked vault rather than stage a generation
