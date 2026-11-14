@@ -47,6 +47,25 @@ void main() {
       expect(commandLineText(_row(2, arguments: const [])), isNull);
     });
 
+    test('ends a command line the host cut at its byte cap in an '
+        'ellipsis (D48)', () {
+      final cut = ProcessRow(
+        pid: 4,
+        arguments: [MaskedValue.plain('java'), MaskedValue.plain('-cp')],
+        argumentsTruncated: true,
+      );
+      expect(commandLineText(cut), 'java -cp…');
+
+      final long = commandLineText(
+        ProcessRow(
+          pid: 5,
+          arguments: [MaskedValue.plain('a' * 5000)],
+          argumentsTruncated: true,
+        ),
+      )!;
+      expect(long, '${'a' * kProcessTextLimit}…');
+    });
+
     test('cuts a long line, keeping a surrogate pair whole', () {
       final long = commandLineText(
         _row(3, arguments: [MaskedValue.plain('a' * 5000)]),

@@ -1300,10 +1300,10 @@ final class SetDeviceName extends EngineRequest {
 }
 
 /// The suite release whose Séance carries the #56 fix (D15, FL-22): the
-/// release a pin publication assertion names. Null until a suite release
-/// carries the fix (M5 plan Q1), so no assertion is offered and the
-/// engine publishes no pin.
-const String? kPinPublicationRelease = null;
+/// release a pin publication assertion names. 1.9.3 is the first tag
+/// whose Séance changelog lists the fix (M5 plan Q1). An engine started
+/// with no release offers no assertion and publishes no pin.
+const String kPinPublicationRelease = '1.9.3';
 
 /// Asserts that every device on the account runs the release
 /// [PinPublicationState.release] names or later, or withdraws that with
@@ -3269,10 +3269,16 @@ enum RevalidationFailure {
 /// one carries the request it answers, so the app matches it to what it
 /// asked. Nothing ran.
 final class ActionRefused extends EngineEvent {
-  const ActionRefused(this.reason, {this.intent, this.planId})
+  const ActionRefused(this.reason, {this.intent, this.planId, this.detail})
     : assert((intent == null) != (planId == null), 'one of intent, planId');
 
   final ActionRefusalReason reason;
+
+  /// What the failed planning step said, in the server's or engine's
+  /// words and not localized: the step, its exit code and error output,
+  /// or the error a planner threw. Null where the reason says it all.
+  /// Control characters stripped, at most `kRefusalDetailMaxChars`.
+  final String? detail;
 
   /// The refused [PlanAction]'s intent.
   final ActionIntent? intent;
@@ -6133,6 +6139,36 @@ sealed class ActionIntent {
   final String serverId;
 }
 
+/// [intent]'s kind as the audit log and the operation records store it,
+/// and the app words it (`activityAction`). The keys are the intent
+/// types' names, written out so that stored records stay readable however
+/// the build names its types; never change one.
+String actionKeyOf(ActionIntent intent) => switch (intent) {
+  KillProcess() => 'KillProcess',
+  UnitAction() => 'UnitAction',
+  StartTimer() => 'StartTimer',
+  RefreshPackageLists() => 'RefreshPackageLists',
+  PowerAction() => 'PowerAction',
+  RunCronJob() => 'RunCronJob',
+  RunSnippet() => 'RunSnippet',
+  ContainerAction() => 'ContainerAction',
+  ContainerBulkAction() => 'ContainerBulkAction',
+  ContainerExec() => 'ContainerExec',
+  RemoveContainer() => 'RemoveContainer',
+  RemoveImage() => 'RemoveImage',
+  CreateVolume() => 'CreateVolume',
+  RemoveVolume() => 'RemoveVolume',
+  RemoveNetwork() => 'RemoveNetwork',
+  PullImage() => 'PullImage',
+  PruneDocker() => 'PruneDocker',
+  StackAction() => 'StackAction',
+  StackComposeAction() => 'StackComposeAction',
+  RedeployStack() => 'RedeployStack',
+  EditFile() => 'EditFile',
+  KeepLastBackups() => 'KeepLastBackups',
+  RemoveBackups() => 'RemoveBackups',
+};
+
 /// Signals process [pid] (PRC-02), only while its start time still reads
 /// [startTicks], so a reused PID is never hit (03 §8.5).
 final class KillProcess extends ActionIntent {
@@ -7764,6 +7800,7 @@ final class ProcessRow {
     this.startTicks,
     this.startedAt,
     this.arguments,
+    this.argumentsTruncated = false,
   });
 
   final int pid;
@@ -7801,6 +7838,11 @@ final class ProcessRow {
   /// null when it could not be read (7.2's "command line unavailable").
   /// Pass an unmodifiable list.
   final List<MaskedValue>? arguments;
+
+  /// Whether the host's read of the command line reached its per-file
+  /// byte cap (D48), so the last of [arguments] may be cut and later ones
+  /// missing. A command line of exactly the cap counts as cut too.
+  final bool argumentsTruncated;
 }
 
 /// Every systemd unit and the failed ones ([SampleStream.units], 7.5).

@@ -605,8 +605,16 @@ void main() {
         'is refused', () async {
       final server = await FakeSyncServer.create();
       final (client, events) = await spawn(
-        entryPoint: (start) =>
-            engineMain(start, syncTransport: server.transport),
+        entryPoint: (start) => engineMain(
+          EngineStart(
+            uiPort: start.uiPort,
+            supportDirectory: start.supportDirectory,
+            supportDirectoryAccess: start.supportDirectoryAccess,
+            deviceId: start.deviceId,
+            pinPublicationRelease: null,
+          ),
+          syncTransport: server.transport,
+        ),
       );
       client.send(enroll);
       expect(client.ready.pinPublication, isNull);

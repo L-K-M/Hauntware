@@ -394,6 +394,7 @@ ProcsResult procsResult(
               maskCommandLine(argv, budget: masking),
             ),
           },
+          argumentsTruncated: p.argvTruncated,
         ),
     ],
     totalProcesses: next.totalProcesses,

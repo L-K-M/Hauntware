@@ -58,14 +58,14 @@ List<SortableTableColumn<PackageUpdate>> updateColumns(
       id: UpdateColumn.installed.name,
       label: l10n.systemUpdatesInstalled,
       text: (update) => update.current ?? l10n.systemUnknown,
-      sortKey: (update) => update.current,
+      sortKey: (update) => _versionKey(update.current),
       extent: FixedColumnExtent(UpdateColumn.installed.width),
     ),
   SortableTableColumn<PackageUpdate>(
     id: UpdateColumn.available.name,
     label: l10n.systemUpdatesAvailable,
     text: (update) => update.available,
-    sortKey: (update) => update.available,
+    sortKey: (update) => _versionKey(update.available),
     extent: FixedColumnExtent(UpdateColumn.available.width),
   ),
   SortableTableColumn<PackageUpdate>(
@@ -76,6 +76,21 @@ List<SortableTableColumn<PackageUpdate>> updateColumns(
     extent: FixedColumnExtent(UpdateColumn.security.width),
   ),
 ];
+
+/// [version]'s sort key: versions in `sort -V` order, as the package
+/// managers compare them closely enough to read (`1.10` after `1.9`);
+/// null, sorting last, when unknown.
+Comparable<Object>? _versionKey(String? version) =>
+    version == null ? null : _VersionKey(version);
+
+final class _VersionKey implements Comparable<_VersionKey> {
+  const _VersionKey(this.version);
+
+  final String version;
+
+  @override
+  int compareTo(_VersionKey other) => compareVersions(version, other.version);
+}
 
 /// PKG-01 to PKG-03's section of the System tab: the pending updates and
 /// security fixes the server's package manager lists from its cached
