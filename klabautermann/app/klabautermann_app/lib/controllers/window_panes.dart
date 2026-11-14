@@ -3,10 +3,7 @@ import 'package:flutter/foundation.dart';
 /// The desktop shell's side panes (03 §10.2, Séance's `PaneVisibility`):
 /// the fleet rail on the leading edge and the inspector on the trailing
 /// one. Hidden panes leave the column and its divider to the workspace.
-enum WindowPane {
-  sidebar,
-  inspector;
-}
+enum WindowPane { sidebar, inspector }
 
 /// A pane flag or width that applied but was not saved: it lasts until
 /// the app restarts unless a later save carries it. [message] is what
@@ -43,8 +40,7 @@ final class WindowPanesController extends ChangeNotifier {
        _sidebarWidth = _usable(sidebarWidth) ?? defaultSidebarWidth,
        _inspectorWidth = _usable(inspectorWidth) ?? defaultInspectorWidth,
        _sidebarWidthSaved = _usable(sidebarWidth) ?? defaultSidebarWidth,
-       _inspectorWidthSaved =
-           _usable(inspectorWidth) ?? defaultInspectorWidth;
+       _inspectorWidthSaved = _usable(inspectorWidth) ?? defaultInspectorWidth;
 
   /// [width] when it can be a pane's width (finite and positive), else
   /// null. The store already reads damaged values as none; this keeps the
