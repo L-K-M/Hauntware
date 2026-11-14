@@ -3,11 +3,7 @@ import 'dart:io';
 
 import 'package:klabautermann_core/src/catalog/sync_credentials.dart';
 import 'package:seance_core/catalog.dart'
-    show
-        FileVaultStore,
-        StagedVaultRekey,
-        VaultRekeyJournal,
-        VaultRekeyOutcome;
+    show FileVaultStore, StagedVaultRekey, VaultRekeyJournal, VaultRekeyOutcome;
 import 'package:seance_core/seance_core.dart'
     show Secret, SecretKind, SecretVault, secureRandomBytes;
 import 'package:test/test.dart';
