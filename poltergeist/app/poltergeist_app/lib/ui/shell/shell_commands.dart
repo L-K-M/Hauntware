@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show GhostFileRevealer;
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../../services/file_manager_reveal.dart';
 import '../../services/pane_controller.dart';
 import '../../services/pane_location.dart';
 import '../../services/pane_drop.dart';
@@ -189,7 +189,7 @@ List<RegisteredCommand> buildShellCommands({
   required PaneFileOps? Function() fileOps,
   required void Function(Object error) reportFailure,
   required String Function(PaneController pane) locationLabel,
-  FileManagerRevealer revealer = const FileManagerRevealer(),
+  GhostFileRevealer revealer = const GhostFileRevealer(),
 
   /// False while another command dialog is open, so a repeated Connect
   /// activator cannot stack a second dialog.
@@ -745,9 +745,12 @@ List<RegisteredCommand> buildShellCommands({
           final path = _revealTarget(workspace);
           if (path == null) return;
           final l10n = AppLocalizations.of(context);
-          if (await revealer.reveal(path) || !context.mounted) return;
+          if ((await revealer.reveal(path)).shown || !context.mounted) {
+            return;
+          }
           // Every route failed (no file manager, no dbus-send/xdg-open/
-          // gio, Explorer would not start): say so, never do nothing.
+          // gio, Explorer would not start) or the bus never answered:
+          // say so, never do nothing.
           showTopToastIn(
             context,
             message: l10n.fileRevealFailed(p.basename(path)),
