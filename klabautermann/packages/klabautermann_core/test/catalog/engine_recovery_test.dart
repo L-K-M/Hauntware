@@ -126,7 +126,14 @@ void main() {
       throwsA(_failure(VaultRecoveryFailure.wrongCode)),
     );
 
-    final altered = Uint8List.fromList(export)..[export.length ~/ 2] ^= 0x01;
+    // One bit of the wrapped vault key flipped, re-encoded so the file
+    // still parses: flipping a byte of the JSON text itself can leave the
+    // base64 alphabet and read as malformed instead.
+    final file = jsonDecode(utf8.decode(export)) as Map<String, Object?>;
+    final wrapped = base64.decode(file['wrappedVaultKey']! as String);
+    wrapped[wrapped.length ~/ 2] ^= 0x01;
+    file['wrappedVaultKey'] = base64.encode(wrapped);
+    final altered = Uint8List.fromList(utf8.encode(jsonEncode(file)));
     await expectLater(
       other.recovery.restoreSecrets(
         altered,
