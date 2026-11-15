@@ -200,7 +200,10 @@ klab_prune() {
 ///    only [kRootOpsDir] (parents 0755, so the login user can read it),
 ///    otherwise only a directory of the uid it runs as (0700). It refuses
 ///    a symlink or a directory it does not own, so root never writes
-///    into a user-writable one.
+///    into a user-writable one. As root it also sets the parent it owns
+///    back to 0755, which an earlier backup script made 0700 on a host
+///    whose first root write was a backup beside it; a symlinked or
+///    foreign parent stays as the administrator set it.
 /// 2. As root it prunes [kRootOpsDir] (03 §7.17, "by the next root-run
 ///    wrapper").
 /// 3. It creates `<id>.log` exclusively (`set -C`), so an id in use
@@ -240,6 +243,9 @@ m=\$(id -u) || exit $kOpWrapperSetupFailed
 if [ "\$d" = '$kRootOpsDir' ]; then
   [ "\$m" = 0 ] || exit $kOpWrapperSetupFailed
   (umask 022 && mkdir -p "\$d") || exit $kOpWrapperSetupFailed
+  p=\${d%/*}
+  [ -h "\$p" ] || [ ! -O "\$p" ] || chmod 755 "\$p" ||
+    exit $kOpWrapperSetupFailed
   k=755
 else
   [ "\$m" = "\$u" ] || exit $kOpWrapperSetupFailed
