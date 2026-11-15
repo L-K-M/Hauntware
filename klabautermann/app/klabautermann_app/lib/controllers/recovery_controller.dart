@@ -6,6 +6,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostRecoveryModel;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../services/recovery_files.dart';
@@ -13,36 +14,10 @@ import '../services/recovery_files.dart';
 /// What Settings reads and changes of this device's recovery code
 /// (CRED-05), apart from where it runs: [RecoveryController] in the app,
 /// `RemoteRecovery` in the Settings window. The section renders
-/// [configured] and calls the explicit actions; the file panels and the
-/// vault key stay in the app's isolate.
-abstract interface class RecoverySettings implements Listenable {
-  /// Whether this device has a recovery code an export can use; null
-  /// until the first answer.
-  bool? get configured;
-
-  /// Refetches the status, reporting a failure rather than treating it as
-  /// an absent code. The section can retry this explicitly.
-  Future<void> refresh();
-
-  /// A new recovery code, formatted, to be shown once. Nothing is stored
-  /// until [saveCode].
-  Future<String> newCode();
-
-  /// Keeps [code] as this device's recovery code, replacing an earlier
-  /// one; exports made with that one still open with it.
-  Future<void> saveCode(String code);
-
-  /// Builds the encrypted export and saves it where the user chooses.
-  /// The saved location, or null when the user cancelled.
-  Future<String?> exportSecrets();
-
-  /// Opens the chosen export with [code] and merges its credentials into
-  /// this device's vault. Null when the user cancelled the file panel.
-  Future<SecretsRestoreSummary?> restoreSecrets({
-    required String code,
-    required VaultRestorePolicy policy,
-  });
-}
+/// [GhostRecoveryModel.configured] and calls the explicit actions; the
+/// file panels and the vault key stay in the app's isolate.
+abstract interface class RecoverySettings
+    implements GhostRecoveryModel<VaultRestorePolicy, SecretsRestoreSummary> {}
 
 /// A recovery operation failed. [failure] is the engine's fixed protocol
 /// kind; no diagnostic text, code or key material crosses.

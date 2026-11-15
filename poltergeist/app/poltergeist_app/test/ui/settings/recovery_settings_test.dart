@@ -1,7 +1,7 @@
-// CRED-05's Settings → Backup → Recovery section: the configured status,
-// the show-once code dialog's first-group check, the replace-code
-// confirmation, the export destination, the restore conflict policy and
-// its Return key, and the ARB copy a failed export shows.
+// CRED-05's Settings → Backup → Recovery section in Poltergeist's words:
+// the ARB copy of the status, the actions, an export, a restore summary
+// and each failure, and the section's place in Backup. The section's
+// behavior is ghost_ui's GhostRecoverySection, tested there.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
@@ -159,53 +159,6 @@ void main() {
     expect(find.text(l10n.recoveryReplace), findsNothing);
   });
 
-  testWidgets('set up shows the code once and keeps it after the first '
-      'group is retyped', (tester) async {
-    final recovery = _FakeRecovery(configured: false);
-    await pumpSection(tester, recovery);
-
-    await tester.tap(find.byKey(const ValueKey('recovery.setUp')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('recovery.code')), findsOneWidget);
-
-    // The gated button stays off until the first group matches.
-    final done = find.byKey(const ValueKey('recovery.code.done'));
-    expect(tester.widget<FilledButton>(done).onPressed, isNull);
-    await tester.enterText(
-      find.byKey(const ValueKey('recovery.code.confirm')),
-      'ZZZZ',
-    );
-    await tester.pump();
-    expect(tester.widget<FilledButton>(done).onPressed, isNull);
-
-    await tester.enterText(
-      find.byKey(const ValueKey('recovery.code.confirm')),
-      _code.split('-').first,
-    );
-    await tester.pump();
-    await tester.tap(done);
-    await tester.pumpAndSettle();
-
-    expect(recovery.savedCode, _code);
-    expect(recovery.configured, isTrue);
-    expect(find.byKey(const ValueKey('recovery.code')), findsNothing);
-  });
-
-  testWidgets('replace asks before replacing an existing code', (tester) async {
-    final recovery = _FakeRecovery(configured: true);
-    await pumpSection(tester, recovery);
-
-    expect(find.text(l10n.recoveryConfigured), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('recovery.setUp')));
-    await tester.pumpAndSettle();
-    expect(find.text(l10n.recoveryReplaceTitle), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('recovery.replace.confirm')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('recovery.code')), findsOneWidget);
-    expect(recovery.savedCode, isNull);
-  });
-
   testWidgets('export reports where it wrote, and a failure maps to its '
       'ARB sentence', (tester) async {
     final recovery = _FakeRecovery(configured: true)
@@ -273,58 +226,6 @@ void main() {
       ),
       findsOneWidget,
     );
-  });
-
-  testWidgets('Return on the code field restores under the same gate as '
-      'the button', (tester) async {
-    final recovery = _FakeRecovery(configured: true)
-      ..summary = const SecretsRestoreSummary(
-        added: 1,
-        replaced: 0,
-        kept: 0,
-        unreadable: 0,
-      );
-    await pumpSection(tester, recovery);
-
-    await tester.tap(find.byKey(const ValueKey('recovery.restore')));
-    await tester.pumpAndSettle();
-    final field = find.byKey(const ValueKey('recovery.restore.code'));
-
-    await tester.enterText(field, _code);
-    await tester.pump();
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-
-    expect(recovery.restoredCode, _code);
-    expect(recovery.restoredPolicy, RestoreConflictPolicy.keepExisting);
-    expect(find.text(l10n.recoveryRestoreTitle), findsNothing);
-  });
-
-  testWidgets('the code fields keep the keyboard from learning them', (
-    tester,
-  ) async {
-    final recovery = _FakeRecovery(configured: false);
-    await pumpSection(tester, recovery);
-
-    await tester.tap(find.byKey(const ValueKey('recovery.setUp')));
-    await tester.pumpAndSettle();
-    final confirm = tester.widget<TextField>(
-      find.byKey(const ValueKey('recovery.code.confirm')),
-    );
-    expect(confirm.autocorrect, isFalse);
-    expect(confirm.enableSuggestions, isFalse);
-    expect(confirm.enableIMEPersonalizedLearning, isFalse);
-
-    await tester.tap(find.byKey(const ValueKey('recovery.code.cancel')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('recovery.restore')));
-    await tester.pumpAndSettle();
-    final restore = tester.widget<TextField>(
-      find.byKey(const ValueKey('recovery.restore.code')),
-    );
-    expect(restore.autocorrect, isFalse);
-    expect(restore.enableSuggestions, isFalse);
-    expect(restore.enableIMEPersonalizedLearning, isFalse);
   });
 
   testWidgets('the Backup section carries Recovery whether or not the '

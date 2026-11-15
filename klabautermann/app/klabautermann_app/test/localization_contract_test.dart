@@ -617,10 +617,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The device name until the first snapshot, which comes with hello.
     "''",
   },
-  // The app lock (SAF-20): a failed change's text for the debug log, the
-  // empty reason that picks the toast's generic branch, and the line break
-  // between the switch's detail and its note.
-  'lib/ui/app_lock_settings.dart': {r"'$error'", "''", r"'\n'"},
+  // The app lock (SAF-20): the empty reason that picks the toast's
+  // generic branch.
+  'lib/ui/app_lock_settings.dart': {"''"},
   // Diagnostics in AppLockException, never shown: the lock's screens word
   // failures from its availability alone.
   'lib/services/device_authenticator.dart': {
@@ -1210,24 +1209,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // the probe's answer; the System tab shows ARB text for it
   // (systemVirtualizationNone).
   'lib/ui/system_view.dart': {"'none'"},
-  // CRED-05's Recovery section: widget keys, the summary's separator and
-  // the code's first-group split; plumbing, never rendered copy.
-  'lib/ui/settings/recovery_settings.dart': {
-    "', '",
-    "'-'",
-    "'recovery.replace.confirm'",
-    "'recovery.status.retry'",
-    "'recovery.setUp'",
-    "'recovery.export'",
-    "'recovery.restore'",
-    "'recovery.message'",
-    "'recovery.code'",
-    "'recovery.code.confirm'",
-    "'recovery.code.cancel'",
-    "'recovery.code.done'",
-    "'recovery.restore.code'",
-    "'recovery.restore.choose'",
-  },
+  // CRED-05's Recovery section: the restore summary's list join;
+  // plumbing, never rendered copy. Its widget keys are ghost_ui's.
+  'lib/ui/settings/recovery_settings.dart': {"', '"},
   // CRED-05's recovery controller: request id prefixes matched in the
   // engine's answers, and diagnostics that never render.
   'lib/controllers/recovery_controller.dart': {

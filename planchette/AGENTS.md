@@ -52,8 +52,10 @@ packages/
   ghost_keystore/         the OS-keystore vault master key and API-key
                           entries (MasterKeyManager, parameterized by each
                           product's entry names) over
-                          flutter_secure_storage and seance_protocol;
-                          outside the workspace
+                          flutter_secure_storage and seance_protocol, and
+                          the app lock with its Settings switch
+                          (GhostAppLockSection, over ghost_ui); outside
+                          the workspace
   ghost_apk_update/       Séance's and Poltergeist's Android in-app update:
                           download a release APK, verify its size and
                           SHA-256, open the system installer (a Java
