@@ -5,7 +5,9 @@ import 'dart:io';
 
 import 'package:klabautermann_core/src/catalog/engine_vault.dart';
 import 'package:klabautermann_core/src/settings/instance_lock.dart';
-import 'package:seance_core/seance_core.dart' show Secret, SecretKind;
+import 'package:seance_core/catalog.dart' show FileVaultStore;
+import 'package:seance_core/seance_core.dart'
+    show Secret, SecretKind, SecretVault;
 import 'package:test/test.dart';
 
 import '../support/fake_sync_server.dart';
@@ -37,6 +39,22 @@ void main() {
     keystore: keystore,
     enrolled: () => enrolled,
   );
+
+  final oldKey = List<int>.filled(32, 1);
+  final newKey = List<int>.filled(32, 2);
+
+  /// `vault.json` sealed under [oldKey] with a re-key to [newKey] staged
+  /// beside it and the keystore holding [newKey]: a process that died
+  /// after the re-key's keystore write, before its settle.
+  Future<File> crashAfterKeystoreWrite() async {
+    final file = File('${support.path}${Platform.pathSeparator}$vaultFileName');
+    final store = FileVaultStore(file);
+    await SecretVault(store, oldKey).putLocalSecret(_secret, updatedAt: 1);
+    final staged = await store.stageRekey(currentKey: oldKey, newKey: newKey);
+    staged.release();
+    keystore.masterKey = List.of(newKey);
+    return File('${file.path}.rekey');
+  }
 
   test(
     'a first save mints the master key, and a read opens the entry',
@@ -144,6 +162,50 @@ void main() {
           VaultUnavailableReason.directoryShared,
         ),
       ),
+    );
+  });
+
+  test('a re-key an earlier process left settles before a read', () async {
+    final journal = await crashAfterKeystoreWrite();
+
+    expect((await open().read('secret-a'))?.value, 'hunter2');
+    expect(journal.existsSync(), isFalse);
+  });
+
+  test('a re-key an earlier process left settles before a save', () async {
+    final journal = await crashAfterKeystoreWrite();
+
+    await open().save(
+      const Secret(id: 'secret-b', kind: SecretKind.password, value: 'x'),
+    );
+
+    expect(journal.existsSync(), isFalse);
+    expect((await open().read('secret-a'))?.value, 'hunter2');
+    expect((await open().read('secret-b'))?.value, 'x');
+    expect(keystore.masterKey, newKey, reason: 'nothing was minted');
+  });
+
+  test('settling leaves the journal while the keystore gives no key, or '
+      'the directory is shared', () async {
+    final journal = await crashAfterKeystoreWrite();
+
+    expect(
+      await open(access: SupportDirectoryAccess.unguarded).settledMasterKey(),
+      newKey,
+    );
+    expect(journal.existsSync(), isTrue, reason: 'a shared directory');
+
+    keystore.masterKey = null;
+    expect(await open().settledMasterKey(), isNull);
+    expect(journal.existsSync(), isTrue, reason: 'no key to settle against');
+
+    keystore.masterKey = List.of(newKey);
+    final vault = open();
+    expect(await vault.settledMasterKey(), newKey);
+    expect(journal.existsSync(), isFalse);
+    expect(
+      (await SecretVault(vault.store, newKey).getSecret('secret-a'))?.value,
+      'hunter2',
     );
   });
 }

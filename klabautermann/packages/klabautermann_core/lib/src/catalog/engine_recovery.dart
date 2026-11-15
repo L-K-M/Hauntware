@@ -25,7 +25,6 @@ import 'package:seance_core/seance_core.dart'
 
 import '../engine/protocol.dart' show VaultRecoveryFailure, VaultRestorePolicy;
 import 'engine_vault.dart';
-import 'sync_credentials.dart' show SyncKeystore;
 
 /// A recovery operation could not be done. [failure] is a fixed protocol
 /// kind; no diagnostic text, code, key material or passphrase is carried.
@@ -39,13 +38,11 @@ final class VaultRecoveryException implements Exception {
 }
 
 /// The CRED-05 operations over the engine's vault, with the master key
-/// resolved through the app's keystore each time.
+/// resolved through [EngineVault.settledMasterKey] each time.
 final class EngineRecovery {
-  EngineRecovery(this._vault, this._keystore)
-    : _recovery = VaultRecovery(_vault.store);
+  EngineRecovery(this._vault) : _recovery = VaultRecovery(_vault.store);
 
   final EngineVault _vault;
-  final SyncKeystore _keystore;
   final VaultRecovery _recovery;
 
   /// Whether this device has a recovery code an export can use. With the
@@ -53,7 +50,7 @@ final class EngineRecovery {
   /// tell.
   Future<bool> configured() => _vault.exclusive(() async {
     _requireExclusive();
-    final key = await _keystore.readMasterKey();
+    final key = await _vault.settledMasterKey();
     return _recovery.configured(key);
   });
 
@@ -144,7 +141,7 @@ final class EngineRecovery {
   }
 
   Future<List<int>> _requireKey() async {
-    final key = await _keystore.readMasterKey();
+    final key = await _vault.settledMasterKey();
     if (key == null) {
       throw const VaultRecoveryException(
         VaultRecoveryFailure.keystoreUnavailable,

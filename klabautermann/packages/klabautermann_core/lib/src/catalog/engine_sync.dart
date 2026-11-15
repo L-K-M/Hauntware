@@ -240,7 +240,7 @@ final class EngineSync {
       return;
     }
     try {
-      final key = await _keystore.readMasterKey();
+      final key = await _vault.settledMasterKey();
       if (key != null) {
         await _vault.exclusive(() => _coordinator(key).catchUpSecrets());
       }
@@ -453,7 +453,7 @@ final class EngineSync {
       final token = await KeystoreSyncCredentialStore(
         keystore: _keystore,
       ).readToken();
-      final key = await _keystore.readMasterKey();
+      final key = await _vault.settledMasterKey();
       if (token == null || key == null) {
         return _failed(
           operation,
@@ -499,7 +499,7 @@ final class EngineSync {
       return const [];
     }
     try {
-      final key = await _keystore.readMasterKey();
+      final key = await _vault.settledMasterKey();
       if (key == null) return const [];
       return await _vault.exclusive(
         () async => _syncPinConflicts(await _coordinator(key).pinConflicts()),
@@ -524,7 +524,7 @@ final class EngineSync {
     if (_refusal(SyncOperation.round) case final refused?) {
       throw StateError(refused.detail ?? refused.failure?.name ?? 'refused');
     }
-    final key = await _keystore.readMasterKey();
+    final key = await _vault.settledMasterKey();
     if (key == null) throw const SyncVaultKeyUnavailableException();
     final coordinator = _coordinator(key);
     return _vault.exclusive(() async {
@@ -796,7 +796,7 @@ final class EngineSync {
       return _refused(requestId, CatalogWriteFailure.notEnrolled);
     }
     try {
-      final key = await _keystore.readMasterKey();
+      final key = await _vault.settledMasterKey();
       if (key == null) {
         return _refused(requestId, CatalogWriteFailure.keystoreUnavailable);
       }
