@@ -21,6 +21,11 @@ import '../layout/pane_allocation.dart' show desktopStageBoundary;
 import '../menus/edit_history_commands.dart'
     show kEditRedoCommandId, kEditUndoCommandId;
 import '../top_toast.dart';
+import 'file_clipboard_commands.dart'
+    show
+        kEditCopyFilesCommandId,
+        kEditCutFilesCommandId,
+        kEditPasteFilesCommandId;
 import 'pane_view.dart' show PaneView;
 
 const kGoBackCommandId = 'go.back';
@@ -1287,12 +1292,16 @@ bool keyMayRunFrom(
   FocusNode? focus,
 ) {
   // The native menu may receive an otherwise unhandled key equivalent.
-  // Preserve the chord scope's field-first rule for both undo families:
-  // a text surface's own history wins inside an EditableText.
+  // Preserve the chord scope's field-first rule for both undo families
+  // and the file clipboard: a text surface's own history and text
+  // clipboard win inside an EditableText.
   if ((command.id == kEditUndoSelectionCommandId ||
           command.id == kEditRedoSelectionCommandId ||
           command.id == kEditUndoCommandId ||
-          command.id == kEditRedoCommandId) &&
+          command.id == kEditRedoCommandId ||
+          command.id == kEditCutFilesCommandId ||
+          command.id == kEditCopyFilesCommandId ||
+          command.id == kEditPasteFilesCommandId) &&
       focus?.context?.findAncestorWidgetOfExactType<EditableText>() != null) {
     return false;
   }
