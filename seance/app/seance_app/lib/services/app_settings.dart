@@ -361,7 +361,8 @@ class AppSettings {
     this.themeMode = ThemeModePreference.system,
     this.deviceId = '',
     this.snippetsSeeded = false,
-  }) : editorRegistry = editorRegistry ?? EditorRegistry(),
+  }) : editorRegistry =
+           editorRegistry ?? EditorRegistry(scheme: seanceEditors),
        themePalette = themePalette ?? ThemePresets.initial,
        remotePathBookmarks = remotePathBookmarks ?? {},
        remoteShowHidden = remoteShowHidden ?? {},
@@ -403,7 +404,7 @@ class AppSettings {
     'editorRegistry': editorRegistry.toJson(),
     // Keep old versions on a safe supported default if settings are downgraded.
     'remoteFileEditor':
-        editorRegistry.defaultEditorId == EditorRegistry.migratedBbeditId
+        editorRegistry.defaultEditorId == seanceMigratedBbeditId
         ? 'bbedit'
         : 'systemDefault',
     'remotePathBookmarks': remotePathBookmarks,
@@ -471,7 +472,8 @@ class AppSettings {
         json['keepSessionsAliveInBackground'] as bool? ?? true,
     editorRegistry: EditorRegistry.fromJson(
       json['editorRegistry'],
-      legacyEditor: json['remoteFileEditor'],
+      scheme: seanceEditors,
+      migrations: [seanceLegacyEditorMigration(json['remoteFileEditor'])],
     ),
     remotePathBookmarks: _bookmarkMap(json['remotePathBookmarks']),
     remoteShowHidden: _boolMap(json['remoteShowHidden']),

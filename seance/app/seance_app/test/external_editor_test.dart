@@ -1,45 +1,147 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:planchette_editor/planchette_editor.dart'
-    show normalizeEditorExtensions;
 import 'package:seance_app/services/editor_document.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 
 import 'support/system_open_recorder.dart';
 
-void main() {
-  test('normalizes extension filters and matches compound extensions', () {
-    final extensions = normalizeEditorExtensions([
-      ' .DART ',
-      '*.tar.gz',
-      'json',
-      '.dart',
-    ]);
-    final editor = ExternalEditorDefinition(
-      id: 'editor.test',
-      displayName: 'Test Editor',
-      platform: currentEditorHostPlatform!,
-      launchTarget: '/test/editor',
-      acceptedExtensions: extensions,
+EditorRegistry _registry() => EditorRegistry(scheme: seanceEditors);
+
+/// What settings.json held, decoded the way AppSettings decodes it.
+EditorRegistry _stored(Object? editorRegistry, {Object? remoteFileEditor}) =>
+    EditorRegistry.fromJson(
+      editorRegistry,
+      scheme: seanceEditors,
+      migrations: [seanceLegacyEditorMigration(remoteFileEditor)],
     );
 
-    expect(extensions, ['dart', 'json', 'tar.gz']);
-    expect(editor.acceptsPath('/tmp/FILE.DART'), isTrue);
-    expect(editor.acceptsPath('/tmp/archive.TAR.GZ'), isTrue);
-    expect(editor.acceptsPath('/tmp/no-extension'), isFalse);
+Map<String, Object?> _code({List<String> extensions = const []}) => {
+  'id': '0b5c3f9e-2a41-4d7e-9c55-6f1e8a2d3b70',
+  'displayName': 'Visual Studio Code',
+  'platform': currentEditorHostPlatform!.name,
+  'launchTarget': currentEditorHostPlatform == EditorHostPlatform.macos
+      ? 'com.microsoft.VSCode'
+      : currentEditorHostPlatform == EditorHostPlatform.windows
+      ? r'C:\Program Files\Microsoft VS Code\Code.exe'
+      : '/usr/bin/code',
+  'acceptedExtensions': extensions,
+};
+
+void main() {
+  // Every format Séance ever stored, as settings.json held it.
+  group('stored registries stay readable', () {
+    test('before the registry: remoteFileEditor bbedit becomes BBEdit as '
+        'the default', () {
+      final registry = _stored(null, remoteFileEditor: 'bbedit');
+
+      expect(registry.defaultEditorId, seanceMigratedBbeditId);
+      expect(registry.editors.single.displayName, 'BBEdit');
+      expect(registry.editors.single.platform, EditorHostPlatform.macos);
+      expect(registry.editors.single.launchTarget, 'com.barebones.bbedit');
+      expect(registry.toJson()['version'], 2);
+    });
+
+    test('before the registry: remoteFileEditor systemDefault, or nothing, '
+        'is the built-in editor', () {
+      for (final legacy in ['systemDefault', null]) {
+        final registry = _stored(null, remoteFileEditor: legacy);
+        expect(registry.defaultEditorId, EditorRegistry.builtInId);
+        expect(registry.editors, isEmpty);
+      }
+    });
+
+    test('version 1: an untouched System default moves to the built-in '
+        'editor, with or without its version key', () {
+      for (final json in [
+        {'version': 1, 'defaultEditorId': 'seance.system', 'editors': []},
+        {'defaultEditorId': 'seance.system', 'editors': []},
+      ]) {
+        expect(_stored(json).defaultEditorId, EditorRegistry.builtInId);
+      }
+    });
+
+    test('version 1: an editor default and its editors are kept', () {
+      final registry = _stored({
+        'version': 1,
+        'defaultEditorId': _code()['id'],
+        'editors': [
+          _code(extensions: ['json', 'md']),
+        ],
+      }, remoteFileEditor: 'systemDefault');
+
+      expect(registry.defaultEditorId, _code()['id']);
+      expect(registry.editors.single.acceptedExtensions, ['json', 'md']);
+    });
+
+    test('version 2: a chosen System default is kept and the document '
+        're-encodes with empty per-extension defaults', () {
+      final stored = {
+        'version': 2,
+        'defaultEditorId': 'seance.system',
+        'editors': [_code()],
+      };
+
+      final registry = _stored(stored, remoteFileEditor: 'systemDefault');
+
+      expect(registry.defaultEditorId, EditorRegistry.systemDefaultId);
+      expect(registry.extensionDefaults, isEmpty);
+      expect(
+        jsonEncode(registry.toJson()),
+        jsonEncode({
+          'version': 2,
+          'defaultEditorId': 'seance.system',
+          'extensionDefaults': <String, String>{},
+          'editors': [_code()],
+        }),
+      );
+    });
+
+    test('version 2: the current editor stays the default for every '
+        'extension', () {
+      final registry = _stored({
+        'version': 2,
+        'defaultEditorId': _code()['id'],
+        'editors': [_code()],
+      });
+
+      for (final path in ['/srv/a.txt', '/srv/b.json', '/srv/Makefile']) {
+        expect(registry.effectiveDefaultFor(path), _code()['id']);
+      }
+    });
   });
 
-  test('empty extension filters accept every file', () {
-    final editor = ExternalEditorDefinition(
-      id: 'editor.all',
-      displayName: 'Everything',
-      platform: currentEditorHostPlatform!,
-      launchTarget: '/test/editor',
-    );
+  group('per-extension defaults', () {
+    test('a binding wins over the default and survives a round trip', () {
+      final registry = _stored({
+        'version': 2,
+        'defaultEditorId': 'seance.builtin',
+        'editors': [_code()],
+      })..setDefaultForExtension('md', _code()['id']! as String);
 
-    expect(editor.acceptsPath('/tmp/.bashrc'), isTrue);
-    expect(editor.acceptsPath('/tmp/no-extension'), isTrue);
+      final restored = _stored(registry.toJson());
+
+      expect(restored.toJson()['extensionDefaults'], {'md': _code()['id']});
+      expect(restored.effectiveDefaultFor('/srv/README.md'), _code()['id']);
+      expect(
+        restored.effectiveDefaultFor('/srv/notes.txt'),
+        EditorRegistry.builtInId,
+      );
+    });
+
+    test('a System default binding sends a listing straight to the system '
+        'app, and limits nothing', () {
+      final registry = _registry()
+        ..setDefaultForExtension('log', EditorRegistry.systemDefaultId);
+
+      expect(
+        registry.effectiveDefaultForListing('/srv/app.log', 10),
+        EditorRegistry.systemDefaultId,
+      );
+      expect(registry.checkoutMaximumBytes('/srv/app.log'), isNull);
+      expect(registry.toJson()['extensionDefaults'], {'log': 'seance.system'});
+    });
   });
 
   test('registry round-trips and filters incompatible defaults', () {
@@ -51,11 +153,12 @@ void main() {
       acceptedExtensions: const ['txt'],
     );
     final registry = EditorRegistry(
+      scheme: seanceEditors,
       defaultEditorId: editor.id,
       editors: [editor],
     );
 
-    final restored = EditorRegistry.fromJson(registry.toJson());
+    final restored = registry.copy();
 
     expect(restored.defaultEditorId, editor.id);
     expect(restored.effectiveDefaultFor('/tmp/readme.txt'), editor.id);
@@ -66,7 +169,7 @@ void main() {
   });
 
   test('the built-in editor is the default on every platform', () {
-    final registry = EditorRegistry();
+    final registry = _registry();
 
     expect(registry.defaultEditorId, EditorRegistry.builtInId);
     expect(
@@ -75,24 +178,13 @@ void main() {
     );
   });
 
-  test('a version 1 System default moves to the built-in editor', () {
-    for (final json in [
-      {'version': 1, 'defaultEditorId': EditorRegistry.systemDefaultId},
-      {'defaultEditorId': EditorRegistry.systemDefaultId},
-    ]) {
-      expect(
-        EditorRegistry.fromJson(json).defaultEditorId,
-        EditorRegistry.builtInId,
-      );
-    }
-  });
-
   test('a System default chosen since version 2 survives a round trip', () {
     final registry = EditorRegistry(
+      scheme: seanceEditors,
       defaultEditorId: EditorRegistry.systemDefaultId,
     );
 
-    final restored = EditorRegistry.fromJson(registry.toJson());
+    final restored = registry.copy();
 
     expect(restored.defaultEditorId, EditorRegistry.systemDefaultId);
     expect(
@@ -102,7 +194,7 @@ void main() {
   });
 
   test('a listing over 4 MB already tells a default open where it goes', () {
-    final registry = EditorRegistry();
+    final registry = _registry();
 
     // Too big for the built-in editor, so on desktop the system app gets it.
     expect(
@@ -126,7 +218,7 @@ void main() {
   });
 
   test('a default open on desktop downloads a file of any size', () {
-    final registry = EditorRegistry();
+    final registry = _registry();
 
     expect(registry.checkoutMaximumBytes('/srv/big.log'), isNull);
     expect(
@@ -146,7 +238,7 @@ void main() {
       ..writeAsStringSync('hello\n');
     final binary = File('${directory.path}/photo.png')
       ..writeAsBytesSync([0, 1, 2]);
-    final registry = EditorRegistry();
+    final registry = _registry();
 
     expect(
       await registry.effectiveDefaultForCheckout('/srv/notes.txt', text),
@@ -164,10 +256,7 @@ void main() {
     final missing = File('${directory.path}/gone.txt');
 
     expect(
-      await EditorRegistry().effectiveDefaultForCheckout(
-        '/srv/gone.txt',
-        missing,
-      ),
+      await _registry().effectiveDefaultForCheckout('/srv/gone.txt', missing),
       EditorRegistry.builtInId,
     );
   });
@@ -180,6 +269,7 @@ void main() {
       launchTarget: '/test/editor',
     );
     final registry = EditorRegistry(
+      scheme: seanceEditors,
       defaultEditorId: editor.id,
       editors: [editor],
     )..remove(editor.id);
@@ -187,55 +277,10 @@ void main() {
     expect(registry.defaultEditorId, EditorRegistry.builtInId);
   });
 
-  test('malformed editor entries do not discard valid entries', () {
-    final registry = EditorRegistry.fromJson({
-      'version': 1,
-      'defaultEditorId': 'valid.editor',
-      'editors': [
-        {'id': 4},
-        {
-          'id': 'valid.editor',
-          'displayName': 'Valid',
-          'platform': currentEditorHostPlatform!.name,
-          'launchTarget': '/test/editor',
-          'acceptedExtensions': ['txt'],
-        },
-      ],
-    });
-
-    expect(registry.editors.single.id, 'valid.editor');
-    expect(registry.defaultEditorId, 'valid.editor');
-  });
-
-  test('legacy BBEdit selection migrates without platform data loss', () {
-    final registry = EditorRegistry.fromJson(null, legacyEditor: 'bbedit');
-
-    expect(registry.defaultEditorId, EditorRegistry.migratedBbeditId);
-    expect(registry.editors.single.launchTarget, 'com.barebones.bbedit');
-  });
-
-  test('registry rejects editor values that cannot round-trip', () {
-    final registry = EditorRegistry();
-    expect(
-      () => registry.put(
-        ExternalEditorDefinition(
-          id: 'editor.invalid',
-          displayName: List.filled(101, 'x').join(),
-          platform: currentEditorHostPlatform!,
-          launchTarget: '/test/editor',
-        ),
-      ),
-      throwsFormatException,
-    );
-  });
-
   test('reserved built-in ids cannot be registered as external editors', () {
-    for (final id in [
-      EditorRegistry.builtInId,
-      EditorRegistry.systemDefaultId,
-    ]) {
+    for (final id in ['seance.builtin', 'seance.system']) {
       expect(
-        () => EditorRegistry().put(
+        () => _registry().put(
           ExternalEditorDefinition(
             id: id,
             displayName: 'Collision',

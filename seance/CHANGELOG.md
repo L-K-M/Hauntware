@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Per-extension default editors.** Settings › Files can open an
+  extension in its own editor, such as `.md` files in an external
+  Markdown app, ahead of the default editor. Your current default editor
+  stays the default for every other extension, and existing editor
+  settings carry over unchanged. The registry and its Settings section
+  are now shared with Poltergeist (`ghost_editors`).
+
 - Settings and sync data files use the shared atomic writer and write
   through symbolic links, and local store operations share one queue so
   a failed save does not poison the next one.

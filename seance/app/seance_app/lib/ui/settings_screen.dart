@@ -1,15 +1,16 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
+import 'package:flutter/foundation.dart'
+    show ChangeNotifier, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:ghost_editors/ghost_editors.dart'
+    show EditorRegistryModel, GhostEditorsSettingsSection, GhostEditorsStrings;
 import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show
         EditorLigatures,
         EditorTextSize,
-        editorDefaultFont,
-        normalizeEditorExtensions,
-        validateEditorDisplayName;
+        editorDefaultFont;
 import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
@@ -116,7 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// the settings window's [SettingsBackend.settings] is itself a copy, and
   /// editing the route's in place would change the live settings before the
   /// write that is supposed to carry the change.
-  late EditorRegistry _editorRegistry;
+  late final _SettingsEditorRegistry _editorRegistry;
 
   /// A getter, not a `late final` field: the service caches its directory
   /// walk, so reading this per build is free, and a field initialized once
@@ -176,7 +177,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     _checkForUpdates = s.checkForUpdates;
     _localShell = s.localShell;
     _keepSessionsAlive = s.keepSessionsAliveInBackground;
-    _editorRegistry = EditorRegistry.fromJson(s.editorRegistry.toJson());
+    _editorRegistry = _SettingsEditorRegistry(
+      s.editorRegistry.copy(),
+      (registry) => _backend.setEditorRegistry(registry),
+    );
     _editorFontSize = EditorTextSize.clamp(s.editorFontSize);
     _editorLigatures = s.editorLigatures;
     _editorFont.text = s.editorFontFamily;
@@ -203,6 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   void dispose() {
     unawaited(_tabRequests?.cancel());
     _tabs.dispose();
+    _editorRegistry.dispose();
     for (final c in [
       _baseUrl,
       _model,
@@ -692,28 +697,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _filesTab() {
-    final defaultItems = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(
-        value: EditorRegistry.builtInId,
-        child: Text('Built-in text editor'),
-      ),
-      if (currentEditorHostPlatform != null)
-        const DropdownMenuItem(
-          value: EditorRegistry.systemDefaultId,
-          child: Text('System default'),
-        ),
-      for (final editor in _editorRegistry.editors)
-        DropdownMenuItem(
-          value: editor.id,
-          enabled: editor.isAvailableOnCurrentPlatform,
-          child: Text(
-            editor.isAvailableOnCurrentPlatform
-                ? editor.displayName
-                : '${editor.displayName} (another platform)',
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-    ];
     return SettingsPage(
       storageKey: const PageStorageKey('files-settings'),
       children: [
@@ -727,71 +710,14 @@ class _SettingsScreenState extends State<SettingsScreen>
               'and desktop, supports UTF-8 text up to 4 MB. On desktop, other '
               'files open in the system default app.',
         ),
-        DropdownButtonFormField<String>(
-          initialValue: _editorRegistry.defaultEditorId,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Default editor'),
-          items: defaultItems,
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() => _editorRegistry.defaultEditorId = value);
-            _persistEditorRegistry();
-          },
+        GhostEditorsSettingsSection(
+          model: _editorRegistry,
+          // The backend's picker titles its own panel.
+          picker: ({required dialogTitle}) => _backend.pickEditor(),
+          strings: _editorStrings,
+          onError: (context, error, _) =>
+              showTopToastIn(context, message: 'Editor settings: $error'),
         ),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(child: SettingsSectionHeader('External editors')),
-            if (currentEditorHostPlatform != null)
-              OutlinedButton.icon(
-                onPressed: _addEditor,
-                icon: const Icon(Icons.add),
-                label: const Text('Add editor'),
-              ),
-          ],
-        ),
-        if (currentEditorHostPlatform == null)
-          Text(
-            'The built-in editor is used on mobile. External in-place editing '
-            'is available on desktop.',
-            style: Theme.of(context).textTheme.bodySmall,
-          )
-        else if (_editorRegistry.editors.isEmpty)
-          Text(
-            'No external applications configured. Add one to make it available '
-            'in each file’s Open with menu.',
-            style: Theme.of(context).textTheme.bodySmall,
-          )
-        else
-          for (final editor in _editorRegistry.editors)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                editor.isAvailableOnCurrentPlatform
-                    ? Icons.open_in_new
-                    : Icons.devices_other,
-              ),
-              title: Text(editor.displayName),
-              subtitle: Text(
-                editor.acceptedExtensions.isEmpty
-                    ? '${editor.launchTarget}\nAccepts all files'
-                    : '${editor.launchTarget}\n${editor.acceptedExtensions.map((value) => '*.$value').join(', ')}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              onTap: () => _editEditor(editor),
-              trailing: PopupMenuButton<String>(
-                tooltip: 'Editor actions',
-                onSelected: (action) {
-                  if (action == 'edit') _editEditor(editor);
-                  if (action == 'remove') _removeEditor(editor);
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit…')),
-                  PopupMenuItem(value: 'remove', child: Text('Remove…')),
-                ],
-              ),
-            ),
       ],
     );
   }
@@ -1306,134 +1232,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     await _persistEditorFont();
   }
 
-  Future<void> _persistEditorRegistry() => _persist(
-    'Editor settings',
-    () => _backend.setEditorRegistry(_editorRegistry),
-  );
-
-  Future<void> _addEditor() async {
-    try {
-      final picked = await _backend.pickEditor();
-      if (picked == null || !mounted) return;
-      await _editEditor(picked, adding: true);
-    } catch (error) {
-      if (!mounted) return;
-      showTopToastIn(context, message: error.toString());
-    }
-  }
-
-  Future<void> _editEditor(
-    ExternalEditorDefinition editor, {
-    bool adding = false,
-  }) async {
-    final name = TextEditingController(text: editor.displayName);
-    final extensions = TextEditingController(
-      text: editor.acceptedExtensions.join(', '),
-    );
-    String? validationError;
-    final updated = await showDialog<ExternalEditorDefinition>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(adding ? 'Add external editor' : 'Edit external editor'),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: name,
-                    autofocus: true,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: 'Display name',
-                      errorText: validationError,
-                    ),
-                  ),
-                  TextField(
-                    controller: extensions,
-                    decoration: const InputDecoration(
-                      labelText: 'Accepted file extensions (optional)',
-                      hintText: 'dart, json, yaml, tar.gz',
-                      helperText:
-                          'Leave blank to show this editor for every file.',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    editor.launchTarget,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                try {
-                  final displayName = validateEditorDisplayName(name.text);
-                  final accepted = normalizeEditorExtensions(
-                    extensions.text.split(','),
-                  );
-                  Navigator.pop(
-                    context,
-                    editor.copyWith(
-                      displayName: displayName,
-                      acceptedExtensions: accepted,
-                    ),
-                  );
-                } on FormatException catch (error) {
-                  setDialogState(() => validationError = error.message);
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-    name.dispose();
-    extensions.dispose();
-    if (updated == null || !mounted) return;
-    setState(() => _editorRegistry.put(updated));
-    await _persistEditorRegistry();
-  }
-
-  Future<void> _removeEditor(ExternalEditorDefinition editor) async {
-    final remove = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Remove ${editor.displayName}?'),
-        content: Text(
-          _editorRegistry.defaultEditorId == editor.id
-              ? 'This is the current default. Removing it resets the default '
-                    'to the built-in editor.'
-              : 'The application is only removed from Séance settings.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    if (remove != true || !mounted) return;
-    setState(() => _editorRegistry.remove(editor.id));
-    await _persistEditorRegistry();
-  }
-
   Future<void> _sync({required SyncEnrollmentMode mode}) async {
     final register = mode == SyncEnrollmentMode.register;
     final issue = validateSyncEnrollment(
@@ -1714,4 +1512,86 @@ class _SyncStatusLine extends StatelessWidget {
     if (d.inHours < 24) return '${d.inHours} h ago';
     return '${d.inDays} d ago';
   }
+}
+
+/// The Files tab's external editor strings.
+final _editorStrings = GhostEditorsStrings(
+  defaultLabel: 'Default editor',
+  builtInOption: 'Built-in text editor',
+  systemDefaultOption: 'System default',
+  otherPlatformName: (name) => '$name (another platform)',
+  listLabel: 'External editors',
+  emptyState:
+      'No external applications configured. Add one to make it available '
+      'in each file’s Open with menu.',
+  desktopOnly:
+      'The built-in editor is used on mobile. External in-place editing '
+      'is available on desktop.',
+  addLabel: 'Add editor',
+  pickDialogTitle: 'Choose an editor application',
+  addTitle: 'Add external editor',
+  editTitle: 'Edit external editor',
+  editLabel: 'Edit…',
+  removeLabel: 'Remove',
+  removeTitle: (name) => 'Remove $name?',
+  removeBody: 'The application is only removed from Séance settings.',
+  removeDefaultBody:
+      'This is the current default. Removing it resets the default to the '
+      'built-in editor.',
+  nameFieldLabel: 'Display name',
+  extensionsFieldLabel: 'Accepted file extensions (optional)',
+  extensionsFieldHint: 'dart, json, yaml, tar.gz',
+  extensionsFieldHelper: 'Leave blank to show this editor for every file.',
+  cancel: 'Cancel',
+  save: 'Save',
+  bindingsLabel: 'Per-extension defaults',
+  bindingsEmpty: 'Every extension opens in the default editor.',
+  bindingAddLabel: 'Add extension default',
+  bindingAddTitle: 'Default editor for an extension',
+  bindingExtensionLabel: 'File extension',
+  bindingExtensionHint: 'txt',
+  bindingEditorLabel: 'Open with',
+  bindingExtensionInvalid: 'Enter one file extension, such as txt.',
+  bindingEditorRejects: (name, extension) =>
+      '$name is not set up to open .$extension files.',
+);
+
+/// This screen's copy of the registry as the shared section's model. Each
+/// change is made on a copy and handed to the backend whole; the screen
+/// shows it only once the backend took it, so a failed write leaves the
+/// section showing what is stored.
+final class _SettingsEditorRegistry extends ChangeNotifier
+    implements EditorRegistryModel {
+  _SettingsEditorRegistry(this._registry, this._save);
+
+  EditorRegistry _registry;
+  final Future<void> Function(EditorRegistry registry) _save;
+
+  @override
+  EditorRegistry get registry => _registry;
+
+  Future<void> _mutate(void Function(EditorRegistry registry) apply) async {
+    final next = _registry.copy();
+    apply(next);
+    await _save(next);
+    _registry = next;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> register(ExternalEditorDefinition editor) =>
+      _mutate((registry) => registry.put(editor));
+
+  @override
+  Future<void> remove(String id) => _mutate((registry) => registry.remove(id));
+
+  @override
+  Future<void> setDefault(String id) =>
+      _mutate((registry) => registry.setDefault(id));
+
+  @override
+  Future<void> setExtensionDefault(String extension, String? editorId) =>
+      _mutate(
+        (registry) => registry.setDefaultForExtension(extension, editorId),
+      );
 }
