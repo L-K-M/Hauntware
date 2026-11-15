@@ -396,6 +396,46 @@ void main() {
     });
   });
 
+  group('hiddenEntriesByHeader', () {
+    test('sections a host\'s own rows as hiddenByHeader does its records, '
+        'telling them apart by the adapter\'s id', () {
+      const entries = [
+        GhostServerEntry(id: 'loose'),
+        GhostServerEntry(id: 'db', group: 'Production'),
+        GhostServerEntry(id: 'web', group: 'Production'),
+        GhostServerEntry(id: 'star'),
+      ];
+      GhostServerEntry same(GhostServerEntry entry) => entry;
+      final all = groupServerEntries(entries, same, pinnedIds: {'star'});
+      final production = serverGroupKey('Production');
+      // Rows built from copies: a server shown is found by its id, not
+      // by identity.
+      final copies = [
+        for (final entry in entries)
+          if (entry.id != 'web')
+            GhostServerEntry(id: entry.id, group: entry.group),
+      ];
+      final hidden = hiddenEntriesByHeader(
+        sections: all,
+        rows: serverListRows(
+          sections: groupServerEntries(copies, same, pinnedIds: {'star'}),
+          collapsedKeys: {kPinnedKey},
+        ),
+        idOf: (entry) => entry.id,
+      );
+      expect(
+        {
+          for (final MapEntry(:key, :value) in hidden.entries)
+            key: [for (final entry in value) entry.id],
+        },
+        {
+          kPinnedKey: ['star'],
+          production: ['web'],
+        },
+      );
+    });
+  });
+
   group('sectionsHoldingLive', () {
     final all = groupServers(
       [_server('star'), _server('loose'), _server('db', group: 'Production')],

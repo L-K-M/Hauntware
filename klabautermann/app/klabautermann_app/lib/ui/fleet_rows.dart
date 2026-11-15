@@ -32,10 +32,8 @@ import 'threshold_scope.dart';
 /// at hand, as the bag allows, so a backoff that the shared glyph draws
 /// as connecting still reads "Waiting to reconnect"; the probe answers
 /// take FL-04's words. A block carries no detail: its reasons are worded
-/// where the user resolves them. The section header's words for hidden
-/// live servers keep the bag's defaults and go unused: a collapsed or
-/// filtered rail does hide live servers, and saying so in the header
-/// (`ghostHiddenLiveIndicator`) is deferred to a follow-up on the header.
+/// where the user resolves them. The words for live servers a section or
+/// group header keeps out of view are the same for every [link].
 GhostServerStatusStrings fleetStatusStrings(
   AppLocalizations l10n,
   LinkStatus link,
@@ -51,6 +49,8 @@ GhostServerStatusStrings fleetStatusStrings(
     probeOffline: l10n.fleetRowProbeOffline,
     probeUnknown: l10n.fleetRowProbeUnknown,
     blockedDetail: null,
+    hiddenConnected: l10n.fleetSectionHiddenConnected,
+    hiddenConnecting: l10n.fleetSectionHiddenConnecting,
   );
 }
 
@@ -94,6 +94,27 @@ Key fleetSectionHeaderKey(String key) => ValueKey('fleet.section.$key');
 /// What `ghost_servers`' sectioning reads from a row.
 GhostServerEntry _entryOf(FleetServer server) =>
     GhostServerEntry(id: server.id, group: server.group);
+
+/// The id `ghost_servers` tells a row apart by.
+String _idOf(FleetServer server) => server.id;
+
+/// [servers] split into the synced ones, which `ghost_servers` sections,
+/// and the imports, which list in a section of their own.
+({List<FleetServer> synced, List<FleetServer> imported}) _byOrigin(
+  List<FleetServer> servers,
+) {
+  final synced = <FleetServer>[];
+  final imported = <FleetServer>[];
+  for (final server in servers) {
+    switch (server.origin) {
+      case FleetEntryOrigin.synced:
+        synced.add(server);
+      case FleetEntryOrigin.sshConfig:
+        imported.add(server);
+    }
+  }
+  return (synced: synced, imported: imported);
+}
 
 /// The fleet's rows under the shared filter field (FL-05, 03 §10.3), for
 /// the desktop rail and the phone's home list alike, with the screen
@@ -171,39 +192,37 @@ class _FleetServerListState extends State<FleetServerList> {
   /// Folds or unfolds [key]; the controller keeps the search rule.
   void _toggle(String key) => widget.fleet.toggleSection(key);
 
-  /// The lines drawn for [servers]: `ghost_servers`' sections of the
-  /// synced ones, then the imports' section. One definition, so "the first
-  /// match" means the row the eye reads first, which pinning and group
-  /// order make differ from the fleet's.
-  List<GhostServerListRow<FleetServer>> _rows(
-    AppLocalizations l10n,
-    List<FleetServer> servers,
-    Set<String> collapsed,
-  ) {
-    final synced = <FleetServer>[];
-    final imported = <FleetServer>[];
-    for (final server in servers) {
-      switch (server.origin) {
-        case FleetEntryOrigin.synced:
-          synced.add(server);
-        case FleetEntryOrigin.sshConfig:
-          imported.add(server);
-      }
-    }
-
-    final rows = serverListRows(
-      sections: groupServerEntries(
+  /// `ghost_servers`' sections of [synced], pinned as this device pins.
+  GhostServerSections<FleetServer> _sections(List<FleetServer> synced) =>
+      groupServerEntries(
         synced,
         _entryOf,
         pinnedIds: widget.fleet.pinnedServerIds,
-      ),
+      );
+
+  /// The lines drawn for [servers]: `ghost_servers`' sections of the
+  /// synced ones, then the imports' section. One definition, so "the first
+  /// match" means the row the eye reads first, which pinning and group
+  /// order make differ from the fleet's. A section in [kept] keeps its
+  /// header with none of [servers] in it, for a live server the filter
+  /// hid.
+  List<GhostServerListRow<FleetServer>> _rows(
+    AppLocalizations l10n,
+    List<FleetServer> servers,
+    Set<String> collapsed, {
+    Set<String> kept = const {},
+  }) {
+    final (:synced, :imported) = _byOrigin(servers);
+    final rows = serverListRows(
+      sections: _sections(synced),
       collapsedKeys: collapsed,
+      keptSections: kept,
       labels: GhostServerSectionLabels(
         pinned: l10n.fleetSectionPinned,
         servers: l10n.fleetSectionServers,
       ),
     );
-    if (imported.isEmpty) return rows;
+    if (imported.isEmpty && !kept.contains(_importedKey)) return rows;
 
     final folded = collapsed.contains(_importedKey);
     return [
@@ -217,6 +236,65 @@ class _FleetServerListState extends State<FleetServerList> {
       if (!folded)
         for (final server in imported) GhostServerRow(server),
     ];
+  }
+
+  /// Whether [server]'s link is up or being made: what a header must
+  /// not hide without a trace.
+  bool _live(FleetServer server) =>
+      switch (ghostSessionOf(widget.fleet.linkStatusFor(server.id))) {
+        GhostSessionState.connected || GhostSessionState.connecting => true,
+        _ => false,
+      };
+
+  /// The sections of the whole fleet [servers] holding a live server, by
+  /// key: the ones whose header a filter must not drop with their rows
+  /// (`ghost_servers`' rule, and the imports' section by the same rule).
+  Set<String> _sectionsHoldingLive(List<FleetServer> servers) {
+    final (:synced, :imported) = _byOrigin(servers);
+    return {
+      ...sectionsHoldingLive(_sections(synced), _live),
+      if (imported.any(_live)) _importedKey,
+    };
+  }
+
+  /// What each header in [rows] says for the live servers of the whole
+  /// fleet [servers] it keeps out of view, folded away or filtered out, by
+  /// the header's key; a header hiding nothing live is left out.
+  Map<String, GhostServerIndicator> _hiddenLive(
+    AppLocalizations l10n,
+    List<FleetServer> servers,
+    List<GhostServerListRow<FleetServer>> rows,
+  ) {
+    final (:synced, :imported) = _byOrigin(servers);
+    final hidden = hiddenEntriesByHeader(
+      sections: _sections(synced),
+      rows: rows,
+      idOf: _idOf,
+    );
+    final importsHeader = rows.any(
+      (row) =>
+          row is GhostServerSectionRow<FleetServer> && row.key == _importedKey,
+    );
+    if (importsHeader) {
+      final shown = {
+        for (final row in rows)
+          if (row is GhostServerRow<FleetServer>) row.server.id,
+      };
+      final hiddenImports = [
+        for (final server in imported)
+          if (!shown.contains(server.id)) server,
+      ];
+      if (hiddenImports.isNotEmpty) hidden[_importedKey] = hiddenImports;
+    }
+
+    final strings = fleetStatusStrings(l10n, const LinkIdle());
+    return {
+      for (final MapEntry(:key, :value) in hidden.entries)
+        key: ?ghostHiddenLiveIndicator(strings, [
+          for (final server in value)
+            ghostSessionOf(widget.fleet.linkStatusFor(server.id)),
+        ]),
+    };
   }
 
   /// A row's verbs: a synced row pins to the top or comes off (an import
@@ -305,8 +383,12 @@ class _FleetServerListState extends State<FleetServerList> {
     widget.onOpen(first.server);
   }
 
-  /// The widget for one of [_rows]' lines.
-  Widget _line(GhostServerListRow<FleetServer> row) => switch (row) {
+  /// The widget for one of [_rows]' lines; a header draws [hiddenLive]'s
+  /// dot for the live servers it keeps out of view.
+  Widget _line(
+    GhostServerListRow<FleetServer> row,
+    Map<String, GhostServerIndicator> hiddenLive,
+  ) => switch (row) {
     GhostServerSectionRow(
       :final title,
       :final key,
@@ -318,6 +400,8 @@ class _FleetServerListState extends State<FleetServerList> {
         title: title,
         count: count,
         collapsed: collapsed,
+        status: _hiddenDot(hiddenLive[key]),
+        statusLabel: hiddenLive[key]?.label,
         onToggle: () => _toggle(key),
       ),
     GhostServerGroupHeaderRow(
@@ -332,6 +416,8 @@ class _FleetServerListState extends State<FleetServerList> {
         title: name,
         count: count,
         collapsed: collapsed,
+        status: _hiddenDot(hiddenLive[key]),
+        statusLabel: hiddenLive[key]?.label,
         onToggle: () => _toggle(key),
       ),
     GhostServerRow(:final server, :final depth) => FleetServerRow(
@@ -347,6 +433,20 @@ class _FleetServerListState extends State<FleetServerList> {
     ),
   };
 
+  /// A header's dot for [indicator], in the rows' status colours.
+  SidebarStatusDot? _hiddenDot(GhostServerIndicator? indicator) {
+    if (indicator == null) return null;
+    final chrome = GhostChrome.of(context, klabautermannThemeStyle);
+    return ghostStatusDot(
+      indicator,
+      GhostStatusColors(
+        online: chrome.statusConnected,
+        connecting: chrome.statusConnecting,
+        offline: chrome.statusFailed,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -361,6 +461,31 @@ class _FleetServerListState extends State<FleetServerList> {
 
           _open = openProblemsByServer(scan, widget.monitoring.attentionAcks);
           final matches = _shown(servers);
+          // A filter that empties a section keeps its header while a live
+          // server is among what it hid, so the header can say so.
+          final rows = _rows(
+            l10n,
+            matches,
+            widget.fleet.filterQuery.isEmpty
+                ? widget.fleet.collapsedSections
+                : const {},
+            kept: matches.length == servers.length
+                ? const {}
+                : _sectionsHoldingLive(servers),
+          );
+          final hiddenLive = _hiddenLive(l10n, servers, rows);
+          final noMatches =
+              widget.fleet.faultsOnly && widget.fleet.filterQuery.isEmpty
+              ? _NoMatches(
+                  message: l10n.fleetNoFaults,
+                  action: l10n.fleetShowAll,
+                  onClear: () => widget.fleet.faultsOnly = false,
+                )
+              : _NoMatches(
+                  message: l10n.fleetFilterNoMatches,
+                  action: l10n.sidebarFilterClear,
+                  onClear: () => _setQuery(''),
+                );
           final faulted = _open.values.where((n) => n > 0).length;
           // FL-10's toggles, offered while a server needs attention or one
           // of them is on: with nothing to triage they would only take
@@ -417,19 +542,13 @@ class _FleetServerListState extends State<FleetServerList> {
                       ),
               ),
               Expanded(
-                child: matches.isEmpty
-                    ? widget.fleet.faultsOnly &&
-                          widget.fleet.filterQuery.isEmpty
-                          ? _NoMatches(
-                              message: l10n.fleetNoFaults,
-                              action: l10n.fleetShowAll,
-                              onClear: () => widget.fleet.faultsOnly = false,
-                            )
-                          : _NoMatches(
-                              message: l10n.fleetFilterNoMatches,
-                              action: l10n.sidebarFilterClear,
-                              onClear: () => _setQuery(''),
-                            )
+                // Nothing matched and nothing live is hidden: the copy
+                // alone.
+                child: rows.isEmpty
+                    ? ListView(
+                        padding: const EdgeInsets.all(24),
+                        children: [noMatches],
+                      )
                     : ListView(
                         children: [
                           ?widget.header,
@@ -442,14 +561,14 @@ class _FleetServerListState extends State<FleetServerList> {
                             openProblems: _open,
                           ),
                           ?triage,
-                          for (final row in _rows(
-                            l10n,
-                            matches,
-                            widget.fleet.filterQuery.isEmpty
-                                ? widget.fleet.collapsedSections
-                                : const {},
-                          ))
-                            _line(row),
+                          for (final row in rows) _line(row, hiddenLive),
+                          // A header stayed for a live server the filter
+                          // hid; it is no match, so the miss is still said.
+                          if (matches.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: noMatches,
+                            ),
                         ],
                       ),
               ),
@@ -474,9 +593,10 @@ class _NoMatches extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A list, so large text in a short rail scrolls instead of clipping.
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    // In a list, so large text in a short rail scrolls instead of
+    // clipping.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           message,
