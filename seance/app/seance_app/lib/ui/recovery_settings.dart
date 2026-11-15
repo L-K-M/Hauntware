@@ -1,7 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show
+        GhostRecoveryCodeStrings,
+        GhostRestoreDialogStrings,
+        showGhostRecoveryCodeDialog,
+        showGhostRestoreDialog;
 
 import '../services/secrets_recovery.dart';
 import '../services/settings_backend.dart';
@@ -120,9 +125,12 @@ class _RecoverySettingsState extends State<RecoverySettings> {
   }
 
   Future<void> _restore() async {
-    final request = await showDialog<(String, RestoreConflictPolicy)>(
-      context: context,
-      builder: (_) => const _RestoreDialog(),
+    final request = await showGhostRestoreDialog<RestoreConflictPolicy>(
+      context,
+      strings: _restoreStrings,
+      codeStyle: _mono,
+      keepExisting: RestoreConflictPolicy.keepExisting,
+      replaceExisting: RestoreConflictPolicy.replaceExisting,
     );
     if (request == null || !mounted) return;
     final (code, policy) = request;
@@ -211,240 +219,48 @@ class _RecoverySettingsState extends State<RecoverySettings> {
   }
 }
 
+/// Séance's words for ghost_ui's new-code dialog.
+const _codeStrings = GhostRecoveryCodeStrings(
+  title: 'Your recovery code',
+  body:
+      'Write this code down and keep it somewhere safe, away from '
+      'this device. It is shown only now. With it, an export of '
+      'this device\'s secrets opens anywhere; without it, nowhere. '
+      'Nothing changes until you confirm.',
+  copy: 'Copy code',
+  copied: 'Copied',
+  confirmLabel: 'Type the code\'s first four characters',
+  cancel: 'Cancel',
+  done: 'I saved it',
+);
+
+/// Séance's words for ghost_ui's restore dialog.
+const _restoreStrings = GhostRestoreDialogStrings(
+  title: 'Restore secrets',
+  body:
+      'Enter the recovery code of the device the export came from, '
+      'then choose the export file.',
+  codeLabel: 'Recovery code',
+  conflictLabel: 'Credentials this device already has:',
+  keep: 'Keep this device\'s',
+  replace: 'Use the export\'s',
+  cancel: 'Cancel',
+  choose: 'Choose export…',
+);
+
 /// Shows a new recovery code once and keeps it, through [save], only after
-/// the user retypes its first group: a check they wrote it down before it is
-/// gone. The first group is part of the key itself, unlike the last, which
-/// is the checksum. Cancelling keeps nothing, so an earlier code stays.
-/// True when the code was kept.
+/// the user retypes its first group (ghost_ui's
+/// [showGhostRecoveryCodeDialog]); a failed save shows its error. True
+/// when the code was kept.
 Future<bool> showRecoveryCodeDialog(
   BuildContext context,
   String code, {
   required Future<void> Function() save,
-}) async =>
-    await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _RecoveryCodeDialog(code: code, save: save),
-    ) ??
-    false;
-
-class _RecoveryCodeDialog extends StatefulWidget {
-  const _RecoveryCodeDialog({required this.code, required this.save});
-
-  final String code;
-  final Future<void> Function() save;
-
-  @override
-  State<_RecoveryCodeDialog> createState() => _RecoveryCodeDialogState();
-}
-
-class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
-  final _confirmation = TextEditingController();
-  bool _copied = false;
-  bool _saving = false;
-  String? _error;
-
-  String get _firstGroup => widget.code.split('-').first;
-
-  bool get _confirmed =>
-      _confirmation.text.trim().toUpperCase() == _firstGroup.toUpperCase();
-
-  Future<void> _keep() async {
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      await widget.save();
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = '$e';
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _confirmation.dispose();
-    super.dispose();
-  }
-
-  Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: widget.code));
-    if (mounted) setState(() => _copied = true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Only Cancel or "I saved it" close it: Esc or back would drop a code
-    // the user may not have written down yet.
-    return PopScope(
-      canPop: false,
-      child: AlertDialog(
-        title: const Text('Your recovery code'),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Write this code down and keep it somewhere safe, away from '
-                  'this device. It is shown only now. With it, an export of '
-                  'this device\'s secrets opens anywhere; without it, nowhere. '
-                  'Nothing changes until you confirm.',
-                ),
-                const SizedBox(height: 12),
-                SelectableText(
-                  widget.code,
-                  key: const ValueKey('recovery.code'),
-                  style: _mono,
-                ),
-                TextButton.icon(
-                  onPressed: _copy,
-                  icon: const Icon(Icons.copy, size: 16),
-                  label: Text(_copied ? 'Copied' : 'Copy code'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  key: const ValueKey('recovery.code.confirm'),
-                  controller: _confirmation,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  enableIMEPersonalizedLearning: false,
-                  style: _mono,
-                  decoration: const InputDecoration(
-                    labelText: 'Type the code\'s first four characters',
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) {
-                    if (_confirmed && !_saving) unawaited(_keep());
-                  },
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            key: const ValueKey('recovery.code.cancel'),
-            onPressed: _saving ? null : () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('recovery.code.done'),
-            onPressed: _confirmed && !_saving ? _keep : null,
-            child: const Text('I saved it'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Asks for the recovery code and what to do with credentials this device
-/// already has; the export file is chosen after.
-class _RestoreDialog extends StatefulWidget {
-  const _RestoreDialog();
-
-  @override
-  State<_RestoreDialog> createState() => _RestoreDialogState();
-}
-
-class _RestoreDialogState extends State<_RestoreDialog> {
-  final _code = TextEditingController();
-  RestoreConflictPolicy _policy = RestoreConflictPolicy.keepExisting;
-
-  @override
-  void dispose() {
-    _code.dispose();
-    super.dispose();
-  }
-
-  void _choose() {
-    final code = _code.text.trim();
-    if (code.isEmpty) return;
-    Navigator.pop(context, (code, _policy));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final code = _code.text.trim();
-    return AlertDialog(
-      title: const Text('Restore secrets'),
-      content: SizedBox(
-        width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the recovery code of the device the export came from, '
-              'then choose the export file.',
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              key: const ValueKey('recovery.restore.code'),
-              controller: _code,
-              autocorrect: false,
-              enableSuggestions: false,
-              enableIMEPersonalizedLearning: false,
-              style: _mono,
-              decoration: const InputDecoration(labelText: 'Recovery code'),
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) => _choose(),
-            ),
-            const SizedBox(height: 12),
-            const Text('Credentials this device already has:'),
-            const SizedBox(height: 4),
-            SegmentedButton<RestoreConflictPolicy>(
-              segments: const [
-                ButtonSegment(
-                  value: RestoreConflictPolicy.keepExisting,
-                  label: Text('Keep this device\'s'),
-                ),
-                ButtonSegment(
-                  value: RestoreConflictPolicy.replaceExisting,
-                  label: Text('Use the export\'s'),
-                ),
-              ],
-              selected: {_policy},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) =>
-                  setState(() => _policy = selection.first),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('recovery.restore.choose'),
-          onPressed: code.isEmpty ? null : _choose,
-          child: const Text('Choose export…'),
-        ),
-      ],
-    );
-  }
-}
+}) => showGhostRecoveryCodeDialog(
+  context,
+  code,
+  save: save,
+  strings: _codeStrings,
+  codeStyle: _mono,
+  describeSaveError: (error) => '$error',
+);

@@ -1,6 +1,6 @@
-// cred-05: the Settings > General app lock switch. Turning it on or off
-// asks the lock, which authenticates first; a change that did not take
-// leaves the switch as it was and says why.
+// cred-05: the Settings > General app lock switch's ARB wording. The
+// switch's behavior is ghost_keystore's GhostAppLockSection, tested
+// there.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/ghost_keystore.dart';
@@ -49,86 +49,43 @@ void main() {
     ),
   );
 
-  bool value(WidgetTester tester) =>
-      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value;
-
-  testWidgets('a change that did not take leaves the switch as it was and '
-      'says why', (tester) async {
-    final lock = _FakeLock(result: AppLockChange.notAuthenticated);
-    await tester.pumpWidget(wrap(lock));
-
-    await tester.tap(find.byType(SwitchListTile));
-    await tester.pumpAndSettle();
-
-    expect(lock.changes, 1);
-    expect(lock.enabled, isFalse);
-    expect(value(tester), isFalse);
-    expect(find.textContaining('authentication failed'), findsOneWidget);
-  });
-
-  testWidgets('a device with no authentication says what to set up', (
-    tester,
-  ) async {
-    final lock = _FakeLock(
-      support: AppLockSupport.unavailable,
-      result: AppLockChange.unavailable,
+  testWidgets('the switch, its detail and its notes come from the ARB '
+      'catalog', (tester) async {
+    await tester.pumpWidget(
+      wrap(_FakeLock(support: AppLockSupport.unavailable)),
     );
-    await tester.pumpWidget(wrap(lock));
+
+    expect(find.text('App lock'), findsOneWidget);
+    expect(find.text('Require device authentication'), findsOneWidget);
+    expect(
+      find.textContaining('after 5 minutes in the background'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Set up a passcode'), findsOneWidget);
 
-    await tester.tap(find.byType(SwitchListTile));
-    await tester.pumpAndSettle();
-
-    expect(lock.enabled, isFalse);
-    expect(value(tester), isFalse);
-    expect(find.textContaining('no authentication to ask for'), findsOneWidget);
-  });
-
-  testWidgets('a change whose save failed says so', (tester) async {
-    final lock = _FakeLock(result: AppLockChange.notSaved);
-    await tester.pumpWidget(wrap(lock));
-
-    await tester.tap(find.byType(SwitchListTile));
-    await tester.pumpAndSettle();
-
-    expect(lock.enabled, isFalse);
-    expect(value(tester), isFalse);
-    expect(find.textContaining('could not be saved'), findsOneWidget);
-  });
-
-  testWidgets('an unexpected failure says the change did not take', (
-    tester,
-  ) async {
-    final lock = _FakeLock(
-      failure: const SettingsLinkException('Settings link closed'),
+    await tester.pumpWidget(
+      wrap(_FakeLock(support: AppLockSupport.unsupported)),
     );
-    await tester.pumpWidget(wrap(lock));
-
-    await tester.tap(find.byType(SwitchListTile));
-    await tester.pumpAndSettle();
-
-    expect(lock.enabled, isFalse);
-    expect(value(tester), isFalse);
-    expect(find.textContaining('did not change'), findsOneWidget);
-  });
-
-  testWidgets('a supported, unchanged change takes', (tester) async {
-    final lock = _FakeLock();
-    await tester.pumpWidget(wrap(lock));
-
-    await tester.tap(find.byType(SwitchListTile));
-    await tester.pumpAndSettle();
-
-    expect(lock.enabled, isTrue);
-    expect(value(tester), isTrue);
-  });
-
-  testWidgets('an unsupported platform disables the switch', (tester) async {
-    final lock = _FakeLock(support: AppLockSupport.unsupported);
-    await tester.pumpWidget(wrap(lock));
-
-    final toggle = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
-    expect(toggle.onChanged, isNull);
     expect(find.textContaining('no device authentication'), findsOneWidget);
   });
+
+  final refusals = <String, _FakeLock Function()>{
+    'authentication failed': () =>
+        _FakeLock(result: AppLockChange.notAuthenticated),
+    'no authentication to ask for': () =>
+        _FakeLock(result: AppLockChange.unavailable),
+    'could not be saved': () => _FakeLock(result: AppLockChange.notSaved),
+    'The app lock did not change.': () =>
+        _FakeLock(failure: const SettingsLinkException('Settings link closed')),
+  };
+  for (final MapEntry(key: words, value: lock) in refusals.entries) {
+    testWidgets('a change that did not take says "$words"', (tester) async {
+      await tester.pumpWidget(wrap(lock()));
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining(words), findsOneWidget);
+    });
+  }
 }

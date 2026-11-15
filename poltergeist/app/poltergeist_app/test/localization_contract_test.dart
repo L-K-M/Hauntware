@@ -1999,24 +1999,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'backup.settings.dialog'",
     "'backup.settings.close'",
   },
-  // CRED-05's Recovery section: widget keys, the code dialog's group
-  // separator and summary's list join: plumbing and machine data.
-  'lib/ui/settings/recovery_settings.dart': {
-    "'-'",
-    "', '",
-    "'recovery.replace.confirm'",
-    "'recovery.status.retry'",
-    "'recovery.setUp'",
-    "'recovery.export'",
-    "'recovery.restore'",
-    "'recovery.message'",
-    "'recovery.code'",
-    "'recovery.code.confirm'",
-    "'recovery.code.cancel'",
-    "'recovery.code.done'",
-    "'recovery.restore.code'",
-    "'recovery.restore.choose'",
-  },
+  // CRED-05's Recovery section: the restore summary's list join;
+  // plumbing, never rendered copy. Its widget keys are ghost_ui's.
+  'lib/ui/settings/recovery_settings.dart': {"', '"},
   // CRED-05's enrolment prompt: widget keys, never rendered copy.
   'lib/ui/recovery_prompt.dart': {
     "'recovery.prompt.notNow'",
@@ -2508,10 +2493,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'device authentication failed: ${error.code}'",
     "'device authentication was rejected'",
   },
-  // The app lock switch's failed-change toast interpolates the caught
-  // error for the debug log — never rendered as authored copy. The empty
-  // reason and the note's line join are formatting, not copy.
-  'lib/ui/settings/app_lock_settings.dart': {r"'$error'", "''", r"'\n'"},
+  // The app lock switch's empty reason, which picks the failed-change
+  // toast's generic branch: formatting, not copy.
+  'lib/ui/settings/app_lock_settings.dart': {"''"},
   // CRED-05's recovery file plumbing (cred-05): the export file name's
   // pieces, the SAF staging path, the channel's method names and its
   // diagnostics are machine text, never rendered copy.
