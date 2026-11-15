@@ -4,6 +4,41 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 runner-image baseline refresh (2026-11-15)
+
+`ubuntu-latest` rotated from `20261101.186.1` to `20261111.196.1`, and
+main run 43649654883 failed on the tier-B runner-image drift with
+`BENCH_ENFORCE_B` set. Three exact-fingerprint runs on `AMD EPYC 7763`
+yield P1 1067.420 ms (n=9), P2 13465.021 ms (n=9) and P4 48.936 ms
+(n=15). P6 stays absent because all rows errored below its frame-capture
+floor. Only the tier-A runner calibration moves; P5's calibrated config,
+thresholds, landed flags and enforcement are unchanged. The enforced
+`ab` checker passes against each pooled artifact (#768).
+
+## Review follow-ups (2026-11-12 to 2026-11-15)
+
+- Transfers and connections (#718): reconnect stops for failures that
+  need the user, a landed copy resumes after a check, refused timestamp
+  updates complete with a note, a retried delete settles a lost reply,
+  and the temp sweep reads the server's clock. Open: after a process
+  kill, the landed-copy resume and a trashed entry's location are lost
+  until a journal record is written before the step.
+- Vault key (#719, #761): no key is minted over a vault that holds
+  secrets, and a vault read can no longer settle a re-key in flight. A
+  remaining window, documented in seance_core: a read after the keystore
+  write and before the re-key's settle fails once and succeeds next.
+- UI (#726, #739, #762): drags between mounts copy, one-shot verbs do not
+  repeat on a held key, Esc and Edit > Deselect All clear the selection
+  (P4-16), the delete dialog offers Retry (UI-01a), the sync table keeps
+  its focused row in view (P4-12), and the changed-key review names the
+  pinned key's type (S06-05). Deferred for product decisions: naming
+  the phone's transfer destination (UI-06) and file Copy, Paste and
+  Undo (P4-21).
+- Shared code (#765, #767): the file-manager reveal is ghost_desktop's
+  `GhostFileRevealer`, preference controllers share
+  `PersistedValueController`, and Recovery and the app lock switch use
+  the ghost_ui and ghost_keystore sections.
+
 ## D12 CPU drift no longer escalates (2026-11-04)
 
 Owner decision: a tier-B run on a CPU other than the baseline's still
@@ -4972,8 +5007,8 @@ visually too close to carry it alone, confirmed by capture review);
 the unfocused pane drops both to neutral tones (02 §2.1). Row semantics
 announce selected state (02 §13). The stale rows under an inline error
 are now pointer-inert too (an `IgnorePointer` scoped to the listing
-subtree behind the error card, matching the key and semantics gates). Esc's deselect tier, the
-context-menu select-on-right-click, Quick Select hand-off wiring, and
+subtree behind the error card, matching the key and semantics gates). Esc's deselect tier (since
+landed, #739), the context-menu select-on-right-click, Quick Select hand-off wiring, and
 type-ahead remain with their owning slices; no Quick Select/filter/
 type-ahead surface or file operation was added.
 
