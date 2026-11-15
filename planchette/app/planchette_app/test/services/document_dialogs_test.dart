@@ -75,7 +75,7 @@ void main() {
     });
 
     test('a folder that is gone is left to the system default', () async {
-      final gone = paths.absolute('no-such-folder-${pid}', 'notes.txt');
+      final gone = paths.absolute('no-such-folder-$pid', 'notes.txt');
       expect(await dialogs.pickSavePath(gone), isNull);
       expect(platform.saveOptions?.suggestedName, 'notes.txt');
       expect(platform.saveOptions?.initialDirectory, isNull);
