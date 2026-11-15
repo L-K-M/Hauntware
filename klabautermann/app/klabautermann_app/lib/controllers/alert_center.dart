@@ -86,6 +86,10 @@ final class AlertCenter extends ChangeNotifier {
   /// How many of [history]'s entries arrived since [markSeen].
   int _unseen = 0;
 
+  /// The raised alerts, by rule and server, raised since the user last
+  /// opened that server's alerts (ALR-02's app icon badge).
+  final Set<(String, String)> _unseenRaised = {};
+
   /// Every raised alert: critical first, then warnings, then info, and
   /// within a severity the newest raise first.
   List<ActiveAlert> get active {
@@ -104,6 +108,11 @@ final class AlertCenter extends ChangeNotifier {
   /// The transitions that arrived since the user last opened the alert
   /// center.
   int get unseen => _unseen;
+
+  /// The raised alerts raised since the user last opened their server's
+  /// alerts: a clear takes its alert out, and a raise after the opening
+  /// counts again. The app icon badge shows it (ALR-02).
+  int get unseenRaised => _unseenRaised.length;
 
   /// The number of servers with a raised alert.
   int get serversWithAlerts => {for (final key in _active.keys) key.$2}.length;
@@ -124,10 +133,12 @@ final class AlertCenter extends ChangeNotifier {
   }
 
   /// Marks every transition so far as seen, as opening the alert center
-  /// does.
+  /// does. The center lists every server's alerts, so opening it opens
+  /// each server's, and every server's share of [unseenRaised] clears.
   void markSeen() {
-    if (_unseen == 0) return;
+    if (_unseen == 0 && _unseenRaised.isEmpty) return;
     _unseen = 0;
+    _unseenRaised.clear();
     notifyListeners();
   }
 
@@ -145,8 +156,10 @@ final class AlertCenter extends ChangeNotifier {
         value: event.value,
         since: event.since,
       );
+      _unseenRaised.add(key);
     } else {
       _active.remove(key);
+      _unseenRaised.remove(key);
     }
     _history.insert(
       0,
@@ -169,6 +182,7 @@ final class AlertCenter extends ChangeNotifier {
   void _onEngineDone() {
     if (_active.isEmpty) return;
     _active.clear();
+    _unseenRaised.clear();
     notifyListeners();
   }
 
