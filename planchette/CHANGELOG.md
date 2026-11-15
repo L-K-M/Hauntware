@@ -38,6 +38,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Shift+F8, or Find › Next Problem and Previous Problem, move between
   them.
 
+- File › Open Recent on the desktop lists the last 20 files you opened
+  or saved, with Clear Menu, and an empty window shows the newest five.
+  A missing file leaves the list; a file on a disconnected disk stays.
+- Files left beside a document by an interrupted save are offered when
+  it opens: open them, delete them or keep them.
+- UTF-16 files with a byte order mark open and save back unchanged, and
+  files whose lines end in a lone CR keep CR. A file that is not UTF-8
+  is refused with the first invalid byte, and the banner offers Reopen
+  with Encoding for Latin-1 or Windows-1252; a character the encoding
+  cannot hold blocks the save with its line and column. The status bar
+  shows the encoding, and its line-ending menu offers CR.
+- Save As onto a symbolic link writes the file the link points to and
+  keeps the link. A dangling link, a link to a folder or a link loop is
+  refused with that reason.
+
 ### Changed
 - Closing an unsaved document, and the quit question that covers several,
   use the shared Ghost close dialog: Save, Don't save or Cancel, with Save
@@ -46,6 +61,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The Linux package build uses the suite's shared packager and fails early
   with a clear message when `objdump` is missing, instead of partway through.
   The built `.deb` and AppImage are unchanged.
+
+- Undo history stores changes instead of whole copies of the document,
+  groups typing by word and keeps at most 16 MiB per document, dropping
+  the oldest steps first. Load, reload and revert clear it.
+- Files from 256 KiB up are decoded, checked and encoded off the UI
+  thread when they load and save, so a 4 MiB file no longer stalls
+  typing for tens of milliseconds. Find over an unchanged document folds
+  it once, and Export as HTML highlights on a background thread.
+- Export as HTML writes pages up to 32 MiB, so documents of about 1 MB
+  or more export instead of being refused at 4 MB. A refused export says
+  the page is too large and gives its size.
+- Find matches ß and ss, İ, and ligatures such as ﬁ and fi,
+  case-insensitively.
+- Saving keeps a file's extended attributes on Linux and macOS, such as
+  Finder tags, quarantine and Linux ACLs, as a best effort.
+- The widgets, document dialogs, settings dialog and server dialogs take
+  their text from the app's string catalog. The workspace servers
+  dialog's Sign In button reads "Sign in".
+- Load and save errors say "the file" instead of "the local copy".
+- When the workspace sync account is full, edits to synced records still
+  sync and new ones wait on this device until the account has room, and
+  slow sync transfers fail only after 30 seconds without progress or 10
+  minutes in total. Both need the current sync server.
 
 ### Fixed
 - Windows bounds the wait when handing a file to the running app and
@@ -99,6 +137,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   runs hands the file to the running Planchette, and launching it again
   raises its window, instead of starting a second copy that writes the
   same settings and window state.
+
+- When a folder does not allow saving, Planchette offers to save the
+  file somewhere else.
+- A save refused while an input method is composing says so on that
+  tab, and Save All names the reason, instead of doing nothing.
+- On Windows, Ctrl+Y redoes and the Edit menu shows it for Redo;
+  Ctrl+Shift+Z still works.
+- Android: a recovery copy saved elsewhere with Save As is deleted, and
+  closing a recovery copy's tab asks whether to keep or delete it, so a
+  copy you no longer need stops reopening at every launch.
+- URL Decode leaves `%00` as it is instead of inserting a NUL character
+  that would make the document impossible to save.
+- The editor's fields ask mobile keyboards not to learn what you type.
 
 ### Security
 - Files Planchette writes from a remote workspace, including remote

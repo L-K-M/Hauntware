@@ -2,6 +2,117 @@
 
 ## Unreleased
 
+- A crash during a sync enrollment's re-key no longer leaves saved
+  credentials unreadable until the next enrollment: the engine settles
+  the leftover re-key at its first vault read.
+- When the sync account is full, edits to synced records still sync,
+  and new records stay on this device with the status "N records wait
+  for space on the sync server" instead of the whole sync failing. Slow
+  sync transfers fail only after 30 seconds without progress or 10
+  minutes in total. Both need the current sync server.
+- Process arguments mask the separate value of known tools' secret
+  options (`sshpass -p`, `redis-cli -a`, `docker login -p` and others),
+  the password half of `curl -u user:pass` and `smbclient -U user%pass`,
+  and the values of secret headers such as `Authorization` and
+  `Cookie`, while `ssh -p 22` and `docker run -p 8080:80` stay visible.
+  URL credentials with an empty user or an `@` in the password are
+  masked whole.
+- A multi-line paste from the phone keyboard's clipboard into a
+  container shell takes the same paste checks as a menu paste, and a
+  multi-line paste asks first whenever the shell has bracketed paste
+  off. A hyperlink whose text does not show its address opens only
+  after a review that shows its host and full URL, with Cancel as the
+  default, and no link opens from the blank cells around it. A shell
+  whose input stream fails closes and says so instead of dropping
+  keystrokes.
+- Charts have a crosshair with a readout of the time and each series'
+  value, driven by mouse, touch or the arrow keys. The History and
+  coverage charts draw the warning and critical levels, and each series
+  has a marker shape besides its colour.
+- Journal rows show their time, and container rows follow the time
+  display setting. A search match past a row's ellipsis, or on a later
+  line of a message, is shown when it is the current match. Repeated
+  journal fields read as text instead of NUL characters.
+- Editing a file through a symbolic link edits the file it points to
+  and keeps the link, and the editor shows "Link to" the real path. A
+  root edit is refused when another account can write the file's
+  folder or a folder above it.
+- Long steps such as a host `docker pull`, a package list refresh, a cron
+  or snippet run and a slow `systemctl restart` get their own time
+  limits (up to 15 minutes) instead of failing after 30 seconds.
+- Admin mode checks the sudo password with `sudo -k -S -v`, so a cached
+  sudo record no longer lets a wrong password through. Cron Pause and
+  Resume work for lines that hold masked values.
+- A detached operation no longer stays running or unknown after one
+  failed check, and one that finished during a check keeps its result
+  instead of reading as interrupted. A detached launch that answers with
+  its process id counts as started even when the SSH exit status is
+  lost.
+- One failing request no longer stops the engine for every server, a
+  damaged audit file no longer empties the Activity page, and Activity
+  pages past 100 records no longer hide or repeat records. History keeps
+  its readings across a restart and an unclean exit.
+- A server whose synced endpoint moved starts clean: its readings,
+  charts, history, Docker choices, admin data and host profile from the
+  old machine are dropped.
+- When the engine stops by itself, open requests and runs end as
+  refused instead of waiting for ever, and a failed engine start shows
+  "Klabautermann could not start" with the reason and a Quit button.
+- Sync now answers the request that asked, so an automatic round no
+  longer answers Sync now or makes the sign-in dialog report a failure
+  that did not happen. Confirming endpoints skips a server whose address
+  changed meanwhile and says so.
+- On macOS, the menu bar's commands other than Settings and Quit are
+  disabled while the app is locked.
+- Notifications that the system no longer allows show as off for that
+  run, and the stored choice is kept.
+- A held Enter or Space no longer confirms an action whose preview it
+  opened. Confirm buttons wrap at large text sizes.
+- Log search accepts the patterns the journal's PCRE2 accepts, such as
+  `a\-b`, and Search on server sends the query as typed. On phones the
+  search field and its toggles get separate rows.
+- Firewall, sshd posture, drive health and restart reads no longer run
+  twice when you switch servers and back.
+- The Overview's quick Reboot shows only in admin mode, and phone
+  palette rows that did nothing are hidden.
+- A container's CPU chart scales past 100 %, the Top view's Select all
+  and Remove count only the containers it shows, and a removed
+  container's details drop its actions and charts. A crashed container's
+  Diagnosis shows its last 20 log lines.
+- The Images Updates filter's empty message follows the check's state,
+  merged stack logs keep their dropped-lines markers, a failed save of an
+  attention acknowledgement says so, and the Apps tab shows names
+  instead of container ids and brackets IPv6 addresses.
+- At large text sizes, the Overview's gauges stack above their
+  sparklines, the Events and Stack logs headers scroll, and the path and
+  time-range dialogs scroll.
+- Short non-TTY execs and shells that exit with output still buffered
+  keep their last output. Requests queued behind a failed relay
+  connection report its error instead of a 30-second timeout.
+- Stacks deployed through compose profiles can be redeployed, a failed
+  stack check is no longer cached, and an update check stops asking a
+  registry after it answers 429.
+- A host's process command lines are read with a 1,536-byte cap, so
+  long command lines no longer cost the whole reading, and command lines
+  or process names can no longer forge process rows or claim another
+  process's socket.
+- Counter rates no longer go negative after a 32-bit counter resets, and
+  an alert clears only while its clear condition holds; a gap in samples
+  restarts a pending alert.
+- A parser that cannot read a host reply costs only that collector's
+  reading, cron schedules such as `fri-sun` are read as cron reads them,
+  and the startup error names the reason the engine stopped.
+- A refused port forward to a closed port no longer reads as forwarding
+  disabled on the server, a server without SFTP says so instead of
+  "link closed", and the shared SFTP channel no longer closes under a
+  running transfer.
+- The start-folder error names control characters and `~name` instead
+  of asking for an absolute path.
+- The file editor keeps lone-CR line endings and shows them.
+- The command palette's text is in the app's strings.
+- System sections, timed reveals, notices and device settings share
+  their state code, and the Recovery section, its dialogs and the app
+  lock switch are the suite's shared ones; behavior is unchanged.
 - Settings no longer shows an empty Docker tab; Docker's choices sit in
   each server's Docker tab.
 - When the engine cannot finish starting, it says why in the error

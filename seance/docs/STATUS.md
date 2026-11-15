@@ -3,6 +3,29 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Sync server bundle, quotas and terminal review (2026-11-15)
+
+- The sync server runs on package:sqlite3 3.x with a bundled,
+  hash-checked SQLite 3.54.1, built with `dart build cli`. Release
+  archives hold `bin/`, `lib/`, `LICENSE` and the notices; the Docker
+  image keeps its entrypoint and drops `libsqlite3-0` (#751).
+- The record quota counts live records only, expired inbox statuses are
+  retired, and a client that sends `"refusalScope": "record"` gets an
+  over-quota push answered per record; every current client opts in
+  and keeps refused records queued (#717, #742). Not done: a
+  server-side tombstone purge, and naming the waiting records in
+  Poltergeist and Klabautermann.
+- `SEANCE_TRUSTED_PROXIES` takes CIDR networks, transfers time out on
+  stalls rather than after 30 s, and the image has a `/readyz`
+  HEALTHCHECK and digest-pinned base images (#717, #725).
+- Keyboard pastes and labelled OSC 8 links go through the paste policy
+  and a link review, in Séance's terminal and Klabautermann's container
+  shell (#722, #747, #749). Which phone keyboards commit a clipboard
+  paste as one text change is unverified.
+- The app's vault store is seance_core's `FileVaultStore`, whose re-key
+  handle keeps a same-process read from settling a re-key in flight
+  (#761).
+
 ## Menus and command palette (2026-11-10)
 
 Linux, Windows and phones get a ☰ menu in the header and the phone home's
@@ -2288,8 +2311,9 @@ release).
   keychain entitlement, which would stop ad-hoc-signed builds from launching.
   The sync server serves the icon as `/favicon.ico` plus a tiny landing page
   at `/`.
-- SQLite storage in the server needs `libsqlite3` at runtime; the Docker image
-  installs `libsqlite3-0` and `bin/` sets a loader override for `.so.0`.
+- The server is built with `dart build cli` on package:sqlite3 3.x, and its
+  bundle carries SQLite in `lib/` beside `bin/`, so neither the release
+  archives nor the Docker image need a system `libsqlite3` (#751).
 - Identity files referenced by path (`~/.ssh/…`) resolve against the *real*
   home on macOS: the sandbox points `$HOME` at the app container, so `~`
   expansion strips the container suffix (`expandHomePath` in seance_core), and

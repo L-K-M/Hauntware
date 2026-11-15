@@ -85,10 +85,11 @@ is on main:
   (`selection=pid`). A `meta` block reports the total, and only the kept
   rows' command lines are read. A container with 2,080 sleeping
   processes took 0.7 s per tick under dash and sent 30 KB, where version
-  4 took 9.6 s and sent 900 KB [U]. Command lines have no byte cap yet,
-  so 500 rows with long ones can still pass the 1 MiB section cap. The
-  per-file byte cap that 03 D48 names as a follow-up, marking the
-  argument vector truncated, has no plan item yet.
+  4 took 9.6 s and sent 900 KB [U]. Since collector-set version 14
+  (#706) each command line is read with `head -c 1536`, so 500 rows stay
+  under the 1 MiB section cap; the `meta` block reports the cap, the
+  parser marks a row that reached it (03 D48), and since #760 the
+  Processes tab ends that line in an ellipsis.
 - Probe and host profile (M2, 03 D49 and D50, K09, #192): the probe's new
   `lxcfs` area lists the `/proc` files that are `fuse.lxcfs` mounts, and
   `HostProfile.showsHostFigures` applies D50: inside a container a
@@ -511,11 +512,14 @@ is on main:
   probe answers; the app does not keep `cachedAt` yet, and sampling
   still waits for the probe. Process arguments cross as `MaskedValue`s,
   masked in the engine by 03 §8.9's rules: an attached `-p`, a secret
-  `name=value`, the value after a secret-named option and URL
-  credentials, with shell-word extents inside `-c` lines and at most
-  65,536 tokens read per procs reading. A short option's separate value
-  (`sshpass -p`), `curl -u user:pass` and header values are not masked
-  yet (03 §8.9). Since K44b turned links on in the app, its engine caches
+  `name=value`, the value after a secret-named option, URL credentials,
+  and a table of known tools' secret options (`sshpass -p`, `curl -u
+  user:********`, `redis-cli -a`, `docker login -p`, `smbclient -U
+  user%********`, `openssl -passin pass:********`, `htpasswd -b`) and
+  secret header values (`-H 'Authorization:********'`, #741), with
+  shell-word extents inside `-c` lines and at most 65,536 tokens read per
+  procs reading; a `-p` the table does not list (`ssh -p 22`) stays
+  visible. Since K44b turned links on in the app, its engine caches
   the profiles its probes answer and masks the procs rows it reads.
 - Spike S5 part 1 (M2, 03 §11.4, K29a, #220):
   `klabautermann_core/tool/engine_budget.dart` replays the host fixtures
@@ -1179,8 +1183,10 @@ is on main:
   series, each gap reason and the caller's source. Screen readers get
   each series' summary, which reads "now unknown" while the right edge
   is in a gap, and each gap's span.
-  Lanes differ by hue alone, which is still open against 03 §10.10. Not
-  yet: 03 §10.7's crosshair and threshold bands on this chart. The coverage card shows it (K39b, above).
+  Since #714 each lane also has a marker shape (03 §10.10), a crosshair
+  with a readout follows the mouse, a finger and the arrow keys (03
+  §10.7), and `thresholds` draws the warning and critical bands, which
+  the History and coverage cards pass. The coverage card shows it (K39b, above).
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears
@@ -1262,9 +1268,10 @@ is on main:
   phones, with the server address, account name, password and
   encryption passphrase, and confirm that every device on the account
   runs Séance 0.9.0 or later before anything is sent. An existing vault
-  is re-keyed through the journal; a first enrollment without one
-  installs the account key directly. The account's servers then lead
-  the fleet, ahead of imports, and stay after a restart; each round is
+  is re-keyed through the journal, and a journal a crash left behind is
+  settled at the engine's first vault read (#766); a first enrollment
+  without one installs the account key directly. The account's servers
+  then lead the fleet, ahead of imports, and stay after a restart; each round is
   started by the user, none runs at startup or on a timer. Synced
   servers have no connect config, so a `Connect` to one is rejected
   until endpoint confirmation (K41) exists. Sign-out, switching
@@ -1681,10 +1688,11 @@ is on main:
   `findSearchMatches` (03 D56), ignoring case unless set, and steps
   between matches with wrap-around; the view highlights matches and
   scrolls the current one's row into sight. The Logs panel (below) adds
-  the search field. Not yet: showing a match past a row's ellipsis or
-  after a journal row's first line without wrap; a time column (needs
-  the server zone); and repeated journal fields, which
-  `parseJournalLines` misreads. The Logs panel and the unit page draw
+  the search field. Since #713 the current match's row is drawn from
+  just before a match the row would hide, and journal rows carry a time
+  column in the zone the time display setting picks; since #706
+  repeated journal fields read as their values joined by newlines. The
+  Logs panel and the unit page draw
   journal rows; the engine reads windows and runs follows only with
   links on (K25b and K26, above).
 - Logs panel (M2, 03 §10.4, §10.8, LOG-01 to LOG-05, LOG-22, K35, #217):
@@ -2825,6 +2833,7 @@ open below and under the manual gates.
 | Performance pass, engine side | The engine budget harness reran on main after M6 ([evidence](evidence/s5/README.md#m7-rerun)): the median per-tick engine time, reply bytes and the resident set match M2's, and the tails vary with the shared machine's load; CI's frame-timing job keeps measuring the UI on main pushes | done |
 | Release dry run | `scripts/release.sh --check` with `lkm-release` 1.1.0 resolves the suite at 1.9.3 across 28 pubspecs with a clean tree and names the Klabautermann preview apps in its CI note; v1.9.3 is already tagged, so the next release takes a new version. Every PR's CI builds the clients a release ships | done |
 | Hardening from main's CI | A host that resets the SSH handshake ended the engine isolate (an unawaited dartssh2 close failing with broken pipe); seance_core's tapped socket now absorbs it, with a regression test in `seance_core/test/ssh_client_limitation_test.dart` (#573) | done |
+| Review fixes | The engine, host, Docker, operations, controller and UI review findings with tests that failed first (#705 to #715, #734, #741, #754, #760, #763, #766); the CHANGELOG lists them | done |
 | Tier A fixture expansion from user-style captures | Needs captures from users' hosts | open |
 | Battery pass and device frame timing | Needs phones | open |
 | Manual checklist on every platform; owner sign-off | 06's manual gates | open |
@@ -2973,8 +2982,9 @@ between PRs. M1 adds gates of its own:
 The macOS runner uses Séance's keyboard and accessibility compatibility
 controller (`KlabautermannFlutterViewController`, ledgered in
 [SHARED.md](SHARED.md)). `scripts/test-macos-keyboard.sh` and
-`scripts/test-macos-accessibility.sh` compile it against the cached
-Flutter engine and run the native fixtures modelled on Séance's. With
+`scripts/test-macos-accessibility.sh`, thin wrappers over the suite's
+`scripts/macos-native-fixtures.sh` since #720, compile it against the
+cached Flutter engine and run the native fixtures modelled on Séance's. With
 `--stock-engine` they test the stock controller instead and are expected
 to fail. They need macOS: CI's `klabautermann_client` macOS leg runs
 both after building the release app, and that build is the first to

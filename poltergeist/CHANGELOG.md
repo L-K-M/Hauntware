@@ -2,6 +2,73 @@
 
 ## Unreleased
 
+- **Reconnect stops for failures that need you.** A rejected login, a
+  refused host key, a key that cannot be read and an invalid route no
+  longer retry every 30 seconds, which could trip a server's
+  brute-force defences such as fail2ban. The pane says why. Network
+  drops and timeouts still reconnect with backoff.
+- **Interrupted transfers finish instead of failing for good.** A move
+  whose copy landed but whose last step failed resumes after checking
+  that the copy is the one it wrote. A server that refuses to set
+  modification times completes the item with a note. A retried file
+  whose source grew or shrank since the scan copies the current file.
+- **Deletes settle after a lost reply.** A delete retried after a
+  dropped connection recognises a delete or trash move the server
+  already did, and records where a trashed entry went so undo and
+  restore can find it.
+- **The temp sweep uses the server's clock.** The startup cleanup of
+  abandoned upload temp files judges their age by the server's clock, so
+  it cannot delete another client's live upload on a server whose clock
+  lags.
+- **A lost keystore entry no longer replaces the vault key.** When the
+  system credential store has lost its entry while `vault.json` still
+  holds saved secrets, Poltergeist no longer creates a new master key
+  that would leave them unreadable. The credential prompt and backup
+  enrollment say the key is missing.
+- **A vault read no longer breaks a re-key.** Reading a saved
+  credential while a sync enrollment's re-key waited for the keystore,
+  for example on a locked login keyring, could settle the re-key
+  against the old key and leave every saved credential unreadable. The
+  re-key now finishes first.
+- **A full sync account still syncs edits.** Edits to synced records
+  still sync, and new records stay on this device with the status "N
+  records wait for space on the sync server" until the account has
+  room. Slow sync transfers fail only after 30 seconds without progress
+  or 10 minutes in total. Both need the current sync server.
+- **Drags between volumes copy.** A plain drag between your home folder
+  and `/Volumes`, `/media`, `/run/media` or `/mnt` copies, as a
+  cross-drive drag on Windows does; the move modifier still moves.
+- **Held shortcuts run once.** Holding Delete, Ctrl+D, F5, F6 or F7 runs
+  the command once. Navigation, tab cycling, selection undo and redo,
+  and app-data Undo and Redo still repeat.
+- **Esc and Edit > Deselect All clear the selection.** Esc deselects the
+  pane's rows once nothing else is pending. Deselect All has no
+  shortcut and is disabled while nothing is selected.
+- **The delete dialog offers Retry.** When counting the items to delete
+  fails, the dialog shows an error mark instead of a spinner and offers
+  Retry.
+- **The sync table keeps its focused row in view.** Arrow keys scroll
+  the table, and Home, End, Page Up and Page Down move the focus.
+- **A changed-key review names the old key type.** It reads "Key
+  algorithm changed from X to Y", as Klabautermann's does.
+- **The start-folder error says what is wrong.** It names control
+  characters and `~name` instead of asking for an absolute path, since
+  relative start folders are accepted.
+- **Keyboards do not learn typed paths and names.** Quick Connect, Quick
+  Open, rename, path, Quick Select, the sidebar search, the sync plan
+  filter and the built-in editor ask mobile keyboards not to learn what
+  you type.
+- **Show in file manager gives up sooner.** On Linux, when no file
+  manager answers, Poltergeist says so after 5 seconds instead of 25.
+- **The built-in editor keeps UTF-16 and CR files as they are.** A
+  UTF-16 file is saved back as UTF-16 instead of UTF-8, and lone-CR line
+  endings stay.
+- **Shared settings code.** The Recovery section, its dialogs and the app
+  lock switch are the suite's shared ones, and the appearance, editor
+  font, text size, double-click and folder grouping preferences share
+  one save path; behavior is unchanged.
+- **Sync progress is cheaper to draw.** A running sync no longer
+  rebuilds the whole plan view for every transferred chunk.
 - **The update check moved into the suite.** The once-per-launch
   latest-release check and its Android in-place update now live in the
   shared `ghost_update` package, which Klabautermann also uses; behavior

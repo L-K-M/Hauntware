@@ -1,5 +1,24 @@
 # Status
 
+## Deferred review items (2026-11-14)
+
+- Done: Open Recent on the desktop, the Save As offer when a folder
+  refuses a save, leftover save files offered on open, extended
+  attributes kept on save (Linux and macOS), search folding for ß, İ and
+  Latin ligatures, Ctrl+Y redo on Windows, the IME save notice, the
+  recovery-copy keep or delete question on Android, load and save of
+  files from 256 KiB up off the UI isolate, and a 32 MiB HTML export
+  bound. Widgets and dialogs are in the ARB catalog.
+- Open, recorded in `planchette/ANALYSIS.md`: hot exit (A2), macOS
+  native recents and per-type Save As folders (A3), the shell's menus
+  and the remaining services' strings (I7, about 500 literals), Unicode's
+  other full case folds (B37), hard links and owner metadata (I3), and
+  profile-build frame measurements (P1, section 13).
+
+Local proof: core, editor and app suites pass and the Kotlin
+`DocumentIoTest` ran on the JVM. The Android `MainActivity` change and
+devices are unverified.
+
 ## Line endings, Save As through links and encodings (2026-11-12)
 
 - A classic Mac OS file whose lines end in a lone CR now saves back with CR
@@ -404,8 +423,9 @@ a native smoke test. No release tag has been created.
 ## Current limits
 
 The standalone app targets Android and the three desktops, and does not
-restore documents after application exit. It accepts UTF-8 files up
-to 4 MiB; highlighting stops above 200,000 characters. File conflict guards
+restore documents after application exit. It accepts UTF-8 and UTF-16
+files up to 4 MiB, and Latin-1 or Windows-1252 through Reopen with
+Encoding; highlighting stops above 200,000 characters. File conflict guards
 are best-effort checks, not cross-process locks. Mixed line endings follow
 the selected host normalization policy. Android hard-link publication limits
 are documented in the core package. Android provider writes retain original

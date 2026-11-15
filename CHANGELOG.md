@@ -6,6 +6,14 @@
   through a shared atomic writer that fsyncs the file and its
   directory and writes through symbolic links, so a power loss is less
   likely to leave a truncated file.
+- The Recovery settings section and its dialogs, the app lock switch,
+  the vault store and "show in file manager" each have one shared
+  implementation (ghost_ui, ghost_keystore, seance_core and
+  ghost_desktop) instead of per-app copies. Text and behavior are
+  unchanged, except as each product's changelog notes.
+- The products' Flatpak and macOS fixture scripts, and every build
+  script but Planchette's, share one body each under `scripts/`; their
+  paths, arguments and outputs are unchanged.
 
 ### Changed
 
@@ -42,6 +50,22 @@
   off autocorrect, suggestions and keyboard learning, so your keyboard
   does not learn or offer your secrets. The SSH client no longer keeps a
   key passphrase in memory once sign-in is done.
+- Sync in every app keeps working when the account is full: edits to
+  synced records still sync, and new records wait on the device until
+  the account has room. Deleted records no longer count toward the
+  record quota, and slow transfers fail only after 30 seconds without
+  progress or 10 minutes in total. This needs the current sync server.
+  Séance's changelog has the details.
+- Sync server release archives hold `bin/` and `lib/` (with a bundled
+  SQLite) instead of one executable; keep them together. The Docker
+  image runs as before. Séance's changelog has the details.
+- The built-in editor in every app keeps its own undo history of
+  changes, at most 16 MiB per document, instead of whole copies of the
+  document, and keeps lone-CR line endings and UTF-16 files as they
+  were when saving.
+- AppImages embed a vendored AppImage runtime whose SHA-256 the
+  packager checks, and appimagetool is checked against a pinned SHA-256
+  before it runs. Packaging no longer downloads a runtime.
 
 ### Added
 
@@ -111,6 +135,15 @@
   saved workspace moves the keyboard to its file list.
 - The built-in editor and the font picker draw one scrollbar on macOS,
   Windows and Linux in every app; they drew two.
+- On Android, a failed Keystore read no longer lets the secure storage
+  plugin delete the vault master key; the read reports the keystore as
+  unavailable and can be retried.
+- While a screen reader is on, a toast with an action stays until you
+  close it, and overflowed and repeated toasts are announced. The
+  command palette announces the highlighted command and its rows grow
+  with large text. The host-key review shows no type for a pinned key
+  of unknown type and brackets IPv6 hosts before the port. A failing
+  Android licence source no longer blanks the licences page.
 
 ## 1.9.0 (2026-10-04)
 

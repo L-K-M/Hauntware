@@ -6,6 +6,73 @@
   through symbolic links, and local store operations share one queue so
   a failed save does not poison the next one.
 
+- Sync server release archives hold `bin/seance_sync_server`, `lib/`
+  with the bundled SQLite 3.54.1, `LICENSE` and the notices, instead of
+  one `seance-sync` executable. Keep `bin/` and `lib/` together when you
+  install from an archive: the executable loads SQLite from `../lib`, so
+  the host needs no `libsqlite3`. The Docker image no longer installs
+  `libsqlite3-0` and keeps its `seance-sync` entrypoint. The server now
+  uses package:sqlite3 3.x and is built with `dart build cli`.
+- Sync server: a current client's push to an account at its storage
+  quota is answered per record. Edits and deletions of records the
+  account holds are stored, and only records that would grow the
+  account past its quota are refused. Older clients still get the
+  whole-push refusal. `PUT /v1/records` accepts `"refusalScope":
+  "record"`, and the response then lists `refused` records; the server
+  README describes the format.
+- When the sync account is full, edits to synced records still sync,
+  and new records stay on this device with the status "N records wait
+  for space on the sync server" until the account has room, for example
+  after you delete something. Against an older sync server nothing
+  changes.
+- Sync server: deleted records no longer count toward the per-account
+  record quota (they still count toward the byte quota), so deleting
+  frees room and an account filled by deletions accepts new records
+  again.
+- Inbox statuses older than the 30-day retention are removed from the
+  sync server, so handled proposals no longer fill the account's record
+  quota over time.
+- Sync server: `SEANCE_TRUSTED_PROXIES` accepts CIDR networks such as
+  `172.16.0.0/12`, an invalid entry or `/0` stops the server at startup,
+  and the README has a reverse-proxy section, so clients behind a proxy
+  no longer share one login rate-limit allowance once it is set. The
+  README also says what a leaked database exposes (offline password
+  guessing) and recommends an encryption passphrase that differs from
+  the account password.
+- Sync server: the container image has a `/readyz` HEALTHCHECK, so a
+  plain `docker run` reports a wedged server as unhealthy, and it builds
+  from digest-pinned Dart and Debian base images.
+- Large sync pages and pushes on slow connections no longer time out
+  after 30 seconds while data is still moving. A transfer fails after 30
+  seconds without progress, or after 10 minutes in total.
+- A multi-line paste from the phone keyboard's clipboard takes the same
+  paste checks as a menu paste: control characters are removed, and a
+  risky multi-line paste asks first. A multi-line paste also asks first
+  whenever the shell has bracketed paste off, since each line would
+  otherwise run as it arrives.
+- A terminal hyperlink whose text does not show its address opens only
+  after a review that shows its host and full URL, with Cancel as the
+  default, so Enter declines it. A link whose text is its own address
+  opens directly, and a link no longer opens from the blank cells around
+  it.
+- The on-screen Ctrl key is no longer used up or misapplied by a paste, a
+  mouse report or a hardware arrow key. The Files and Git panes ignore
+  directory reports from a nested SSH session on another host, keep `?`
+  or `#` in a reported path, and Open terminal here works with iTerm2's
+  shell integration. A session ends when the far end refuses input
+  instead of hanging.
+- On Windows, deep-link registration works for an install path up to
+  Windows' 32,767-character limit, and Show in Explorer selects the item
+  instead of opening its folder. When showing an item falls back to
+  opening a folder, that folder is the item's parent.
+- The built-in editor saves a UTF-16 file back as UTF-16 and a file
+  whose lines end in a lone CR with CR, and its status line shows the
+  encoding. Undo history keeps changes instead of whole copies of the
+  document, at most 16 MiB per document.
+- A damaged vault is moved aside as `vault.json.corrupt-<time>`, so an
+  earlier damaged copy is no longer overwritten. Séance's vault store is
+  now the shared one in seance_core.
+
 - The Linux package build uses the suite's shared packager and fails early
   with a clear message when `objdump` is missing, instead of partway through.
   The built `.deb` and AppImage are unchanged.
