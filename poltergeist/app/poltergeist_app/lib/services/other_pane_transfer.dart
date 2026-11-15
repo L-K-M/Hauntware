@@ -60,13 +60,13 @@ class OtherPaneCopyPlan {
   /// The other pane's folder when the plan was taken.
   final String folder;
 
-  /// Whether copying the roots into [folder] passes 02 §5.1's
+  /// Whether copying the roots into [destinationFolder] passes 02 §5.1's
   /// containment rules (never into a root or below it).
-  bool allows(String folder) => paneDropAllowed(
+  bool allows(String destinationFolder) => paneDropAllowed(
     source: source,
     sourceRoots: rootPaths,
     destination: destination,
-    destinationDir: folder,
+    destinationDir: destinationFolder,
     operation: TransferOperation.copy,
   );
 }

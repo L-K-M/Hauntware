@@ -145,7 +145,12 @@ void main() {
     );
     // Folders only, sorted by name regardless of case.
     final rows = tester
-        .widgetList<ListTile>(find.byType(ListTile))
+        .widgetList<ListTile>(
+          find.descendant(
+            of: _key(CompactKey.folderPicker),
+            matching: find.byType(ListTile),
+          ),
+        )
         .map((tile) => (tile.title! as Text).data)
         .toList();
     expect(rows, ['Archive', 'daily']);

@@ -3816,7 +3816,6 @@ class PaneController extends ChangeNotifier {
   /// failed or cancelled navigation can neither replay nor drop the link.
   PaneLocation? get committedLocation => _committedLocation;
 
-  /// Whether [path] lists on the channel live at probe issue — the Sync
   /// The subfolders of [path] on this pane's binding, sorted by name
   /// (UI-06's Change folder picker): one `listDirectory` round trip on
   /// the live channel, so a phone browses a destination without moving
@@ -3839,6 +3838,7 @@ class PaneController extends ChangeNotifier {
     ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 
+  /// Whether [path] lists on the channel live at probe issue — the Sync
   /// Browsing mirror probe (02 §7): the link checks existence on the
   /// other pane BEFORE navigating it, so a missing mirror suspends the
   /// link instead of optimistically erroring that pane onto a
