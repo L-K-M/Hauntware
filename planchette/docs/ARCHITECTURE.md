@@ -159,6 +159,17 @@ succeeds but removal of the source fails, both names are retained and the
 error identifies them for recovery; a complete destination can exist even
 though that exceptional cleanup failure is reported.
 
+A file with other hard links is not replaced: a new file would carry this
+name only, and the other names would keep the old text. The save checks the
+digest, writes an owner-only backup copy of the current text beside the
+file, rewrites the file in place, and deletes the backup; a write that fails
+puts the old text back, and when that fails too the backup is kept and
+named in the error. This path is not atomic (a crash mid-write leaves a
+partial file and the backup), but it keeps the inode, so owner, mode,
+attributes and ACLs stay. The link count comes from `statx` on Linux and
+Android API 30+, `lstat` on macOS and `GetFileInformationByHandle` on
+Windows; where it cannot be read the replacing save is used.
+
 New files and Save As have explicit create/replace contracts. A canceled or
 failed save does not change a document's identity or erase its dirty state.
 The save baseline advances only for the text revision actually written;
