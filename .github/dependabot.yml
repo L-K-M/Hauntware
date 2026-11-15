@@ -37,7 +37,8 @@ updates:
   # flutter_secure_storage 11 drops data written with v10's deprecated
   # options (keychain entries are user data). archive 4.6 stops
   # reporting damaged data by default, which Poltergeist's extraction
-  # of untrusted archives must audit first.
+  # of untrusted archives must audit first. window_manager 0.7 requires
+  # Flutter 3.50 / Dart 3.14, newer than the suite's Flutter 3.47.2.
   - package-ecosystem: pub
     directories:
       - /
@@ -63,6 +64,8 @@ updates:
         versions: ['>=4.6.0']
       - dependency-name: xml
         versions: ['>7.0.1']
+      - dependency-name: window_manager
+        versions: ['>=0.7.0']
     groups:
       pub:
         patterns: ['*']
