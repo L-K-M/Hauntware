@@ -372,7 +372,7 @@ void main() {
           storage: keystore,
         );
 
-        await keys.probeKeystore();
+        await keys.probeKeystore(hasExistingVault: false);
         await keys.setKeystoreKey(_stored);
         await keys.putApiKey('sync.token', 'token');
         expect(await keys.getApiKey('sync.token'), 'token');
@@ -407,7 +407,10 @@ void main() {
         keys.getApiKey('sync.token'),
         throwsA(isA<AppLockException>()),
       );
-      await expectLater(keys.probeKeystore(), throwsA(isA<AppLockException>()));
+      await expectLater(
+        keys.probeKeystore(hasExistingVault: false),
+        throwsA(isA<AppLockException>()),
+      );
       await expectLater(
         keys.readKeystoreKey(),
         throwsA(isA<AppLockException>()),
@@ -430,7 +433,7 @@ void main() {
       final gate = _Gate()..locked = false;
       keys.protectCredentialReads(gate.read);
 
-      await keys.probeKeystore();
+      await keys.probeKeystore(hasExistingVault: false);
       expect(await keys.getApiKey('sync.token'), isNull);
       expect(await keys.readKeystoreKey(), hasLength(32));
       expect(gate.reads, 3);
@@ -492,7 +495,7 @@ void main() {
         masterKeyEntry: _masterKeyEntry,
         apiKeyPrefix: 'poltergeist.apikey.',
       );
-      await keys.probeKeystore();
+      await keys.probeKeystore(hasExistingVault: false);
 
       expect(calls, isNotEmpty);
       for (final call in calls) {
@@ -509,7 +512,7 @@ void main() {
         'probeKeystore returns null and marks the keystore unavailable',
         () async {
           final keys = _manager(_LockedKeystore());
-          final key = await keys.probeKeystore();
+          final key = await keys.probeKeystore(hasExistingVault: false);
           expect(key, isNull);
           expect(keys.keystoreStatus, KeystoreStatus.unavailable);
           expect(keys.lastKeystoreError, contains('KeyringLocked'));
@@ -541,18 +544,18 @@ void main() {
         final storage = _ToggleableKeystore()..locked = true;
         final keys = _manager(storage);
 
-        expect(await keys.probeKeystore(), isNull);
+        expect(await keys.probeKeystore(hasExistingVault: false), isNull);
         expect(keys.keystoreStatus, KeystoreStatus.unavailable);
 
         storage.locked = false;
-        final key = await keys.probeKeystore();
+        final key = await keys.probeKeystore(hasExistingVault: false);
         expect(key, isNotNull);
         expect(key, hasLength(32));
         expect(keys.keystoreStatus, KeystoreStatus.available);
         expect(keys.lastKeystoreError, isNull);
 
         // The created key persists: a second probe returns the same one.
-        expect(await keys.probeKeystore(), equals(key));
+        expect(await keys.probeKeystore(hasExistingVault: false), equals(key));
       });
 
       test(
@@ -563,8 +566,8 @@ void main() {
           // this session would decrypt to garbage (or appear corrupt) forever
           // after — "unavailable" is the only honest answer.
           final keys = _manager(_LockedKeystore());
-          expect(await keys.probeKeystore(), isNull);
-          expect(await keys.probeKeystore(), isNull);
+          expect(await keys.probeKeystore(hasExistingVault: false), isNull);
+          expect(await keys.probeKeystore(hasExistingVault: false), isNull);
         },
       );
     },

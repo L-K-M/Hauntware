@@ -161,10 +161,13 @@ class MasterKeyManager {
   /// [MasterKeyUnavailableException] rather than guess. A read that throws
   /// instead is a keystore that cannot answer at all — the locked-vault null
   /// above, not a refusal: nothing is minted either way.
-  Future<List<int>?> probeKeystore({bool hasExistingVault = false}) =>
+  ///
+  /// Required, not defaulted: a caller that forgot it would mint over the
+  /// vault it did not mention, the one mistake that cannot be taken back.
+  Future<List<int>?> probeKeystore({required bool hasExistingVault}) =>
       _guarded(() => _probeKeystore(hasExistingVault: hasExistingVault));
 
-  Future<List<int>?> _probeKeystore({bool hasExistingVault = false}) async {
+  Future<List<int>?> _probeKeystore({required bool hasExistingVault}) async {
     try {
       final existing = await _storage.read(key: _masterKeyEntry);
       // An empty entry decodes to no bytes: no key, as an absent one.

@@ -110,7 +110,10 @@ void main() {
     });
     await store.putSecretBlobs({'orphan': _orphan, 'live': live});
 
-    await store.stageRekey(currentKey: _currentKey, newKey: _newKey);
+    final rekey = await store.stageRekey(
+      currentKey: _currentKey,
+      newKey: _newKey,
+    );
 
     final staged = String.fromCharCodes(await journal.readAsBytes());
     final snapshots = ((jsonDecode(staged) as Map)['snapshots'] as Map)
@@ -155,7 +158,7 @@ void main() {
     expect(await vault.readAsBytes(), vaultBefore);
     expect(String.fromCharCodes(await journal.readAsBytes()), staged);
 
-    expect(await store.settleRekey(_newKey), VaultRekeyOutcome.adopted);
+    expect(await rekey.settle(_newKey), VaultRekeyOutcome.adopted);
     expect(await journal.exists(), isFalse);
     expect(
       String.fromCharCodes(
@@ -179,11 +182,14 @@ void main() {
       await store.putSecretBlob('b', _opaque('b'));
       expect(_mode(vault), _ownerReadWrite);
 
-      await store.stageRekey(currentKey: _currentKey, newKey: _newKey);
+      final rekey = await store.stageRekey(
+        currentKey: _currentKey,
+        newKey: _newKey,
+      );
       expect(_mode(journal), _ownerReadWrite);
 
       await _chmod('644', vault);
-      expect(await store.settleRekey(_newKey), VaultRekeyOutcome.adopted);
+      expect(await rekey.settle(_newKey), VaultRekeyOutcome.adopted);
       expect(_mode(vault), _ownerReadWrite);
 
       // No temporary sibling outlives a write.

@@ -62,6 +62,22 @@ Future<bool> vaultHoldsSecrets(File vaultFile) async {
 Future<List<int>?> probeVaultKey(MasterKeyManager keys, File vaultFile) async =>
     keys.probeKeystore(hasExistingVault: await vaultHoldsSecrets(vaultFile));
 
+/// The vault over [store] under the key [keys] holds now, after settling any
+/// re-key journal an earlier process left against that key; null when the
+/// keystore cannot be read. Every vault consumer resolves the vault through
+/// this, so the settle runs on each access. A re-key this process is still
+/// running is left to finish on its own: the store defers to it (see
+/// [VaultRekeyJournal]).
+Future<SecretVault?> openSettledVault(
+  MasterKeyManager keys,
+  FileVaultStore store,
+) async {
+  final key = await probeVaultKey(keys, store.file);
+  if (key == null) return null;
+  await store.settleRekey(key);
+  return SecretVault(store, key);
+}
+
 /// The vault has no key this session because the OS keystore is unavailable,
 /// so secrets can neither be read nor stored until it comes back.
 class VaultLockedException implements Exception {

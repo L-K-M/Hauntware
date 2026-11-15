@@ -117,21 +117,31 @@ final class KeystoreSyncCredentialStore implements SyncCredentialStore {
     final current = await _keystore.readMasterKey();
     if (current == null) throw const SyncVaultKeyUnavailableException();
     await journal.settleRekey(current);
-    await journal.stageRekey(currentKey: current, newKey: vaultKey);
+    // Until this re-key settles or is released, any other settle in this
+    // process leaves the journal alone: the keystore still holds the old
+    // key.
+    final staged = await journal.stageRekey(
+      currentKey: current,
+      newKey: vaultKey,
+    );
 
     try {
-      await _keystore.writeMasterKey(vaultKey);
-    } on Object {
-      // The write's own failure is the one to report; a recovery that
-      // fails too leaves the journal staged for the next settle.
       try {
-        final installed = await _keystore.readMasterKey();
-        if (installed != null) await journal.settleRekey(installed);
+        await _keystore.writeMasterKey(vaultKey);
       } on Object {
-        // Left staged; the next attempt or launch settles it.
+        // The write's own failure is the one to report; a recovery that
+        // fails too leaves the journal staged for the next settle.
+        try {
+          final installed = await _keystore.readMasterKey();
+          if (installed != null) await staged.settle(installed);
+        } on Object {
+          // Left staged; the next attempt or launch settles it.
+        }
+        rethrow;
       }
-      rethrow;
+      await staged.settle(vaultKey);
+    } finally {
+      staged.release();
     }
-    await journal.settleRekey(vaultKey);
   }
 }
