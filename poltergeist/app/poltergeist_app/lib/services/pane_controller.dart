@@ -625,6 +625,12 @@ class PaneController extends ChangeNotifier {
   void Function(PaneLocation location, {Bookmark? remoteBookmark})?
   onLocationCommitted;
 
+  /// P4-21's Undo feed: invoked after an inline rename of `from` to `to`
+  /// on [location]'s host committed. The strip stamps the same callback
+  /// on every tab; the shell records it on Edit ▸ Undo.
+  void Function(PaneLocation location, String from, String to)?
+  onEntryRenamed;
+
   /// Catalog lookup stamped by the owning tab strip. Reconnects resolve
   /// again so a synchronized route edit cannot revive the stale route.
   PaneServerConfigLookup? serverConfigLookup;
@@ -1853,6 +1859,49 @@ class PaneController extends ChangeNotifier {
     }
   }
 
+  /// Whether this tab holds a live channel that can answer requests (a
+  /// lost connection or an unbound tab cannot).
+  bool get hasLiveChannel => !_disposed && _channel != null && !connectionLost;
+
+  /// Renames [from] to [to] on this tab's host through its live channel
+  /// (P4-21's same-server Cut, and Undo of renames, moves and Put Back):
+  /// a taken [to] fails with the channel's typed conflict, never an
+  /// overwrite. Unlike the inline rename it may cross folders, and it
+  /// leaves this tab's own listing to its watch or the caller.
+  Future<void> renamePath(String from, String to) async {
+    final channel = _channel;
+    if (!hasLiveChannel || channel == null) {
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'rename',
+        message: '',
+      );
+    }
+    await channel.rename(from, to);
+    final location = _location;
+    if (location != null &&
+        identical(channel, _channel) &&
+        (paneParentPath(from) == location.path ||
+            paneParentPath(to) == location.path)) {
+      refresh();
+    }
+  }
+
+  /// Every name in [folder], hidden files included, through this tab's
+  /// live channel (P4-21: what a paste must never take back on Undo).
+  Future<Set<String>> listNames(String folder) async {
+    final channel = _channel;
+    if (!hasLiveChannel || channel == null) {
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'list',
+        message: '',
+      );
+    }
+    final listed = await channel.listDirectory(folder);
+    return {for (final entry in listed) entry.name};
+  }
+
   /// Navigates to the parent folder; the root is its own parent (no-op).
   /// The folder it climbs out of is re-selected once the parent lists
   /// (P4-02), so ⌘↓ goes straight back in and ↓ to the next sibling.
@@ -2866,6 +2915,7 @@ class PaneController extends ChangeNotifier {
     }
 
     if (_disposed || ownsPresentation()) _renameInFlight = false;
+    if (location != null) onEntryRenamed?.call(location, entry.path, newPath);
     if (_disposed) return;
     if (!ownsPresentation()) {
       // The rename applied on the old binding; the pane's current
@@ -3815,6 +3865,28 @@ class PaneController extends ChangeNotifier {
   /// Sync Browsing (02 §7) keys on it: only a commit moves a pane, so a
   /// failed or cancelled navigation can neither replay nor drop the link.
   PaneLocation? get committedLocation => _committedLocation;
+
+  /// The subfolders of [path] on this pane's binding, sorted by name
+  /// (UI-06's Change folder picker): one `listDirectory` round trip on
+  /// the live channel, so a phone browses a destination without moving
+  /// the pane. Throws the typed `disconnected` [RemoteFileException]
+  /// without a live channel and lets the channel's own typed refusals
+  /// through for the picker to show.
+  Future<List<RemoteFileEntry>> listFolders(String path) async {
+    final channel = _channel;
+    if (_disposed || channel == null || connectionLost) {
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'list',
+        message: '',
+      );
+    }
+    final listed = await channel.listDirectory(path);
+    return [
+      for (final entry in listed)
+        if (entry.isDirectory) entry,
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
 
   /// Whether [path] lists on the channel live at probe issue — the Sync
   /// Browsing mirror probe (02 §7): the link checks existence on the

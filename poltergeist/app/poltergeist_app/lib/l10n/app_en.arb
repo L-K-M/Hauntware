@@ -10871,14 +10871,74 @@
   "@compactSelectionClear": {
     "description": "D32 §9: tooltip of the ✕ that leaves selection mode."
   },
-  "compactActionCopyTo": "Copy to {pane}",
+  "compactActionCopyTo": "Copy to…",
   "@compactActionCopyTo": {
-    "description": "D32 §9: selection bar label of Copy to Other Pane, naming the other pane's letter, e.g. 'Copy to B'.",
+    "description": "UI-06: selection bar label of Copy to Other Pane on phones. The ellipsis says a confirmation sheet naming the destination host and folder opens first."
+  },
+  "compactCopyToTitle": "{count, plural, =1{Copy 1 item} other{Copy {count} items}}",
+  "@compactCopyToTitle": {
+    "description": "UI-06: title of the Copy to… confirmation sheet.",
     "placeholders": {
-      "pane": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "compactCopyToHost": "Host",
+  "@compactCopyToHost": {
+    "description": "UI-06: caption above the destination host (a server name, or This device) in the Copy to… sheet."
+  },
+  "compactCopyToFolder": "Folder",
+  "@compactCopyToFolder": {
+    "description": "UI-06: caption above the destination folder path in the Copy to… sheet."
+  },
+  "compactCopyToConfirm": "Copy",
+  "@compactCopyToConfirm": {
+    "description": "UI-06: the Copy to… sheet's button that queues the copy into the shown host and folder."
+  },
+  "compactCopyToConfirmSemantics": "Copy to {host}, {folder}",
+  "@compactCopyToConfirmSemantics": {
+    "description": "UI-06: screen reader label of the Copy button, naming the full destination.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "folder": {
         "type": "String"
       }
     }
+  },
+  "compactCopyToChangeFolder": "Change folder",
+  "@compactCopyToChangeFolder": {
+    "description": "UI-06: the Copy to… sheet's button that opens a folder picker on the destination host."
+  },
+  "compactCopyToNotAllowed": "Choose a folder outside the items you are copying.",
+  "@compactCopyToNotAllowed": {
+    "description": "UI-06: shown in the Copy to… sheet, with Copy disabled, when the chosen folder is one of the copied folders or inside one."
+  },
+  "compactFolderPickerTitle": "Choose a folder",
+  "@compactFolderPickerTitle": {
+    "description": "UI-06: title of the destination folder picker opened by Change folder."
+  },
+  "compactFolderPickerUp": "Enclosing folder",
+  "@compactFolderPickerUp": {
+    "description": "UI-06: tooltip of the folder picker's button that goes to the parent folder."
+  },
+  "compactFolderPickerChoose": "Use this folder",
+  "@compactFolderPickerChoose": {
+    "description": "UI-06: the folder picker's button that picks the folder it shows."
+  },
+  "compactFolderPickerEmpty": "No folders here",
+  "@compactFolderPickerEmpty": {
+    "description": "UI-06: the folder picker's message for a folder without subfolders."
+  },
+  "compactFolderPickerFailed": "This folder can't be listed.",
+  "@compactFolderPickerFailed": {
+    "description": "UI-06: the folder picker's message when the folder's listing failed; a Retry button follows."
+  },
+  "compactFolderPickerRetry": "Retry",
+  "@compactFolderPickerRetry": {
+    "description": "UI-06: the folder picker's button that lists the folder again after a failure."
   },
   "compactActionMoveTo": "Move to {pane}",
   "@compactActionMoveTo": {
@@ -11573,5 +11633,149 @@
   "recoveryPromptRetry": "Retry",
   "@recoveryPromptRetry": {
     "description": "The enrolment prompt's retry action."
+  },
+  "editCantUndoNamedLabel": "Can't Undo {name}",
+  "@editCantUndoNamedLabel": {
+    "description": "P4-21: Edit ▸ Undo, disabled, when the next change cannot be undone (a remote or permanent delete), e.g. \"Can't Undo Delete\".",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Delete"
+      }
+    }
+  },
+  "editCutFilesLabel": "Cut",
+  "@editCutFilesLabel": {
+    "description": "P4-21: Edit menu and context menu command that puts the selected items on the app's file clipboard to be moved by the next Paste (edit.cut)."
+  },
+  "editCopyFilesLabel": "Copy",
+  "@editCopyFilesLabel": {
+    "description": "P4-21: Edit menu and context menu command that puts the selected items on the app's file clipboard to be copied by Paste (edit.copy)."
+  },
+  "editPasteFilesLabel": "Paste",
+  "@editPasteFilesLabel": {
+    "description": "P4-21: Edit menu and context menu command that copies or moves the clipboard's items into the active pane's folder (edit.paste)."
+  },
+  "commandDisabledClipboardEmpty": "Copy or cut items first.",
+  "@commandDisabledClipboardEmpty": {
+    "description": "P4-21: why Paste is disabled while the app's file clipboard is empty."
+  },
+  "commandDisabledPasteHere": "These items can't be pasted into this folder.",
+  "@commandDisabledPasteHere": {
+    "description": "P4-21: why Paste is disabled in a folder the items cannot go into: one of the copied folders or inside it, or the folder a cut item is already in."
+  },
+  "filePasteUnavailable": "Nothing was pasted. Open a folder on that host and try again.",
+  "@filePasteUnavailable": {
+    "description": "P4-21: toast when Paste had no transfer queue or live connection to work with."
+  },
+  "filePastePartial": "{count, plural, =1{1 item couldn't be moved: {detail}} other{{count} items couldn't be moved: {detail}}}",
+  "@filePastePartial": {
+    "description": "P4-21: toast after a same-server Cut and Paste where some renames failed; detail is the first failure's reason.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "fileUndoCopyName": "Copy",
+  "@fileUndoCopyName": {
+    "description": "P4-21: the Edit ▸ Undo name of a pasted copy (\"Undo Copy\")."
+  },
+  "fileUndoMoveName": "Move",
+  "@fileUndoMoveName": {
+    "description": "P4-21: the Edit ▸ Undo name of a Cut and Paste (\"Undo Move\")."
+  },
+  "fileUndoRenameName": "Rename",
+  "@fileUndoRenameName": {
+    "description": "P4-21: the Edit ▸ Undo name of an inline rename (\"Undo Rename\")."
+  },
+  "fileUndoTrashName": "Move to Trash",
+  "@fileUndoTrashName": {
+    "description": "P4-21: the Edit ▸ Undo name of a local Move to Trash; undoing it puts the items back (\"Undo Move to Trash\")."
+  },
+  "fileUndoDeleteName": "Delete",
+  "@fileUndoDeleteName": {
+    "description": "P4-21: the name of a delete that cannot be undone, shown as \"Can't Undo Delete\"."
+  },
+  "fileUndoIrreversibleDelete": "Items deleted on a server, or deleted immediately, can't be restored.",
+  "@fileUndoIrreversibleDelete": {
+    "description": "P4-21: why Undo is disabled after a remote or permanent delete."
+  },
+  "fileUndoWaitForTransfer": "Wait for the transfer to finish, or cancel it in Transfers, then undo.",
+  "@fileUndoWaitForTransfer": {
+    "description": "P4-21: Undo declined while the copy, move or trash it would reverse is still running."
+  },
+  "fileUndoUnknownOrigin": "The destination folder couldn't be read before pasting, so Undo can't tell which items the paste created.",
+  "@fileUndoUnknownOrigin": {
+    "description": "P4-21: Undo of a paste declined because the destination's contents were unknown at paste time; nothing is deleted or moved."
+  },
+  "fileUndoNothing": "Nothing from this change is left to undo.",
+  "@fileUndoNothing": {
+    "description": "P4-21: Undo declined because no item of the change completed, or every item went into something that already existed."
+  },
+  "fileUndoNeedsTab": "Open a tab on {host} to undo this.",
+  "@fileUndoNeedsTab": {
+    "description": "P4-21: Undo declined because no open tab has a live connection to the host the change happened on.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "fileUndoNoQueue": "The transfer queue isn't available.",
+  "@fileUndoNoQueue": {
+    "description": "P4-21: Undo failed because no transfer queue is bound."
+  },
+  "fileUndoIncomplete": "Some items couldn't be taken back.",
+  "@fileUndoIncomplete": {
+    "description": "P4-21: Undo's transfer finished with failed or skipped items."
+  },
+  "fileUndoCopyKept": "The copied items were kept.",
+  "@fileUndoCopyKept": {
+    "description": "P4-21: toast after the user cancelled Undo Copy's confirmation."
+  },
+  "fileUndoPutBackUnavailable": "This system's trash doesn't report where it put the items. Restore them from the Trash.",
+  "@fileUndoPutBackUnavailable": {
+    "description": "P4-21: Undo of a local Move to Trash declined where the trash gives no Put Back location (Linux, Windows)."
+  },
+  "fileUndoPutBackPartial": "{count, plural, =1{1 item couldn't be put back. Restore it from the Trash.} other{{count} items couldn't be put back. Restore them from the Trash.}}",
+  "@fileUndoPutBackPartial": {
+    "description": "P4-21: Put Back restored some items but the trash gave no location for the rest.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fileUndoCopyTitle": "Undo Copy?",
+  "@fileUndoCopyTitle": {
+    "description": "P4-21: title of the confirmation before Undo Copy deletes the copied items."
+  },
+  "fileUndoCopyMessage": "{count, plural, =1{The item the copy created on {host} will be deleted.} other{The {count} items the copy created on {host} will be deleted.}} On a server, or where the Trash is unavailable, they are deleted permanently. Items that replaced or merged into existing ones are kept.",
+  "@fileUndoCopyMessage": {
+    "description": "P4-21: body of Undo Copy's confirmation.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "fileUndoCopyConfirm": "Delete Copies",
+  "@fileUndoCopyConfirm": {
+    "description": "P4-21: the confirmation button that deletes the copied items."
+  },
+  "fileUndoCopyCancel": "Keep Copies",
+  "@fileUndoCopyCancel": {
+    "description": "P4-21: the button that cancels Undo Copy and keeps the copied items."
+  },
+  "fileHostThisDevice": "This device",
+  "@fileHostThisDevice": {
+    "description": "P4-21: the host name of local files in Undo messages."
   }
 }

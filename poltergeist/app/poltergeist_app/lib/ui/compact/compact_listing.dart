@@ -8,12 +8,15 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/checkout_session.dart';
 import '../../services/pane_controller.dart';
+import '../../services/pane_drop.dart' show fsLocationForLocation;
 import '../../services/pane_location.dart';
 import '../../services/pane_permissions.dart' show nameIsFlagged;
 import '../../services/quick_select_state.dart';
 import '../../services/selection_state.dart';
 import '../../theme/app_theme.dart';
 import '../local_edits_review.dart';
+import '../panes/file_clipboard_commands.dart'
+    show FileClipboardScope, kCutRowOpacity;
 import '../panes/pane_format.dart';
 import '../panes/save_favorite_bar.dart';
 import 'compact_pane_messages.dart';
@@ -561,6 +564,13 @@ class _CompactListingState extends State<CompactListing> {
       );
     } else {
       final extent = scaledGhostCompactFileRowExtent(context);
+      // P4-21: rows that were cut and not yet pasted render dimmed.
+      final clipboard = FileClipboardScope.maybeOf(context);
+      final shown = controller.location;
+      bool isCut(int index) =>
+          clipboard != null &&
+          shown != null &&
+          clipboard.isCut(fsLocationForLocation(shown), entries[index].path);
       scrollable = ListView.builder(
         key: const ValueKey(CompactKey.listing),
         controller: _scroll,
@@ -568,7 +578,9 @@ class _CompactListingState extends State<CompactListing> {
         padding: padding,
         itemExtent: extent,
         itemCount: entries.length,
-        itemBuilder: (context, index) => GhostFileCompactRow(
+        itemBuilder: (context, index) => Opacity(
+          opacity: isCut(index) ? kCutRowOpacity : 1,
+          child: GhostFileCompactRow(
           key: ValueKey((CompactKey.row, entries[index].path)),
           item: paneFileItem(entries[index]),
           selected: controller.isRowSelected(index),
@@ -585,6 +597,7 @@ class _CompactListingState extends State<CompactListing> {
                   controller.startRename();
                 }
               : null,
+        ),
         ),
       );
     }

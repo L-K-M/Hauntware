@@ -2083,6 +2083,20 @@ English: the shell's menus and banners (`planchette_app.dart`,
 store, Android documents, remote files) and the `EditorStrings` feed, about
 500 literals in all. They are split off so each review stays small.
 
+**Status (2026-11-15, branch `planchette/wave5-3`):** phase 3 moves the
+`EditorStrings` feed, the largest part (about 340 of those literals):
+`lib/ui/editor_strings.dart` (`PlanchetteEditorStrings`) adapts the shared
+editor's copy to the catalog the way Poltergeist and Klabautermann do,
+with their reviewed keys, and the shell passes it to every editor, the
+status row and the Text menu. A test checks that the English catalog says
+what the package says, so no copy changed. Still English: the shell's
+menus and banners and the services' messages (about 200 literals). They
+wait for the hot-exit and Save As branches, which edit the same lines of
+`planchette_app.dart` and `document_workspace.dart`; the menu labels also
+serve as menu identities (the Window and Edit checks, mnemonics), which
+needs ids first, and the workspace needs a strings seam since its messages
+are built without a `BuildContext`.
+
 ## 8. Visual design and theming
 
 ### V1. Verify curated themes and expose preferences (after #41) — M

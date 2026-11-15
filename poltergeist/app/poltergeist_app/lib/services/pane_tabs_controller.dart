@@ -195,6 +195,7 @@ class PaneTabsController extends ChangeNotifier {
     this.externalEditorOpen,
     this.otherPaneTransfer,
     this.onLocationCommitted,
+    this.onEntryRenamed,
     this.serverConfigLookup,
     this.confirmClose,
     this.serverStillShared,
@@ -295,6 +296,11 @@ class PaneTabsController extends ChangeNotifier {
   /// record through the same seam.
   final void Function(PaneLocation location, {Bookmark? remoteBookmark})?
   onLocationCommitted;
+
+  /// P4-21's rename feed for Edit ▸ Undo, stamped on every arriving tab
+  /// like [onLocationCommitted].
+  final void Function(PaneLocation location, String from, String to)?
+  onEntryRenamed;
 
   /// Fresh shared-catalog lookup for every remote bind and rebind.
   final PaneServerConfigLookup? serverConfigLookup;
@@ -914,6 +920,7 @@ class PaneTabsController extends ChangeNotifier {
     controller.externalEditorOpen = externalEditorOpen;
     controller.otherPaneTransfer = otherPaneTransfer;
     controller.onLocationCommitted = onLocationCommitted;
+    controller.onEntryRenamed = onEntryRenamed;
     controller.serverConfigLookup = serverConfigLookup;
     final tab = PaneTab(
       id: controller.paneTabId,

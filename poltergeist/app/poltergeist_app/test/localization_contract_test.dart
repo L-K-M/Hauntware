@@ -1687,6 +1687,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$required'",
     r"'no positive vsync interval in ${intervals.length} samples'",
   },
+  // P4-21's clipboard command ids (D21 plumbing) and the Undo Copy
+  // dialog's widget keys, never rendered copy.
+  'lib/ui/panes/file_clipboard_commands.dart': {
+    "'edit.cut'",
+    "'edit.copy'",
+    "'edit.paste'",
+    "'fileUndoCopy.dialog'",
+    "'fileUndoCopy.cancel'",
+    "'fileUndoCopy.confirm'",
+  },
+  // The paste destination's child-path join: machine path data.
+  'lib/services/file_clipboard.dart': {
+    r"'$folder$name'",
+    r"'$folder$separator$name'",
+  },
   // The activity panel's registered command id (D21 plumbing).
   'lib/ui/activity/activity_commands.dart': {"'queue.togglePause'"},
   // D32's shell command ids (D21 plumbing) and the Help menu's
