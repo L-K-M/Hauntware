@@ -12,6 +12,19 @@ import 'services/document_workspace_test.dart'
     show FakeDialogs, MemoryDocuments;
 import 'services/memory_settings.dart';
 
+/// Lets file work the app started inside the test's fake-async zone run to
+/// its end: real IO completes only while real time passes, and what follows
+/// it only on a pump. A write or listing left halfway holds a handle that
+/// stops Windows from deleting the temporary folder.
+Future<void> _settleFiles(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+  }
+}
+
 void main() {
   /// Mocks the Android runner over a temporary files folder, answering how
   /// many times the app asked to exit.
@@ -71,6 +84,7 @@ void main() {
       ).listSync().whereType<File>().where((f) => f.path.endsWith('.json'));
       expect(kept.single.readAsStringSync(), contains('keep my edits'));
       await tester.pumpWidget(const SizedBox.shrink());
+      await _settleFiles(tester);
     },
     variant: const TargetPlatformVariant({TargetPlatform.android}),
   );
@@ -105,6 +119,7 @@ void main() {
       expect(runner.exits(), 1);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+      await _settleFiles(tester);
     },
     variant: const TargetPlatformVariant({TargetPlatform.android}),
   );
