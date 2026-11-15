@@ -57,8 +57,18 @@ void main() {
   late ValueNotifier<Sample?> core;
   late DateTime now;
   late PowerWaits waits;
+  var built = false;
 
   setUp(() {
+    built = false;
+    now = DateTime.utc(2026, 10, 26, 12);
+  });
+
+  // Built inside the test's fake-async zone, so the engine's events reach
+  // the controllers there and the timers they arm follow the test clock.
+  void build() {
+    if (built) return;
+    built = true;
     engine = FakeEngineClient();
     admin = AdminController(engine);
     operations = OperationsController(engine);
@@ -69,15 +79,15 @@ void main() {
       apply: (_) {},
     );
     core = ValueNotifier(_core(_bootBefore));
-    now = DateTime.utc(2026, 10, 26, 12);
     waits = PowerWaits(
       core: (_) => core,
       operations: operations,
       now: () => now,
     );
-  });
+  }
 
   tearDown(() async {
+    if (!built) return;
     waits.dispose();
     admin.dispose();
     operations.dispose();
@@ -87,6 +97,7 @@ void main() {
   });
 
   Future<void> pump(WidgetTester tester) async {
+    build();
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -321,6 +332,7 @@ void main() {
   test('a later boot read before the run\'s end is the server back once '
       'the run says the host took the reboot; a failed run leaves no '
       'wait', () async {
+    build();
     const confirmation = ActionConfirmation(
       tier: ConfirmationTier.typedPhrase,
       phrase: 'web-01',

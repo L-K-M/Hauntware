@@ -385,4 +385,62 @@ void main() {
     expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.notBack);
     expect(shown, isFalse);
   });
+
+  testWidgets('the reboot timeout counts from the host taking the run', (
+    tester,
+  ) async {
+    final engine = FakeEngineClient();
+    final operations = OperationsController(engine);
+    final cores = ValueNotifier<Sample?>(null);
+    final waits = PowerWaits(core: (_) => cores, operations: operations);
+    addTearDown(() async {
+      waits.dispose();
+      cores.dispose();
+      operations.dispose();
+      await engine.close();
+    });
+    late bool shown;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PowerWaitsScope(
+          waits: waits,
+          child: Builder(
+            builder: (context) {
+              shown = quickActionsShown(context, _serverId);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    operations.run(
+      'plan-1',
+      const ActionConfirmation(
+        tier: ConfirmationTier.typedPhrase,
+        phrase: 'web-01',
+      ),
+    );
+    waits.start(_serverId, 'plan-1', PowerVerb.reboot);
+    await tester.pump();
+    expect(shown, isTrue);
+
+    // The run is taken only after a full timeout span has passed.
+    await tester.pump(kRebootWaitTimeout + const Duration(minutes: 1));
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.running);
+
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.waiting);
+    expect(shown, isTrue);
+
+    await tester.pump(kRebootWaitTimeout - const Duration(seconds: 1));
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.waiting);
+    await tester.pump(const Duration(seconds: 1));
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.notBack);
+    expect(shown, isFalse);
+  });
 }

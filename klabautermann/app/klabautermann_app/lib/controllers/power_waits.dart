@@ -80,8 +80,9 @@ final class PowerWait {
   final Duration? backAfter;
 
   /// Whether a reboot is still waited for: running, or taken and not yet
-  /// back, or not back in time. The Overview keeps its quick actions
-  /// card for it after admin mode ends (Q1).
+  /// back. The Overview keeps its quick actions card for it after admin
+  /// mode ends (Q1), until the server is back or the wait times out
+  /// ([PowerWaitPhase.notBack] is no longer pending).
   bool get rebootPending =>
       verb == PowerVerb.reboot &&
       (phase == PowerWaitPhase.running || phase == PowerWaitPhase.waiting);
@@ -144,13 +145,7 @@ final class PowerWaits extends ChangeNotifier {
     );
     void onCore() => _onCore(serverId);
     core.addListener(onCore);
-    _follows[serverId] = _Follow(
-      core,
-      onCore,
-      verb == PowerVerb.reboot
-          ? Timer(_timeout, () => _onTimeout(serverId))
-          : null,
-    );
+    _follows[serverId] = _Follow(core, onCore);
     // The run can have ended before the wait began.
     _onRuns();
     notifyListeners();
@@ -203,6 +198,12 @@ final class PowerWaits extends ChangeNotifier {
   void _onTaken(String serverId, PowerWait wait) {
     final backAfter = wait.backAfter;
     if (backAfter == null) {
+      // The timeout counts from the host taking the reboot, not from the
+      // request: a run that queued behind slower actions still gets its
+      // full span before the wait says the server has not answered.
+      if (wait.verb == PowerVerb.reboot) {
+        _follows[serverId]?.armTimeout(_timeout, () => _onTimeout(serverId));
+      }
       _waits[serverId] = wait._to(
         wait.verb == PowerVerb.reboot
             ? PowerWaitPhase.waiting
@@ -276,11 +277,16 @@ final class PowerWaits extends ChangeNotifier {
 /// What a wait listens to: its server's `core` readings, and the timer
 /// that says it has not come back in time.
 final class _Follow {
-  _Follow(this.core, this.onCore, this.timeout);
+  _Follow(this.core, this.onCore);
 
   final ValueListenable<Sample?> core;
   final VoidCallback onCore;
-  final Timer? timeout;
+  Timer? timeout;
+
+  void armTimeout(Duration after, void Function() onTimeout) {
+    timeout?.cancel();
+    timeout = Timer(after, onTimeout);
+  }
 
   void cancel() {
     core.removeListener(onCore);
