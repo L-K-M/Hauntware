@@ -6,6 +6,9 @@ import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'json_file.dart';
+import 'save_as_folders.dart';
+
+export 'save_as_folders.dart' show SaveAsFolders;
 
 /// What the user chose, as one immutable value.
 ///
@@ -25,6 +28,7 @@ final class AppSettings {
     this.saveOptions = const TextSaveOptions(),
     this.sidebarVisible = true,
     this.sidebarWidth = defaultSidebarWidth,
+    this.saveAsFolders = const SaveAsFolders(),
   });
 
   /// Bounds a stored size so a bad file cannot make the editor unreadable.
@@ -100,6 +104,10 @@ final class AppSettings {
   /// logical pixels. New windows and a relaunch start from it.
   final double sidebarWidth;
 
+  /// Where Save As opens for a document without a folder of its own. Kept
+  /// on this device with Open Recent, and cleared with it.
+  final SaveAsFolders saveAsFolders;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     int? fontSize,
@@ -111,6 +119,7 @@ final class AppSettings {
     TextSaveOptions? saveOptions,
     bool? sidebarVisible,
     double? sidebarWidth,
+    SaveAsFolders? saveAsFolders,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontSize: fontSize ?? this.fontSize,
@@ -122,6 +131,7 @@ final class AppSettings {
     saveOptions: saveOptions ?? this.saveOptions,
     sidebarVisible: sidebarVisible ?? this.sidebarVisible,
     sidebarWidth: sidebarWidth ?? this.sidebarWidth,
+    saveAsFolders: saveAsFolders ?? this.saveAsFolders,
   );
 
   Map<String, Object?> toJson() => {
@@ -141,6 +151,7 @@ final class AppSettings {
     // The defaults need no keys: an older file stays valid unchanged.
     if (!sidebarVisible) 'sidebarVisible': false,
     if (sidebarWidth != defaultSidebarWidth) 'sidebarWidth': sidebarWidth,
+    if (!saveAsFolders.isEmpty) 'saveAsFolders': saveAsFolders.toJson(),
   };
 
   /// Read a stored document, falling back field by field. One bad value costs
@@ -167,6 +178,7 @@ final class AppSettings {
           : fallback.sidebarVisible,
       sidebarWidth:
           _sidebarWidth(json['sidebarWidth']) ?? fallback.sidebarWidth,
+      saveAsFolders: SaveAsFolders.fromJson(json['saveAsFolders']),
     );
   }
 
@@ -242,6 +254,7 @@ final class AppSettings {
       other.saveOptions == saveOptions &&
       other.sidebarVisible == sidebarVisible &&
       other.sidebarWidth == sidebarWidth &&
+      other.saveAsFolders == saveAsFolders &&
       _listsEqual(other.recentTextTools, recentTextTools) &&
       _listsEqual(other.recentDocuments, recentDocuments);
 
@@ -262,6 +275,7 @@ final class AppSettings {
     saveOptions,
     sidebarVisible,
     sidebarWidth,
+    saveAsFolders,
     jsonEncode(recentTextTools),
     Object.hashAll(recentDocuments),
   );

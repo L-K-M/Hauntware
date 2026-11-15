@@ -287,6 +287,18 @@ class _DocumentShellState extends State<_DocumentShell>
     final value = settings.value;
     workspace.indentationPreference = value.indentation;
     workspace.saveOptions = value.saveOptions;
+    workspace.saveAsFolders = value.saveAsFolders;
+    workspace.onSavedToChosenPath = _rememberSaveAsFolder;
+  }
+
+  /// Remembers the folder a save just went to, for where Save As opens on
+  /// documents that have none (A3). Android paths are provider identities,
+  /// not folders, and its picker opens where the provider decides.
+  void _rememberSaveAsFolder(String path) {
+    if (android) return;
+    final next = settings.value.saveAsFolders.recorded(path);
+    if (next == settings.value.saveAsFolders) return;
+    unawaited(settings.update(settings.value.copyWith(saveAsFolders: next)));
   }
 
   void _settingsChanged() {
@@ -432,7 +444,14 @@ class _DocumentShellState extends State<_DocumentShell>
       _Command(
         'Clear Menu',
         () => unawaited(
-          settings.update(settings.value.copyWith(recentDocuments: const [])),
+          // The remembered Save As folders name the same places, so a
+          // clear for privacy takes them too.
+          settings.update(
+            settings.value.copyWith(
+              recentDocuments: const [],
+              saveAsFolders: const SaveAsFolders(),
+            ),
+          ),
         ),
         enabled: unlocked,
         id: 'clearRecentDocuments',
