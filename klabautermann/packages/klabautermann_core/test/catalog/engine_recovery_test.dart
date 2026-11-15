@@ -53,7 +53,7 @@ void main() {
       keystore: keystore,
       enrolled: () => false,
     );
-    recovery = EngineRecovery(vault, keystore);
+    recovery = EngineRecovery(vault);
   });
 
   tearDown(() => support.deleteSync(recursive: true));
@@ -75,7 +75,7 @@ void main() {
       other,
       otherKeystore,
       otherVault,
-      EngineRecovery(otherVault, otherKeystore),
+      EngineRecovery(otherVault),
     );
   }
 

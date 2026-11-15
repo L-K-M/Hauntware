@@ -368,9 +368,9 @@ void engineMain(
   );
 
   // CRED-05's recovery operations over the same vault, with the master
-  // key resolved through the same keystore responder and the vault's
-  // exclusive queue (03 §4.5).
-  final recovery = EngineRecovery(vault, keystore);
+  // key resolved through the vault (so through the same keystore
+  // responder) and its exclusive queue (03 §4.5).
+  final recovery = EngineRecovery(vault);
 
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).

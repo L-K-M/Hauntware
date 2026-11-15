@@ -102,6 +102,27 @@ final class EngineVault {
     return run;
   }
 
+  /// The keystore's master key, after settling against it a re-key an
+  /// earlier process left (the store's `VaultRekeyJournal`): a crash
+  /// between a re-key's keystore write and its settle leaves the journal
+  /// behind, and the staged generation this key opens wins, as at
+  /// Séance's and Poltergeist's startup. Null when the keystore gave no
+  /// key (a locked app, say); the journal then stays for the next read.
+  ///
+  /// Every engine read of the master key goes through this, so the first
+  /// one after launch settles, which at a normal launch is the app's
+  /// startup pin-conflict read. The engine cannot ask the keystore by
+  /// itself at startup: a request before the app's keystore binding
+  /// listens reaches another listener and is never answered. A re-key
+  /// this process is still running is left alone (the store defers to
+  /// it), and a shared directory, which the engine never writes (D63),
+  /// is never settled.
+  Future<List<int>?> settledMasterKey() async {
+    final key = await _keystore.readMasterKey();
+    if (key != null && exclusiveAccess) await store.settleRekey(key);
+    return key;
+  }
+
   /// Whether the vault file, or a re-key staged for it, exists.
   Future<bool> exists() async =>
       await _file.exists() || await File('${_file.path}.rekey').exists();
@@ -115,7 +136,7 @@ final class EngineVault {
     if (_access != SupportDirectoryAccess.exclusive) return null;
     if (!await exists()) return null;
 
-    final key = await _keystore.readMasterKey();
+    final key = await settledMasterKey();
     if (key == null) {
       throw const VaultUnavailableException(
         VaultUnavailableReason.keystoreUnavailable,
@@ -147,7 +168,7 @@ final class EngineVault {
   /// port cannot tell "none" from "could not answer", so a key it failed
   /// to return is replaced only when that loses nothing.
   Future<List<int>> _masterKey() async {
-    final key = await _keystore.readMasterKey();
+    final key = await settledMasterKey();
     if (key != null) return key;
     if (await exists() || _enrolled()) {
       throw const VaultUnavailableException(
