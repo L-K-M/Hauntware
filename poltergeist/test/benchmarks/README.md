@@ -491,6 +491,40 @@ enforcement flags enabled after this refresh, without drift-skipping.
 Thresholds, minimum repetitions, landed flags, enforcement, and the
 Dart 3.13.4 job pin are unchanged.
 
+## Baseline refresh: runner image rotation (2026-11-15)
+
+Main run 43627319868 first reported the controlled `ubuntu-latest`
+rotation from `20261101.186.1` to `20261111.196.1`, and main run
+43649654883 failed on that stale axis with `BENCH_ENFORCE_B` set. That run
+is the only main run on the new image that shares the complete recorded
+fingerprint, including `AMD EPYC 7763 64-Core Processor`. The other
+samples come from `ci.yml` dispatches on the side branch
+`bench/d12-sample` at main's tip af3f165dc: runs 43673357513 and
+43675483012. Run 43649654883 measured ea74a726f; the one merge between
+the two tips only touches Séance store code. A side-branch dispatch never
+writes drift state, and each was cancelled only after its D12 job uploaded
+`bench-results`. The scenario configs are unchanged. Pooled medians: P1
+1067.420 ms (n=9), P2 13465.021 ms (n=9), and P4 48.936 ms (n=15). P6
+still has no entry: all nine rows errored at 759 to 822 captured frames
+against the required minimum of 1800.
+
+The fleet stayed mixed, and nine side dispatches yielded two matching
+runs. Main runs 43635158639, 43641916028, and 43657890953 carried the new
+image on `AMD EPYC 9V74`, and 43627319868 on `AMD EPYC 9V45`. Side runs
+43664174671 and 43666840863 ran on `AMD EPYC 9V74`, 43671232226 on
+`AMD EPYC 9V45`, and 43661972006 on `Intel(R) Xeon(R) 6973P-C`; 43657275190,
+43660114398, and 43669106641 reported a different image,
+`ubuntu-latest@20261111.82.6`, on `Intel(R) Xeon(R) 6975P-C`. All were
+excluded. Main run 43405063032, the last before the rotation, still
+carried `20261101.186.1`. P5's first file stays `entry-04105.txt` on the
+new image, so its calibrated config is unchanged. The pooled tier-A
+medians are P3 601.635 ms, P5 601.597 ms, and P7 16803.105 entries/s
+(n=15 each); all pass the unchanged budgets. Each included artifact passes
+all six landed comparisons with both enforcement flags set after this
+refresh, without drift-skipping. Only the shared runner-image calibration
+moves. Thresholds, landed flags, enforcement, and per-scenario configs
+are unchanged.
+
 ## Baseline refresh: runner image rotation (2026-10-31)
 
 Main run 40489638863 exposed the controlled `ubuntu-latest` rotation from
