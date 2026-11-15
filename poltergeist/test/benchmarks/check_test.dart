@@ -1153,7 +1153,7 @@ void main() {
       expect(calibration, isNotNull);
       expect(
         calibration!.runnerImage,
-        'ubuntu-latest@20261101.186.1',
+        'ubuntu-latest@20261111.196.1',
       );
       expect(calibration.arch, 'linux_x64');
       expect(
@@ -1285,7 +1285,7 @@ void main() {
       expect(baseline.fingerprint.dartVersion, isNotNull);
       expect(
         baseline.fingerprint.runnerImage,
-        'ubuntu-latest@20261101.186.1',
+        'ubuntu-latest@20261111.196.1',
       );
       expect(baseline.fingerprint.arch, isNotNull);
       expect(baseline.fingerprint.cpuModel, isNotNull);
@@ -1337,19 +1337,19 @@ void main() {
       // Pin values too so an edited median, repetition count, or config
       // fails alongside a dropped or fabricated entry. The configs are
       // the ones the cited pooled artifacts actually recorded.
-      expect(baseline.scenarios['P1']!.median, 1211.403);
+      expect(baseline.scenarios['P1']!.median, 1067.42);
       expect(baseline.scenarios['P1']!.repetitions, 9);
       expect(
         baseline.scenarios['P1']!.scenarioConfig,
         'local-entries-10000-first-paint',
       );
-      expect(baseline.scenarios['P2']!.median, 12916.379);
+      expect(baseline.scenarios['P2']!.median, 13465.021);
       expect(baseline.scenarios['P2']!.repetitions, 9);
       expect(
         baseline.scenarios['P2']!.scenarioConfig,
         'local-entries-100000-first-paint',
       );
-      expect(baseline.scenarios['P4']!.median, 48.81);
+      expect(baseline.scenarios['P4']!.median, 48.936);
       expect(baseline.scenarios['P4']!.repetitions, 15);
       expect(
         baseline.scenarios['P4']!.scenarioConfig,
