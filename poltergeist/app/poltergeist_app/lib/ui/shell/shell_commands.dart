@@ -63,18 +63,7 @@ List<ShortcutActivator> Function(TargetPlatform) _perPlatform({
 PaneController? _otherPaneTarget(WorkspaceController workspace) =>
     otherPaneTarget(workspace, workspace.activePane);
 
-/// The roots a selection verb acts on: the selected rows, else the
-/// cursor row (Finder's "the focused item is the selection" rule). A row
-/// inside a selected folder is not a root of its own (02 §2.5).
-List<String> _selectionRoots(PaneController pane) {
-  final selected = pane.selectedRoots;
-  if (selected.isNotEmpty) return [for (final e in selected) e.path];
-  final cursor = pane.cursorIndex;
-  if (cursor == null || cursor < 0 || cursor >= pane.entries.length) {
-    return const [];
-  }
-  return [pane.entries[cursor].path];
-}
+List<String> _selectionRoots(PaneController pane) => paneSelectionRoots(pane);
 
 /// Whether Copy/Move to Other Pane can run now: both panes bound, a
 /// non-empty selection, a queue to receive it, and a drop the 02 §5.1

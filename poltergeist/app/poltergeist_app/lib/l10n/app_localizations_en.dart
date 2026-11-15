@@ -8402,9 +8402,57 @@ class AppLocalizationsEn extends AppLocalizations {
   String get compactSelectionClear => 'Clear selection';
 
   @override
-  String compactActionCopyTo(String pane) {
-    return 'Copy to $pane';
+  String get compactActionCopyTo => 'Copy to…';
+
+  @override
+  String compactCopyToTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Copy $count items',
+      one: 'Copy 1 item',
+    );
+    return '$_temp0';
   }
+
+  @override
+  String get compactCopyToHost => 'Host';
+
+  @override
+  String get compactCopyToFolder => 'Folder';
+
+  @override
+  String get compactCopyToConfirm => 'Copy';
+
+  @override
+  String compactCopyToConfirmSemantics(String host, String folder) {
+    return 'Copy to $host, $folder';
+  }
+
+  @override
+  String get compactCopyToChangeFolder => 'Change folder';
+
+  @override
+  String get compactCopyToNotAllowed =>
+      'Choose a folder outside the items you are copying.';
+
+  @override
+  String get compactFolderPickerTitle => 'Choose a folder';
+
+  @override
+  String get compactFolderPickerUp => 'Enclosing folder';
+
+  @override
+  String get compactFolderPickerChoose => 'Use this folder';
+
+  @override
+  String get compactFolderPickerEmpty => 'No folders here';
+
+  @override
+  String get compactFolderPickerFailed => 'This folder can\'t be listed.';
+
+  @override
+  String get compactFolderPickerRetry => 'Retry';
 
   @override
   String compactActionMoveTo(String pane) {

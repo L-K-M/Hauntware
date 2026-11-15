@@ -10871,14 +10871,74 @@
   "@compactSelectionClear": {
     "description": "D32 §9: tooltip of the ✕ that leaves selection mode."
   },
-  "compactActionCopyTo": "Copy to {pane}",
+  "compactActionCopyTo": "Copy to…",
   "@compactActionCopyTo": {
-    "description": "D32 §9: selection bar label of Copy to Other Pane, naming the other pane's letter, e.g. 'Copy to B'.",
+    "description": "UI-06: selection bar label of Copy to Other Pane on phones. The ellipsis says a confirmation sheet naming the destination host and folder opens first."
+  },
+  "compactCopyToTitle": "{count, plural, =1{Copy 1 item} other{Copy {count} items}}",
+  "@compactCopyToTitle": {
+    "description": "UI-06: title of the Copy to… confirmation sheet.",
     "placeholders": {
-      "pane": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "compactCopyToHost": "Host",
+  "@compactCopyToHost": {
+    "description": "UI-06: caption above the destination host (a server name, or This device) in the Copy to… sheet."
+  },
+  "compactCopyToFolder": "Folder",
+  "@compactCopyToFolder": {
+    "description": "UI-06: caption above the destination folder path in the Copy to… sheet."
+  },
+  "compactCopyToConfirm": "Copy",
+  "@compactCopyToConfirm": {
+    "description": "UI-06: the Copy to… sheet's button that queues the copy into the shown host and folder."
+  },
+  "compactCopyToConfirmSemantics": "Copy to {host}, {folder}",
+  "@compactCopyToConfirmSemantics": {
+    "description": "UI-06: screen reader label of the Copy button, naming the full destination.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "folder": {
         "type": "String"
       }
     }
+  },
+  "compactCopyToChangeFolder": "Change folder",
+  "@compactCopyToChangeFolder": {
+    "description": "UI-06: the Copy to… sheet's button that opens a folder picker on the destination host."
+  },
+  "compactCopyToNotAllowed": "Choose a folder outside the items you are copying.",
+  "@compactCopyToNotAllowed": {
+    "description": "UI-06: shown in the Copy to… sheet, with Copy disabled, when the chosen folder is one of the copied folders or inside one."
+  },
+  "compactFolderPickerTitle": "Choose a folder",
+  "@compactFolderPickerTitle": {
+    "description": "UI-06: title of the destination folder picker opened by Change folder."
+  },
+  "compactFolderPickerUp": "Enclosing folder",
+  "@compactFolderPickerUp": {
+    "description": "UI-06: tooltip of the folder picker's button that goes to the parent folder."
+  },
+  "compactFolderPickerChoose": "Use this folder",
+  "@compactFolderPickerChoose": {
+    "description": "UI-06: the folder picker's button that picks the folder it shows."
+  },
+  "compactFolderPickerEmpty": "No folders here",
+  "@compactFolderPickerEmpty": {
+    "description": "UI-06: the folder picker's message for a folder without subfolders."
+  },
+  "compactFolderPickerFailed": "This folder can't be listed.",
+  "@compactFolderPickerFailed": {
+    "description": "UI-06: the folder picker's message when the folder's listing failed; a Retry button follows."
+  },
+  "compactFolderPickerRetry": "Retry",
+  "@compactFolderPickerRetry": {
+    "description": "UI-06: the folder picker's button that lists the folder again after a failure."
   },
   "compactActionMoveTo": "Move to {pane}",
   "@compactActionMoveTo": {
