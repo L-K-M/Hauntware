@@ -616,15 +616,14 @@ void main() {
   });
 
   test('a limited case fold is reported instead of hidden', () {
-    // Unicode full folding expands ŉ to "ʼn", which changes length. The
-    // search expands ß itself, but a host fold that changes a run's length
-    // cannot be mapped back; the editor must then say the search was not
-    // the case-insensitive one the user asked for.
-    String fullFold(String value) => value.replaceAll('\u0149', '\u02bcn');
+    // The search expands Unicode's full folds itself, but a host fold that
+    // changes a run's length cannot be mapped back; the editor must then
+    // say the search was not the case-insensitive one the user asked for.
+    String lengthening(String value) => value.replaceAll('x', 'xx');
     final editor = EditorController(
       displayPath: 'notes.txt',
-      initialText: 'Die \u0149 Stra\u00dfe ist breit',
-      caseFolder: fullFold,
+      initialText: 'Die x Stra\u00dfe ist breit',
+      caseFolder: lengthening,
     );
     addTearDown(editor.dispose);
     editor.openSearch();
@@ -648,7 +647,7 @@ void main() {
     final closed = EditorController(
       displayPath: 'notes.txt',
       initialText: 'x',
-      caseFolder: fullFold,
+      caseFolder: lengthening,
     );
     addTearDown(closed.dispose);
     closed.openSearch();
