@@ -10,12 +10,12 @@ import 'package:ghost_keystore/app_lock.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/app_settings.dart';
-import 'package:seance_app/services/file_stores.dart';
 import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/services/secure_master_key.dart';
 import 'package:seance_app/services/secrets_recovery.dart';
 import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_app/services/xterm_engine.dart';
+import 'package:seance_core/catalog.dart' show FileVaultStore;
 import 'package:seance_core/seance_core.dart';
 
 import 'support/device_authenticator.dart';

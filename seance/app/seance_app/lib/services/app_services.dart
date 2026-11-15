@@ -8,10 +8,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/catalog.dart'
     show
         ConflictAwareHostKeyStore,
+        FileVaultStore,
         HostKeyConflict,
         PersistentLocalRecordStore,
+        StagedVaultRekey,
         SyncAccountScope,
-        VaultRecovery;
+        VaultRecovery,
+        VaultRekeyJournal,
+        VaultRekeyOutcome;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
@@ -339,7 +343,7 @@ class AppServices {
     final probed = vaultKey;
     if (probed != null) {
       try {
-        await _settleRekey(vaultStore, probed);
+        await _settleRekey(vaultStore.settleRekey(probed));
       } catch (error, stackTrace) {
         developer.log(
           'Could not settle a pending vault re-key; starting with a locked '
@@ -485,7 +489,7 @@ class AppServices {
     // last run left staged, and it has to happen before the key is adopted:
     // the generation the vault opens with has to be the one this key seals.
     try {
-      await _settleRekey(_rekeyJournal, key);
+      await _settleRekey(_rekeyJournal.settleRekey(key));
     } catch (error, stackTrace) {
       developer.log(
         'Could not settle a pending vault re-key; the vault stays locked and '
@@ -502,16 +506,16 @@ class AppServices {
     return true;
   }
 
-  /// Settle a staged re-key against [key], the one the OS keystore holds.
+  /// The outcome of [settling], a staged re-key settled against the key the
+  /// OS keystore holds.
   ///
   /// A discarded journal is the outcome worth logging: the vault survives, but
   /// a staged generation was dropped because no key on offer opened it, and
   /// nothing else would explain the credentials that went with it.
   static Future<VaultRekeyOutcome> _settleRekey(
-    VaultRekeyJournal journal,
-    List<int> key,
+    Future<VaultRekeyOutcome> settling,
   ) async {
-    final outcome = await journal.settleRekey(key);
+    final outcome = await settling;
     if (outcome == VaultRekeyOutcome.discarded) {
       developer.log(
         'A staged vault re-key matched neither generation the OS keyring '
@@ -636,19 +640,29 @@ class AppServices {
     // from a vault it could not read.
     if (currentKey == null) throw const VaultLockedException();
     await appLock.requireUnlocked();
-    await _rekeyJournal.stageRekey(currentKey: currentKey, newKey: newKey);
+    // Until this re-key settles or is released, another settle in this
+    // process (an unlock retry) leaves the journal alone.
+    final staged = await _rekeyJournal.stageRekey(
+      currentKey: currentKey,
+      newKey: newKey,
+    );
     try {
-      // The keystore is the only place the new key survives a restart, and it
-      // can refuse outright: a locked keyring throws here, which is why the
-      // rest of this class treats that as a state to recover from rather than
-      // a crash. Nothing needs rolling back if it does: staging left the vault
-      // file on the generation the installed key still opens.
-      await masterKeys.setKeystoreKey(newKey);
-    } catch (_) {
-      await _adoptInstalledKey();
-      rethrow;
+      try {
+        // The keystore is the only place the new key survives a restart, and
+        // it can refuse outright: a locked keyring throws here, which is why
+        // the rest of this class treats that as a state to recover from
+        // rather than a crash. Nothing needs rolling back if it does: staging
+        // left the vault file on the generation the installed key still
+        // opens.
+        await masterKeys.setKeystoreKey(newKey);
+      } catch (_) {
+        await _adoptInstalledKey(staged);
+        rethrow;
+      }
+      await _settleRekey(staged.settle(newKey));
+    } finally {
+      staged.release();
     }
-    await _settleRekey(_rekeyJournal, newKey);
     vault = _credentialVault(vault.store, newKey);
     vaultKey = newKey;
   }
@@ -759,12 +773,17 @@ class AppServices {
   /// Only the caller's keystore error is worth reporting, so a failure here is
   /// logged and swallowed; it leaves the journal on disk, which is exactly
   /// what the next launch settles from.
-  Future<void> _adoptInstalledKey() async {
+  ///
+  /// [staged] is the re-key this process staged and still owns, which only
+  /// its own settle resolves; without one, this settles whatever journal an
+  /// earlier attempt left.
+  Future<void> _adoptInstalledKey([StagedVaultRekey? staged]) async {
     try {
       final installed = await masterKeys.readKeystoreKey();
       if (installed == null) return;
-      if (await _settleRekey(_rekeyJournal, installed) !=
-          VaultRekeyOutcome.adopted) {
+      final settling =
+          staged?.settle(installed) ?? _rekeyJournal.settleRekey(installed);
+      if (await _settleRekey(settling) != VaultRekeyOutcome.adopted) {
         return;
       }
       vault = _credentialVault(vault.store, installed);

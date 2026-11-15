@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:klabautermann_core/src/catalog/sync_credentials.dart';
 import 'package:seance_core/catalog.dart'
-    show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
+    show FileVaultStore, StagedVaultRekey, VaultRekeyJournal, VaultRekeyOutcome;
 import 'package:seance_core/seance_core.dart'
     show Secret, SecretKind, SecretVault, secureRandomBytes;
 import 'package:test/test.dart';
@@ -74,13 +74,18 @@ final class _LoggingJournal implements VaultRekeyJournal {
   bool failSettlesAfterStage = false;
   bool _staged = false;
 
+  /// Whether the last staged re-key was released.
+  bool released = false;
+
   @override
-  Future<void> stageRekey({
+  Future<StagedVaultRekey> stageRekey({
     required List<int> currentKey,
     required List<int> newKey,
   }) async {
     log.add('stage ${currentKey.first}->${newKey.first}');
     _staged = true;
+    released = false;
+    return _LoggingStaged(this);
   }
 
   @override
@@ -91,6 +96,20 @@ final class _LoggingJournal implements VaultRekeyJournal {
     }
     return VaultRekeyOutcome.none;
   }
+}
+
+/// The staged re-key [_LoggingJournal] hands out; its settles log like the
+/// journal's own.
+final class _LoggingStaged implements StagedVaultRekey {
+  _LoggingStaged(this._journal);
+
+  final _LoggingJournal _journal;
+
+  @override
+  Future<VaultRekeyOutcome> settle(List<int> key) => _journal.settleRekey(key);
+
+  @override
+  void release() => _journal.released = true;
 }
 
 List<int> _key(int first) => [first, ...List.filled(31, 0)];
@@ -162,6 +181,7 @@ void main() {
       () async {
         await store.writeVaultKey(_key(2));
         expect(journal.log, ['settle 1', 'stage 1->2', 'settle 2']);
+        expect(journal.released, isTrue);
         expect(keystore.masterKey, _key(2));
         expect(keystore.log, [
           'read klabautermann.vault.masterKey.v1',
@@ -210,6 +230,8 @@ void main() {
       );
       await expectLater(failing.writeVaultKey(_key(2)), throwsStateError);
       expect(journal.log, ['settle 1', 'stage 1->2']);
+      // Released, so a later settle in this process can resolve it.
+      expect(journal.released, isTrue);
       expect(keystore.masterKey, _key(1));
     });
 

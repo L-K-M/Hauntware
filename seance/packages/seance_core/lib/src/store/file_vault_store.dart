@@ -21,6 +21,11 @@ enum VaultRekeyOutcome {
   /// The installed key opened neither staged generation, so the journal was
   /// moved aside and the stored vault stands.
   discarded,
+
+  /// This process staged the journal and has not finished its re-key, so the
+  /// call changed nothing: only the re-key's own [StagedVaultRekey] settles
+  /// it.
+  deferred,
 }
 
 /// Crash recovery for a vault re-key, which has to change two stores that no
@@ -34,17 +39,44 @@ enum VaultRekeyOutcome {
 /// whichever key the keystore ends up holding, [settleRekey] can still find
 /// the matching one. Only a store that outlives the process needs this: an
 /// in-memory vault dies with the keystore write that failed.
+///
+/// While this process's own re-key is between [stageRekey] and its
+/// [StagedVaultRekey.settle], [settleRekey] is a no-op
+/// ([VaultRekeyOutcome.deferred]). A read path that settles before every
+/// vault access (Poltergeist's) would otherwise run inside that window,
+/// while the keystore still holds the old key, adopt the old generation and
+/// clear the journal; the keystore then takes the new key, and the vault no
+/// longer opens.
 abstract interface class VaultRekeyJournal {
   /// Record both generations of the vault, the current one and the one sealed
   /// under [newKey], before the OS keystore is asked to adopt [newKey].
-  Future<void> stageRekey({
+  ///
+  /// The caller owns the returned re-key: it settles it through
+  /// [StagedVaultRekey.settle] and releases it on every path.
+  Future<StagedVaultRekey> stageRekey({
     required List<int> currentKey,
     required List<int> newKey,
   });
 
-  /// Resolve a staged re-key against [key], the one the OS keystore actually
-  /// holds, and clear the journal. Always resolves: see [VaultRekeyOutcome].
+  /// Resolve a journal against [key], the one the OS keystore actually
+  /// holds, and clear it: the recovery path for a journal an earlier
+  /// process left. Always resolves: see [VaultRekeyOutcome].
   Future<VaultRekeyOutcome> settleRekey(List<int> key);
+}
+
+/// A re-key this process staged and has not finished. Until it is settled or
+/// released, [VaultRekeyJournal.settleRekey] leaves the journal alone.
+abstract interface class StagedVaultRekey {
+  /// Resolve the staged journal against [key], the key the OS keystore holds
+  /// after this re-key's keystore write, as [VaultRekeyJournal.settleRekey]
+  /// does. A completed settle ends the re-key; one that throws leaves it
+  /// staged for [release] to hand over to recovery.
+  Future<VaultRekeyOutcome> settle(List<int> key);
+
+  /// End this process's claim on the journal, leaving whatever is staged on
+  /// disk for [VaultRekeyJournal.settleRekey]. Call it on every path out of
+  /// the re-key; it does nothing once the re-key has been settled.
+  void release();
 }
 
 /// JSON-file [VaultStore] holding only opaque, already-encrypted blobs
@@ -59,13 +91,20 @@ abstract interface class VaultRekeyJournal {
 ///
 /// Moved from Poltergeist's app `file_stores.dart`
 /// (docs/design/catalog-library.md section 8), which ported it from
-/// Séance's app store; poltergeist/docs/PORTS.md records the port.
+/// Séance's app store; poltergeist/docs/PORTS.md records the port. The
+/// Séance app's own copy was folded in later, bringing its settle-failure
+/// cache restore.
 class FileVaultStore implements VaultStore, VaultRekeyJournal {
   final File file;
   final Map<String, String> _blobs = {}; // id -> base64
   Future<void>? _loading;
   Future<void> _pending = Future<void>.value();
   Map<String, String>? _rekeySnapshots;
+
+  /// The re-key this process staged and still owns, which [settleRekey]
+  /// defers to. Only [stageRekey] sets it, so a journal found on disk at
+  /// load belongs to recovery.
+  _StagedFileVaultRekey? _ownedRekey;
 
   FileVaultStore(this.file);
 
@@ -296,7 +335,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   /// place: a second re-key while one is pending would drop the generations
   /// the first one is the only record of.
   @override
-  Future<void> stageRekey({
+  Future<StagedVaultRekey> stageRekey({
     required List<int> currentKey,
     required List<int> newKey,
   }) => _serialize(() async {
@@ -323,6 +362,9 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
       privacy: AtomicFilePrivacy.ownerOnly,
     );
     _rekeySnapshots = snapshots;
+    // Set in the same queue slot as the journal, so no settle queued behind
+    // this one can see the journal without also seeing its owner.
+    return _ownedRekey = _StagedFileVaultRekey(this);
   });
 
   /// Adopt whichever staged generation [key] opens, then clear the journal.
@@ -334,6 +376,11 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   /// otherwise do. The stored vault is untouched either way.
   @override
   Future<VaultRekeyOutcome> settleRekey(List<int> key) => _serialize(() async {
+    if (_ownedRekey != null) return VaultRekeyOutcome.deferred;
+    return _settle(key);
+  });
+
+  Future<VaultRekeyOutcome> _settle(List<int> key) async {
     final snapshots = _rekeySnapshots;
     if (snapshots == null) return VaultRekeyOutcome.none;
     final Map<String, String> blobs;
@@ -348,17 +395,50 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
       _rekeySnapshots = null;
       return VaultRekeyOutcome.discarded;
     }
-    _blobs
-      ..clear()
-      ..addAll(blobs);
-    // The cache is not restored if the flush fails: it now holds the
-    // generation [key] opens, which is the one this session has to read
-    // with. The journal stays on disk for the next launch to settle again,
-    // and lands on the same generation because the installed key has not
-    // changed.
-    await _flush();
-    if (await _rekeyFile.exists()) await _rekeyFile.delete();
+    final previous = Map<String, String>.from(_blobs);
+    try {
+      _blobs
+        ..clear()
+        ..addAll(blobs);
+      await _flush();
+      if (await _rekeyFile.exists()) await _rekeyFile.delete();
+    } catch (_) {
+      // A caller adopts [key] only after settling succeeds (Séance), so keep
+      // the session readable with the key it still holds when persistence or
+      // cleanup fails, even if the vault file already holds the new
+      // generation. The staged snapshots still block mutations and let a
+      // retry or the next launch finish against the key the keystore holds.
+      _blobs
+        ..clear()
+        ..addAll(previous);
+      rethrow;
+    }
     _rekeySnapshots = null;
     return VaultRekeyOutcome.adopted;
-  });
+  }
+}
+
+final class _StagedFileVaultRekey implements StagedVaultRekey {
+  _StagedFileVaultRekey(this._store);
+
+  final FileVaultStore _store;
+
+  bool get _owned => identical(_store._ownedRekey, this);
+
+  @override
+  Future<VaultRekeyOutcome> settle(List<int> key) => _store._serialize(
+    () async {
+      if (!_owned) {
+        throw StateError('This vault re-key is no longer staged.');
+      }
+      final outcome = await _store._settle(key);
+      _store._ownedRekey = null;
+      return outcome;
+    },
+  );
+
+  @override
+  void release() {
+    if (_owned) _store._ownedRekey = null;
+  }
 }

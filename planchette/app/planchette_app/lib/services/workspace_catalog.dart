@@ -294,16 +294,25 @@ class WorkspaceCatalog extends ChangeNotifier {
     for (final blob in (await _vaultStore.allSecretBlobs()).values) {
       await VaultCrypto.openJson(vault.vaultKey, blob);
     }
-    await _vaultStore.stageRekey(currentKey: vault.vaultKey, newKey: key);
+    final staged = await _vaultStore.stageRekey(
+      currentKey: vault.vaultKey,
+      newKey: key,
+    );
     try {
-      await _keys.setKeystoreKey(key);
-    } catch (_) {
-      // A keystore may write and then throw; only its read-back can settle.
-      _vault = null;
-      await _unlockVault();
-      rethrow;
+      try {
+        await _keys.setKeystoreKey(key);
+      } catch (_) {
+        // A keystore may write and then throw; only its read-back can
+        // settle, so hand the journal to the unlock path's settle.
+        _vault = null;
+        staged.release();
+        await _unlockVault();
+        rethrow;
+      }
+      await staged.settle(key);
+    } finally {
+      staged.release();
     }
-    await _vaultStore.settleRekey(key);
     _vault = _ReportingVault(_vaultStore, key);
   }
 
