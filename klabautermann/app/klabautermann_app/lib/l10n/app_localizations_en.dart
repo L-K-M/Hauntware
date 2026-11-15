@@ -10621,6 +10621,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String systemPowerNotBack(String elapsed) {
+    return 'The server has not answered again $elapsed after the reboot. It may still be starting, or need someone at its console.';
+  }
+
+  @override
   String get systemPowerOff =>
       'The server is shutting down. It stays off until someone starts it.';
 

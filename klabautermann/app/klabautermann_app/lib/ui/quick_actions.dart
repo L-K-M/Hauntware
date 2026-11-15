@@ -11,6 +11,7 @@ import 'actions/action_entry.dart';
 import 'actions/action_preview.dart';
 import 'admin_mode_chip.dart' show AdminScope;
 import 'hand_off_actions.dart';
+import 'power.dart' show PowerWaitProgress, PowerWaitsScope, startPowerAction;
 import 'system_panel.dart' show PanelSection;
 
 /// The device's pinned services for the widgets under it; the
@@ -36,14 +37,24 @@ const String _filesRoot = '/';
 
 /// Whether a reboot can be offered for [serverId]: actions are allowed and
 /// admin mode is on, since a power action is planned in admin mode only
-/// (SYS-03, as the System tab's Power section shows it).
+/// (SYS-03, as the System tab's Power section shows it), and no reboot is
+/// already waited for.
 bool _rebootOffered(BuildContext context, String serverId) =>
     actionsAllowedAt(context, serverId, ActionEntryPoint.power) &&
-    AdminScope.maybeOf(context)?.stateFor(serverId)?.phase == AdminModePhase.on;
+    AdminScope.maybeOf(context)?.stateFor(serverId)?.phase ==
+        AdminModePhase.on &&
+    !_rebootPending(context, serverId);
+
+/// Whether a reboot of [serverId] is still waited for, from here or the
+/// System tab.
+bool _rebootPending(BuildContext context, String serverId) =>
+    PowerWaitsScope.maybeOf(context)?.waitFor(serverId)?.rebootPending ?? false;
 
 /// Whether [QuickActionsCard] for [serverId] has anything to offer: a
 /// hand-off this device can make, reboot where actions are allowed and
-/// admin mode is on, or a pinned service to restart. The Overview leaves the card out otherwise.
+/// admin mode is on, a pinned service to restart, or a reboot still waited
+/// for, which keeps the card after admin mode ends with only its progress
+/// (Q1). The Overview leaves the card out otherwise.
 bool quickActionsShown(BuildContext context, String serverId) {
   final launcher = HandOffScope.maybeOf(context);
   final handOff =
@@ -57,7 +68,7 @@ bool quickActionsShown(BuildContext context, String serverId) {
       (PinnedServicesScope.maybeOf(context)?.pinsFor(serverId).isNotEmpty ??
           false) &&
       actionsAllowedAt(context, serverId, ActionEntryPoint.unitVerb);
-  return handOff || reboot || pinned;
+  return handOff || reboot || pinned || _rebootPending(context, serverId);
 }
 
 /// OV-08's quick actions on a server's Overview: a terminal in Séance,
@@ -79,6 +90,8 @@ class QuickActionsCard extends StatelessWidget {
     return PanelSection(
       title: l10n.quickActionsTitle,
       children: [
+        if (PowerWaitsScope.maybeOf(context)?.waitFor(serverId) != null)
+          PowerWaitProgress(serverId: serverId, whileRunning: true),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -122,10 +135,8 @@ class QuickActionsCard extends StatelessWidget {
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.power_settings_new),
                   label: Text(l10n.quickActionsReboot),
-                  onPressed: () => startAction(
-                    context,
-                    PowerAction(serverId, PowerVerb.reboot),
-                  ),
+                  onPressed: () =>
+                      startPowerAction(context, serverId, PowerVerb.reboot),
                 ),
               ),
           ],
