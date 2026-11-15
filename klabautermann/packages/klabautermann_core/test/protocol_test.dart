@@ -104,6 +104,7 @@ void main() {
           encryptionPassphrase: 'pp',
         ),
         const RunSyncRound(),
+        const SignOutSync(requestId: 'out-1'),
         const ReadPinConflicts(),
         const ResolvePinConflict(
           'alpha.example.com:22',

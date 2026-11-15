@@ -5048,6 +5048,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'The host key setting could not be changed.';
 
   @override
+  String get settingsSyncAccountTitle => 'Account';
+
+  @override
+  String settingsSyncAccount(String username, String server) {
+    return 'Signed in as $username on $server';
+  }
+
+  @override
+  String get settingsSyncSignOut => 'Sign out';
+
+  @override
+  String get settingsSyncSignOutTitle => 'Sign out of sync?';
+
+  @override
+  String get settingsSyncSignOutBody =>
+      'This device forgets its sign-in and removes the servers that came from your sync account, with their cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.';
+
+  @override
+  String settingsSyncSignOutOpenConnections(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count servers it removes have open connections, which close.',
+      one: '1 server it removes has an open connection, which closes.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsSyncSignOutCancel => 'Cancel';
+
+  @override
+  String get settingsSyncSignOutFailed =>
+      'Sign-out did not finish. This device is still signed in.';
+
+  @override
   String settingsPinConflictWarning(String locator) {
     return 'A synced host key for $locator conflicts with the key this device trusts. This can mean a man-in-the-middle attack.';
   }

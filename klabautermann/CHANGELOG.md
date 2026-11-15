@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Settings > Sync can sign this device out of the sync account. It asks
+  first and says how many connections it closes, then forgets the
+  sign-in and removes the servers that came from the account, with
+  their saved credentials, cached profiles and history. Servers
+  imported from ~/.ssh/config and host key pins stay, and nothing on
+  the sync server changes.
 - A crash during a sync enrollment's re-key no longer leaves saved
   credentials unreadable until the next enrollment: the engine settles
   the leftover re-key at its first vault read.

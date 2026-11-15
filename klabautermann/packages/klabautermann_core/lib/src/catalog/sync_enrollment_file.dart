@@ -148,6 +148,17 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
     return _save();
   }
 
+  /// Forgets the enrollment, as a sign-out does: the account, the push
+  /// hold, the notices and the pin publication assertion. Throws when the
+  /// file cannot be written.
+  Future<void> clear() {
+    _account = null;
+    _unverified = false;
+    _notices.clear();
+    _pinAssertion = null;
+    return _save();
+  }
+
   static bool _sameAccount(SyncAccount? a, SyncAccount? b) =>
       a?.baseUrl == b?.baseUrl &&
       a?.username == b?.username &&

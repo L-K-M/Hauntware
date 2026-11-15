@@ -65,7 +65,8 @@ void main() {
           KeystoreGetApiKey(:final name) => KeystoreApiKey(
             await keystore.getApiKey(name),
           ),
-          KeystoreDeleteApiKey() => const KeystoreDone(),
+          KeystoreDeleteApiKey(:final name) =>
+            await keystore.deleteApiKey(name).then((_) => const KeystoreDone()),
           KeystoreReadMasterKey() => KeystoreMasterKey(
             switch (keystore.masterKey) {
               final key? => Uint8List.fromList(key),
@@ -209,6 +210,61 @@ void main() {
     final roundStatus = round.last as SyncStatus;
     expect(roundStatus.phase, SyncPhase.succeeded, reason: roundStatus.detail);
     expect(server.pushed, isEmpty, reason: 'nothing was written');
+  });
+
+  test("a sign-out drops the account's servers and rules from the fleet "
+      'before it answers, and keeps the imports', () async {
+    final server = await FakeSyncServer.create();
+    await server.seedServer(fakeServer('srv-a', 'alpha'));
+    await server.seedKlabautermann(
+      KlabautermannRecordType.rule.idOf('rule-a'),
+      encodeSyncedRule(
+        const SyncedRule(
+          id: 'rule-a',
+          rule: ThresholdRule(
+            metric: 'cpu.busy',
+            op: ThresholdOp.greaterThan,
+            raise: ThresholdBound(value: 90),
+            clear: ThresholdBound(value: 80),
+          ),
+        ),
+      ),
+    );
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+    final keystore = MemoryKeystore();
+    client.send(
+      const EnrollSync(
+        baseUrl: 'https://sync.example.com',
+        username: fakeSyncUser,
+        password: fakeSyncPassword,
+        encryptionPassphrase: fakeSyncPassword,
+      ),
+    );
+    await untilSyncEnds(client, events, keystore);
+    client.send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'));
+    while (await events.moveNext()) {
+      if (events.current is SshConfigImported) break;
+    }
+
+    client.send(const SignOutSync(requestId: 'out-1'));
+    final seen = await untilSyncEnds(client, events, keystore);
+
+    final fleet = seen.whereType<CatalogReplaced>().single;
+    expect(seen.indexOf(fleet), lessThan(seen.length - 1));
+    expect(
+      [for (final entry in fleet.entries) (entry.serverId, entry.origin)],
+      [('ssh-config:web', FleetEntryOrigin.sshConfig)],
+    );
+    expect(seen.whereType<AlertRulesChanged>().single.rules, isEmpty);
+    final status = seen.last as SyncStatus;
+    expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+    expect(status.operation, SyncOperation.signOut);
+    expect(status.requestId, 'out-1');
+    expect(status.account, isNull);
+    expect(keystore.apiKeys, isEmpty);
+    expect(server.pushed, isEmpty);
   });
 
   test('a saved server shows in the fleet, confirmed on this device, '

@@ -1076,8 +1076,18 @@ user's retry of a connect. The proposals the owner answered on
   `FleetEntry` values with `origin: synced`, their group, sign-in kind,
   search text and jump route by label, and no connect config, so no link
   dials one before its endpoint is confirmed (4.7, K41). An enrolled
-  device signs in again only to the same account; signing out and
-  switching accounts come later. The app's sign-in (4.3 steps 1 and 2)
+  device signs in again only to the same account; switching accounts
+  comes later. Sign-out (`SignOutSync`, Settings > Sync) matches
+  Poltergeist's: the engine deletes the record store and `servers.json`,
+  clears the synced preferences, rules, snippets and the enrollment,
+  deletes the vault entries the account's servers named and then the
+  session token, and the fleet refresh drops those servers with their
+  links, cached profiles and history. Imports, host-key pins, endpoint
+  confirmations and the vault master key stay; nothing reaches the
+  server. The catalog goes before the enrollment, so an interrupted
+  sign-out leaves the device enrolled rather than holding records a
+  later enrollment would push. The app confirms first and names the
+  open connections it closes. The app's sign-in (4.3 steps 1 and 2)
   sends nothing before the fleet assertion is ticked, so no record is
   pulled before it. *Rejected:* sync in the request queue (one sign-in
   would hold every connect and subscription for its network round trips

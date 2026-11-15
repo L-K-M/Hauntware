@@ -358,6 +358,9 @@ import '../operations/plan_types.dart';
 /// [ConfirmEndpoints] then gained `shown`, the endpoints the user looked
 /// at as [ShownEndpoint]s, within v3 the same way (03 §4.7, SAF-09): the
 /// engine confirms no server whose endpoint changed since.
+///
+/// Sync sign-out then joined v3 the same way (03 §4.3): the [SignOutSync]
+/// request, answered by [SyncStatus] for the new [SyncOperation.signOut].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -437,6 +440,21 @@ final class EnrollSync extends EngineRequest {
 /// (v1.x, D42).
 final class RunSyncRound extends EngineRequest {
   const RunSyncRound({this.requestId});
+
+  /// Echoed by the [SyncStatus] events that answer this request.
+  final String? requestId;
+}
+
+/// Signs this device out of the enrolled account (03 §4.3), as
+/// Poltergeist's sign-out does: the engine forgets the session token, the
+/// enrollment and the account's records, removes the servers that came
+/// from the account with their vault entries, and drops their cached
+/// profiles, history and links. The imported servers and the host-key
+/// pins stay, and nothing on the sync server changes. Answered by
+/// [SyncStatus] events for [SyncOperation.signOut], and the fleet in a
+/// [CatalogReplaced] when it succeeds.
+final class SignOutSync extends EngineRequest {
+  const SignOutSync({this.requestId});
 
   /// Echoed by the [SyncStatus] events that answer this request.
   final String? requestId;
@@ -1879,9 +1897,9 @@ final class SyncStatus extends EngineEvent {
   final SyncPhase phase;
   final SyncOperation operation;
 
-  /// The id of the [EnrollSync] or [RunSyncRound] this operation answers;
-  /// null for a round the engine started itself, or a request sent
-  /// without one.
+  /// The id of the [EnrollSync], [RunSyncRound] or [SignOutSync] this
+  /// operation answers; null for a round the engine started itself, or a
+  /// request sent without one.
   final String? requestId;
 
   /// The enrolled account as the operation leaves it, or null when this
@@ -7209,6 +7227,9 @@ enum SyncOperation {
 
   /// [RunSyncRound].
   round,
+
+  /// [SignOutSync].
+  signOut,
 }
 
 /// Why a sync operation failed (03 §4.3, §4.5).
@@ -7222,10 +7243,10 @@ enum SyncFailure {
   /// carry this install's authorship.
   noDeviceId,
 
-  /// A round was asked for, but this device is not enrolled.
+  /// A round or sign-out was asked for, but this device is not enrolled.
   notEnrolled,
 
-  /// The device is enrolled in another account; signing out comes later.
+  /// The device is enrolled in another account; sign out first.
   otherAccount,
 
   /// The server address, account name, password or passphrase is not
