@@ -19,6 +19,11 @@ import '../shell/shell_commands.dart'
         kSelectionTransferToOtherPaneCommandId;
 import 'batch_rename_command.dart' show kFileBatchRenameCommandId;
 import 'compare_files_command.dart' show kFileCompareFilesCommandId;
+import 'file_clipboard_commands.dart'
+    show
+        kEditCopyFilesCommandId,
+        kEditCutFilesCommandId,
+        kEditPasteFilesCommandId;
 import 'open_with_commands.dart' show kOpenWithExternalCommandId;
 import 'pane_commands.dart';
 
@@ -43,6 +48,7 @@ const kPaneRowContextMenu = <List<String>>[
     kFileExtractArchiveCommandId,
     kSelectionCopyPathCommandId,
   ],
+  [kEditCutFilesCommandId, kEditCopyFilesCommandId, kEditPasteFilesCommandId],
   [kFileNewFolderCommandId, kFileNewFileCommandId],
   [
     kSelectionTransferToOtherPaneCommandId,
@@ -57,6 +63,7 @@ const kPaneRowContextMenu = <List<String>>[
 /// a selection the pointer did not land on.
 const kPaneEmptyContextMenu = <List<String>>[
   [kFileNewFolderCommandId, kFileNewFileCommandId],
+  [kEditPasteFilesCommandId],
   [kSelectionCopyPathCommandId],
   [kViewToggleHiddenCommandId, kViewRefreshCommandId],
   [kEditSelectAllCommandId],
