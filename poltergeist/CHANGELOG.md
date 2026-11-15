@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Per-extension default editors in Settings.** Settings › Editing
+  lists the extensions bound to their own editor, and you can add or
+  remove one there, not only through Open With › Other…. The editor
+  registry is now shared with Séance (`ghost_editors`); your saved
+  editors carry over unchanged.
 - **Reconnect stops for failures that need you.** A rejected login, a
   refused host key, a key that cannot be read and an invalid route no
   longer retry every 30 seconds, which could trip a server's
