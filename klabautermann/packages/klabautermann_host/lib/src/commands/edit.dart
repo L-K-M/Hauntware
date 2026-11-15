@@ -283,15 +283,28 @@ h=$(sha256sum -- "$1") || { s=$?; rm -f -- "$2"; exit "$s"; }
 if [ "${h%% *}" != "$3" ]; then rm -f -- "$2"; exit 101; fi
 mv -f -- "$2" "$1" || { s=$?; rm -f -- "$2"; exit "$s"; }''';
 
+/// Makes the backup directory `$d`, 0700. [kRootBackupsDir]'s parent
+/// also holds the root operation directory, whose records the login user
+/// reads (03 §7.17: parents 0755), so it is made 0755 first: under the
+/// scripts' `umask 077` alone, a host's first backup would make it 0700
+/// and hide every later root-run operation from the login user.
+const String _kMakeBackupDir =
+    'if [ "\$d" = \'$kRootBackupsDir\' ]; then\n'
+    '  (umask 022 && mkdir -p -- "\${d%/*}") || exit\n'
+    'fi\n'
+    'mkdir -p -- "\$d" && chmod 0700 -- "\$d" || exit\n';
+
 /// Copies the target to `<dir>/<sha256>-<epoch>`, through a temp name so
 /// a partial copy never looks like a backup, and replaces the
 /// [kEditBackupIndexName] with one more line the same way. Prints the
 /// backup's path.
-const String _kBackupScript = r'''
+const String _kBackupScript =
+    r'''
 umask 077
 d=$2
-mkdir -p -- "$d" && chmod 0700 -- "$d" || exit
-h=$(sha256sum -- "$1") || exit
+'''
+    '$_kMakeBackupDir'
+    r'''h=$(sha256sum -- "$1") || exit
 h=${h%% *}
 t=$(date +%s)
 b=$d/$h-$t
@@ -316,13 +329,15 @@ exec crontab "$@" -''';
 /// file, under the name `crontab:<user>` in the index. Its temps carry
 /// the shell's PID, as the file backup's index temp does, so two devices
 /// backing up into one directory never write each other's.
-const String _kCrontabBackupScript = r'''
+const String _kCrontabBackupScript =
+    r'''
 umask 077
 d=$1
 n=$2
 shift 2
-mkdir -p -- "$d" && chmod 0700 -- "$d" || exit
-t=$(date +%s)
+'''
+    '$_kMakeBackupDir'
+    r'''t=$(date +%s)
 c=$d/.crontab.tmp.$$
 crontab -l "$@" > "$c" 2>/dev/null || : > "$c" || exit
 h=$(sha256sum -- "$c") || { s=$?; rm -f -- "$c"; exit "$s"; }

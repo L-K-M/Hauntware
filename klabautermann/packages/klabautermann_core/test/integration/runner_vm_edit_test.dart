@@ -10,9 +10,12 @@
 // `crontab -u <user> -`.
 //
 // Each test seeds the files it edits as root and removes them, the root
-// backups and the root manifest again; runner_vm.sh removes the backups
-// and the manifest too should a run end part-way. It starts the leg and
-// runs these one at a time; without it they skip.
+// backups and the root manifest again, and starts without
+// /var/lib/klabautermann where no root operation's files remain there,
+// so its first backup meets a fresh host's state whichever suite ran
+// before it; runner_vm.sh removes the backups and the manifest too
+// should a run end part-way. It starts the leg and runs these one at a
+// time; without it they skip.
 @Tags(['runner-vm'])
 @Timeout(Duration(minutes: 4))
 library;
@@ -39,6 +42,10 @@ const _rootFile = '$_editDir/app.conf';
 /// The unit file the verify test edits, beside runner_vm.sh's own.
 const _unitFile = '/etc/systemd/system/klabautermann-vm-edit.service';
 
+/// The parent of the root backups, shared with the root operation
+/// directory, which the login user must be able to enter (03 §7.17).
+const _rootStateDir = '/var/lib/klabautermann';
+
 /// The extended attribute the root file carries.
 const _xattr = 'user.klabautermann';
 
@@ -57,9 +64,17 @@ void main() {
   Future<String> root(String script) => vm.sudo(['sh', '-c', script]);
 
   /// Removes the root backups and manifest an edit writes, before and
-  /// after each test, so each starts with none.
-  Future<void> clearRootFootprint() =>
-      vm.sudo(['rm', '-rf', '--', kRootBackupsDir, '/etc/klabautermann']);
+  /// after each test, so each starts with none, and their parent while
+  /// it is empty but for an empty operation directory: a backup then
+  /// makes it as on a fresh host, and leaves no mode behind for the
+  /// operation suites that run later.
+  Future<void> clearRootFootprint() async {
+    await vm.sudo(['rm', '-rf', '--', kRootBackupsDir, '/etc/klabautermann']);
+    await root(
+      'rmdir -- "$_rootStateDir/ops" 2>/dev/null; '
+      'rmdir -- "$_rootStateDir" 2>/dev/null; true',
+    );
+  }
 
   setUp(() async {
     await clearRootFootprint();
@@ -161,8 +176,13 @@ void main() {
     expect(await leftovers(_editDir), isEmpty);
 
     // The backup: root's directory, 0700, holding the seeded text, and
-    // the manifest that lists it.
+    // the manifest that lists it. Its parent stays 0755: the root
+    // operation records beside it are the login user's to read.
     expect((await root('stat -c %a -- "$kRootBackupsDir"')).trim(), '700');
+    expect(
+      (await root('stat -c "%U:%G %a" -- "$_rootStateDir"')).trim(),
+      'root:root 755',
+    );
     final index = await root('cat -- "$kRootBackupsDir/index"');
     expect(index, contains('\t$_rootFile\n'));
     final hash = index.trim().split('\t')[1];
@@ -317,6 +337,10 @@ void main() {
     expect(
       await root('cat -- "$kRootBackupsDir/index"'),
       contains('\tcrontab:$user\n'),
+    );
+    expect(
+      (await root('stat -c "%U:%G %a" -- "$_rootStateDir"')).trim(),
+      'root:root 755',
     );
   });
 }
