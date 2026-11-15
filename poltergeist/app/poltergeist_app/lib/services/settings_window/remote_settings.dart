@@ -192,7 +192,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     } else {
       (_editors ??= RemoteEditorRegistry._(
         _link,
-      ))._apply(EditorRegistry.fromJson(editors));
+      ))._apply(EditorRegistry.fromJson(editors, scheme: poltergeistEditors));
     }
 
     final backup = (snapshot[SettingsLinkKey.backup.name] as Map?)
@@ -391,7 +391,7 @@ final class RemoteEditorRegistry extends ChangeNotifier
   RemoteEditorRegistry._(this._link);
 
   final _Link _link;
-  EditorRegistry _registry = EditorRegistry();
+  EditorRegistry _registry = EditorRegistry(scheme: poltergeistEditors);
   String? _registryJson;
 
   void _apply(EditorRegistry registry) {
@@ -416,6 +416,13 @@ final class RemoteEditorRegistry extends ChangeNotifier
   @override
   Future<void> setDefault(String id) =>
       _link.call(SettingsLinkMethod.setDefaultEditor, id);
+
+  @override
+  Future<void> setExtensionDefault(String extension, String? editorId) =>
+      _link.call(SettingsLinkMethod.setExtensionDefault, {
+        'extension': extension,
+        'editorId': editorId,
+      });
 }
 
 /// [BackupSettingsModel] over the link.

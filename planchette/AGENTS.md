@@ -22,6 +22,12 @@ packages/
   ghost_desktop/          Flutter desktop window lifecycle (restore, track,
                           close) shared with Séance, Poltergeist and
                           Klabautermann; also outside the workspace
+  ghost_editors/          the external editor registry shared by Séance
+                          and Poltergeist: definitions, global and
+                          per-extension defaults, the persisted codec
+                          parameterized by each app's id namespace and
+                          migrations, the channel/process launcher and
+                          the Settings section; outside the workspace
   ghost_ui/               shared leaf UI widgets/theme tokens; outside the
                           workspace, no app or host dependencies
   ghost_fonts/            the bundled monospace fonts (OFL; see README),
@@ -99,6 +105,7 @@ dart test    packages/planchette_core
 (cd packages/planchette_editor && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_ui && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_fonts && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_editors && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_marks && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_marks_picker && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_theme && flutter pub get && flutter analyze && flutter test)

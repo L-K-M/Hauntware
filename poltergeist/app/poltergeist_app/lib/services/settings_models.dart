@@ -18,7 +18,12 @@ import 'bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
 import 'double_click_action.dart';
 import 'editor_font.dart';
-import 'external_file_opener.dart';
+
+// The Settings → Editing registry sections' model and `Add Editor…`'s
+// picker: EditorRegistryController and ExternalFileOpener.pickEditor in
+// the app.
+export 'package:ghost_editors/ghost_editors.dart'
+    show EditorPicker, EditorRegistryModel;
 
 /// The Settings → Appearance section's model: [AppearanceController] in the
 /// app. [value] is the theme the app is drawn in, and what the app's
@@ -84,25 +89,6 @@ extension EditorTextSizeZoom on EditorTextSizeModel {
   Future<void> zoom(EditorZoom zoom) =>
       setTextSize(EditorTextSize.zoomed(value, zoom));
 }
-
-/// The Settings → Editing registry sections' model:
-/// [EditorRegistryController] in the app.
-abstract interface class EditorRegistryModel implements Listenable {
-  /// The live registry.
-  EditorRegistry get registry;
-
-  /// Adds or replaces [editor]; persists first, throws on failure.
-  Future<void> register(ExternalEditorDefinition editor);
-
-  Future<void> remove(String id);
-
-  Future<void> setDefault(String id);
-}
-
-/// The platform's application picker behind `Add Editor…` — null when the
-/// user cancels. [ExternalFileOpener.pickEditor] in the app.
-typedef EditorPicker =
-    Future<ExternalEditorDefinition?> Function({required String dialogTitle});
 
 /// The Settings → Backup → Recovery section's model: [RecoverySettings]
 /// in the app, `RemoteRecovery` in the Settings window. The section

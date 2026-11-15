@@ -278,6 +278,10 @@ class SettingsWindowHost {
         await _require(editors).remove(argument! as String);
       case SettingsLinkMethod.setDefaultEditor:
         await _require(editors).setDefault(argument! as String);
+      case SettingsLinkMethod.setExtensionDefault:
+        await _require(
+          editors,
+        ).setExtensionDefault(text('extension'), map()['editorId'] as String?);
       case SettingsLinkMethod.pickEditor:
         final picked = await _sources.opener.pickEditor(
           dialogTitle: argument! as String,

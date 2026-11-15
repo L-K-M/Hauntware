@@ -32,7 +32,7 @@ final class EditorRegistryController extends ChangeNotifier
   final SettingsStore _store;
   final ApplicationErrorReporter _errors;
 
-  EditorRegistry _registry = EditorRegistry();
+  EditorRegistry _registry = EditorRegistry(scheme: poltergeistEditors);
 
   /// The live registry — menus resolve through it on every render.
   @override
@@ -43,6 +43,7 @@ final class EditorRegistryController extends ChangeNotifier
   Future<void> load() async {
     _registry = EditorRegistry.fromJson(
       await _store.get<Object>(_settingsKey),
+      scheme: poltergeistEditors,
     );
     notifyListeners();
   }
@@ -56,24 +57,19 @@ final class EditorRegistryController extends ChangeNotifier
   @override
   Future<void> remove(String id) => _mutate(() => _registry.remove(id));
 
-  /// The global default editor — `poltergeist.system`,
-  /// `poltergeist.builtin`, or a registered editor id (06 §8's
-  /// Default-editor dropdown writes here). Refuses an unresolvable id
+  /// The global default editor — a selector (persisted as
+  /// `poltergeist.system` or `poltergeist.builtin`) or a registered editor
+  /// id (06 §8's Default-editor dropdown writes here). Refuses an unresolvable id
   /// at write time, matching [setExtensionDefault]'s rule — a dangling
   /// default would sit in settings.json until the next load's repair.
   @override
-  Future<void> setDefault(String id) => _mutate(() {
-    if (id != EditorRegistry.systemDefaultId &&
-        id != EditorRegistry.builtInId &&
-        _registry.byId(id) == null) {
-      throw FormatException('Unknown editor id: $id');
-    }
-    _registry.defaultEditorId = id;
-  });
+  Future<void> setDefault(String id) => _mutate(() => _registry.setDefault(id));
 
-  /// The remember-choice write (06 §4.1): binds one extension to an
-  /// editor id or a reserved selector.
-  Future<void> setExtensionDefault(String extension, String editorId) =>
+  /// The remember-choice write (06 §4.1) and Settings' per-extension
+  /// defaults: binds one extension to an editor id or a reserved
+  /// selector; null clears it.
+  @override
+  Future<void> setExtensionDefault(String extension, String? editorId) =>
       _mutate(() => _registry.setDefaultForExtension(extension, editorId));
 
   Future<void> _mutate(void Function() apply) async {
@@ -88,7 +84,7 @@ final class EditorRegistryController extends ChangeNotifier
       // `before` would clobber it — the registry mutates in place, so
       // compare snapshots, not identity.
       if (jsonEncode(_registry.toJson()) == jsonEncode(after)) {
-        _registry = EditorRegistry.fromJson(before);
+        _registry = EditorRegistry.fromJson(before, scheme: poltergeistEditors);
       }
       _errors.report(error, stackTrace);
       // Listeners may have read the mutated registry while the write

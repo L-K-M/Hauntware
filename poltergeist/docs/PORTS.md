@@ -2127,10 +2127,23 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   `validateEditorDisplayName` moved into `planchette_editor`, which both
   apps import; their pure cases moved to its
   `external_editor_fields_test.dart`.
-- Port-back candidates: the platform-aware launch-target validation —
-  Séance's `File.isAbsolute` decode fails the same synced-Windows case
-  upstream. The executable-launch refusal, if Séance's remote edit
-  also OS-opens downloaded copies.
+- Shared: 2026-11-15. The registry (definitions, bindings, resolution,
+  the platform-aware target validation), its persisted codec, the
+  channel/process launcher and the §8 Settings sections moved into
+  `planchette/packages/ghost_editors`, which Séance adopts too; their
+  tests moved with them. Poltergeist keeps its `EditorRegistryScheme`
+  (`poltergeistEditors`: namespace `poltergeist`, reserved whole,
+  version 1, System default, no migrations), the `poltergeist/files`
+  channel, the LocalFileOpener System default seam with
+  `ExecutableLaunchRefused`, `EditorRegistryController`'s persistence,
+  and its ARB strings. Selectors are app-neutral in memory
+  (`EditorRegistry.systemDefaultId`/`builtInId`); the stored document is
+  unchanged (`poltergeist.system`/`poltergeist.builtin`), which
+  `external_editor_test.dart` pins with stored samples. The Settings
+  section gained a per-extension defaults list (view, add, remove),
+  carried over the Settings window link as `setExtensionDefault`.
+- Port-back candidates: none (Séance adopts the shared registry; the
+  executable-launch refusal already exists there).
 
 ## Preview and Quick Look (M7)
 

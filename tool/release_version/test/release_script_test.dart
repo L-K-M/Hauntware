@@ -105,6 +105,7 @@ exit 1
         'planchette/app/planchette_app/pubspec.yaml',
         'planchette/packages/ghost_apk_update/pubspec.yaml',
         'planchette/packages/ghost_desktop/pubspec.yaml',
+        'planchette/packages/ghost_editors/pubspec.yaml',
         'planchette/packages/ghost_fonts/pubspec.yaml',
         'planchette/packages/ghost_keepalive/pubspec.yaml',
         'planchette/packages/ghost_keystore/pubspec.yaml',

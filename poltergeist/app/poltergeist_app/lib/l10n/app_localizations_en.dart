@@ -5132,6 +5132,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editorDialogSave => 'Save';
 
   @override
+  String get editorDesktopOnly =>
+      'External editors open files on desktop. The built-in editor is used here.';
+
+  @override
+  String get editorBindingsLabel => 'Per-extension defaults';
+
+  @override
+  String get editorBindingsEmpty =>
+      'Every extension opens in the default editor.';
+
+  @override
+  String get editorBindingAddLabel => 'Add Extension Default…';
+
+  @override
+  String get editorBindingAddTitle => 'Default editor for an extension';
+
+  @override
+  String get editorBindingExtensionLabel => 'File extension';
+
+  @override
+  String get editorBindingExtensionHint => 'txt';
+
+  @override
+  String get editorBindingEditorLabel => 'Open with';
+
+  @override
+  String get editorBindingExtensionInvalid =>
+      'Enter one file extension, such as txt.';
+
+  @override
+  String editorBindingEditorRejects(String name, String extension) {
+    return '$name is not set up to open .$extension files.';
+  }
+
+  @override
   String get filePreviewLabel => 'Quick Look';
 
   @override

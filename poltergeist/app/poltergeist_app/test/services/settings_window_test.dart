@@ -159,7 +159,7 @@ final class _FakeBackup extends ChangeNotifier implements BackupSettingsModel {
 
 final class _FakeEditors extends ChangeNotifier implements EditorRegistryModel {
   @override
-  EditorRegistry registry = EditorRegistry();
+  EditorRegistry registry = EditorRegistry(scheme: poltergeistEditors);
 
   final List<String> calls = [];
 
@@ -175,6 +175,10 @@ final class _FakeEditors extends ChangeNotifier implements EditorRegistryModel {
 
   @override
   Future<void> setDefault(String id) async => calls.add('setDefault($id)');
+
+  @override
+  Future<void> setExtensionDefault(String extension, String? editorId) async =>
+      calls.add('setExtensionDefault($extension, $editorId)');
 }
 
 /// The app lock with scripted state, recording each change and notifying
@@ -739,6 +743,24 @@ void main() {
     expect(registry.registry.byId('linux.editor')?.displayName, 'Editor');
     expect(notified, 1);
   });
+
+  test(
+    'per-extension defaults cross the link, a null editor clearing',
+    () async {
+      final remote = await openWindow();
+
+      await remote.editors!.setExtensionDefault(
+        'txt',
+        EditorRegistry.builtInId,
+      );
+      await remote.editors!.setExtensionDefault('md', null);
+
+      expect(editors.calls, [
+        'setExtensionDefault(txt, ${EditorRegistry.builtInId})',
+        'setExtensionDefault(md, null)',
+      ]);
+    },
+  );
 
   test('closing hides the screen; opening again shows a fresh one', () async {
     final remote = await openWindow();
