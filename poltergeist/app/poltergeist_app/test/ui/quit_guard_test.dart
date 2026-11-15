@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:ghost_desktop/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/app_preferences.dart';
@@ -93,29 +94,31 @@ void main() {
     () => isShown(find.byKey(const ValueKey('quitFlush.dialog'))),
   );
 
-  Future<void> waitForDestroy(
-    WidgetTester tester,
-    FakeWindowAdapter window,
-  ) => waitFor(tester, () => window.events.contains('destroy'));
+  Future<void> waitForDestroy(WidgetTester tester, FakeWindowAdapter window) =>
+      waitFor(tester, () => window.events.contains('destroy'));
 
   Future<void> waitForDialogDismissed(WidgetTester tester) => waitFor(
     tester,
-    () => !isShown(find.byKey(const ValueKey('quit.dialog'))) &&
+    () =>
+        !isShown(find.byKey(const ValueKey('quit.dialog'))) &&
         !isShown(find.byKey(const ValueKey('quitFlush.dialog'))),
   );
 
-  test('an unsaved document vetoes quit before queue mutations or flushing', () async {
-    final queue = FakeAppTransferQueue();
-    final guard = QuitGuard(
-      navigatorKey: GlobalKey<NavigatorState>(),
-      confirmEditorsClose: () async => false,
-    )..bindQueue(() => queue);
-    expect(await guard.confirmClose(), isFalse);
-    expect(queue.flushJournalCalls, 0);
-    expect(queue.pauseTaskCalls, isEmpty);
-    expect(queue.cancelTaskCalls, isEmpty);
-    await queue.close();
-  });
+  test(
+    'an unsaved document vetoes quit before queue mutations or flushing',
+    () async {
+      final queue = FakeAppTransferQueue();
+      final guard = QuitGuard(
+        navigatorKey: GlobalKey<NavigatorState>(),
+        confirmEditorsClose: () async => false,
+      )..bindQueue(() => queue);
+      expect(await guard.confirmClose(), isFalse);
+      expect(queue.flushJournalCalls, 0);
+      expect(queue.pauseTaskCalls, isEmpty);
+      expect(queue.cancelTaskCalls, isEmpty);
+      await queue.close();
+    },
+  );
 
   testWidgets('close with active tasks warns and does not destroy', (
     tester,
@@ -134,12 +137,9 @@ void main() {
 
       expect(find.byKey(const ValueKey('quit.dialog')), findsOneWidget);
       expect(find.textContaining('2 transfers are running'), findsOneWidget);
-      expect(
-        find.textContaining('1.2 MB remaining so far'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('1.2 MB remaining so far'), findsOneWidget);
       expect(h.window.events, isNot(contains('destroy')));
-      expect(h.window.callbacksRegistered, isTrue);
+      expect(h.window.listenerRegistered, isTrue);
 
       // Leave the close cleanly vetoed for teardown.
       await tester.tap(find.byKey(const ValueKey('quit.keepTransferring')));
@@ -147,40 +147,34 @@ void main() {
     });
   });
 
-  testWidgets(
-    'unknown-total tasks never subtract from the remaining floor',
-    (tester) async {
-      final h = await pumpApp(tester);
-      // Still scanning: 900 MB moved with no discovered total. Its
-      // progress must not cancel the known task's 100 MB remaining.
-      h.queue.addTask(
-        state: TransferTaskState.running,
-        scanComplete: false,
-        transferredBytes: 900 * 1000 * 1000,
-      );
-      h.queue.addTask(
-        state: TransferTaskState.running,
-        totalBytes: 200 * 1000 * 1000,
-        transferredBytes: 100 * 1000 * 1000,
-      );
+  testWidgets('unknown-total tasks never subtract from the remaining floor', (
+    tester,
+  ) async {
+    final h = await pumpApp(tester);
+    // Still scanning: 900 MB moved with no discovered total. Its
+    // progress must not cancel the known task's 100 MB remaining.
+    h.queue.addTask(
+      state: TransferTaskState.running,
+      scanComplete: false,
+      transferredBytes: 900 * 1000 * 1000,
+    );
+    h.queue.addTask(
+      state: TransferTaskState.running,
+      totalBytes: 200 * 1000 * 1000,
+      transferredBytes: 100 * 1000 * 1000,
+    );
 
-      await tester.runAsync(() async {
-        h.window.emitClose();
-        await waitForQuitDialog(tester);
+    await tester.runAsync(() async {
+      h.window.emitClose();
+      await waitForQuitDialog(tester);
 
-        expect(find.byKey(const ValueKey('quit.dialog')), findsOneWidget);
-        expect(
-          find.textContaining('100 MB remaining so far'),
-          findsOneWidget,
-        );
+      expect(find.byKey(const ValueKey('quit.dialog')), findsOneWidget);
+      expect(find.textContaining('100 MB remaining so far'), findsOneWidget);
 
-        await tester.tap(
-          find.byKey(const ValueKey('quit.keepTransferring')),
-        );
-        await waitForDialogDismissed(tester);
-      });
-    },
-  );
+      await tester.tap(find.byKey(const ValueKey('quit.keepTransferring')));
+      await waitForDialogDismissed(tester);
+    });
+  });
 
   testWidgets('Keep Transferring vetoes the close; a retry re-asks', (
     tester,
@@ -256,9 +250,7 @@ void main() {
     },
   );
 
-  testWidgets('destroy waits for the journal flush to resolve', (
-    tester,
-  ) async {
+  testWidgets('destroy waits for the journal flush to resolve', (tester) async {
     final h = await pumpApp(tester);
     h.queue.addTask(state: TransferTaskState.running);
     h.queue.blockFlushJournal = true;
@@ -295,10 +287,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('quit.cancelTransfers')));
       await waitForDestroy(tester, h.window);
 
-      expect(
-        h.queue.cancelTaskCalls,
-        containsAll([running.id, paused.id]),
-      );
+      expect(h.queue.cancelTaskCalls, containsAll([running.id, paused.id]));
       expect(h.queue.pauseTaskCalls, isEmpty);
       expect(h.queue.flushJournalCalls, 1);
       expect(h.window.events.last, 'destroy');
@@ -435,10 +424,7 @@ void main() {
       // real clock, then the warning builds.
       await waitForFlushWarning(tester);
 
-      expect(
-        find.byKey(const ValueKey('quitFlush.dialog')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('quitFlush.dialog')), findsOneWidget);
       expect(h.errors, contains(isA<TimeoutException>()));
       expect(h.window.events, isNot(contains('destroy')));
 
@@ -447,7 +433,7 @@ void main() {
 
       expect(await closing, isFalse);
       expect(h.window.events, isNot(contains('destroy')));
-      expect(h.window.callbacksRegistered, isTrue);
+      expect(h.window.listenerRegistered, isTrue);
 
       // The window survived; a retry with a healthy journal closes.
       h.queue.blockFlushJournal = false;
@@ -458,9 +444,7 @@ void main() {
     });
   });
 
-  testWidgets('a failed flush warns and keeps the window open', (
-    tester,
-  ) async {
+  testWidgets('a failed flush warns and keeps the window open', (tester) async {
     final h = await pumpApp(tester);
     h.queue.flushJournalError = StateError('disk full');
 
@@ -468,10 +452,7 @@ void main() {
       final closing = h.lifecycle.close();
       await waitForFlushWarning(tester);
 
-      expect(
-        find.byKey(const ValueKey('quitFlush.dialog')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('quitFlush.dialog')), findsOneWidget);
       expect(find.textContaining('disk full'), findsOneWidget);
       expect(h.errors, contains(isA<StateError>()));
       expect(h.window.events, isNot(contains('destroy')));

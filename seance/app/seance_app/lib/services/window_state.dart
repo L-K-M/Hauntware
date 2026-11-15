@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,48 +8,17 @@ import 'package:window_manager/window_manager.dart';
 
 import 'atomic_file.dart';
 
-/// Loads and saves the window state as `window_state.json`. Kept out of
-/// settings.json on purpose: geometry changes with every move/resize, and the
-/// settings file — which carries the device's sync identity — should not be
-/// rewritten that often (and it isn't loaded until after the first frame,
-/// which is too late to place the window without a flash).
-///
-/// This is the store as the shared lifecycle sees it: Séance's file keeps its
-/// schema (and its physical-pixel units on Windows — see the coordinate space
-/// on the lifecycle below), the package never learns either.
-final class WindowStateStore implements GhostWindowPersistence {
-  final File file;
-  Future<void> _saveTail = Future<void>.value();
-
-  WindowStateStore(this.file);
-
-  @override
-  Future<GhostWindowSnapshot?> load() async {
-    try {
-      if (!await file.exists()) return null;
-      return GhostWindowSnapshot.fromJson(
-        jsonDecode(await file.readAsString()),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  @override
-  Future<void> save(GhostWindowSnapshot snapshot) {
-    final contents = jsonEncode(snapshot.toJson());
-    final result = Completer<void>();
-    _saveTail = _saveTail.then((_) async {
-      try {
-        await writeStringAtomically(file, contents);
-        result.complete();
-      } catch (error, stackTrace) {
-        result.completeError(error, stackTrace);
-      }
-    });
-    return result.future;
-  }
-}
+/// The window state as `window_state.json`, written through the atomic
+/// writer the other stores use. Its schema and its physical-pixel units on
+/// Windows (see the coordinate space on the lifecycle below) are the ones
+/// Séance's file established; ghost_desktop's [GhostWindowStateFile]
+/// carries both unchanged. Kept out of settings.json also because that file
+/// isn't loaded until after the first frame, too late to place the window
+/// without a flash.
+GhostWindowStateFile windowStateFile(File file) => GhostWindowStateFile(
+  file,
+  write: (target, json) => writeStringAtomically(target, jsonEncode(json)),
+);
 
 /// Restores the persisted window state at launch and keeps it current while
 /// the app runs. Desktop only — a no-op on mobile.
@@ -87,7 +55,7 @@ final class WindowStateService {
       await windowManager.ensureInitialized();
       final dir = await getApplicationSupportDirectory();
       final lifecycle = GhostWindowLifecycle(
-        persistence: WindowStateStore(File('${dir.path}/window_state.json')),
+        persistence: windowStateFile(File('${dir.path}/window_state.json')),
         closePolicy: GhostClosePolicy.intercept,
         missingMonitor: MissingMonitorPolicy.rejectAndKeep,
         coordinates: GhostCoordinateSpace.physicalOnWindows,

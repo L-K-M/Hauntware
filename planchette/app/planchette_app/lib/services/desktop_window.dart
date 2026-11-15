@@ -29,7 +29,7 @@ final class DesktopWindow with WindowListener {
   }) : _window = window ?? WindowManagerGhostWindowAdapter(),
        _setWindowTitle = setWindowTitle ?? windowManager.setTitle {
     _lifecycle = GhostWindowLifecycle(
-      persistence: persistence ?? WindowStateStore.defaultLocation(),
+      persistence: persistence ?? defaultWindowStatePersistence(),
       closePolicy: GhostClosePolicy.intercept,
       missingMonitor: MissingMonitorPolicy.rejectAndKeep,
       // Physical pixels on Windows: the same space Séance's file established,

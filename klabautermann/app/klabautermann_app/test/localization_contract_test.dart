@@ -585,11 +585,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/macos_titlebar.dart': {
     // The 04 §12.3 method channel name.
     "'klabautermann/window'",
-    // debugPrint diagnostics of a failed titlebar install or reset, and of
-    // an unavailable toolbar band state.
-    r"'Integrated titlebar install failed: $error'",
-    r"'Standard titlebar reset failed: $error'",
-    r"'Toolbar band state unavailable: $error'",
   },
   // The settings window's wire: channel names, the argument its engine
   // starts with, an error's text as the link carries it, an unknown

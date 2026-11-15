@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:ghost_desktop/ghost_desktop.dart';
+import '../adapters.dart';
+import '../snapshot.dart';
 
-/// Scripted adapters for [GhostWindowLifecycle] tests: every native call
-/// records into [events] and block/fail switches let a test hold or break
-/// any stage. `emit*` methods drive the listener callbacks the way
-/// `window_manager` delivers them.
+/// A scripted main window for `GhostWindowLifecycle` tests: [events]
+/// records what changed on screen, [calls] every native call by method
+/// name, and block/fail switches let a test hold or break any stage.
+/// `emit*` methods drive the listener callbacks the way `window_manager`
+/// delivers them.
 final class FakeWindowAdapter implements GhostWindowAdapter {
   int ensureInitializedCalls = 0;
   bool failEnsureInitialized = false;
   bool blockEnsureInitialized = false;
+  bool failReadyToShow = false;
   bool failShow = false;
   bool failDestroy = false;
   bool failSetMinimumSize = false;
@@ -28,6 +31,10 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   Size? minimumSize;
   final minimumSizes = <Size>[];
   final callsAfterDestroy = <String>[];
+
+  /// Every full frame [setBounds] applied, in order.
+  final boundsSet = <Rect>[];
+  final calls = <String>[];
   GhostWindowOptions? readyOptions;
   final events = <String>[];
   final ensureInitializedStarted = Completer<void>();
@@ -41,6 +48,7 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   @override
   Future<void> ensureInitialized() async {
     ensureInitializedCalls++;
+    calls.add('ensureInitialized');
     if (!ensureInitializedStarted.isCompleted) {
       ensureInitializedStarted.complete();
     }
@@ -77,6 +85,7 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
     }
     if (value != null) {
       bounds = value;
+      boundsSet.add(value);
       events.add('bounds');
     }
   }
@@ -124,6 +133,7 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   @override
   Future<void> waitUntilReadyToShow(GhostWindowOptions? options) async {
     _recordCall('waitUntilReadyToShow');
+    if (failReadyToShow) throw StateError('ready to show failed');
     readyOptions = options;
     events.add('ready');
     if (!readyToShowStarted.isCompleted) readyToShowStarted.complete();
@@ -202,6 +212,7 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   }
 
   void _recordCall(String call) {
+    calls.add(call);
     if (destroyed) callsAfterDestroy.add(call);
   }
 }
@@ -213,6 +224,11 @@ final class FakeDisplayAdapter implements GhostDisplayAdapter {
     ),
     this.all = const [GhostDisplay(workArea: Rect.fromLTWH(0, 0, 1920, 1040))],
   });
+
+  /// Displays at scale 1 with these work areas, the first one primary.
+  FakeDisplayAdapter.workAreas(List<Rect> workAreas)
+    : primary = GhostDisplay(workArea: workAreas.first),
+      all = [for (final area in workAreas) GhostDisplay(workArea: area)];
 
   GhostDisplay primary;
   List<GhostDisplay> all;

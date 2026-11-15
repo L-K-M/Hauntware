@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:ghost_desktop/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/services/app_preferences.dart';
 import 'package:poltergeist_app/services/desktop_window_lifecycle.dart';
@@ -49,8 +50,8 @@ void main() {
 
     expect(window.ensureInitializedCalls, 1);
     expect(window.preventClose, isTrue);
-    expect(window.callbacksRegistered, isTrue);
-    expect(titlebar.initializeCalls, 1);
+    expect(window.listenerRegistered, isTrue);
+    expect(titlebar.installCalls, 1);
   });
 
   test('show restores clamped geometry before showing and focusing', () async {
@@ -141,7 +142,7 @@ void main() {
       writer.releaseWrites();
       await closing;
       expect(window.events.last, 'destroy');
-      expect(window.callbacksRegistered, isFalse);
+      expect(window.listenerRegistered, isFalse);
     },
   );
 
@@ -203,7 +204,7 @@ void main() {
 
     expect(vetoed, isFalse);
     expect(window.events, isNot(contains('destroy')));
-    expect(window.callbacksRegistered, isTrue);
+    expect(window.listenerRegistered, isTrue);
     // A veto leaves the lifecycle live: show must not be gated by a
     // stale closing flag.
     await lifecycle.show();
@@ -237,7 +238,7 @@ void main() {
 
       expect(guardCalls, 0);
       expect(window.events, isNot(contains('destroy')));
-      expect(window.callbacksRegistered, isTrue);
+      expect(window.listenerRegistered, isTrue);
 
       // The last window's close is a quit again, guard first.
       instead = false;

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
@@ -6,9 +5,8 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:ghost_desktop/testing.dart';
 import 'package:klabautermann_app/services/window_state.dart';
-
-import 'support/fake_window.dart';
 
 /// The main window's state (03 §10.2): `window_state.json` beside
 /// `settings.json`, and Klabautermann's choices on ghost_desktop's shared
@@ -42,120 +40,25 @@ void main() {
       expect(windowStateFileName, 'window_state.json');
     });
 
-    test('reads nothing saved from a missing file', () async {
-      expect(await WindowStateStore(file).load(), isNull);
-    });
-
-    test('round-trips a snapshot in the shape Séance established', () async {
+    test('round-trips a snapshot through the settings writer, in the shape '
+        'Séance established', () async {
       const snapshot = GhostWindowSnapshot(
         bounds: Rect.fromLTWH(10, 20, 1200, 800),
         isMaximized: true,
       );
-      await WindowStateStore(file).save(snapshot);
-
-      expect(jsonDecode(await file.readAsString()), {
-        'x': 10,
-        'y': 20,
-        'width': 1200,
-        'height': 800,
-        'isMaximized': true,
-        'isFullScreen': false,
-      });
-      expect(await WindowStateStore(file).load(), snapshot);
-    });
-
-    test('reads a file that is not a snapshot as nothing saved', () async {
-      for (final text in ['not json', '[]', '"x"', '']) {
-        await file.writeAsString(text);
-        expect(await WindowStateStore(file).load(), isNull, reason: text);
-      }
-    });
-
-    test('drops an unusable frame but keeps the flags', () async {
-      await store({
-        'x': 0,
-        'y': 0,
-        'width': -5,
-        'height': 10,
-        'isFullScreen': true,
-      });
+      await windowStateFile(file).save(snapshot);
 
       expect(
-        await WindowStateStore(file).load(),
-        const GhostWindowSnapshot(isFullScreen: true),
+        await file.readAsString(),
+        '{"x":10.0,"y":20.0,"width":1200.0,"height":800.0,'
+        '"isMaximized":true,"isFullScreen":false}',
       );
-    });
-
-    test('lands overlapping saves whole, the last one last', () async {
-      final windowState = WindowStateStore(file);
-      const first = GhostWindowSnapshot(bounds: Rect.fromLTWH(0, 0, 400, 300));
-      const second = GhostWindowSnapshot(
-        bounds: Rect.fromLTWH(50, 60, 900, 700),
-      );
-      await Future.wait([windowState.save(first), windowState.save(second)]);
-
-      expect(await WindowStateStore(file).load(), second);
+      expect(await windowStateFile(file).load(), snapshot);
       expect(
         directory.listSync().map((entity) => entity.uri.pathSegments.last),
         ['window_state.json'],
         reason: 'no temp file is left behind',
       );
-    });
-  });
-
-  group('saving', () {
-    const first = GhostWindowSnapshot(bounds: Rect.fromLTWH(0, 0, 400, 300));
-    const second = GhostWindowSnapshot(bounds: Rect.fromLTWH(50, 60, 900, 700));
-
-    test('writes one save at a time, in the order asked', () async {
-      final events = <String>[];
-      final firstWrite = Completer<void>();
-      var writes = 0;
-      final windowState = WindowStateStore(
-        file,
-        writer: (target, bytes) async {
-          final name = ++writes == 1 ? 'first' : 'second';
-          events.add('$name started');
-          if (name == 'first') await firstWrite.future;
-          events.add('$name done');
-        },
-      );
-
-      final saves = Future.wait([
-        windowState.save(first),
-        windowState.save(second),
-      ]);
-      await settle();
-      expect(events, ['first started'], reason: 'the second save waits');
-
-      firstWrite.complete();
-      await saves;
-      expect(events, [
-        'first started',
-        'first done',
-        'second started',
-        'second done',
-      ]);
-    });
-
-    test('a failed save reports its error and does not hold up the next '
-        'one', () async {
-      final written = <String>[];
-      var writes = 0;
-      final windowState = WindowStateStore(
-        file,
-        writer: (target, bytes) async {
-          if (++writes == 1) throw const FileSystemException('disk full');
-          written.add(utf8.decode(bytes));
-        },
-      );
-
-      final failed = windowState.save(first);
-      final next = windowState.save(second);
-
-      await expectLater(failed, throwsA(isA<FileSystemException>()));
-      await next;
-      expect(written.map(jsonDecode), [second.toJson()]);
     });
   });
 
@@ -185,34 +88,34 @@ void main() {
     test('puts an on-screen frame back and leaves showing to the runner '
         'on Linux', () async {
       await store({'x': 200, 'y': 150, 'width': 1000, 'height': 700});
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
 
       final lifecycle = await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.linux,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
       );
 
       expect(lifecycle, isNotNull);
       expect(window.boundsSet, [const Rect.fromLTWH(200, 150, 1000, 700)]);
       // The Linux and Windows runners show the window on the first frame.
       expect(window.calls, isNot(contains('show')));
-      expect(window.listening, isTrue);
+      expect(window.listenerRegistered, isTrue);
       // The close is intercepted (K4): the native window holds the close
       // for the quit guard, which answers through confirmClose.
-      expect(window.calls, contains('setPreventClose(true)'));
+      expect(window.preventClose, isTrue);
     });
 
     test('asks confirmClose before closing; a veto leaves the window up, '
         'writes no state, and an OK destroys it', () async {
       var answer = false;
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
       final lifecycle = await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.linux,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
         confirmClose: () async => answer,
       );
 
@@ -220,7 +123,7 @@ void main() {
       expect(await lifecycle!.close(), isFalse);
       expect(await file.exists(), isFalse);
       expect(window.calls, isNot(contains('destroy')));
-      expect(window.listening, isTrue);
+      expect(window.listenerRegistered, isTrue);
 
       // The next close re-runs the whole path, guard included.
       answer = true;
@@ -232,13 +135,13 @@ void main() {
     test('clamps a frame from a monitor that is gone onto the primary '
         'display', () async {
       await store({'x': 2200, 'y': 100, 'width': 1200, 'height': 800});
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
 
       await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.linux,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
       );
 
       // Centred on the only display, at its own size.
@@ -247,13 +150,13 @@ void main() {
 
     test('pulls a frame partly off screen fully onto its display', () async {
       await store({'x': 1500, 'y': 600, 'width': 800, 'height': 600});
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
 
       await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.linux,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
       );
 
       expect(window.boundsSet, [const Rect.fromLTWH(1120, 480, 800, 600)]);
@@ -261,13 +164,13 @@ void main() {
 
     test('shrinks a frame larger than the display that remains', () async {
       await store({'x': -100, 'y': 0, 'width': 3000, 'height': 2000});
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
 
       await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.windows,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
       );
 
       expect(window.boundsSet.last, const Rect.fromLTWH(0, 0, 1920, 1080));
@@ -275,15 +178,19 @@ void main() {
 
     test('keeps a frame spanning two displays where it was', () async {
       await store({'x': 1500, 'y': 100, 'width': 1000, 'height': 700});
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
 
       await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.linux,
         window: window,
-        displays: FakeDisplays(display, const [
-          GhostDisplay(workArea: Rect.fromLTWH(1920, 0, 1920, 1080)),
-        ]),
+        displays: FakeDisplayAdapter(
+          primary: display,
+          all: const [
+            display,
+            GhostDisplay(workArea: Rect.fromLTWH(1920, 0, 1920, 1080)),
+          ],
+        ),
       );
 
       expect(window.boundsSet, [const Rect.fromLTWH(1500, 100, 1000, 700)]);
@@ -294,18 +201,17 @@ void main() {
       // A 2x display: its logical work area is 1920 by 1080, so 3840 by
       // 2160 physical pixels.
       await store({'x': 400, 'y': 200, 'width': 2000, 'height': 1200});
-      final window = FakeWindow()..devicePixelRatio = 2;
+      final window = FakeWindowAdapter()..devicePixelRatio = 2;
+      const hiDpi = GhostDisplay(
+        workArea: Rect.fromLTWH(0, 0, 1920, 1080),
+        scaleFactor: 2,
+      );
 
       await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.windows,
         window: window,
-        displays: FakeDisplays(
-          const GhostDisplay(
-            workArea: Rect.fromLTWH(0, 0, 1920, 1080),
-            scaleFactor: 2,
-          ),
-        ),
+        displays: FakeDisplayAdapter(primary: hiDpi, all: const [hiDpi]),
       );
 
       expect(window.boundsSet.last, const Rect.fromLTWH(200, 100, 1000, 600));
@@ -321,13 +227,13 @@ void main() {
           'height': 700,
           'isMaximized': true,
         });
-        final window = FakeWindow();
+        final window = FakeWindowAdapter();
 
         await restoreMainWindow(
           stateFile: file,
           platform: TargetPlatform.macOS,
           window: window,
-          displays: FakeDisplays(display),
+          displays: FakeDisplayAdapter(primary: display, all: const [display]),
         );
 
         expect(
@@ -341,13 +247,13 @@ void main() {
     );
 
     test('on macOS shows the window even when restoring fails', () async {
-      final window = FakeWindow()..failEnsureInitialized = true;
+      final window = FakeWindowAdapter()..failEnsureInitialized = true;
 
       await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.macOS,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
       );
 
       expect(window.calls, containsAllInOrder(['show', 'focus']));
@@ -355,27 +261,27 @@ void main() {
     });
 
     test('opens at the runner\'s placement when nothing was saved', () async {
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
 
       await restoreMainWindow(
         stateFile: file,
         platform: TargetPlatform.linux,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
       );
 
       expect(window.boundsSet, isEmpty);
-      expect(window.listening, isTrue);
+      expect(window.listenerRegistered, isTrue);
     });
 
     test('leaves phones alone', () async {
-      final window = FakeWindow();
+      final window = FakeWindowAdapter();
       for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
         final lifecycle = await restoreMainWindow(
           stateFile: file,
           platform: platform,
           window: window,
-          displays: FakeDisplays(display),
+          displays: FakeDisplayAdapter(primary: display, all: const [display]),
         );
         expect(lifecycle, isNull, reason: '$platform');
       }
@@ -385,21 +291,21 @@ void main() {
   });
 
   group('tracking while the app runs', () {
-    late FakeWindow window;
-    late MemoryWindowState persistence;
-    late ManualDebounce debounce;
+    late FakeWindowAdapter window;
+    late MemoryPersistence persistence;
+    late FakeDebounceScheduler debounce;
     late GhostWindowLifecycle lifecycle;
 
     setUp(() async {
-      window = FakeWindow();
-      persistence = MemoryWindowState();
-      debounce = ManualDebounce();
+      window = FakeWindowAdapter();
+      persistence = MemoryPersistence();
+      debounce = FakeDebounceScheduler();
       lifecycle = mainWindowLifecycle(
         persistence: persistence,
         window: window,
-        displays: FakeDisplays(display),
+        displays: FakeDisplayAdapter(primary: display, all: const [display]),
         platform: GhostDesktopPlatform.linux,
-        scheduleDebounce: debounce.call,
+        scheduleDebounce: debounce.schedule,
       );
       await lifecycle.prepare();
       await lifecycle.show();
@@ -411,11 +317,11 @@ void main() {
       window.bounds = const Rect.fromLTWH(300, 200, 1100, 750);
       window.emitMove();
       window.emitMove();
-      expect(persistence.saves, isEmpty, reason: 'debounced');
+      expect(persistence.writes, isEmpty, reason: 'debounced');
 
-      await debounce.flush();
+      await debounce.fire();
 
-      expect(persistence.saves, [
+      expect(persistence.writes, [
         const GhostWindowSnapshot(bounds: Rect.fromLTWH(300, 200, 1100, 750)),
       ]);
     });
@@ -424,16 +330,16 @@ void main() {
       const normal = Rect.fromLTWH(300, 200, 1100, 750);
       window.bounds = normal;
       window.emitMove();
-      await debounce.flush();
+      await debounce.fire();
 
       window
         ..maximized = true
         ..bounds = const Rect.fromLTWH(0, 0, 1920, 1080);
       window.emitMaximize();
-      await debounce.flush();
+      await debounce.fire();
 
       expect(
-        persistence.saves.last,
+        persistence.writes.last,
         const GhostWindowSnapshot(bounds: normal, isMaximized: true),
       );
     });
@@ -444,7 +350,7 @@ void main() {
       await settle();
 
       expect(
-        persistence.saves.single,
+        persistence.writes.single,
         const GhostWindowSnapshot(bounds: Rect.fromLTWH(40, 30, 1000, 700)),
       );
       // With no confirmClose wired, the intercepted close proceeds: the

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:ghost_apk_update/ghost_apk_update.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show installMacosTitlebar;
 import 'package:ghost_keystore/app_lock.dart';
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart'
@@ -132,7 +133,7 @@ Future<void> main(List<String> args) async {
   // macOS: the integrated titlebar goes in while the runner still keeps
   // the window hidden, so it never shows the standard one first.
   final toolbarBand = defaultTargetPlatform == TargetPlatform.macOS
-      ? await installMacosTitlebar()
+      ? await installMacosTitlebar(channelName: windowChannelName)
       : null;
   // Checked menu items' states reach the native menu over
   // klabautermann/menu_checks (Poltergeist's MenuChecks.swift); Flutter's

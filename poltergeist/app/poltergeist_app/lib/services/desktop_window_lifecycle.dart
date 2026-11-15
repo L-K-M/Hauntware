@@ -2,17 +2,12 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:ghost_desktop/ghost_desktop.dart';
-import 'package:macos_window_utils/macos_window_utils.dart';
 
 import 'app_preferences.dart';
 
 const _initialWindowSize = Size(1180, 760);
 const _minimumContentSize = Size(720, 480);
 const _defaultGeometrySaveDelay = Duration(milliseconds: 250);
-
-abstract interface class MacTitlebarAdapter {
-  Future<void> initialize();
-}
 
 /// The persisted window bounds, as the shared lifecycle sees them: the
 /// `window.*` keys in the settings store keep their shape (logical pixels,
@@ -54,7 +49,7 @@ final class DesktopWindowLifecycle extends GhostWindowLifecycle {
     AppPreferences preferences, {
     super.window,
     super.displays,
-    MacTitlebarAdapter? titlebar,
+    MacosTitlebarAdapter? titlebar,
     super.platform,
     super.geometrySaveDelay = _defaultGeometrySaveDelay,
     super.scheduleDebounce,
@@ -67,34 +62,15 @@ final class DesktopWindowLifecycle extends GhostWindowLifecycle {
          closePolicy: GhostClosePolicy.intercept,
          missingMonitor: MissingMonitorPolicy.clampToNearest,
          // D32 §3: the unified toolbar goes in while the window is still
-         // hidden, so the standard titlebar never flashes first.
-         onMacosPrepare: (titlebar ?? const _MacTitlebarAdapter()).initialize,
+         // hidden, so the standard titlebar never flashes first. An empty
+         // unified toolbar makes the titlebar band 52 pt tall, so the
+         // traffic lights sit centered on the Flutter header drawn beneath
+         // it (Finder/ForkLift geometry).
+         onMacosPrepare: (titlebar ?? MacosTitlebarAdapter()).install,
          windowDefaults: const GhostWindowOptions(
            size: _initialWindowSize,
            minimumSize: _minimumContentSize,
          ),
          minimumContentSize: _minimumContentSize,
        );
-}
-
-final class _MacTitlebarAdapter implements MacTitlebarAdapter {
-  const _MacTitlebarAdapter();
-
-  @override
-  Future<void> initialize() async {
-    await WindowManipulator.initialize();
-    await WindowManipulator.enableFullSizeContentView();
-    await WindowManipulator.makeTitlebarTransparent();
-    await WindowManipulator.hideTitle();
-    // D32 §3: an empty unified toolbar makes the titlebar band 52 pt
-    // tall, so the traffic lights sit centered on the Flutter header
-    // drawn beneath it (Finder/ForkLift geometry). Empty areas keep the
-    // native drag and double-click-to-zoom; the header wraps its
-    // controls in MacosToolbarPassthrough so clicks reach Flutter, and
-    // every other surface stays below the band (ReserveMacosToolbarBand).
-    await WindowManipulator.addToolbar();
-    await WindowManipulator.setToolbarStyle(
-      toolbarStyle: NSWindowToolbarStyle.unified,
-    );
-  }
 }

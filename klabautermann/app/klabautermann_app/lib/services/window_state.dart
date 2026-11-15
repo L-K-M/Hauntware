@@ -14,51 +14,20 @@ const String windowStateFileName = 'window_state.json';
 /// write per drag, not one per pixel (Séance's delay).
 const Duration _geometrySaveDelay = Duration(milliseconds: 500);
 
-/// Loads and saves the window state as `window_state.json`, in the shape
-/// Séance's file established and Planchette's shares
-/// ([GhostWindowSnapshot.toJson]: `x`, `y`, `width`, `height`,
-/// `isMaximized`, `isFullScreen`).
+/// The window state as [windowStateFileName], in the shape Séance's file
+/// established and Planchette's shares ([GhostWindowStateFile]), replaced
+/// atomically through the writer `settings.json` uses.
 ///
 /// Kept out of `settings.json` on purpose, as Séance and Planchette keep
 /// theirs: a dragged resize saves on a debounce, and those writes have no
 /// business rewriting the file that carries the device's sync id each
 /// time. The file is device-local and never synced; on Windows its bounds
 /// are physical pixels ([GhostCoordinateSpace.physicalOnWindows]).
-final class WindowStateStore implements GhostWindowPersistence {
-  /// `writer` replaces the file's contents; a seam for tests.
-  WindowStateStore(this._file, {this._writer = writeFileAtomically});
-
-  final File _file;
-  final Future<void> Function(File target, List<int> bytes) _writer;
-  Future<void> _saveTail = Future<void>.value();
-
-  /// The stored state, or null when there is none. This runs before the
-  /// window is shown, so a file that is missing, unreadable or not a
-  /// snapshot reads as nothing saved rather than keeping the window from
-  /// opening; the next save overwrites it. Window geometry is cheap to
-  /// lose, so there is no corrupt copy as `settings.json` keeps.
-  @override
-  Future<GhostWindowSnapshot?> load() async {
-    try {
-      if (!await _file.exists()) return null;
-      return GhostWindowSnapshot.fromJson(
-        jsonDecode(await _file.readAsString()),
-      );
-    } on Object {
-      return null;
-    }
-  }
-
-  /// Replaces the file atomically through the writer `settings.json` uses,
-  /// one save at a time in the order they were asked for.
-  @override
-  Future<void> save(GhostWindowSnapshot snapshot) {
-    final bytes = utf8.encode(jsonEncode(snapshot.toJson()));
-    final saved = _saveTail.then((_) => _writer(_file, bytes));
-    _saveTail = saved.then<void>((_) {}, onError: (Object _) {});
-    return saved;
-  }
-}
+GhostWindowStateFile windowStateFile(File file) => GhostWindowStateFile(
+  file,
+  write: (target, json) =>
+      writeFileAtomically(target, utf8.encode(jsonEncode(json))),
+);
 
 /// The desktop platform the window lifecycle runs on, or null where there
 /// is no window to remember (phones, tablets, the web).
@@ -142,7 +111,7 @@ Future<GhostWindowLifecycle?> restoreMainWindow({
   if (desktop == null) return null;
 
   final lifecycle = mainWindowLifecycle(
-    persistence: WindowStateStore(stateFile),
+    persistence: windowStateFile(stateFile),
     window: window,
     displays: displays,
     platform: desktop,

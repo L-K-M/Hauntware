@@ -95,7 +95,7 @@ Future<void> main(List<String> args) async {
   // macOS: the integrated titlebar goes in while the window is still
   // hidden, so it never shows the standard one first.
   final toolbarBand = !kIsWeb && Platform.isMacOS
-      ? await MacosTitlebar.install()
+      ? await installMacosTitlebar(channelName: windowChannelName)
       : null;
   // Put the desktop window back where it was closed (size, monitor,
   // maximized/full-screen) before the first frame, and keep tracking it.
@@ -138,7 +138,7 @@ class SeanceApp extends StatelessWidget {
   final Future<AppState> Function()? initOverride;
 
   /// Whether the macOS unified toolbar band shows, when the window has the
-  /// integrated titlebar ([MacosTitlebar.install]); null everywhere else,
+  /// integrated titlebar ([installMacosTitlebar]); null everywhere else,
   /// and then no surface reserves a band.
   final ValueListenable<bool>? toolbarBand;
 

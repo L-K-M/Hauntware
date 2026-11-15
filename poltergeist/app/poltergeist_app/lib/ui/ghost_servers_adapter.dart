@@ -120,8 +120,8 @@ GhostKeyboardInteractiveStrings poltergeistKeyboardInteractiveStrings(
 
 /// The engine's credential prompt as the shared dialog shows it: the
 /// identity-file form, prefilled with the config's path, and the vault
-/// offer only where the config names a secretRef (04 §2.1). The endpoint
-/// shows the host as configured, without IPv6 brackets.
+/// offer only where the config names a secretRef (04 §2.1). The dialog
+/// brackets a bare IPv6 host before the endpoint line's port.
 GhostCredentialRequest ghostCredentialRequestOf(
   CredentialPromptData data, {
   required bool vaultUnavailable,

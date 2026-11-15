@@ -44,7 +44,7 @@ Widget _passthroughScope(BuildContext context, Widget child) =>
 
 /// The wide layout's header, on every platform: the window's title and
 /// its toolbar in one row, Poltergeist's arrangement. On macOS it draws
-/// under the unified toolbar band (`MacosTitlebar.install`), with the
+/// under the unified toolbar band (`installMacosTitlebar`), with the
 /// traffic lights over the server list to its left instead of a standard
 /// titlebar above everything; elsewhere it sits under the native title bar.
 ///
