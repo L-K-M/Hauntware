@@ -100,6 +100,31 @@ void main() {
     expect(model.registry.byId('editor.test')!.displayName, 'Valid Name');
   });
 
+  testWidgets('an invalid extension reports under the extensions field', (
+    tester,
+  ) async {
+    final model = FakeEditors([testEditor()]);
+    addTearDown(model.dispose);
+    await _pumpSection(tester, model);
+    await tester.tap(find.byKey(const ValueKey('editors.edit.editor.test')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      _fieldWithLabel('Accepted file extensions (optional)'),
+      'a/b',
+    );
+    await tester.tap(find.byKey(const ValueKey('editors.edit.save')));
+    await tester.pumpAndSettle();
+
+    final name = tester.widget<TextField>(_fieldWithLabel('Display name'));
+    final extensions = tester.widget<TextField>(
+      _fieldWithLabel('Accepted file extensions (optional)'),
+    );
+    expect(name.decoration!.errorText, isNull);
+    expect(extensions.decoration!.errorText, 'Invalid file extension: a/b');
+    expect(model.calls, isEmpty);
+  });
+
   testWidgets('Return in the name field moves on to the extensions', (
     tester,
   ) async {
@@ -238,6 +263,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Test Editor does not open .txt'), findsOneWidget);
     expect(model.calls, isEmpty);
+  });
+
+  testWidgets('Return in the binding extension field saves like Save', (
+    tester,
+  ) async {
+    final model = FakeEditors([testEditor()]);
+    addTearDown(model.dispose);
+    await _pumpSection(tester, model);
+    await tester.tap(find.byKey(const ValueKey('editors.binding.add')));
+    await tester.pumpAndSettle();
+
+    final field = find.byKey(const ValueKey('editors.binding.extension'));
+    await tester.enterText(field, 'md');
+    await tester.showKeyboard(field);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('editors.binding.md')), findsOneWidget);
   });
 
   testWidgets('a host without desktop editors explains instead of adding', (

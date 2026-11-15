@@ -512,7 +512,8 @@ final class _EditEditorDialogState extends State<_EditEditorDialog> {
   late final _extensions = TextEditingController(
     text: widget.editor.acceptedExtensions.join(', '),
   );
-  String? _validationError;
+  String? _nameError;
+  String? _extensionsError;
 
   @override
   void dispose() {
@@ -521,25 +522,39 @@ final class _EditEditorDialogState extends State<_EditEditorDialog> {
     super.dispose();
   }
 
-  void _clearError() {
-    if (_validationError != null) setState(() => _validationError = null);
+  void _clearErrors() {
+    if (_nameError == null && _extensionsError == null) return;
+    setState(() {
+      _nameError = null;
+      _extensionsError = null;
+    });
   }
 
   /// The Save button and Return in the last field share one action, so
   /// both validate identically.
+  /// Each field reports its own error, so an invalid extension is not
+  /// shown as a problem with the name.
   void _save() {
+    final String displayName;
     try {
-      Navigator.of(context).pop(
-        widget.editor.copyWith(
-          displayName: validateEditorDisplayName(_name.text),
-          acceptedExtensions: normalizeEditorExtensions(
-            _extensions.text.split(','),
-          ),
-        ),
-      );
+      displayName = validateEditorDisplayName(_name.text);
     } on FormatException catch (error) {
-      setState(() => _validationError = error.message);
+      setState(() => _nameError = error.message);
+      return;
     }
+    final List<String> extensions;
+    try {
+      extensions = normalizeEditorExtensions(_extensions.text.split(','));
+    } on FormatException catch (error) {
+      setState(() => _extensionsError = error.message);
+      return;
+    }
+    Navigator.of(context).pop(
+      widget.editor.copyWith(
+        displayName: displayName,
+        acceptedExtensions: extensions,
+      ),
+    );
   }
 
   @override
@@ -557,22 +572,23 @@ final class _EditEditorDialogState extends State<_EditEditorDialog> {
               TextField(
                 controller: _name,
                 autofocus: true,
-                onChanged: (_) => _clearError(),
+                onChanged: (_) => _clearErrors(),
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
                   labelText: strings.nameFieldLabel,
-                  errorText: _validationError,
+                  errorText: _nameError,
                 ),
               ),
               TextField(
                 controller: _extensions,
-                onChanged: (_) => _clearError(),
+                onChanged: (_) => _clearErrors(),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _save(),
                 decoration: InputDecoration(
                   labelText: strings.extensionsFieldLabel,
                   hintText: strings.extensionsFieldHint,
                   helperText: strings.extensionsFieldHelper,
+                  errorText: _extensionsError,
                 ),
               ),
               const SizedBox(height: 12),
@@ -685,6 +701,8 @@ final class _BindingDialogState extends State<_BindingDialog> {
                   setState(() => _validationError = null);
                 }
               },
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _save(),
               decoration: InputDecoration(
                 labelText: strings.bindingExtensionLabel,
                 hintText: strings.bindingExtensionHint,
