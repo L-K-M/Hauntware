@@ -22,6 +22,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/admin_memory.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
+import 'controllers/app_badge.dart';
 import 'controllers/alert_rules_controller.dart';
 import 'controllers/log_display.dart';
 import 'controllers/snippets_controller.dart';
@@ -331,13 +332,14 @@ Future<void> main(List<String> args) async {
     ),
   );
   final startStrings = deviceStrings();
+  final systemNotifications = await LocalSystemNotifications.start((
+    channelName: startStrings.alertNotificationChannel,
+    channelDescription: startStrings.alertNotificationChannelDetail,
+    openAction: startStrings.alertNotificationOpen,
+  ));
   final alertNotifications = AlertNotificationsController(
     engine,
-    notifications: await LocalSystemNotifications.start((
-      channelName: startStrings.alertNotificationChannel,
-      channelDescription: startStrings.alertNotificationChannelDetail,
-      openAction: startStrings.alertNotificationOpen,
-    )),
+    notifications: systemNotifications,
     textOf: (raise) => alertNotificationText(
       deviceStrings(),
       raise,
@@ -351,6 +353,15 @@ Future<void> main(List<String> args) async {
     enabled: settings.alertNotifications,
     save: settings.setAlertNotifications,
   );
+  // The app icon badge (ALR-02): the unseen raised alerts while their
+  // notifications are on, on iOS and macOS. It lasts as long as the app.
+  if (systemNotifications != null) {
+    AppBadgeController(
+      alerts: alerts,
+      notifications: alertNotifications,
+      sink: systemNotifications,
+    );
+  }
   // Action previews and runs (03 §8.5): the engine plans and runs them;
   // the app shows the preview and the results.
   final operations = OperationsController(

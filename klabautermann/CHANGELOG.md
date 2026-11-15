@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- On iOS and macOS, while alert notifications are on, the app icon
+  shows how many raised alerts you have not seen yet. Opening the alert
+  center clears it. Turning notifications on asks for badge permission
+  too.
 - A crash during a sync enrollment's re-key no longer leaves saved
   credentials unreadable until the next enrollment: the engine settles
   the leftover re-key at its first vault read.
