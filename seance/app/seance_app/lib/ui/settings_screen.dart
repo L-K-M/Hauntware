@@ -1570,12 +1570,34 @@ final class _SettingsEditorRegistry extends ChangeNotifier
   @override
   EditorRegistry get registry => _registry;
 
-  Future<void> _mutate(void Function(EditorRegistry registry) apply) async {
-    final next = _registry.copy();
-    apply(next);
-    await _save(next);
-    _registry = next;
-    notifyListeners();
+  bool _disposed = false;
+
+  /// The last mutation, so the next one copies the registry that write
+  /// stored rather than the one shown before it: two edits made while a
+  /// write is in flight (the settings window's link is a round trip)
+  /// would otherwise each start from the same registry, and the later
+  /// write would drop the earlier change.
+  Future<void> _pending = Future<void>.value();
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  Future<void> _mutate(void Function(EditorRegistry registry) apply) {
+    final mutation = _pending.then((_) async {
+      final next = _registry.copy();
+      apply(next);
+      await _save(next);
+      // The screen may close while a write is in flight.
+      if (_disposed) return;
+      _registry = next;
+      notifyListeners();
+    });
+    // A failed write reaches its caller; the next edit still runs.
+    _pending = mutation.then<void>((_) {}, onError: (Object _) {});
+    return mutation;
   }
 
   @override

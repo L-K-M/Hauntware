@@ -124,8 +124,14 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
   /// The last registry a write carried.
   EditorRegistry? savedRegistry;
 
+  /// Holds the next editor registry write open until completed.
+  Completer<void>? holdEditorRegistry;
+
   @override
   Future<void> setEditorRegistry(EditorRegistry registry) async {
+    final hold = holdEditorRegistry;
+    holdEditorRegistry = null;
+    await hold?.future;
     await _write('setEditorRegistry');
     savedRegistry = registry;
   }
@@ -407,6 +413,33 @@ void main() {
     await addBinding('md');
     expect(find.byKey(const ValueKey('editors.binding.md')), findsNothing);
     expect(find.textContaining('disk full'), findsOneWidget);
+  });
+
+  testWidgets('an editor change made while an earlier write is in flight '
+      'keeps both changes', (tester) async {
+    await pumpScreen(tester, tab: SettingsTab.files);
+
+    Future<void> addBinding(String extension) async {
+      await tester.ensureVisible(find.byKey(const ValueKey('editors.binding.add')));
+      await tester.tap(find.byKey(const ValueKey('editors.binding.add')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('editors.binding.extension')), extension);
+      await tester.tap(find.byKey(const ValueKey('editors.binding.save')));
+      await tester.pumpAndSettle();
+    }
+
+    final hold = backend.holdEditorRegistry = Completer<void>();
+    await addBinding('log');
+    await addBinding('md');
+    hold.complete();
+    await tester.pumpAndSettle();
+
+    expect(backend.savedRegistry!.extensionDefaults, {
+      'log': EditorRegistry.builtInId,
+      'md': EditorRegistry.builtInId,
+    });
+    expect(find.byKey(const ValueKey('editors.binding.log')), findsOneWidget);
+    expect(find.byKey(const ValueKey('editors.binding.md')), findsOneWidget);
   });
 
   testWidgets('the route keeps its title', (tester) async {
