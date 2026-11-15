@@ -11857,11 +11857,89 @@ abstract class AppLocalizations {
   /// **'Clear selection'**
   String get compactSelectionClear;
 
-  /// D32 §9: selection bar label of Copy to Other Pane, naming the other pane's letter, e.g. 'Copy to B'.
+  /// UI-06: selection bar label of Copy to Other Pane on phones. The ellipsis says a confirmation sheet naming the destination host and folder opens first.
   ///
   /// In en, this message translates to:
-  /// **'Copy to {pane}'**
-  String compactActionCopyTo(String pane);
+  /// **'Copy to…'**
+  String get compactActionCopyTo;
+
+  /// UI-06: title of the Copy to… confirmation sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Copy 1 item} other{Copy {count} items}}'**
+  String compactCopyToTitle(int count);
+
+  /// UI-06: caption above the destination host (a server name, or This device) in the Copy to… sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get compactCopyToHost;
+
+  /// UI-06: caption above the destination folder path in the Copy to… sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder'**
+  String get compactCopyToFolder;
+
+  /// UI-06: the Copy to… sheet's button that queues the copy into the shown host and folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get compactCopyToConfirm;
+
+  /// UI-06: screen reader label of the Copy button, naming the full destination.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy to {host}, {folder}'**
+  String compactCopyToConfirmSemantics(String host, String folder);
+
+  /// UI-06: the Copy to… sheet's button that opens a folder picker on the destination host.
+  ///
+  /// In en, this message translates to:
+  /// **'Change folder'**
+  String get compactCopyToChangeFolder;
+
+  /// UI-06: shown in the Copy to… sheet, with Copy disabled, when the chosen folder is one of the copied folders or inside one.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a folder outside the items you are copying.'**
+  String get compactCopyToNotAllowed;
+
+  /// UI-06: title of the destination folder picker opened by Change folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a folder'**
+  String get compactFolderPickerTitle;
+
+  /// UI-06: tooltip of the folder picker's button that goes to the parent folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enclosing folder'**
+  String get compactFolderPickerUp;
+
+  /// UI-06: the folder picker's button that picks the folder it shows.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this folder'**
+  String get compactFolderPickerChoose;
+
+  /// UI-06: the folder picker's message for a folder without subfolders.
+  ///
+  /// In en, this message translates to:
+  /// **'No folders here'**
+  String get compactFolderPickerEmpty;
+
+  /// UI-06: the folder picker's message when the folder's listing failed; a Retry button follows.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder can\'t be listed.'**
+  String get compactFolderPickerFailed;
+
+  /// UI-06: the folder picker's button that lists the folder again after a failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get compactFolderPickerRetry;
 
   /// D32 §9: selection bar label of Move to Other Pane, naming the other pane's letter, e.g. 'Move to B'.
   ///

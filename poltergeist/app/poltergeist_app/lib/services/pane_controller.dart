@@ -3866,6 +3866,28 @@ class PaneController extends ChangeNotifier {
   /// failed or cancelled navigation can neither replay nor drop the link.
   PaneLocation? get committedLocation => _committedLocation;
 
+  /// The subfolders of [path] on this pane's binding, sorted by name
+  /// (UI-06's Change folder picker): one `listDirectory` round trip on
+  /// the live channel, so a phone browses a destination without moving
+  /// the pane. Throws the typed `disconnected` [RemoteFileException]
+  /// without a live channel and lets the channel's own typed refusals
+  /// through for the picker to show.
+  Future<List<RemoteFileEntry>> listFolders(String path) async {
+    final channel = _channel;
+    if (_disposed || channel == null || connectionLost) {
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'list',
+        message: '',
+      );
+    }
+    final listed = await channel.listDirectory(path);
+    return [
+      for (final entry in listed)
+        if (entry.isDirectory) entry,
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
   /// Whether [path] lists on the channel live at probe issue — the Sync
   /// Browsing mirror probe (02 §7): the link checks existence on the
   /// other pane BEFORE navigating it, so a missing mirror suspends the

@@ -5,7 +5,9 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/checkout_session.dart';
+import '../../services/other_pane_transfer.dart';
 import '../../services/pane_controller.dart';
+import '../../services/pane_drop.dart';
 import '../../services/pane_location.dart';
 import '../../services/pane_tabs_controller.dart';
 import '../../services/registered_command.dart';
@@ -21,6 +23,7 @@ import '../sync/sync_plan_view.dart';
 import '../sync/sync_rules_edit_request.dart';
 import 'compact_breadcrumbs.dart';
 import 'compact_command_sheet.dart';
+import 'compact_copy_to_sheet.dart';
 import 'compact_listing.dart';
 import 'compact_pane_switcher.dart';
 import 'compact_posture.dart';
@@ -40,6 +43,7 @@ class CompactPaneSeams {
     this.onSyncEditRules,
     this.onImportSshConfig,
     this.onAddToFavorites,
+    this.copyDelegate,
   });
 
   /// The shell's sibling-aware cancel for a pane's pending bind or lost
@@ -57,6 +61,10 @@ class CompactPaneSeams {
   /// desktop sidebar's "+" carries, offered here because the browser is
   /// where a phone shows a folder (Home shows none). Null hides it.
   final void Function(PaneController pane)? onAddToFavorites;
+
+  /// The queue seam UI-06's Copy to… sheet enqueues through; null (no
+  /// queue bound) leaves the bar's Copy on the registered command.
+  final PaneDropDelegate? copyDelegate;
 }
 
 /// The selection's title (D32 §9): "3 selected · 42 MB" — the count,
@@ -128,6 +136,15 @@ class CompactBrowser extends StatelessWidget {
     return null;
   }
 
+  /// UI-06: snapshots Copy to Other Pane and confirms it in the sheet.
+  /// The selection stays as it is, as after the desktop verb.
+  Future<void> _copyTo(BuildContext context) async {
+    final delegate = seams.copyDelegate;
+    final plan = planSelectionCopyToOtherPane(workspace);
+    if (delegate == null || plan == null) return;
+    await showCompactCopyToSheet(context, plan: plan, delegate: delegate);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -194,6 +211,9 @@ class CompactBrowser extends StatelessWidget {
                 onRun: onRunCommand,
                 otherPaneLetter: otherLetter,
                 moreTitle: l10n.compactSelectionCount(pane.selectedCount),
+                onCopyTo: seams.copyDelegate == null
+                    ? null
+                    : () => unawaited(_copyTo(context)),
               )
             : const SizedBox(width: double.infinity),
       ),

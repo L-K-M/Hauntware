@@ -2259,6 +2259,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         commands: commands,
         sshImportCommand: sshImportCommand,
         onReviewLocalEdits: onReviewLocalEdits,
+        dropDelegate: dropDelegate,
       );
     }
 
@@ -2503,6 +2504,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     required List<RegisteredCommand> commands,
     required RegisteredCommand? sshImportCommand,
     required void Function(String serverId) onReviewLocalEdits,
+    required PaneDropDelegate? dropDelegate,
   }) {
     return CompactWorkspace(
       key: _compactKey,
@@ -2535,6 +2537,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         onAddToFavorites: _sidebar == null
             ? null
             : (pane) => unawaited(_addPaneToFavorites(pane)),
+        copyDelegate: dropDelegate,
       ),
     );
   }
