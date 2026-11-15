@@ -120,6 +120,113 @@ void setFilePermissions(String path, int mode) {
   }
 }
 
+/// How many directory entries name the file at [path] (its hard link
+/// count), without following a symbolic link; null when the platform or
+/// the file cannot say.
+///
+/// A guarded save replaces the file with a new one, which detaches every
+/// other name of a hard-linked file from the saved text, so the save asks
+/// this first (I3). Read through Linux `statx` (fixed layout on every
+/// architecture; Android only from API 30), macOS `lstat`, and Windows
+/// `GetFileInformationByHandle`. Null keeps the caller's ordinary path.
+int? fileLinkCount(String path) {
+  _checkPath(path);
+  try {
+    if (Platform.isWindows) return _windowsLinkCount(path);
+    if (Platform.isMacOS || Platform.isIOS) return _darwinLinkCount(path);
+    if (Platform.isLinux || Platform.isAndroid) return _linuxLinkCount(path);
+  } on ArgumentError {
+    // The symbol is missing on this system (older Android): unknown.
+  }
+  return null;
+}
+
+/// Linux `struct statx`: 256 bytes, `stx_nlink` a u32 at offset 16 on every
+/// architecture. AT_SYMLINK_NOFOLLOW = 0x100; STATX_NLINK = 0x4.
+const _statxSize = 256;
+const _statxNlinkOffset = 16;
+const _atFdCwd = -100;
+const _atSymlinkNoFollow = 0x100;
+const _statxNlink = 0x4;
+
+int? _linuxLinkCount(String path) {
+  final nativePath = path.toNativeUtf8();
+  final buffer = calloc<Uint8>(_statxSize);
+  try {
+    final result = _statx(
+      _atFdCwd,
+      nativePath,
+      _atSymlinkNoFollow,
+      _statxNlink,
+      buffer,
+    );
+    if (result != 0) return null;
+    // stx_mask, the first u32, says which fields the kernel filled in.
+    final filled = buffer.cast<Uint32>().value;
+    if (filled & _statxNlink == 0) return null;
+    return (buffer + _statxNlinkOffset).cast<Uint32>().value;
+  } finally {
+    calloc.free(nativePath);
+    calloc.free(buffer);
+  }
+}
+
+/// Darwin's 64-bit-inode `struct stat`: `st_nlink` is a u16 at offset 6.
+/// Allocated with room to spare over its 144 bytes.
+const _darwinStatSize = 256;
+const _darwinNlinkOffset = 6;
+
+int? _darwinLinkCount(String path) {
+  final nativePath = path.toNativeUtf8();
+  final buffer = calloc<Uint8>(_darwinStatSize);
+  try {
+    if (_lstatDarwin(nativePath, buffer) != 0) return null;
+    return (buffer + _darwinNlinkOffset).cast<Uint16>().value;
+  } finally {
+    calloc.free(nativePath);
+    calloc.free(buffer);
+  }
+}
+
+// https://learn.microsoft.com/windows/win32/api/fileapi/nf-fileapi-createfilew
+const _fileShareAll = 0x7; // FILE_SHARE_READ | WRITE | DELETE
+const _openExisting = 3;
+const _fileFlagBackupSemantics = 0x02000000;
+const _fileFlagOpenReparsePoint = 0x00200000;
+const _invalidHandleValue = -1;
+
+/// BY_HANDLE_FILE_INFORMATION: 52 bytes, `nNumberOfLinks` a u32 at 40.
+const _fileInformationSize = 52;
+const _fileInformationLinksOffset = 40;
+
+int? _windowsLinkCount(String path) {
+  final nativePath = _windowsExtendedPath(path).toNativeUtf16();
+  final information = calloc<Uint8>(_fileInformationSize);
+  try {
+    // No access rights: reading metadata needs none, and it opens files
+    // other programs hold open, or that are read-only, all the same.
+    final handle = _createFile(
+      nativePath,
+      0,
+      _fileShareAll,
+      nullptr,
+      _openExisting,
+      _fileFlagBackupSemantics | _fileFlagOpenReparsePoint,
+      nullptr,
+    );
+    if (handle.address == _invalidHandleValue) return null;
+    try {
+      if (_getFileInformationByHandle(handle, information) == 0) return null;
+      return (information + _fileInformationLinksOffset).cast<Uint32>().value;
+    } finally {
+      _closeHandle(handle);
+    }
+  } finally {
+    calloc.free(nativePath);
+    calloc.free(information);
+  }
+}
+
 /// Copies each extended attribute of [source] onto [destination], on Linux
 /// and macOS, and returns the names it could not copy.
 ///
@@ -373,6 +480,17 @@ final _setXattrDarwin = _posix
       ),
       int Function(Pointer<Utf8>, Pointer<Utf8>, Pointer<Uint8>, int, int, int)
     >('setxattr');
+final _statx = _posix
+    .lookupFunction<
+      Int32 Function(Int32, Pointer<Utf8>, Int32, Uint32, Pointer<Uint8>),
+      int Function(int, Pointer<Utf8>, int, int, Pointer<Uint8>)
+    >('statx');
+// x86_64 macOS names the 64-bit-inode variant; arm64 has only that one.
+final _lstatDarwin = _posix
+    .lookupFunction<
+      Int32 Function(Pointer<Utf8>, Pointer<Uint8>),
+      int Function(Pointer<Utf8>, Pointer<Uint8>)
+    >(Abi.current() == Abi.macosX64 ? r'lstat$INODE64' : 'lstat');
 final _errno = _posix
     .lookupFunction<Pointer<Int32> Function(), Pointer<Int32> Function()>(
       Platform.isMacOS || Platform.isIOS
@@ -388,6 +506,36 @@ final _moveFileEx = _kernel32
       Int32 Function(Pointer<Utf16>, Pointer<Utf16>, Uint32),
       int Function(Pointer<Utf16>, Pointer<Utf16>, int)
     >('MoveFileExW');
+final _createFile = _kernel32
+    .lookupFunction<
+      Pointer<Void> Function(
+        Pointer<Utf16>,
+        Uint32,
+        Uint32,
+        Pointer<Void>,
+        Uint32,
+        Uint32,
+        Pointer<Void>,
+      ),
+      Pointer<Void> Function(
+        Pointer<Utf16>,
+        int,
+        int,
+        Pointer<Void>,
+        int,
+        int,
+        Pointer<Void>,
+      )
+    >('CreateFileW');
+final _getFileInformationByHandle = _kernel32
+    .lookupFunction<
+      Int32 Function(Pointer<Void>, Pointer<Uint8>),
+      int Function(Pointer<Void>, Pointer<Uint8>)
+    >('GetFileInformationByHandle');
+final _closeHandle = _kernel32
+    .lookupFunction<Int32 Function(Pointer<Void>), int Function(Pointer<Void>)>(
+      'CloseHandle',
+    );
 final _getLastError = _kernel32
     .lookupFunction<Uint32 Function(), int Function()>('GetLastError');
 final _getFileAttributes = _kernel32

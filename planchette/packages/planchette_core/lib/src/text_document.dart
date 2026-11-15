@@ -355,6 +355,10 @@ const _carriageReturn = 0x0d;
 /// This is a best-effort conflict guard, not a cross-process lock. Replacement
 /// briefly removes the original path while checking its backup. Hosts retain
 /// their temp prefix so their existing crash-recovery sweeps keep working.
+///
+/// A file with other hard links is instead rewritten in place behind a
+/// backup copy, so all of its names see the new text (Linux, macOS and
+/// Windows; Android from API 30, where the link count can be read).
 Future<String> saveTextDocument(
   File file,
   String text, {
@@ -439,6 +443,19 @@ Future<String> _writeTextDocument(
   ), debugName: 'saveTextDocument');
   final temporary = _recoverySibling(file, temporaryPrefix, 'edit');
   final backup = _recoverySibling(file, temporaryPrefix, 'backup');
+  // A replacement would leave the file's other names on the old text. The
+  // count is read without following a link; a link or a missing file has
+  // one name and takes the replacing path, which refuses it there.
+  if (expectedSha256 != null && (fileLinkCount(file.path) ?? 1) > 1) {
+    return _writeHardLinkedInPlace(
+      file,
+      bytes,
+      expectedSha256: expectedSha256,
+      backup: backup,
+      maximumBytes: maximumBytes,
+      observeBackup: observeBackup,
+    );
+  }
   RandomAccessFile? handle;
   var retainTemporary = false;
   var windowsReadOnly = false;
@@ -514,10 +531,7 @@ Future<String> _writeTextDocument(
       await observeBackup?.call(backup);
       await _requireRegularFile(backup);
       if (await textDocumentSha256(backup) != expectedSha256) {
-        throw const TextDocumentException(
-          'The file changed in another editor. Reopen it before '
-          'saving to avoid losing those changes.',
-        );
+        throw _changedInAnotherEditor;
       }
       final stat = await backup.stat();
       setFilePermissions(temporary.path, stat.mode & _posixPermissionMask);
@@ -554,6 +568,146 @@ Future<String> _writeTextDocument(
     if (!retainTemporary && await temporary.exists()) await temporary.delete();
   }
 }
+
+/// Saves a file that has other hard links by rewriting it in place, so
+/// every name sees the new text (I3). A replacing save would publish a new
+/// file under this name only, and the other names would keep the old text.
+///
+/// The guard is kept as far as an in-place write allows: the current text
+/// must still match [expectedSha256], and a copy of it, owner-only, is
+/// written to [backup] before the file is truncated. A failed write puts
+/// that text back; only when that fails too is the backup kept and named.
+/// Unlike the replacing save this is not atomic: a crash mid-write leaves
+/// the file partly written, with the previous text in [backup]. The file
+/// keeps its inode, so its owner, mode, attributes and ACLs stay as they
+/// were without being copied.
+Future<String> _writeHardLinkedInPlace(
+  File file,
+  Uint8List bytes, {
+  required String expectedSha256,
+  required File backup,
+  required int maximumBytes,
+  Future<void> Function(File backup)? observeBackup,
+}) async {
+  await _requireRegularFile(file);
+  // Larger than any document the digest could have come from.
+  if (await file.length() > maximumBytes) throw _changedInAnotherEditor;
+  final previous = await file.readAsBytes();
+  if (crypto.sha256.convert(previous).toString() != expectedSha256) {
+    throw _changedInAnotherEditor;
+  }
+
+  try {
+    await backup.create(exclusive: true);
+  } on FileSystemException catch (error, stackTrace) {
+    Error.throwWithStackTrace(
+      TextDocumentFolderNotWritableException(
+        'A backup could not be created beside the document. Check that its '
+        'folder is writable. ${_osDetail(error)}',
+        folder: backup.parent.path,
+      ),
+      stackTrace,
+    );
+  }
+  var keepBackup = false;
+  try {
+    setFilePermissions(backup.path, _ownerReadWriteMode);
+    await backup.writeAsBytes(previous, flush: true);
+    await observeBackup?.call(backup);
+
+    try {
+      await _overwriteInPlace(file, bytes);
+    } on FileSystemException catch (error, stackTrace) {
+      try {
+        await _overwriteInPlace(file, previous);
+      } on FileSystemException {
+        keepBackup = true;
+        Error.throwWithStackTrace(
+          TextDocumentException(
+            'The file could not be written, and its previous text could not '
+            'be put back. It is preserved at ${backup.path}. '
+            '${_osDetail(error)}',
+          ),
+          stackTrace,
+        );
+      }
+      Error.throwWithStackTrace(
+        TextDocumentException(
+          'The file could not be written; it still holds its previous text. '
+          '${_osDetail(error)}',
+        ),
+        stackTrace,
+      );
+    }
+
+    final savedSha256 = crypto.sha256.convert(bytes).toString();
+    if (await textDocumentSha256(file) != savedSha256) {
+      // Another program wrote between the write and this check.
+      keepBackup = true;
+      throw TextDocumentException(
+        'The file changed while it was being saved. '
+        'The previous copy is preserved at ${backup.path}.',
+      );
+    }
+    return savedSha256;
+  } finally {
+    if (!keepBackup) {
+      try {
+        await backup.delete();
+      } on FileSystemException {
+        // The outcome stands; a leftover backup is offered at the next open.
+      }
+    }
+  }
+}
+
+const _changedInAnotherEditor = TextDocumentException(
+  'The file changed in another editor. Reopen it before saving to avoid '
+  'losing those changes.',
+);
+
+/// Truncates [file] and writes [bytes] into it, flushed to disk. A file
+/// marked read-only is made writable for the write and marked again after:
+/// the user already agreed to save over it, as for a replacing save.
+Future<void> _overwriteInPlace(File file, List<int> bytes) async {
+  final mode = (await file.stat()).mode;
+  final protected = mode & _writePermissionBits == 0;
+  if (protected) _allowWrite(file.path, mode, allow: true);
+  try {
+    final handle = await file.open(mode: FileMode.writeOnly);
+    try {
+      await handle.writeFrom(bytes);
+      await handle.flush();
+    } finally {
+      await handle.close();
+    }
+  } finally {
+    if (protected) _allowWrite(file.path, mode, allow: false);
+  }
+}
+
+/// Grants or withdraws the owner's write permission (on Windows, clears or
+/// sets the read-only attribute) around an in-place write. A failure to
+/// grant leaves the open to report the real error; one to withdraw leaves
+/// the file writable rather than failing a write that landed.
+void _allowWrite(String path, int mode, {required bool allow}) {
+  try {
+    if (Platform.isWindows) {
+      setWindowsReadOnly(path, readOnly: !allow);
+      return;
+    }
+    final permissions = mode & _posixPermissionMask;
+    setFilePermissions(
+      path,
+      allow ? permissions | _ownerWritePermission : permissions,
+    );
+  } on FileSystemException {
+    // See above.
+  }
+}
+
+/// chmod u+w.
+const int _ownerWritePermission = 0x80;
 
 /// The pure, CPU-bound half of a write: rejects NUL, applies [lineEnding]
 /// and encodes, all before anything touches the disk. It may run in
