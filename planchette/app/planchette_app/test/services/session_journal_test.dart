@@ -125,6 +125,19 @@ void main() {
       expect(SessionWindow.fromJson({'version': 99, 'tabs': []}), isNull);
       expect(SessionWindow.fromJson('garbage'), isNull);
     });
+
+    test('the active tab survives a skipped tab before it', () {
+      final read = SessionWindow.fromJson({
+        'version': SessionWindow.version,
+        'tabs': [
+          'not a tab',
+          {'untitledName': 'A', 'text': 'a'},
+          {'untitledName': 'B', 'text': 'b'},
+        ],
+        'active': 2,
+      })!;
+      expect(read.tabs[read.active!].untitledName, 'B');
+    });
   });
 
   group('workspace snapshot and restore', () {
@@ -603,6 +616,25 @@ void main() {
       final kept = await SessionJournalStore(temp).readAll();
       expect(kept.single.id, '8888888888888888');
       expect(kept.single.window.tabs, hasLength(2));
+    });
+
+    test('a write queued before a window closes cannot bring its file '
+        'back', () async {
+      await keep(
+        'aaaaaaaaaaaaaaaa',
+        const SessionWindow(
+          tabs: [SessionTab(untitledName: 'A', text: 'a')],
+        ),
+      );
+      final journal = makeJournal();
+      final workspace = newWorkspace();
+      await journal.restoreWorkspace(workspace, await journal.open());
+      workspace.documents.single.editor.text.text = 'changed';
+      final pending = journal.flushAll();
+      await journal.detach(workspace);
+      await pending;
+      await _settle();
+      expect(await SessionJournalStore(temp).readAll(), isEmpty);
     });
   });
 

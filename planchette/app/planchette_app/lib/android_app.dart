@@ -94,7 +94,13 @@ class _AndroidAppState extends State<_AndroidApp> {
   Future<void> _quit() async {
     if (!await widget.workspace.confirmQuit()) return;
     widget.journal.freeze();
-    await widget.settings.flush();
+    try {
+      await widget.settings.flush();
+    } on Object {
+      // The app stays open, so its windows must be kept again.
+      widget.journal.thaw();
+      rethrow;
+    }
     await SystemNavigator.pop();
   }
 

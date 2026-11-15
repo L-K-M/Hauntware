@@ -123,13 +123,16 @@ final class SessionWindow {
     if (json is! Map || json['version'] != version) return null;
     final stored = json['tabs'];
     if (stored is! List) return null;
-    final tabs = [for (final entry in stored) ?SessionTab.fromJson(entry)];
-    final active = json['active'];
-    return SessionWindow(
-      tabs: List.unmodifiable(tabs),
-      active: active is int && active >= 0 && active < tabs.length
-          ? active
-          : null,
-    );
+    // The stored index counts every entry, skipped ones included.
+    final storedActive = json['active'];
+    final tabs = <SessionTab>[];
+    int? active;
+    for (final (index, entry) in stored.indexed) {
+      final tab = SessionTab.fromJson(entry);
+      if (tab == null) continue;
+      if (index == storedActive) active = tabs.length;
+      tabs.add(tab);
+    }
+    return SessionWindow(tabs: List.unmodifiable(tabs), active: active);
   }
 }

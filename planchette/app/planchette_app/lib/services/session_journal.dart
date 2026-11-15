@@ -174,6 +174,10 @@ final class WorkspaceJournal {
   Timer? _timer;
   SessionWindow? _written;
   Future<bool> _tail = Future.value(true);
+
+  /// Completes once every write queued so far has ended. [stop] keeps
+  /// those writes, so whoever deletes the file after it waits for this.
+  Future<void> get idle => _tail;
   bool _failing = false;
   bool _running = false;
 
@@ -350,8 +354,11 @@ final class SessionJournal {
   /// its documents were asked about.
   Future<void> detach(DocumentWorkspace workspace) async {
     if (_frozen) return;
-    _journals.remove(workspace)?.stop();
+    final journal = _journals.remove(workspace)?..stop();
     final id = _ids.remove(workspace);
+    // A write queued before the stop would otherwise land after the
+    // delete and bring back a window the user closed.
+    await journal?.idle;
     if (id == null || !_owned) return;
     try {
       await store.delete(id);
