@@ -79,6 +79,11 @@
   section's included, shows a dot when a server it hides is connected
   or connecting, as Séance's does, and a filter keeps such a section's
   header in view.
+- A reboot from the Overview's quick actions waits for the server to
+  answer again, as one from the System tab does, and the wait lasts
+  when you leave the tab or admin mode ends: the quick actions card
+  stays with only the reboot's progress until the server is back. After
+  15 minutes without an answer the wait says so.
 - A container's CPU chart scales past 100 %, the Top view's Select all
   and Remove count only the containers it shows, and a removed
   container's details drop its actions and charts. A crashed container's

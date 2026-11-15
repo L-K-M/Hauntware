@@ -7,10 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/pinned_services.dart';
+import 'package:klabautermann_app/controllers/power_waits.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/admin_mode_chip.dart' show AdminScope;
+import 'package:klabautermann_app/ui/power.dart' show PowerWaitsScope;
 import 'package:klabautermann_app/ui/quick_actions.dart';
 import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -198,5 +200,247 @@ void main() {
     await tester.pumpAndSettle();
     expect(shown, isTrue);
     expect(find.text('Reboot'), findsOneWidget);
+  });
+
+  testWidgets('a reboot from the card keeps the card with only its progress '
+      'after admin mode ends, until the server is back (Q1)', (tester) async {
+    final engine = FakeEngineClient();
+    final admin = AdminController(engine);
+    final operations = OperationsController(engine);
+    final safety = SafetyController(
+      initial: const SafetyPolicy(
+        servers: {_serverId: ServerSafety(management: true)},
+      ),
+      apply: (_) {},
+    );
+    final bootBefore = DateTime.utc(2026, 10, 20, 8);
+    var now = DateTime.utc(2026, 10, 26, 12);
+    Sample core(DateTime bootedAt, int seq) => Sample(
+      serverId: _serverId,
+      stream: SampleStream.core,
+      seq: seq,
+      at: now,
+      result: CoreResult(bootedAt: bootedAt),
+    );
+    final cores = ValueNotifier<Sample?>(core(bootBefore, 1));
+    final waits = PowerWaits(
+      core: (_) => cores,
+      operations: operations,
+      now: () => now,
+    );
+    addTearDown(() async {
+      waits.dispose();
+      cores.dispose();
+      admin.dispose();
+      safety.dispose();
+      operations.dispose();
+      await engine.close();
+    });
+    late bool shown;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => SafetyScope(
+          safety: safety,
+          child: OperationsScope(
+            operations: operations,
+            child: AdminScope(
+              admin: admin,
+              child: PowerWaitsScope(waits: waits, child: child!),
+            ),
+          ),
+        ),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) {
+              shown = quickActionsShown(context, _serverId);
+              return shown
+                  ? const QuickActionsCard(serverId: _serverId)
+                  : const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    engine.emit(const AdminModeState(_serverId, AdminModePhase.on));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Reboot'));
+    await tester.pump();
+    engine.emit(
+      ActionPlanned(
+        'plan-1',
+        ActionPreview(
+          intent: const PowerAction(_serverId, PowerVerb.reboot),
+          targetName: 'web-01',
+          steps: [
+            ShellStep(
+              const ['systemctl', 'reboot'],
+              elevated: true,
+              endsLink: true,
+            ),
+          ],
+          requiredLevel: RequiredLevel.admin,
+          runner: const RunnerFacts(
+            identity: 'root',
+            credentials: RunnerCredentials.adminPassword,
+          ),
+          requiredTier: ConfirmationTier.typedPhrase,
+          hostWrites: const [HostWriteRow.loginRecords],
+          impact: const PlanImpact(ImpactKind.restartsHost),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'web-01');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    // The run's progress bar never settles.
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(engine.sentOfType<RunAction>(), hasLength(1));
+
+    // The reboot drops the link, and admin mode ends with it, before the
+    // host's answer: the card stays, with a bare progress bar and no
+    // admin action.
+    engine.emit(const AdminModeState(_serverId, AdminModePhase.off));
+    await tester.pump();
+    expect(shown, isTrue);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('Reboot'), findsNothing);
+
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+    await tester.pump();
+    now = now.add(const Duration(seconds: 20));
+    await tester.pump(const Duration(seconds: 1));
+    expect(shown, isTrue);
+    expect(
+      find.text(
+        'Rebooting. Waiting for the server to answer again: '
+        '20 seconds so far.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Stop waiting'), findsOneWidget);
+    expect(find.text('Reboot'), findsNothing);
+
+    // Back on a later boot: nothing is left to offer outside admin mode.
+    now = now.add(const Duration(seconds: 40));
+    cores.value = core(now.subtract(const Duration(seconds: 15)), 2);
+    await tester.pump();
+    expect(shown, isFalse);
+    expect(find.byType(QuickActionsCard), findsNothing);
+  });
+
+  testWidgets('a reboot not back in time leaves the card outside admin '
+      'mode', (tester) async {
+    final engine = FakeEngineClient();
+    final operations = OperationsController(engine);
+    final cores = ValueNotifier<Sample?>(null);
+    final waits = PowerWaits(core: (_) => cores, operations: operations);
+    addTearDown(() async {
+      waits.dispose();
+      cores.dispose();
+      operations.dispose();
+      await engine.close();
+    });
+    late bool shown;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PowerWaitsScope(
+          waits: waits,
+          child: Builder(
+            builder: (context) {
+              shown = quickActionsShown(context, _serverId);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    operations.run(
+      'plan-1',
+      const ActionConfirmation(
+        tier: ConfirmationTier.typedPhrase,
+        phrase: 'web-01',
+      ),
+    );
+    waits.start(_serverId, 'plan-1', PowerVerb.reboot);
+    await tester.pump();
+    expect(shown, isTrue);
+
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.waiting);
+    expect(shown, isTrue);
+
+    await tester.pump(kRebootWaitTimeout);
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.notBack);
+    expect(shown, isFalse);
+  });
+
+  testWidgets('the reboot timeout counts from the host taking the run', (
+    tester,
+  ) async {
+    final engine = FakeEngineClient();
+    final operations = OperationsController(engine);
+    final cores = ValueNotifier<Sample?>(null);
+    final waits = PowerWaits(core: (_) => cores, operations: operations);
+    addTearDown(() async {
+      waits.dispose();
+      cores.dispose();
+      operations.dispose();
+      await engine.close();
+    });
+    late bool shown;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PowerWaitsScope(
+          waits: waits,
+          child: Builder(
+            builder: (context) {
+              shown = quickActionsShown(context, _serverId);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+    operations.run(
+      'plan-1',
+      const ActionConfirmation(
+        tier: ConfirmationTier.typedPhrase,
+        phrase: 'web-01',
+      ),
+    );
+    waits.start(_serverId, 'plan-1', PowerVerb.reboot);
+    await tester.pump();
+    expect(shown, isTrue);
+
+    // The run is taken only after a full timeout span has passed.
+    await tester.pump(kRebootWaitTimeout + const Duration(minutes: 1));
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.running);
+
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.waiting);
+    expect(shown, isTrue);
+
+    await tester.pump(kRebootWaitTimeout - const Duration(seconds: 1));
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.waiting);
+    await tester.pump(const Duration(seconds: 1));
+    expect(waits.waitFor(_serverId)!.phase, PowerWaitPhase.notBack);
+    expect(shown, isFalse);
   });
 }

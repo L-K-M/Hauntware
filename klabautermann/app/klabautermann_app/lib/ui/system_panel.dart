@@ -311,7 +311,6 @@ class _SystemPanelState extends State<SystemPanel> {
               PowerSection(
                 key: const ValueKey(SystemSection.power),
                 serverId: widget.serverId,
-                core: _core,
               ),
             ],
           ),

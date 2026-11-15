@@ -43,6 +43,8 @@ import '../services/local_volumes.dart' show LocalVolumeSource;
 import '../services/other_pane_transfer.dart';
 import '../services/pane_comparison.dart';
 import '../services/pane_controller.dart';
+import '../services/file_clipboard.dart';
+import '../services/file_operations.dart';
 import '../services/pane_drop.dart';
 import '../services/pane_file_ops.dart';
 import '../services/pane_location.dart';
@@ -106,6 +108,7 @@ import 'local_edits_review.dart';
 import 'menus/app_menu_commands.dart';
 import 'menus/app_menu_host.dart';
 import 'menus/edit_history_commands.dart';
+import 'panes/file_clipboard_commands.dart';
 import 'panes/batch_rename_command.dart';
 import 'panes/batch_rename_dialog.dart';
 import 'panes/compare_files_command.dart';
@@ -608,6 +611,40 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// only a change made here is this window's to take back.
   final _undoHistory = GhostUndoHistory();
 
+  /// P4-21's app-internal file clipboard: one per window, shared by its
+  /// panes and tabs on every host. Never the OS clipboard.
+  final _fileClipboard = FileClipboard();
+
+  /// Paste and the file operations' Edit ▸ Undo entries, recorded on
+  /// [_undoHistory].
+  late final FileOperations _fileOperations = FileOperations(
+    history: _undoHistory,
+    clipboard: _fileClipboard,
+    delegate: () {
+      final queue = widget.transferQueue;
+      return queue == null
+          ? null
+          : PaneDropDelegate(
+              queue: queue,
+              conflictPolicy: widget.conflictPolicy,
+            );
+    },
+    hostChannel: (host) {
+      final workspace = _workspace;
+      return workspace == null ? null : fileHostChannelIn(workspace, host);
+    },
+    confirmCopyUndo: (host, paths) async {
+      if (!mounted) return false;
+      return confirmFileCopyUndo(
+        context,
+        host: _fileHostLabel(host),
+        count: paths.length,
+      );
+    },
+    hostLabel: _fileHostLabel,
+    strings: () => AppLocalizations.of(context),
+  );
+
   /// The lifecycle forwarder feeding [_probes] (02 §4's foreground
   /// gating): owned by the shell so probe activity dies with the window.
   /// The engine session gets its own forwarding in the app composition —
@@ -1043,6 +1080,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _disposeProbes();
     _sidebar?.dispose();
     _undoHistory.dispose();
+    _fileClipboard.dispose();
     _activity.dispose();
     _alerts.dispose();
     _dragOut.dispose();
@@ -1538,6 +1576,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         externalEditorOpen: _openWithExternal,
         otherPaneTransfer: _transferToOtherPane,
         onLocationCommitted: widget.recentLocations?.recordLocation,
+        onEntryRenamed: (location, from, to) => _fileOperations.recordRename(
+          fsLocationForLocation(location),
+          from,
+          to,
+        ),
         serverConfigLookup: _serverConfigById,
         confirmClose: _confirmTabClose,
         // The cross-pane half of a remote tab's last-binding check: read
@@ -1856,7 +1899,18 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         ...buildWindowCommands(window: window),
       // 10 §5's Edit ▸ Undo/Redo: registered unconditionally — the rows
       // stay visible-disabled while the window's history is empty.
-      ...buildEditHistoryCommands(history: _undoHistory),
+      ...buildEditHistoryCommands(
+        history: _undoHistory,
+        blockedUndoName: () => _fileOperations.blockedUndoName,
+      ),
+      // P4-21's Edit ▸ Cut, Copy and Paste over the file clipboard.
+      if (workspace != null)
+        ...buildFileClipboardCommands(
+          workspace: workspace,
+          clipboard: _fileClipboard,
+          operations: _fileOperations,
+          reportFailure: _reportCommandFailure,
+        ),
       if (workspace != null && widget.workspaces != null)
         ...buildWorkspaceCommands(
           workspace: workspace,
@@ -1908,6 +1962,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
             await launchUrl(url);
           },
           fileOps: () => _fileOps,
+          fileOperations: _fileOperations,
           reportFailure: _reportCommandFailure,
           locationLabel: _paneLocationLabel,
           disconnectServer: widget.engineSession == null
@@ -2012,6 +2067,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       ?sidebar,
       // Edit ▸ Undo/Redo: labels and enablement follow the history.
       _undoHistory,
+      // Paste's enablement follows the file clipboard.
+      _fileClipboard,
       // The focused plan row drives the compare command's enablement.
       ?_activeSyncSession,
       // View ▸ Keep Folders on Top's checkmark.
@@ -2057,7 +2114,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         bottom: !compact,
         child: ServerLabelScope(
           resolve: _serverLabel,
-          child: CommandChordScope(
+          child: FileClipboardScope(
+            clipboard: _fileClipboard,
+            child: CommandChordScope(
             commands: commands,
             onRun: _runCommand,
             child: ListenableBuilder(
@@ -2091,6 +2150,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
                         ),
                       ),
                     ),
+            ),
             ),
           ),
         ),
@@ -2199,6 +2259,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         commands: commands,
         sshImportCommand: sshImportCommand,
         onReviewLocalEdits: onReviewLocalEdits,
+        dropDelegate: dropDelegate,
       );
     }
 
@@ -2443,6 +2504,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     required List<RegisteredCommand> commands,
     required RegisteredCommand? sshImportCommand,
     required void Function(String serverId) onReviewLocalEdits,
+    required PaneDropDelegate? dropDelegate,
   }) {
     return CompactWorkspace(
       key: _compactKey,
@@ -2475,6 +2537,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         onAddToFavorites: _sidebar == null
             ? null
             : (pane) => unawaited(_addPaneToFavorites(pane)),
+        copyDelegate: dropDelegate,
       ),
     );
   }
@@ -2684,6 +2747,12 @@ class _WorkspaceShellState extends State<WorkspaceShell>
 
   /// The place a delete dialog names: the server's own name for a remote
   /// pane, "This computer" for a local one.
+  /// A host's name in the file operations' Undo messages.
+  String _fileHostLabel(FsLocation host) => switch (host) {
+    ServerFsLocation(:final serverId) => _serverLabel(serverId) ?? serverId,
+    _ => AppLocalizations.of(context).fileHostThisDevice,
+  };
+
   String _paneLocationLabel(PaneController pane) {
     final l10n = AppLocalizations.of(context);
     final location = pane.location;

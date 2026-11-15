@@ -11857,11 +11857,89 @@ abstract class AppLocalizations {
   /// **'Clear selection'**
   String get compactSelectionClear;
 
-  /// D32 §9: selection bar label of Copy to Other Pane, naming the other pane's letter, e.g. 'Copy to B'.
+  /// UI-06: selection bar label of Copy to Other Pane on phones. The ellipsis says a confirmation sheet naming the destination host and folder opens first.
   ///
   /// In en, this message translates to:
-  /// **'Copy to {pane}'**
-  String compactActionCopyTo(String pane);
+  /// **'Copy to…'**
+  String get compactActionCopyTo;
+
+  /// UI-06: title of the Copy to… confirmation sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Copy 1 item} other{Copy {count} items}}'**
+  String compactCopyToTitle(int count);
+
+  /// UI-06: caption above the destination host (a server name, or This device) in the Copy to… sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get compactCopyToHost;
+
+  /// UI-06: caption above the destination folder path in the Copy to… sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder'**
+  String get compactCopyToFolder;
+
+  /// UI-06: the Copy to… sheet's button that queues the copy into the shown host and folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get compactCopyToConfirm;
+
+  /// UI-06: screen reader label of the Copy button, naming the full destination.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy to {host}, {folder}'**
+  String compactCopyToConfirmSemantics(String host, String folder);
+
+  /// UI-06: the Copy to… sheet's button that opens a folder picker on the destination host.
+  ///
+  /// In en, this message translates to:
+  /// **'Change folder'**
+  String get compactCopyToChangeFolder;
+
+  /// UI-06: shown in the Copy to… sheet, with Copy disabled, when the chosen folder is one of the copied folders or inside one.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a folder outside the items you are copying.'**
+  String get compactCopyToNotAllowed;
+
+  /// UI-06: title of the destination folder picker opened by Change folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a folder'**
+  String get compactFolderPickerTitle;
+
+  /// UI-06: tooltip of the folder picker's button that goes to the parent folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enclosing folder'**
+  String get compactFolderPickerUp;
+
+  /// UI-06: the folder picker's button that picks the folder it shows.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this folder'**
+  String get compactFolderPickerChoose;
+
+  /// UI-06: the folder picker's message for a folder without subfolders.
+  ///
+  /// In en, this message translates to:
+  /// **'No folders here'**
+  String get compactFolderPickerEmpty;
+
+  /// UI-06: the folder picker's message when the folder's listing failed; a Retry button follows.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder can\'t be listed.'**
+  String get compactFolderPickerFailed;
+
+  /// UI-06: the folder picker's button that lists the folder again after a failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get compactFolderPickerRetry;
 
   /// D32 §9: selection bar label of Move to Other Pane, naming the other pane's letter, e.g. 'Move to B'.
   ///
@@ -12744,6 +12822,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get recoveryPromptRetry;
+
+  /// P4-21: Edit ▸ Undo, disabled, when the next change cannot be undone (a remote or permanent delete), e.g. "Can't Undo Delete".
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t Undo {name}'**
+  String editCantUndoNamedLabel(String name);
+
+  /// P4-21: Edit menu and context menu command that puts the selected items on the app's file clipboard to be moved by the next Paste (edit.cut).
+  ///
+  /// In en, this message translates to:
+  /// **'Cut'**
+  String get editCutFilesLabel;
+
+  /// P4-21: Edit menu and context menu command that puts the selected items on the app's file clipboard to be copied by Paste (edit.copy).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get editCopyFilesLabel;
+
+  /// P4-21: Edit menu and context menu command that copies or moves the clipboard's items into the active pane's folder (edit.paste).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get editPasteFilesLabel;
+
+  /// P4-21: why Paste is disabled while the app's file clipboard is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy or cut items first.'**
+  String get commandDisabledClipboardEmpty;
+
+  /// P4-21: why Paste is disabled in a folder the items cannot go into: one of the copied folders or inside it, or the folder a cut item is already in.
+  ///
+  /// In en, this message translates to:
+  /// **'These items can\'t be pasted into this folder.'**
+  String get commandDisabledPasteHere;
+
+  /// P4-21: toast when Paste had no transfer queue or live connection to work with.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was pasted. Open a folder on that host and try again.'**
+  String get filePasteUnavailable;
+
+  /// P4-21: toast after a same-server Cut and Paste where some renames failed; detail is the first failure's reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item couldn\'t be moved: {detail}} other{{count} items couldn\'t be moved: {detail}}}'**
+  String filePastePartial(int count, String detail);
+
+  /// P4-21: the Edit ▸ Undo name of a pasted copy ("Undo Copy").
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get fileUndoCopyName;
+
+  /// P4-21: the Edit ▸ Undo name of a Cut and Paste ("Undo Move").
+  ///
+  /// In en, this message translates to:
+  /// **'Move'**
+  String get fileUndoMoveName;
+
+  /// P4-21: the Edit ▸ Undo name of an inline rename ("Undo Rename").
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get fileUndoRenameName;
+
+  /// P4-21: the Edit ▸ Undo name of a local Move to Trash; undoing it puts the items back ("Undo Move to Trash").
+  ///
+  /// In en, this message translates to:
+  /// **'Move to Trash'**
+  String get fileUndoTrashName;
+
+  /// P4-21: the name of a delete that cannot be undone, shown as "Can't Undo Delete".
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get fileUndoDeleteName;
+
+  /// P4-21: why Undo is disabled after a remote or permanent delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Items deleted on a server, or deleted immediately, can\'t be restored.'**
+  String get fileUndoIrreversibleDelete;
+
+  /// P4-21: Undo declined while the copy, move or trash it would reverse is still running.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the transfer to finish, or cancel it in Transfers, then undo.'**
+  String get fileUndoWaitForTransfer;
+
+  /// P4-21: Undo of a paste declined because the destination's contents were unknown at paste time; nothing is deleted or moved.
+  ///
+  /// In en, this message translates to:
+  /// **'The destination folder couldn\'t be read before pasting, so Undo can\'t tell which items the paste created.'**
+  String get fileUndoUnknownOrigin;
+
+  /// P4-21: Undo declined because no item of the change completed, or every item went into something that already existed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing from this change is left to undo.'**
+  String get fileUndoNothing;
+
+  /// P4-21: Undo declined because no open tab has a live connection to the host the change happened on.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a tab on {host} to undo this.'**
+  String fileUndoNeedsTab(String host);
+
+  /// P4-21: Undo failed because no transfer queue is bound.
+  ///
+  /// In en, this message translates to:
+  /// **'The transfer queue isn\'t available.'**
+  String get fileUndoNoQueue;
+
+  /// P4-21: Undo's transfer finished with failed or skipped items.
+  ///
+  /// In en, this message translates to:
+  /// **'Some items couldn\'t be taken back.'**
+  String get fileUndoIncomplete;
+
+  /// P4-21: toast after the user cancelled Undo Copy's confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'The copied items were kept.'**
+  String get fileUndoCopyKept;
+
+  /// P4-21: Undo of a local Move to Trash declined where the trash gives no Put Back location (Linux, Windows).
+  ///
+  /// In en, this message translates to:
+  /// **'This system\'s trash doesn\'t report where it put the items. Restore them from the Trash.'**
+  String get fileUndoPutBackUnavailable;
+
+  /// P4-21: Put Back restored some items but the trash gave no location for the rest.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item couldn\'t be put back. Restore it from the Trash.} other{{count} items couldn\'t be put back. Restore them from the Trash.}}'**
+  String fileUndoPutBackPartial(int count);
+
+  /// P4-21: title of the confirmation before Undo Copy deletes the copied items.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo Copy?'**
+  String get fileUndoCopyTitle;
+
+  /// P4-21: body of Undo Copy's confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The item the copy created on {host} will be deleted.} other{The {count} items the copy created on {host} will be deleted.}} On a server, or where the Trash is unavailable, they are deleted permanently. Items that replaced or merged into existing ones are kept.'**
+  String fileUndoCopyMessage(int count, String host);
+
+  /// P4-21: the confirmation button that deletes the copied items.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Copies'**
+  String get fileUndoCopyConfirm;
+
+  /// P4-21: the button that cancels Undo Copy and keeps the copied items.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep Copies'**
+  String get fileUndoCopyCancel;
+
+  /// P4-21: the host name of local files in Undo messages.
+  ///
+  /// In en, this message translates to:
+  /// **'This device'**
+  String get fileHostThisDevice;
 }
 
 class _AppLocalizationsDelegate
