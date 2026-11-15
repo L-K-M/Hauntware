@@ -9,6 +9,7 @@ import 'document_store.dart';
 import 'document_publication.dart';
 import 'folder_workspace.dart';
 import 'save_siblings.dart';
+import 'session_state.dart';
 
 // DocumentDialogs answers with it, so its implementers need no second import.
 export 'save_siblings.dart' show SaveSiblingChoice;
@@ -22,6 +23,17 @@ enum ReadOnlyChoice { saveAs, saveAnyway, cancel }
 enum BulkCloseChoice { saveAll, discardAll, cancel }
 
 enum _CloseScope { tab, application }
+
+/// What a [DocumentWorkspace.confirmQuit] is for.
+enum QuitScope {
+  /// The app is quitting: unsaved documents may be kept for the next
+  /// launch instead of asked about (A2).
+  application,
+
+  /// Only this window is closing while others stay open. Its documents are
+  /// asked about, since nothing restores a closed window.
+  window,
+}
 
 /// Who is walking the dirty tabs, which decides what the walk may assume.
 enum _SaveRun {
@@ -278,6 +290,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// no-overwrite rules. The window registry installs itself here; in a
   /// one-window app this stays null and every peer check passes.
   PeerDocuments? peers;
+
+  /// Set while the hot-exit journal keeps this window (A2). A quit of the
+  /// application then awaits it instead of asking about unsaved documents:
+  /// true means everything is journaled and the quit goes ahead silently;
+  /// false (the journal could not be written) falls back to the questions.
+  Future<bool> Function()? keepUnsavedOnQuit;
 
   /// The run history every tab's editor shares, so Repeat and Recent see
   /// tools run in any document.
@@ -1395,9 +1413,17 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// user's answer, and the store re-checks each file before deleting it.
   /// Server copies are left to their host's own recovery.
   Future<void> _offerSaveSiblings(DocumentTab tab) async {
-    final siblings = saveSiblings;
     final path = tab.path;
-    if (siblings == null || path == null || tab._publication != null) return;
+    if (path == null || tab._publication != null) return;
+    await _offerSaveSiblingsAt(path, tab.name);
+  }
+
+  /// The offer for the document at [path], called [name], whether or not
+  /// it is open: a restored session also asks for a file that is gone,
+  /// whose interrupted save may have left its only copy beside it (B10).
+  Future<void> _offerSaveSiblingsAt(String path, String name) async {
+    final siblings = saveSiblings;
+    if (siblings == null) return;
     final key = _pathKey(path);
     if (!_siblingsOffered.add(key)) return;
     final List<SaveSibling> found;
@@ -1414,7 +1440,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
     if (found.isEmpty || _disposed || _quitAccepted) return;
     final choice = await _dialog(
-      () => dialogs.chooseSaveSiblings(tab.name, [
+      () => dialogs.chooseSaveSiblings(name, [
         for (final sibling in found) _paths.basename(sibling.path),
       ]),
     );
@@ -1838,12 +1864,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// Both the native close button and the OS Quit route share this decision.
   /// No tab is removed until every document has consented; a later Cancel
   /// therefore leaves the entire workspace available.
-  Future<bool> confirmQuit() =>
-      _quitDecision ??= _confirmQuit().whenComplete(() {
+  Future<bool> confirmQuit({QuitScope scope = QuitScope.application}) =>
+      _quitDecision ??= _confirmQuit(scope).whenComplete(() {
         _quitDecision = null;
       });
 
-  Future<bool> _confirmQuit() async {
+  Future<bool> _confirmQuit(QuitScope scope) async {
     if (_quitAccepted) return true;
 
     // A busy window cannot ask about its tabs, and refusing in silence looks
@@ -1859,6 +1885,13 @@ final class DocumentWorkspace extends ChangeNotifier {
     _closingAll = true;
     _notify();
     try {
+      // Hot exit: the journal keeps every document, so nothing is asked.
+      // Editing is locked from here, so what it writes is what quits.
+      final keep = keepUnsavedOnQuit;
+      if (scope == QuitScope.application && keep != null && await keep()) {
+        _quitAccepted = true;
+        return true;
+      }
       final unsaved = [
         for (final tab in _documents)
           if (tab.hasUnsavedChanges) tab,
@@ -1957,6 +1990,156 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  /// What the hot-exit journal keeps of this window (A2), in tab order.
+  ///
+  /// A local file is kept by its path, with its text only while it has
+  /// unsaved edits. An untitled buffer is kept with its text, except an
+  /// untouched empty one. A server copy cannot be reopened without its
+  /// connection, so only its unsaved text is kept, to come back as an
+  /// untitled buffer; its saved local copy has its own recovery. A tab
+  /// being reverted has had its edits discarded, so they are not kept.
+  SessionWindow sessionSnapshot() {
+    final tabs = <SessionTab>[];
+    int? active;
+    for (final tab in _documents) {
+      final kept = _sessionTab(tab);
+      if (kept == null) continue;
+      if (identical(tab, _active)) active = tabs.length;
+      tabs.add(kept);
+    }
+    return SessionWindow(tabs: List.unmodifiable(tabs), active: active);
+  }
+
+  SessionTab? _sessionTab(DocumentTab tab) {
+    final editor = tab.editor;
+    final (line, column) = editor.caretLineColumn;
+    final unsaved = editor.isDirty && !tab._reverting ? editor.text.text : null;
+    if (tab._publication != null) {
+      if (unsaved == null) return null;
+      return SessionTab(
+        untitledName: tab.name,
+        text: unsaved,
+        metadata: editor.metadata,
+        line: line,
+        column: column,
+      );
+    }
+    final path = tab.path;
+    if (path == null) {
+      if (_isPristineTab(tab)) return null;
+      // An untitled buffer's text is all there is of it, edited or not.
+      return SessionTab(
+        untitledName: tab.untitledName,
+        text: editor.text.text,
+        metadata: editor.metadata,
+        line: line,
+        column: column,
+      );
+    }
+    return SessionTab(
+      path: path,
+      text: unsaved,
+      baselineSha256: unsaved == null ? null : tab.baseline?.sha256,
+      metadata: editor.metadata,
+      line: line,
+      column: column,
+    );
+  }
+
+  /// Reopens a kept window's documents in their order (A2): files from
+  /// disk with their unsaved text put back over them, untitled buffers
+  /// with theirs. Nothing is written: a restored edit stays unsaved until
+  /// the user saves it.
+  ///
+  /// A file changed on disk since its edits were kept still gets them back,
+  /// over the new version, and the banner says so. A file that cannot be
+  /// opened gives its unsaved text to an untitled tab named after it, and
+  /// one that is gone is offered the files an interrupted save left beside
+  /// it (B10). Every problem is named in one banner.
+  Future<void> restoreSession(SessionWindow session) async {
+    final problems = <String>[];
+    DocumentTab? active;
+    for (final (index, kept) in session.tabs.indexed) {
+      if (_disposed) return;
+      final tab = kept.isFile
+          ? await _restoreFile(kept, problems)
+          : _restoreUntitled(kept.untitledName!, kept);
+      if (index == session.active) active = tab;
+    }
+    if (_disposed) return;
+    if (active != null && _documents.contains(active)) _active = active;
+    if (problems.isNotEmpty) {
+      _reportError(
+        'Some documents from the last session need attention: '
+        '${problems.join('; ')}.',
+      );
+    }
+    _notify();
+  }
+
+  DocumentTab _restoreUntitled(String name, SessionTab kept) {
+    final taken = _documents.any((tab) => tab.name == name);
+    final tab = _makeTab(
+      initialText: '',
+      untitledName: taken ? _freeUntitledName() : name,
+    );
+    _documents.add(tab);
+    _active = tab;
+    tab.editor.setMetadata(kept.metadata);
+    tab.editor.text.text = kept.text ?? '';
+    tab.editor.goToLine(kept.line, column: kept.column);
+    return tab;
+  }
+
+  Future<DocumentTab?> _restoreFile(
+    SessionTab kept,
+    List<String> problems,
+  ) async {
+    final path = kept.path!;
+    final name = _paths.basename(path);
+    final failure = await _openDeduped(path);
+    final tab = failure == null ? _findPath(path) : null;
+    if (tab != null) {
+      final text = kept.text;
+      if (text != null) {
+        if (tab.baseline?.sha256 != kept.baselineSha256) {
+          problems.add(
+            '$name changed on disk after its unsaved edits were kept. They '
+            'are back over the new version: compare before saving',
+          );
+        }
+        tab.editor.setMetadata(kept.metadata);
+        tab.editor.text.text = text;
+      }
+      tab.editor.goToLine(kept.line, column: kept.column);
+      return tab;
+    }
+
+    // Gone, not merely unreadable: an interrupted save may have left its
+    // only copy beside it.
+    if (await _isMissing(path)) unawaited(_offerSaveSiblingsAt(path, name));
+    final reason = failure?.message ?? 'it is open in another window';
+    if (kept.text == null) {
+      problems.add('$name could not be reopened ($reason)');
+      return null;
+    }
+    problems.add(
+      '$name could not be reopened ($reason); its unsaved text is in an '
+      'untitled tab',
+    );
+    return _restoreUntitled(name, kept);
+  }
+
+  Future<bool> _isMissing(String path) async {
+    try {
+      return await store.stamp(path) == null;
+    } on Object {
+      // A store that cannot say (an Android identity from before a
+      // restart) has nothing beside the file to offer either.
+      return false;
+    }
   }
 
   /// The tab holding [path]'s canonical key, or null. The window registry

@@ -10,6 +10,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   write through symbolic links.
 
 ### Added
+- Hot exit: quitting no longer asks about unsaved changes. The open
+  windows, untitled documents and unsaved edits come back at the next
+  launch, also after a crash or after Android ends the app in the
+  background. They are kept in a private folder on the device until
+  saved or discarded. Settings > Keep unsaved changes when quitting turns
+  it off and brings back the "Save changes?" questions.
 - `ghost_keepalive` package: the Android background keep-alive (a
   dataSync foreground service and its `ghost_keepalive` channel) shared
   by Séance and Poltergeist, moved out of Séance's app-private

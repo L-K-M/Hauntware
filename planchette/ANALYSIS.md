@@ -814,6 +814,13 @@ its own it needs a decision on where a vanished document's recovery is offered
 added: the age rule reads only the file's mtime, which the existing fresh-file
 test already sets, so another process adds no new path.
 
+**Status (2026-11-15, branch `planchette/wave5`):** the missing-target
+case now reaches the user through A2: a document in the restored session
+that is gone is offered the `.edit`/`.backup` siblings beside it (Open,
+Delete or Keep, with the existing safeguards), and its kept text opens in
+an untitled tab. A document that was never in a session still needs Open
+Recent to offer its siblings.
+
 ### B11. Explain or defer quit during saving — S (inherited read)
 `_confirmQuit` returns false while a tab is busy/saving, and the window treats
 false as doing nothing. Reproduce Cmd+Q during a gated save. Queue quit until
@@ -1747,6 +1754,21 @@ be written to disk at all for files a user opened from a protected location,
 and what Android restores after a process kill. The journal design, the
 interrupted-publication record (B10's missing target) and the
 forced-termination tests follow from those answers.
+
+**Status (2026-11-15, branch `planchette/wave5`):** done per the user's
+decision (Q7); see ARCHITECTURE.md. Quitting keeps every window's
+documents in an owner-only journal instead of asking; closing one window
+of several still asks. Unsaved text is journaled at once when a document
+opens, closes, is saved or becomes dirty, half a second after typing
+pauses, and on Android's pause; Don't Save and saving remove it. A restore
+never writes: kept edits come back unsaved over the file as it is on disk,
+a changed file is named in the banner, a missing one gives its text to an
+untitled tab. A setting (default on) restores the classic prompt and
+deletes the journal. A second instance or a failed write falls back to
+the prompt. Not done: scroll position, forced-termination tests at each
+save phase (the journal does not depend on the save), a preview before
+restoring, and Kotlin compilation of the Android identity persistence,
+which only CI can build.
 
 ### A3. Open Recent and a recent list in the empty state — M
 Keep the last 20 paths in settings. Show them in File › Open Recent (on

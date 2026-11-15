@@ -544,6 +544,18 @@ abstract class AppLocalizations {
   /// **'Ensure final newline on save'**
   String get settingsFinalNewline;
 
+  /// Switch for hot exit: quitting keeps unsaved documents and windows for the next launch instead of asking to save them.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep unsaved changes when quitting'**
+  String get settingsKeepUnsaved;
+
+  /// Explains the keep-unsaved-changes switch, where the changes are kept and what turning it off does.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit without being asked; the open windows and unsaved changes come back at the next launch. They are kept in a private folder on this device until saved or discarded. Turn off to be asked to save instead.'**
+  String get settingsKeepUnsavedDetail;
+
   /// Settings section heading for the version and licenses.
   ///
   /// In en, this message translates to:
