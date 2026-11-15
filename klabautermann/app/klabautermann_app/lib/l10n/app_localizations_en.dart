@@ -5063,7 +5063,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsSyncSignOutBody =>
-      'This device forgets its sign-in and removes the servers that came from your sync account, with their cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.';
+      'This device forgets its sign-in and removes the servers that came from your sync account, with their saved credentials, cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.';
 
   @override
   String settingsSyncSignOutOpenConnections(int count) {

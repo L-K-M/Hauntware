@@ -6158,7 +6158,7 @@
   "@settingsSyncSignOutTitle": {
     "description": "Title of the dialog confirming the sync sign-out."
   },
-  "settingsSyncSignOutBody": "This device forgets its sign-in and removes the servers that came from your sync account, with their cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.",
+  "settingsSyncSignOutBody": "This device forgets its sign-in and removes the servers that came from your sync account, with their saved credentials, cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.",
   "@settingsSyncSignOutBody": {
     "description": "Body of the dialog confirming the sync sign-out: what it removes and what it keeps."
   },

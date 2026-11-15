@@ -6492,7 +6492,7 @@ abstract class AppLocalizations {
   /// Body of the dialog confirming the sync sign-out: what it removes and what it keeps.
   ///
   /// In en, this message translates to:
-  /// **'This device forgets its sign-in and removes the servers that came from your sync account, with their cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.'**
+  /// **'This device forgets its sign-in and removes the servers that came from your sync account, with their saved credentials, cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.'**
   String get settingsSyncSignOutBody;
 
   /// Warning in the sign-out dialog when servers it removes are connected.
