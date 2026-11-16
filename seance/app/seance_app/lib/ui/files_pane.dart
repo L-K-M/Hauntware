@@ -3,10 +3,11 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:file_selector/file_selector.dart' show getSaveLocation;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_marks_picker/picked_files.dart' show saveAs;
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorZoom;
@@ -28,6 +29,21 @@ import 'file_kinds.dart';
 /// threshold Poltergeist's preview asks at
 /// (`defaultLargeDownloadThresholdBytes`).
 const _largeDownloadBytes = 100 * 1024 * 1024;
+
+/// The largest remote file iOS's "Download / Save as…" saves: its document
+/// picker takes the whole file in memory. Share… streams any size.
+const _documentPickerSaveBytes = _largeDownloadBytes;
+
+/// A remote file too large for iOS's document picker, said before or after
+/// the download, whichever learns the size first.
+class _TooLargeForDocumentPickerException implements Exception {
+  const _TooLargeForDocumentPickerException();
+
+  @override
+  String toString() =>
+      'Files over 100 MB cannot be saved this way on iOS. Use Share… and '
+      'choose Save to Files.';
+}
 
 class FilesScreen extends StatelessWidget {
   const FilesScreen({super.key});
@@ -1361,20 +1377,28 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   Future<void> _exportRemoteFile(RemoteFileEntry entry) async {
     StagedExportFile? staged;
     try {
+      if (_savesThroughDocumentPicker &&
+          (entry.size ?? 0) > _documentPickerSaveBytes) {
+        throw const _TooLargeForDocumentPickerException();
+      }
       staged = await _stageRemoteFile(entry);
       final service = FileExportService(
-        desktopSave: (file) async {
-          // Only the destination: file_picker's own save needs the whole
-          // file in memory and writes it before returning.
-          final location = await getSaveLocation(
-            suggestedName: file.fileName,
-          );
-          if (location == null) return null;
-          final destination = location.path;
-          await _copyExportAtomically(file.file, File(destination));
-          await _provenance.markDownloaded(destination);
-          return destination;
-        },
+        // A desktop panel names the destination and the staged copy is
+        // streamed there; iOS's document picker takes the bytes.
+        desktopSave: (file) => saveAs(
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+          readBytes: () async {
+            if (await file.file.length() > _documentPickerSaveBytes) {
+              throw const _TooLargeForDocumentPickerException();
+            }
+            return file.file.readAsBytes();
+          },
+          writeTo: (destination) async {
+            await _copyExportAtomically(file.file, File(destination));
+            await _provenance.markDownloaded(destination);
+          },
+        ),
       );
       if (Platform.isAndroid && !await service.hasExportDirectoryAccess()) {
         if (!await service.pickExportDirectory()) return;
@@ -1690,6 +1714,11 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
 
   static final bool _supportsDesktopDrop =
       Platform.isLinux || Platform.isMacOS || Platform.isWindows;
+
+  /// Whether "Download / Save as…" ends in iOS's document picker, which
+  /// holds the whole file (see [saveAs]).
+  static bool get _savesThroughDocumentPicker =>
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   static final bool _supportsSharing =
       Platform.isAndroid ||
