@@ -51,9 +51,10 @@ List<List<RegisteredCommand>> compactMoreSections(
   return sections;
 }
 
-/// D32 §9's bottom action bar while items are selected: Copy and Move to
-/// the other pane (named by its letter — the two-pane model's implicit
-/// destination), Delete, and More. Each item is the registered command
+/// D32 §9's bottom action bar while items are selected: Copy to… (UI-06:
+/// a confirmation sheet names the destination host and folder before
+/// anything is queued), Move to the other pane (named by its letter),
+/// Delete, and More. Each item is the registered command
 /// (D21): its enablement, its run path, and its full label for assistive
 /// tech. A disabled item still answers a tap with the command's reason,
 /// so a greyed Copy explains that the other pane has no folder open
@@ -68,6 +69,7 @@ class CompactSelectionBar extends StatelessWidget {
     required this.onRun,
     required this.otherPaneLetter,
     required this.moreTitle,
+    this.onCopyTo,
   });
 
   final List<RegisteredCommand> commands;
@@ -78,6 +80,10 @@ class CompactSelectionBar extends StatelessWidget {
 
   /// The More sheet's title ("3 selected").
   final String moreTitle;
+
+  /// Opens UI-06's Copy to… sheet while Copy to Other Pane is enabled;
+  /// null runs the registered command directly (no queue to snapshot).
+  final VoidCallback? onCopyTo;
 
   RegisteredCommand? _command(String id) {
     for (final command in commands) {
@@ -105,7 +111,8 @@ class CompactSelectionBar extends StatelessWidget {
                 key: CompactKey.actionCopy,
                 command: _command(kSelectionTransferToOtherPaneCommandId),
                 icon: Icons.content_copy_outlined,
-                label: l10n.compactActionCopyTo(otherPaneLetter),
+                label: l10n.compactActionCopyTo,
+                onEnabledPressed: onCopyTo,
               ),
               _item(
                 context,
@@ -149,6 +156,7 @@ class CompactSelectionBar extends StatelessWidget {
     required RegisteredCommand? command,
     required IconData icon,
     required String label,
+    VoidCallback? onEnabledPressed,
   }) {
     final l10n = AppLocalizations.of(context);
     final enabled = command != null && command.enabled();
@@ -161,6 +169,10 @@ class CompactSelectionBar extends StatelessWidget {
       onPressed: () {
         if (command == null) return;
         if (command.enabled()) {
+          if (onEnabledPressed != null) {
+            onEnabledPressed();
+            return;
+          }
           unawaited(onRun(command));
           return;
         }

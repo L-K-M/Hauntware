@@ -13617,6 +13617,12 @@ abstract class AppLocalizations {
   /// **'The server answered again {elapsed} after the reboot.'**
   String systemPowerBack(String elapsed);
 
+  /// System tab, Power, and the Overview's quick actions: shown when a rebooted server has not reported a new boot within 15 minutes; elapsed is a duration such as '15 minutes'.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has not answered again {elapsed} after the reboot. It may still be starting, or need someone at its console.'**
+  String systemPowerNotBack(String elapsed);
+
   /// System tab, Power: shown after the shutdown was taken.
   ///
   /// In en, this message translates to:

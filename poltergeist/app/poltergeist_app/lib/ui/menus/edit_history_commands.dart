@@ -30,15 +30,21 @@ enum EditHistoryTarget { focusedControl, appData }
 /// scope's field-first suspension, the native menu's Edit-verb
 /// retargeting, and [stepEditHistory]'s own stand-down all keep these
 /// steps out of fields and the built-in editor.
+///
+/// [blockedUndoName] names a next change that cannot be undone (P4-21: a
+/// remote or permanent delete): the Undo row then reads "Can't Undo
+/// Delete", disabled, rather than offering a step that only declines.
 List<RegisteredCommand> buildEditHistoryCommands({
   required GhostUndoHistory history,
+  String? Function()? blockedUndoName,
 }) => [
   RegisteredCommand(
     id: kEditUndoCommandId,
     scope: CommandScope.app,
-    label: (l10n) => switch (history.undoName) {
-      null => l10n.editUndoLabel,
-      final name => l10n.editUndoNamedLabel(name),
+    label: (l10n) => switch ((blockedUndoName?.call(), history.undoName)) {
+      (final String blocked, _) => l10n.editCantUndoNamedLabel(blocked),
+      (null, null) => l10n.editUndoLabel,
+      (null, final String name) => l10n.editUndoNamedLabel(name),
     },
     icon: Icons.undo,
     activators: _perPlatform(
@@ -48,8 +54,11 @@ List<RegisteredCommand> buildEditHistoryCommands({
     // A held chord steps back change by change, as in the suite's other
     // apps; the history refuses a step while one is still running.
     repeatable: true,
-    enabled: () => history.undoName != null,
-    disabledReason: (l10n) => l10n.commandDisabledNoUndo,
+    enabled: () =>
+        history.undoName != null && blockedUndoName?.call() == null,
+    disabledReason: (l10n) => blockedUndoName?.call() == null
+        ? l10n.commandDisabledNoUndo
+        : l10n.fileUndoIrreversibleDelete,
     run: (context) => stepEditHistory(
       Overlay.of(context, rootOverlay: true),
       history,

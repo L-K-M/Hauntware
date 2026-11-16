@@ -43,6 +43,11 @@ final class _FakeNotifications implements SystemNotifications {
 
   @override
   Future<void> cancel(int id) async => cancelled.add(id);
+
+  final badges = <int>[];
+
+  @override
+  Future<void> setBadge(int count) async => badges.add(count);
 }
 
 LocalAlertChanged _change(

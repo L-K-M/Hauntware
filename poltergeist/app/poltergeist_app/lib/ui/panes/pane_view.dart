@@ -41,6 +41,7 @@ import '../compact/compact_pane_messages.dart'
         compactRenameErrorText;
 import '../local_edits_review.dart';
 import '../server_appearance.dart';
+import 'file_clipboard_commands.dart' show FileClipboardScope, kCutRowOpacity;
 import 'pane_column_header.dart';
 import 'pane_context_menu.dart';
 import 'pane_drop_area.dart';
@@ -2133,7 +2134,7 @@ class _PaneSurface extends StatelessWidget {
     final highlighted = controller.cursorIndex == index;
     final selected = controller.isRowSelected(index);
     final disclosure = controller.disclosureAt(index);
-    final row = GhostFileRow(
+    final fileRow = GhostFileRow(
       item: paneFileItem(controller.entries[index]),
       outline: !gestures.touch,
       depth: controller.rowDepth(index),
@@ -2176,6 +2177,19 @@ class _PaneSurface extends StatelessWidget {
           ? () => gestures.onRename(index)
           : null,
     );
+    // P4-21: a row that was cut and not yet pasted renders dimmed.
+    final clipboard = FileClipboardScope.maybeOf(context);
+    final shown = controller.location;
+    final cut =
+        clipboard != null &&
+        shown != null &&
+        clipboard.isCut(
+          fsLocationForLocation(shown),
+          controller.entries[index].path,
+        );
+    final Widget row = cut
+        ? Opacity(opacity: kCutRowOpacity, child: fileRow)
+        : fileRow;
     // Rows drag only where a pointer drag is the platform's gesture —
     // on touch platforms the immediate recognizer would steal the
     // listing's scroll. Drops still land via DragTarget on the zone.

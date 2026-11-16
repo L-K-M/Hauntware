@@ -5236,9 +5236,20 @@ arrives with E22's Docker actions.
   in the foreground with the app as the notification center's delegate,
   Windows names the app with its application id and a fixed GUID, and
   the Flatpak talks to `org.freedesktop.Notifications`. Notifications
-  are not scheduled and a tap only brings the app forward. The app
-  icon's badge (ALR-02) stays open; delivery on real devices is a manual
-  check per OS.
+  are not scheduled and a tap only brings the app forward. Delivery on
+  real devices is a manual check per OS.
+- **As built (ALR-02 app icon badge).** On iOS and macOS the app icon
+  shows how many raised alerts the user has not seen: `AlertCenter`
+  counts each raise until its clear or until the alert center opens,
+  which lists every server's alerts and so clears every server's share;
+  a raise after that counts again. The count shows only while the
+  notifications switch is on, and the badge clears when it turns off
+  and at each launch (alerts last one engine run). The plugin sets a
+  badge only from a notification's content, so `setBadge` posts a
+  notification with no title or body that presents nothing and is
+  withdrawn at once; permission requests now include the badge. Android
+  launchers, Windows and Linux would need another plugin and show none.
+  Delivery on a device is a manual check.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1

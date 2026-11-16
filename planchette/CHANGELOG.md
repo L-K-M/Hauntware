@@ -14,6 +14,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   codec, per-extension defaults, launcher and Settings section, shared by
   Séance and Poltergeist instead of a copy in each app. Each app keeps its
   stored format through its own id namespace and migrations.
+- The editor's find and replace bars, Go to Line, text tools, status row
+  and problem messages take their text from the app's localization
+  catalog, ready for translation. The English text is unchanged.
 - `ghost_keepalive` package: the Android background keep-alive (a
   dataSync foreground service and its `ghost_keepalive` channel) shared
   by Séance and Poltergeist, moved out of Séance's app-private

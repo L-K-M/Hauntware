@@ -1,5 +1,29 @@
 # Status
 
+## Wave 5 (2026-11-15)
+
+Three branches, each with its own PR:
+
+- `planchette/wave5`: hot exit (A2). Quitting keeps unsaved documents
+  and windows in an owner-only journal and restores them at the next
+  launch, desktop and Android; a setting brings back the prompt. A
+  missing file in a restored session is offered its save siblings
+  (B10).
+- `planchette/wave5-2`: Unicode 17.0.0 full case folding for literal
+  search (B37), in-place saves behind a backup for hard-linked files
+  (I3), and per-type Save As folders (A3).
+- `planchette/wave5-3`: the `EditorStrings` feed in the ARB catalog
+  (I7 phase 3).
+
+Open: the shell's menus and the services' strings (I7, about 200
+literals), macOS native recents (A3), owner metadata on replaced files
+(I3), scroll position in a restored session (A2).
+
+Local proof: the app suite on each branch, the core and editor suites
+for B37 and I3. Unverified here: the Android `MainActivity` identity
+persistence (no Android SDK), macOS and Windows runs of the hard-link
+and journal paths, and devices.
+
 ## Deferred review items (2026-11-14)
 
 - Done: Open Recent on the desktop, the Save As offer when a folder

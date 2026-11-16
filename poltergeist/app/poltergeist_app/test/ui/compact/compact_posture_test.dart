@@ -498,7 +498,7 @@ void main() {
       expect(identical(workspace.activePane, workspace.left), isTrue);
     });
 
-    testWidgets('Copy to B sends the selection into the other pane', (
+    testWidgets('Copy to… sends the selection into the other pane', (
       tester,
     ) async {
       final harness = CompactHarness();
@@ -516,8 +516,10 @@ void main() {
 
       await tester.longPress(compactRow('/home/deploy/photo.jpg'));
       await tester.pumpAndSettle();
-      expect(find.text('Copy to B'), findsOneWidget);
+      expect(find.text('Copy to…'), findsOneWidget);
       await tester.tap(_key(CompactKey.actionCopy));
+      await tester.pumpAndSettle();
+      await tester.tap(_key(CompactKey.copyToConfirm));
       // The queued copy knows no size yet: the pill's spinner is
       // indeterminate, so the frame never settles.
       await tester.pump();

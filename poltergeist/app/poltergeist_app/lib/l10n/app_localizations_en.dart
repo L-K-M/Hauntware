@@ -8437,9 +8437,57 @@ class AppLocalizationsEn extends AppLocalizations {
   String get compactSelectionClear => 'Clear selection';
 
   @override
-  String compactActionCopyTo(String pane) {
-    return 'Copy to $pane';
+  String get compactActionCopyTo => 'Copy to…';
+
+  @override
+  String compactCopyToTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Copy $count items',
+      one: 'Copy 1 item',
+    );
+    return '$_temp0';
   }
+
+  @override
+  String get compactCopyToHost => 'Host';
+
+  @override
+  String get compactCopyToFolder => 'Folder';
+
+  @override
+  String get compactCopyToConfirm => 'Copy';
+
+  @override
+  String compactCopyToConfirmSemantics(String host, String folder) {
+    return 'Copy to $host, $folder';
+  }
+
+  @override
+  String get compactCopyToChangeFolder => 'Change folder';
+
+  @override
+  String get compactCopyToNotAllowed =>
+      'Choose a folder outside the items you are copying.';
+
+  @override
+  String get compactFolderPickerTitle => 'Choose a folder';
+
+  @override
+  String get compactFolderPickerUp => 'Enclosing folder';
+
+  @override
+  String get compactFolderPickerChoose => 'Use this folder';
+
+  @override
+  String get compactFolderPickerEmpty => 'No folders here';
+
+  @override
+  String get compactFolderPickerFailed => 'This folder can\'t be listed.';
+
+  @override
+  String get compactFolderPickerRetry => 'Retry';
 
   @override
   String compactActionMoveTo(String pane) {
@@ -9045,4 +9093,122 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get recoveryPromptRetry => 'Retry';
+
+  @override
+  String editCantUndoNamedLabel(String name) {
+    return 'Can\'t Undo $name';
+  }
+
+  @override
+  String get editCutFilesLabel => 'Cut';
+
+  @override
+  String get editCopyFilesLabel => 'Copy';
+
+  @override
+  String get editPasteFilesLabel => 'Paste';
+
+  @override
+  String get commandDisabledClipboardEmpty => 'Copy or cut items first.';
+
+  @override
+  String get commandDisabledPasteHere =>
+      'These items can\'t be pasted into this folder.';
+
+  @override
+  String get filePasteUnavailable =>
+      'Nothing was pasted. Open a folder on that host and try again.';
+
+  @override
+  String filePastePartial(int count, String detail) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items couldn\'t be moved: $detail',
+      one: '1 item couldn\'t be moved: $detail',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fileUndoCopyName => 'Copy';
+
+  @override
+  String get fileUndoMoveName => 'Move';
+
+  @override
+  String get fileUndoRenameName => 'Rename';
+
+  @override
+  String get fileUndoTrashName => 'Move to Trash';
+
+  @override
+  String get fileUndoDeleteName => 'Delete';
+
+  @override
+  String get fileUndoIrreversibleDelete =>
+      'Items deleted on a server, or deleted immediately, can\'t be restored.';
+
+  @override
+  String get fileUndoWaitForTransfer =>
+      'Wait for the transfer to finish, or cancel it in Transfers, then undo.';
+
+  @override
+  String get fileUndoUnknownOrigin =>
+      'The destination folder couldn\'t be read before pasting, so Undo can\'t tell which items the paste created.';
+
+  @override
+  String get fileUndoNothing => 'Nothing from this change is left to undo.';
+
+  @override
+  String fileUndoNeedsTab(String host) {
+    return 'Open a tab on $host to undo this.';
+  }
+
+  @override
+  String get fileUndoNoQueue => 'The transfer queue isn\'t available.';
+
+  @override
+  String get fileUndoIncomplete => 'Some items couldn\'t be taken back.';
+
+  @override
+  String get fileUndoCopyKept => 'The copied items were kept.';
+
+  @override
+  String get fileUndoPutBackUnavailable =>
+      'This system\'s trash doesn\'t report where it put the items. Restore them from the Trash.';
+
+  @override
+  String fileUndoPutBackPartial(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items couldn\'t be put back. Restore them from the Trash.',
+      one: '1 item couldn\'t be put back. Restore it from the Trash.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fileUndoCopyTitle => 'Undo Copy?';
+
+  @override
+  String fileUndoCopyMessage(int count, String host) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'The $count items the copy created on $host will be deleted.',
+      one: 'The item the copy created on $host will be deleted.',
+    );
+    return '$_temp0 On a server, or where the Trash is unavailable, they are deleted permanently. Items that replaced or merged into existing ones are kept.';
+  }
+
+  @override
+  String get fileUndoCopyConfirm => 'Delete Copies';
+
+  @override
+  String get fileUndoCopyCancel => 'Keep Copies';
+
+  @override
+  String get fileHostThisDevice => 'This device';
 }
