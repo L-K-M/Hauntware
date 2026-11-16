@@ -1981,10 +1981,10 @@
     "description": "Changed-run notice: Extract Matches, matches, in place.",
     "placeholders": {"count": {"type": "int"}, "where": {"type": "String"}}
   },
-  "editorTextToolChangedFallback": "changed {scope} units {where}.",
+  "editorTextToolChangedFallback": "changed {changed} of {scope, plural, =1{1 unit} other{{scope} units}} {where}.",
   "@editorTextToolChangedFallback": {
-    "description": "Changed-run notice: Unknown tool.",
-    "placeholders": {"scope": {"type": "int"}, "where": {"type": "String"}}
+    "description": "Changed-run notice: Unknown tool. changed counts the units it changed out of the scope units it covered.",
+    "placeholders": {"changed": {"type": "int"}, "scope": {"type": "int"}, "where": {"type": "String"}}
   },
   "editorTextToolUnchangedNoMatches": "no matches {where}.",
   "@editorTextToolUnchangedNoMatches": {

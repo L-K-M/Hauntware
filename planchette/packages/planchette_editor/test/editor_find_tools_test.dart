@@ -294,6 +294,10 @@ void main() {
       await c.applyExtract();
 
       expect(c.text.text, 'a1 b\nc2');
+      expect(
+        const EditorStrings().textToolNotice(c.toolReport!),
+        'Extract Matches: extracted 2 lines in the whole document.',
+      );
     });
 
     test('leaves the buffer alone with no matches', () async {
@@ -317,6 +321,10 @@ void main() {
       expect(extracted, '1\n2');
       expect(c.text.text, 'a1 b\nc2');
       expect(outcome, isA<TextToolUnchanged>());
+      expect(
+        const EditorStrings().textToolNotice(c.toolReport!),
+        'Extract Matches: opened 2 matches in a new document.',
+      );
     });
 
     test('a new-document target without the callback refuses to run', () async {
@@ -356,6 +364,10 @@ void main() {
 
       expect(copied, '1\n2');
       expect(c.text.text, 'a1 b\nc2');
+      expect(
+        const EditorStrings().textToolNotice(c.toolReport!),
+        'Extract Matches: copied 2 matches to the clipboard.',
+      );
     });
   });
 

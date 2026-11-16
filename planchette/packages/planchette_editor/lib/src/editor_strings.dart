@@ -543,7 +543,7 @@ class EditorStrings {
     'keepLinesMatching' ||
     'deleteLinesMatching' => 'removed $changed of ${_lines(scope)} $where.',
     'extractMatches' => _extractText(changed, where, detail),
-    _ => 'changed $scope units $where.',
+    _ => 'changed $changed of ${_plural(scope, 'unit')} $where.',
   };
 
   /// What Convert to ASCII did: the run's detail is `unmapped:N` when
@@ -562,16 +562,18 @@ class EditorStrings {
     return int.tryParse(detail.substring('unmapped:'.length)) ?? 0;
   }
 
-  /// What Extract Matches did, per the 'unit:target' detail the run
+  /// What Extract Matches did, per the 'target:unit' detail the run
   /// reported — in place rewrites the buffer, the other destinations do
-  /// not touch it.
+  /// not touch it. [count] is how many lines or matches it extracted.
   String _extractText(int count, String where, String? detail) {
     final parts = detail?.split(':') ?? const [];
-    final unit = parts.firstOrNull == 'lines' ? 'line' : 'match';
-    return switch (parts.lastOrNull) {
-      'clipboard' => 'copied ${_plural(count, unit)} to the clipboard.',
-      'newDocument' => 'opened ${_plural(count, unit)} in a new document.',
-      _ => 'extracted ${_plural(count, unit)} $where.',
+    final what = parts.lastOrNull == 'lines'
+        ? _lines(count)
+        : '$count ${count == 1 ? 'match' : 'matches'}';
+    return switch (parts.firstOrNull) {
+      'clipboard' => 'copied $what to the clipboard.',
+      'newDocument' => 'opened $what in a new document.',
+      _ => 'extracted $what $where.',
     };
   }
 
@@ -702,7 +704,8 @@ class EditorStrings {
     'removeDuplicateLines' => 'will remove $changed of ${_lines(scope)}',
     'removeBlankLines' => 'will remove ${_plural(changed, 'line')}',
     'collapseBlankLines' => 'will collapse ${_plural(changed, 'blank line')}',
-    'trimLeadingWhitespace' => 'will trim ${_plural(changed, 'line')}',
+    'trimLeadingWhitespace' ||
+    'trimTrailingWhitespace' => 'will trim ${_plural(changed, 'line')}',
     'normalizeSpaces' => 'will normalize ${_plural(changed, 'space')}',
     'uppercase' => 'will uppercase ${_plural(changed, 'character')}',
     'lowercase' => 'will lowercase ${_plural(changed, 'character')}',

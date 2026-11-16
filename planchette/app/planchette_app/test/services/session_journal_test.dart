@@ -23,7 +23,7 @@ Future<void> _settle() => Future<void>.delayed(_short * 3);
 /// Polls [condition] until it holds: an atomic replace syncs to disk, which
 /// takes as long as the file system wants.
 Future<void> _until(Future<bool> Function() condition) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  final deadline = DateTime.now().add(WorkspaceJournal.retryDelays.last * 2);
   while (!await condition()) {
     if (DateTime.now().isAfter(deadline)) fail('timed out');
     await Future<void>.delayed(_short);
@@ -433,7 +433,7 @@ void main() {
 
       // Only the file's timestamp is polled until the paused write lands:
       // a read still open during the atomic replace makes Windows refuse
-      // the rename, and the journal does not retry until the next edit.
+      // the rename, which leaves the write to a later retry.
       Future<String?> keptTextAfterPause(String text) async {
         await journal.idle;
         final before = (await file.stat()).modified;
@@ -497,6 +497,57 @@ void main() {
       expect(await workspace.confirmQuit(), isFalse);
       expect(dialogs.asked, hasLength(1));
       expect(errors, hasLength(1));
+    });
+
+    test('a failed write is tried again without another edit', () async {
+      // A file where the journal's folder belongs fails every write until
+      // it goes, as a scanner briefly holding the window file does.
+      final blocked = File(paths.join(temp.path, 'blocked'))
+        ..writeAsStringSync('not a folder');
+      final blockedStore = SessionJournalStore(Directory(blocked.path));
+      final workspace = newWorkspace();
+      final errors = <Object>[];
+      final journal = WorkspaceJournal(
+        workspace: workspace,
+        store: blockedStore,
+        id: '4444444444444444',
+        delay: _short,
+        onError: errors.add,
+      )..start();
+      addTearDown(journal.stop);
+      workspace.newDocument()!.editor.text.text = 'unsaved';
+      await _until(() async => errors.isNotEmpty);
+      await journal.idle;
+
+      await blocked.delete();
+      await _until(() async {
+        final kept = await blockedStore.readAll();
+        return kept.singleOrNull?.window.tabs.singleOrNull?.text == 'unsaved';
+      });
+      expect(errors, hasLength(1));
+    });
+
+    test('a stopped journal does not try a failed write again', () async {
+      final blocked = File(paths.join(temp.path, 'blocked'))
+        ..writeAsStringSync('not a folder');
+      final blockedStore = SessionJournalStore(Directory(blocked.path));
+      final workspace = newWorkspace();
+      final errors = <Object>[];
+      final journal = WorkspaceJournal(
+        workspace: workspace,
+        store: blockedStore,
+        id: '5555555555555555',
+        delay: _short,
+        onError: errors.add,
+      )..start();
+      workspace.newDocument()!.editor.text.text = 'unsaved';
+      await _until(() async => errors.isNotEmpty);
+      await journal.idle;
+      journal.stop();
+
+      await blocked.delete();
+      await Future<void>.delayed(WorkspaceJournal.retryDelays.last * 2);
+      expect(await blockedStore.readAll(), isEmpty);
     });
   });
 

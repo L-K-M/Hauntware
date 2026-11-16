@@ -8,7 +8,8 @@ Settings section that edits it.
 ## What it owns
 
 - `ExternalEditorDefinition`, `EditorHostPlatform`,
-  `currentEditorHostPlatform` and the id/target validators.
+  `currentEditorHostPlatform` and the id/target validators, and the
+  extension and display-name rules the registry and its edit dialog share.
 - `EditorRegistry`: configured editors (at most 64), the global default,
   per-extension defaults (longest match wins, validated at read, stripped
   when an edit or removal orphans them) and `effectiveDefaultFor`.

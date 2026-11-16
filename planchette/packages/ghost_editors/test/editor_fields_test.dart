@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:planchette_editor/planchette_editor.dart';
+import 'package:ghost_editors/src/editor_fields.dart';
 
 void main() {
   group('normalizeEditorExtensions', () {

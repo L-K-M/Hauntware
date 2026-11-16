@@ -170,6 +170,19 @@ final class WorkspaceJournal {
 
   static const defaultDelay = Duration(milliseconds: 500);
 
+  /// How long to wait before each new try of a failed write, while no edit
+  /// writes first. On Windows a scanner or the indexer briefly holding the
+  /// window file makes the atomic replace fail; without a retry the file
+  /// would stay one pause behind until the next edit. After the last try
+  /// the journal waits for the next change, as before.
+  static const retryDelays = [
+    Duration(milliseconds: 250),
+    Duration(milliseconds: 500),
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+  ];
+
   final DocumentWorkspace workspace;
   final SessionJournalStore store;
   final String id;
@@ -181,6 +194,10 @@ final class WorkspaceJournal {
 
   final _editors = <EditorController>{};
   Timer? _timer;
+  Timer? _retry;
+
+  /// Tries made since the last successful write, indexing [retryDelays].
+  int _retries = 0;
   SessionWindow? _written;
   Future<bool> _tail = Future.value(true);
 
@@ -202,6 +219,7 @@ final class WorkspaceJournal {
     if (!_running) return;
     _running = false;
     _timer?.cancel();
+    _retry?.cancel();
     workspace.removeListener(_workspaceChanged);
     if (workspace.keepUnsavedOnQuit == flush) {
       workspace.keepUnsavedOnQuit = null;
@@ -259,12 +277,26 @@ final class WorkspaceJournal {
         await store.write(id, next);
         _written = next;
         _failing = false;
+        _retries = 0;
+        _retry?.cancel();
         return true;
       } on Object catch (error) {
         if (!_failing) onError?.call(error);
         _failing = true;
+        _scheduleRetry();
         return false;
       }
+    });
+  }
+
+  /// Tries the latest snapshot again after a failed write, backing off,
+  /// up to [retryDelays]' length per failing run. An edit in between
+  /// writes on its own and leaves the next try to wait its turn.
+  void _scheduleRetry() {
+    _retry?.cancel();
+    if (!_running || _retries >= retryDelays.length) return;
+    _retry = Timer(retryDelays[_retries++], () {
+      if (_running) unawaited(_write());
     });
   }
 

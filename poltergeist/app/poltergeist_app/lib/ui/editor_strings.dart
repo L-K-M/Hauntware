@@ -757,7 +757,7 @@ class PoltergeistEditorStrings extends EditorStrings {
     ),
     'insertUuid' => l10n.editorTextToolChangedInsertedUuid(where),
     'extractMatches' => _extractSentence(changed, where, detail),
-    _ => l10n.editorTextToolChangedFallback(scope, where),
+    _ => l10n.editorTextToolChangedFallback(changed, scope, where),
   };
 
   String _asciiChangedSentence(int changed, String where, String? detail) {
@@ -771,10 +771,12 @@ class PoltergeistEditorStrings extends EditorStrings {
         : l10n.editorTextToolChangedConvertToAscii(changed, where);
   }
 
+  /// The run's detail is 'target:unit'; [count] is how many lines or
+  /// matches it extracted.
   String _extractSentence(int count, String where, String? detail) {
     final parts = detail?.split(':') ?? const [];
-    final lines = parts.firstOrNull == 'lines';
-    return switch (parts.lastOrNull) {
+    final lines = parts.lastOrNull == 'lines';
+    return switch (parts.firstOrNull) {
       'clipboard' => lines
           ? l10n.editorTextToolChangedExtractCopiedLines(count)
           : l10n.editorTextToolChangedExtractCopiedMatches(count),
@@ -920,7 +922,8 @@ class PoltergeistEditorStrings extends EditorStrings {
     ),
     'removeBlankLines' => l10n.editorTextToolPreviewWillRemoveLines(changed),
     'collapseBlankLines' => l10n.editorTextToolPreviewWillCollapse(changed),
-    'trimLeadingWhitespace' => l10n.editorTextToolPreviewWillTrimLines(changed),
+    'trimLeadingWhitespace' ||
+    'trimTrailingWhitespace' => l10n.editorTextToolPreviewWillTrimLines(changed),
     'normalizeSpaces' => l10n.editorTextToolPreviewWillNormalizeSpaces(
       changed,
     ),

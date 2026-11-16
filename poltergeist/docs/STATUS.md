@@ -28,9 +28,7 @@ next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 
 Deferred: batch-rename undo; a root renamed by Keep Both keeps its
 "(2)" name when a move is undone; a regression test for #775's
-server-id host label during a rebind, which the fake lanes cannot hold;
-moving `normalizeEditorExtensions` and `validateEditorDisplayName` from
-planchette_editor into `ghost_editors`.
+server-id host label during a rebind, which the fake lanes cannot hold.
 
 Proof: analysis and the full app suite passed locally, `ghost_editors`
 has 46 tests, and CI passed on each merged head. Automated compilation
