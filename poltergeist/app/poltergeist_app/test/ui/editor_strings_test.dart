@@ -451,8 +451,16 @@ void main() {
         outcome: outcome,
         ranOn: TextToolRanOn.selection,
       );
-      expect(strings.textToolNotice(report), defaults.textToolNotice(report));
-      expect(strings.textToolPreview(report), defaults.textToolPreview(report));
+      expect(
+        strings.textToolNotice(report),
+        defaults.textToolNotice(report),
+        reason: '${tool.id} notice (${outcome.runtimeType})',
+      );
+      expect(
+        strings.textToolPreview(report),
+        defaults.textToolPreview(report),
+        reason: '${tool.id} preview (${outcome.runtimeType})',
+      );
     }
   });
 }
