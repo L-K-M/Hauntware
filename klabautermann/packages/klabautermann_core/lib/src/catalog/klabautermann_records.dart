@@ -338,6 +338,13 @@ final class KlabautermannRecordStore {
     return _save();
   }
 
+  /// Forgets every record, as a sign-out does. Throws when the file
+  /// cannot be written.
+  Future<void> clear() {
+    _entries.clear();
+    return _save();
+  }
+
   /// [recordId]'s materialized record as [CatalogWriter.sealLocal] takes
   /// it, under its winning tuple, or null.
   DecryptedRecord? sealable(String recordId) {

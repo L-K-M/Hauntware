@@ -85,6 +85,13 @@ final class SnippetMirror {
     });
   }
 
+  /// Forgets every snippet, as a sign-out does. Throws when the file
+  /// cannot be written.
+  Future<void> clear() {
+    _entries.clear();
+    return _save();
+  }
+
   SyncTuple? _tupleOf(String recordId) => _entries[recordId]?.tuple;
 
   Future<void> _put(String recordId, SyncTuple tuple, Snippet? snippet) {

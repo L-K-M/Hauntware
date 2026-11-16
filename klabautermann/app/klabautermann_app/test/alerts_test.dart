@@ -79,6 +79,36 @@ void main() {
       expect(center.unseen, 0);
     });
 
+    test('unseenRaised counts raises since the alerts were opened: a clear '
+        'takes its alert out, opening clears every server, and a raise '
+        'after it counts again (ALR-02 badge)', () async {
+      engine
+        ..emit(_change('srv-1', 'r1', raised: true))
+        ..emit(_change('srv-1', 'r2', raised: true))
+        ..emit(_change('srv-2', 'r1', raised: true));
+      await pumpEventQueue();
+      expect(center.unseenRaised, 3);
+
+      engine.emit(_change('srv-1', 'r2', raised: false, minute: 1));
+      await pumpEventQueue();
+      expect(center.unseenRaised, 2);
+
+      center.markSeen();
+      expect(center.unseenRaised, 0);
+      expect(center.active, hasLength(2), reason: 'still raised, but seen');
+
+      // A clear of a seen alert changes nothing; its raise again counts.
+      engine
+        ..emit(_change('srv-1', 'r1', raised: false, minute: 2))
+        ..emit(_change('srv-1', 'r1', raised: true, minute: 3));
+      await pumpEventQueue();
+      expect(center.unseenRaised, 1);
+
+      await engine.close();
+      await pumpEventQueue();
+      expect(center.unseenRaised, 0, reason: 'a stopped engine raises none');
+    });
+
     test('active alerts sort critical first, and a server badges its '
         'highest severity', () async {
       engine

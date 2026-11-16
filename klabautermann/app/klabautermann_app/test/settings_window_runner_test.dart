@@ -330,6 +330,7 @@ void main() {
 
 const _snapshotValueTypes = {
   'SyncPinConflict',
+  'SyncAccountInfo',
   'SecretsRestoreSummary',
   'VaultRecoveryFailure',
   'VaultRestorePolicy',

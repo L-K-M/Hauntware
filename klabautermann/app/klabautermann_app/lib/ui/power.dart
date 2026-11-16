@@ -1,37 +1,43 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/operations_controller.dart';
+import '../controllers/power_waits.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart';
 import 'actions/action_preview.dart' show startAction;
 import 'admin_mode_chip.dart' show AdminScope;
 import 'system_panel.dart' show PanelSection;
 
-/// How far `btime` may move between two readings of one boot: the kernel
-/// derives it from the uptime and the wall clock, so it can step by a
-/// second.
-const _sameBoot = Duration(seconds: 2);
+/// The app's power waits for the widgets under it; the composition root
+/// puts it above every route, and a test may leave it out, which starts
+/// power actions without a wait after them.
+class PowerWaitsScope extends InheritedNotifier<PowerWaits> {
+  const PowerWaitsScope({
+    super.key,
+    required PowerWaits waits,
+    required super.child,
+  }) : super(notifier: waits);
 
-/// Whether a reading is of a boot after the one the reboot started
-/// from: its [bootedAt] unlike [before] where that boot was read,
-/// otherwise its [uptime] shorter than the time [sinceStart] the reboot
-/// was asked for. Both compare the server's readings with each other or
-/// durations with durations, so a server clock that runs ahead of this
-/// device's cannot pass for a new boot.
-@visibleForTesting
-bool isLaterBoot(
-  DateTime bootedAt, {
-  required DateTime? before,
-  required Duration? uptime,
-  required Duration sinceStart,
-}) => before == null
-    // The same margin as btime's, for a reading a little older than now.
-    ? uptime != null && uptime < sinceStart - _sameBoot
-    : bootedAt.difference(before).abs() > _sameBoot;
+  /// The waits for [context], which rebuilds when they change, or null
+  /// when none are provided.
+  static PowerWaits? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<PowerWaitsScope>()?.notifier;
+}
+
+/// Starts [verb] on [serverId] through its preview and confirmation, and
+/// the app-wide wait after it: the System tab's Power section and the
+/// Overview's quick actions both start power actions here.
+void startPowerAction(BuildContext context, String serverId, PowerVerb verb) {
+  final waits = PowerWaitsScope.maybeOf(context);
+  startAction(
+    context,
+    PowerAction(serverId, verb),
+    onRun: (planId, _) => waits?.start(serverId, planId, verb),
+  );
+}
 
 /// SYS-03's words for how long the wait has lasted: seconds for the
 /// first two minutes, then minutes.
@@ -40,138 +46,94 @@ String _elapsed(AppLocalizations l10n, Duration elapsed) =>
     ? l10n.systemClockSeconds(elapsed.inSeconds)
     : l10n.systemClockMinutes(elapsed.inMinutes);
 
-/// SYS-03's section of the System tab: reboot and shut down, in admin
-/// mode, each behind the host's own name typed in the preview. After a
-/// reboot it waits for the server to answer again, which a `core`
-/// reading of a later boot shows, and says how long that took.
-class PowerSection extends StatefulWidget {
-  const PowerSection({
+/// What became of [serverId]'s power action once the host took it: the
+/// wait for a rebooted server, its end, or a server shutting down. Empty
+/// while the run goes on, unless [whileRunning] shows a bare progress bar
+/// then, as the quick actions card does when it is shown for the wait
+/// alone.
+class PowerWaitProgress extends StatefulWidget {
+  const PowerWaitProgress({
     super.key,
     required this.serverId,
-    required this.core,
-    this.now = DateTime.now,
+    this.whileRunning = false,
   });
 
   final String serverId;
-
-  /// The server's `core` stream, whose `btime` tells one boot from the
-  /// next.
-  final ValueListenable<Sample?> core;
-
-  /// This device's clock, which a test sets.
-  final DateTime Function() now;
+  final bool whileRunning;
 
   @override
-  State<PowerSection> createState() => _PowerSectionState();
+  State<PowerWaitProgress> createState() => _PowerWaitProgressState();
 }
 
-class _PowerSectionState extends State<PowerSection> {
-  /// The run this section started, and what it asked for.
-  String? _planId;
-  PowerVerb? _verb;
-
-  /// When the run started, and the boot the server was on then.
-  DateTime? _startedAt;
-  DateTime? _bootBefore;
-
-  /// How long the server took to answer after the reboot, once it did.
-  Duration? _backAfter;
-
+class _PowerWaitProgressState extends State<PowerWaitProgress> {
   /// Ticks the waiting line's elapsed time while a reboot waits.
   Timer? _ticker;
 
   @override
-  void initState() {
-    super.initState();
-    widget.core.addListener(_onCore);
-  }
-
-  @override
-  void didUpdateWidget(PowerSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.core != widget.core) {
-      oldWidget.core.removeListener(_onCore);
-      widget.core.addListener(_onCore);
-    }
-    if (oldWidget.serverId != widget.serverId) _reset();
-  }
-
-  @override
   void dispose() {
-    widget.core.removeListener(_onCore);
     _ticker?.cancel();
     super.dispose();
   }
 
-  void _reset() {
-    _ticker?.cancel();
-    _ticker = null;
-    _planId = null;
-    _verb = null;
-    _startedAt = null;
-    _bootBefore = null;
-    _backAfter = null;
-  }
-
-  void _start(PowerVerb verb) {
-    startAction(
-      context,
-      PowerAction(widget.serverId, verb),
-      onRun: (planId, _) {
-        // The preview can outlast the section, as when the server leaves
-        // the fleet behind it.
-        if (!mounted) return;
-        setState(() {
-          _reset();
-          _planId = planId;
-          _verb = verb;
-          _startedAt = widget.now();
-          _bootBefore = _bootedAt(widget.core.value);
-          if (verb == PowerVerb.reboot) {
-            _ticker = Timer.periodic(
-              const Duration(seconds: 1),
-              (_) => setState(() {}),
-            );
-          }
-        });
-      },
+  void _tick(bool on) {
+    if (!on) {
+      _ticker?.cancel();
+      _ticker = null;
+      return;
+    }
+    _ticker ??= Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => setState(() {}),
     );
   }
 
-  static DateTime? _bootedAt(Sample? sample) => switch (sample?.result) {
-    final CoreResult core => core.bootedAt,
-    _ => null,
-  };
-
-  static Duration? _uptime(Sample? sample) => switch (sample?.result) {
-    final CoreResult core => core.uptime,
-    _ => null,
-  };
-
-  void _onCore() {
-    final startedAt = _startedAt;
-    final verb = _verb;
-    if (verb == null || startedAt == null || _backAfter != null) return;
-    final booted = _bootedAt(widget.core.value);
-    if (booted == null ||
-        !isLaterBoot(
-          booted,
-          before: _bootBefore,
-          uptime: _uptime(widget.core.value),
-          sinceStart: widget.now().difference(startedAt),
-        )) {
-      return;
-    }
-    // A server that was shut down and is up again on a later boot has
-    // nothing left to say about it: back to the buttons.
-    if (verb == PowerVerb.poweroff) {
-      setState(_reset);
-      return;
-    }
-    _ticker?.cancel();
-    _ticker = null;
-    setState(() => _backAfter = widget.now().difference(startedAt));
+  @override
+  Widget build(BuildContext context) {
+    final waits = PowerWaitsScope.maybeOf(context);
+    final wait = waits?.waitFor(widget.serverId);
+    _tick(wait?.phase == PowerWaitPhase.waiting);
+    if (waits == null || wait == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    final elapsed = _elapsed(l10n, waits.elapsed(wait));
+    final stop = TextButton(
+      onPressed: () => waits.stop(widget.serverId),
+      child: Text(l10n.systemPowerStopWaiting),
+    );
+    return switch (wait.phase) {
+      PowerWaitPhase.running when widget.whileRunning =>
+        const LinearProgressIndicator(),
+      PowerWaitPhase.running => const SizedBox.shrink(),
+      PowerWaitPhase.off => Text(l10n.systemPowerOff),
+      PowerWaitPhase.back => Text(
+        l10n.systemPowerBack(_elapsed(l10n, wait.backAfter!)),
+      ),
+      PowerWaitPhase.notBack => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [Text(l10n.systemPowerNotBack(elapsed)), stop],
+      ),
+      PowerWaitPhase.waiting => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [
+          const LinearProgressIndicator(),
+          Text(l10n.systemPowerWaiting(elapsed)),
+          stop,
+        ],
+      ),
+    };
   }
+}
+
+/// SYS-03's section of the System tab: reboot and shut down, in admin
+/// mode, each behind the host's own name typed in the preview. After a
+/// reboot it shows the app-wide wait for the server to answer again
+/// ([PowerWaits]), which a `core` reading of a later boot ends, and how
+/// long that took.
+class PowerSection extends StatelessWidget {
+  const PowerSection({super.key, required this.serverId});
+
+  final String serverId;
 
   @override
   Widget build(BuildContext context) {
@@ -188,75 +150,44 @@ class _PowerSectionState extends State<PowerSection> {
   Widget _section(BuildContext context, OperationsController? operations) {
     final l10n = AppLocalizations.of(context);
     final admin = AdminScope.maybeOf(context);
-    final adminOn =
-        admin?.stateFor(widget.serverId)?.phase == AdminModePhase.on;
-    final planId = _planId;
-    final run = planId == null ? null : operations?.runOf(planId);
-    final taken = switch (run) {
-      RunFinished(:final finished) =>
-        finished.outcome == ActionOutcome.succeeded,
-      _ => false,
-    };
-    // A run that ended without the host taking it shows no wait, so its
-    // clock stops.
-    if (run is RunFinished && !taken) {
-      _ticker?.cancel();
-      _ticker = null;
-    }
+    final adminOn = admin?.stateFor(serverId)?.phase == AdminModePhase.on;
+    final wait = PowerWaitsScope.maybeOf(context)?.waitFor(serverId);
+    final run = wait == null ? null : operations?.runOf(wait.planId);
+    // While the run goes, a second power action would race it, and a
+    // reboot being waited for has not finished either.
+    final busy =
+        run is RunInProgress ||
+        wait?.phase == PowerWaitPhase.waiting ||
+        wait?.phase == PowerWaitPhase.off;
 
     return PanelSection(
       title: l10n.systemPowerTitle,
       children: [
-        if (taken) ?_progress(l10n),
+        if (wait != null && wait.phase != PowerWaitPhase.running)
+          PowerWaitProgress(serverId: serverId),
         if (!adminOn)
           Text(l10n.systemPowerAdminNeeded)
-        // While the run goes, a second power action would race it.
-        else if (run is! RunInProgress && (!taken || _backAfter != null))
+        else if (!busy)
           ActionEntry(
-            serverId: widget.serverId,
+            serverId: serverId,
             point: ActionEntryPoint.power,
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 OutlinedButton(
-                  onPressed: () => _start(PowerVerb.reboot),
+                  onPressed: () =>
+                      startPowerAction(context, serverId, PowerVerb.reboot),
                   child: Text(l10n.systemPowerReboot),
                 ),
                 OutlinedButton(
-                  onPressed: () => _start(PowerVerb.poweroff),
+                  onPressed: () =>
+                      startPowerAction(context, serverId, PowerVerb.poweroff),
                   child: Text(l10n.systemPowerShutDown),
                 ),
               ],
             ),
           ),
-      ],
-    );
-  }
-
-  /// What became of the power action the host took: the wait for a
-  /// rebooted server, its end, or a server shutting down.
-  Widget? _progress(AppLocalizations l10n) {
-    final startedAt = _startedAt;
-    if (startedAt == null) return null;
-    if (_verb == PowerVerb.poweroff) return Text(l10n.systemPowerOff);
-    if (_backAfter case final back?) {
-      return Text(l10n.systemPowerBack(_elapsed(l10n, back)));
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 8,
-      children: [
-        const LinearProgressIndicator(),
-        Text(
-          l10n.systemPowerWaiting(
-            _elapsed(l10n, widget.now().difference(startedAt)),
-          ),
-        ),
-        TextButton(
-          onPressed: () => setState(_reset),
-          child: Text(l10n.systemPowerStopWaiting),
-        ),
       ],
     );
   }

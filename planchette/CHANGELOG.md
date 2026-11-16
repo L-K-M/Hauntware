@@ -14,6 +14,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   codec, per-extension defaults, launcher and Settings section, shared by
   Séance and Poltergeist instead of a copy in each app. Each app keeps its
   stored format through its own id namespace and migrations.
+- Hot exit: quitting no longer asks about unsaved changes. The open
+  windows, untitled documents and unsaved edits come back at the next
+  launch, also after a crash or after Android ends the app in the
+  background. They are kept in a private folder on the device until
+  saved or discarded. Settings > Keep unsaved changes when quitting turns
+  it off and brings back the "Save changes?" questions.
+- The editor's find and replace bars, Go to Line, text tools, status row
+  and problem messages take their text from the app's localization
+  catalog, ready for translation. The English text is unchanged.
 - `ghost_keepalive` package: the Android background keep-alive (a
   dataSync foreground service and its `ghost_keepalive` channel) shared
   by Séance and Poltergeist, moved out of Séance's app-private
@@ -78,6 +87,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the page is too large and gives its size.
 - Find matches ß and ss, İ, and ligatures such as ﬁ and fi,
   case-insensitively.
+- Case-insensitive find uses Unicode 17.0.0 full case folding from
+  CaseFolding.txt, so every character Unicode folds matches: Greek with
+  iota subscript and αι, Armenian ligatures, ŉ, and σ, ς and Σ.
+  Regular-expression find keeps simple folding. The Unicode License v3
+  notice is on the licenses page of every app.
+- Saving a file that has other hard links writes it in place behind a
+  backup copy, so every name of the file shows the saved text.
+- Save As on an untitled document opens in the last folder used for a
+  file with the same extension, then in the last Save As folder. Clear
+  Menu in Open Recent forgets these folders too.
 - Saving keeps a file's extended attributes on Linux and macOS, such as
   Finder tags, quarantine and Linux ACLs, as a best effort.
 - The widgets, document dialogs, settings dialog and server dialogs take

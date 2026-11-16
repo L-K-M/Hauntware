@@ -1076,8 +1076,18 @@ user's retry of a connect. The proposals the owner answered on
   `FleetEntry` values with `origin: synced`, their group, sign-in kind,
   search text and jump route by label, and no connect config, so no link
   dials one before its endpoint is confirmed (4.7, K41). An enrolled
-  device signs in again only to the same account; signing out and
-  switching accounts come later. The app's sign-in (4.3 steps 1 and 2)
+  device signs in again only to the same account; switching accounts
+  comes later. Sign-out (`SignOutSync`, Settings > Sync) matches
+  Poltergeist's: the engine deletes the record store and `servers.json`,
+  clears the synced preferences, rules, snippets and the enrollment,
+  deletes the vault entries the account's servers named and then the
+  session token, and the fleet refresh drops those servers with their
+  links, cached profiles and history. Imports, host-key pins, endpoint
+  confirmations and the vault master key stay; nothing reaches the
+  server. The catalog goes before the enrollment, so an interrupted
+  sign-out leaves the device enrolled rather than holding records a
+  later enrollment would push. The app confirms first and names the
+  open connections it closes. The app's sign-in (4.3 steps 1 and 2)
   sends nothing before the fleet assertion is ticked, so no record is
   pulled before it. *Rejected:* sync in the request queue (one sign-in
   would hold every connect and subscription for its network round trips
@@ -5236,9 +5246,20 @@ arrives with E22's Docker actions.
   in the foreground with the app as the notification center's delegate,
   Windows names the app with its application id and a fixed GUID, and
   the Flatpak talks to `org.freedesktop.Notifications`. Notifications
-  are not scheduled and a tap only brings the app forward. The app
-  icon's badge (ALR-02) stays open; delivery on real devices is a manual
-  check per OS.
+  are not scheduled and a tap only brings the app forward. Delivery on
+  real devices is a manual check per OS.
+- **As built (ALR-02 app icon badge).** On iOS and macOS the app icon
+  shows how many raised alerts the user has not seen: `AlertCenter`
+  counts each raise until its clear or until the alert center opens,
+  which lists every server's alerts and so clears every server's share;
+  a raise after that counts again. The count shows only while the
+  notifications switch is on, and the badge clears when it turns off
+  and at each launch (alerts last one engine run). The plugin sets a
+  badge only from a notification's content, so `setBadge` posts a
+  notification with no title or body that presents nothing and is
+  withdrawn at once; permission requests now include the badge. Android
+  launchers, Windows and Linux would need another plugin and show none.
+  Delivery on a device is a manual check.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1

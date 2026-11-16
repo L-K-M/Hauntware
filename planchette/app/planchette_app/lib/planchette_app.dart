@@ -38,6 +38,7 @@ import 'services/workspace_remote_files.dart';
 import 'ui/workspace_servers_dialog.dart';
 import 'ui/workspace_remote_folder_dialog.dart';
 import 'ui/document_windows_root.dart';
+import 'ui/editor_strings.dart';
 import 'theme/planchette_theme.dart';
 import 'widgets/disk_notice.dart';
 import 'widgets/document_status_bar.dart';
@@ -287,6 +288,18 @@ class _DocumentShellState extends State<_DocumentShell>
     final value = settings.value;
     workspace.indentationPreference = value.indentation;
     workspace.saveOptions = value.saveOptions;
+    workspace.saveAsFolders = value.saveAsFolders;
+    workspace.onSavedToChosenPath = _rememberSaveAsFolder;
+  }
+
+  /// Remembers the folder a save just went to, for where Save As opens on
+  /// documents that have none (A3). Android paths are provider identities,
+  /// not folders, and its picker opens where the provider decides.
+  void _rememberSaveAsFolder(String path) {
+    if (android) return;
+    final next = settings.value.saveAsFolders.recorded(path);
+    if (next == settings.value.saveAsFolders) return;
+    unawaited(settings.update(settings.value.copyWith(saveAsFolders: next)));
   }
 
   void _settingsChanged() {
@@ -432,7 +445,14 @@ class _DocumentShellState extends State<_DocumentShell>
       _Command(
         'Clear Menu',
         () => unawaited(
-          settings.update(settings.value.copyWith(recentDocuments: const [])),
+          // The remembered Save As folders name the same places, so a
+          // clear for privacy takes them too.
+          settings.update(
+            settings.value.copyWith(
+              recentDocuments: const [],
+              saveAsFolders: const SaveAsFolders(),
+            ),
+          ),
         ),
         enabled: unlocked,
         id: 'clearRecentDocuments',
@@ -766,8 +786,10 @@ class _DocumentShellState extends State<_DocumentShell>
 
   bool _paletteOpen = false;
 
-  /// The editor's display strings, for Text-menu tool names.
-  static const _editorStrings = EditorStrings();
+  /// The editor's display strings from the ARB catalog (F7), for the
+  /// editor surface, its status row and the Text-menu tool names.
+  EditorStrings get _editorStrings =>
+      PlanchetteEditorStrings(AppLocalizations.of(context));
 
   /// Lists every command the menus define, enabled or not — a greyed row
   /// still answers "where does that live". The native macOS menu stays
@@ -1903,6 +1925,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                     ),
                                     ligatures: settings.value.ligatures,
                                     controller: tab.editor,
+                                    strings: _editorStrings,
                                     isActive: tab == active,
                                     banner: _diskNotice(tab),
                                     // App-only clickable status; the shared
@@ -1910,6 +1933,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                     statusBuilder: (context, controller) =>
                                         DocumentStatusBar(
                                           controller: controller,
+                                          strings: _editorStrings,
                                         ),
                                     // No editingLocked here: the workspace locks
                                     // each controller the moment a dialog opens

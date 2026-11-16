@@ -412,7 +412,7 @@ List<TextRange> findSearchMatches(
   bool caseSensitive = false,
   bool wholeWord = false,
   int limit = searchMatchLimit,
-  CaseFolder fold = _defaultCaseFolder,
+  CaseFolder fold = unicodeCaseFold,
   int? start,
   TextRange? scope,
   bool reverse = false,
@@ -431,8 +431,6 @@ List<TextRange> findSearchMatches(
     .matches
     .map((match) => TextRange(start: match.start, end: match.end))
     .toList(growable: false);
-
-String _defaultCaseFolder(String value) => value.toLowerCase();
 
 /// A search outcome in Flutter ranges, carrying the case-handling report that
 /// the pure-Dart [core.SearchResult] gives its callers.
@@ -460,7 +458,7 @@ SearchResult searchText(
   bool caseSensitive = false,
   bool wholeWord = false,
   int limit = searchMatchLimit,
-  CaseFolder fold = _defaultCaseFolder,
+  CaseFolder fold = unicodeCaseFold,
   int? start,
   TextRange? scope,
   bool reverse = false,

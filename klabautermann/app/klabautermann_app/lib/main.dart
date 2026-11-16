@@ -22,6 +22,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/admin_memory.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/alert_notifications.dart';
+import 'controllers/app_badge.dart';
 import 'controllers/alert_rules_controller.dart';
 import 'controllers/log_display.dart';
 import 'controllers/snippets_controller.dart';
@@ -30,6 +31,7 @@ import 'controllers/attention.dart';
 import 'controllers/cadence_controller.dart';
 import 'controllers/overview_layout.dart';
 import 'controllers/pinned_services.dart';
+import 'controllers/power_waits.dart';
 import 'controllers/fleet_density.dart';
 import 'controllers/container_columns.dart';
 import 'controllers/coverage_controller.dart';
@@ -52,6 +54,7 @@ import 'controllers/tls_endpoints.dart';
 import 'controllers/window_panes.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/sync_sign_out.dart' show SyncSignOut;
 import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/app_version.dart';
@@ -140,8 +143,9 @@ Future<void> main(List<String> args) async {
   // menu plugin cannot set NSMenuItem.state itself. Other platforms draw
   // their checks in the in-window menu bar.
   if (defaultTargetPlatform == TargetPlatform.macOS) {
-    WidgetsBinding.instance.platformMenuDelegate =
-        CheckedPlatformMenuDelegate(channelName: 'klabautermann/menu_checks');
+    WidgetsBinding.instance.platformMenuDelegate = CheckedPlatformMenuDelegate(
+      channelName: 'klabautermann/menu_checks',
+    );
   }
 
   // settings.json (03 §4.10), owned by this isolate. Opened before the
@@ -329,13 +333,14 @@ Future<void> main(List<String> args) async {
     ),
   );
   final startStrings = deviceStrings();
+  final systemNotifications = await LocalSystemNotifications.start((
+    channelName: startStrings.alertNotificationChannel,
+    channelDescription: startStrings.alertNotificationChannelDetail,
+    openAction: startStrings.alertNotificationOpen,
+  ));
   final alertNotifications = AlertNotificationsController(
     engine,
-    notifications: await LocalSystemNotifications.start((
-      channelName: startStrings.alertNotificationChannel,
-      channelDescription: startStrings.alertNotificationChannelDetail,
-      openAction: startStrings.alertNotificationOpen,
-    )),
+    notifications: systemNotifications,
     textOf: (raise) => alertNotificationText(
       deviceStrings(),
       raise,
@@ -349,6 +354,15 @@ Future<void> main(List<String> args) async {
     enabled: settings.alertNotifications,
     save: settings.setAlertNotifications,
   );
+  // The app icon badge (ALR-02): the unseen raised alerts while their
+  // notifications are on, on iOS and macOS. It lasts as long as the app.
+  if (systemNotifications != null) {
+    AppBadgeController(
+      alerts: alerts,
+      notifications: alertNotifications,
+      sink: systemNotifications,
+    );
+  }
   // Action previews and runs (03 §8.5): the engine plans and runs them;
   // the app shows the preview and the results.
   final operations = OperationsController(
@@ -435,6 +449,13 @@ Future<void> main(List<String> args) async {
   );
   applyCadence();
   cadence.addListener(applyCadence);
+
+  // SYS-03's waits after power actions, for the run: a reboot drops the
+  // link and ends admin mode, and its wait outlasts that.
+  final powerWaits = PowerWaits(
+    core: (serverId) => monitoring.sampleFor(serverId, SampleStream.core),
+    operations: operations,
+  );
 
   // OV-08's pinned services, kept per device in settings.json.
   final pinnedServices = PinnedServicesController(
@@ -618,6 +639,7 @@ Future<void> main(List<String> args) async {
     pinPublication: pinPublication,
     pinConflicts: sync,
     accountSize: sync.accountSize,
+    signOut: SyncSignOut(sync, fleet),
     cadence: cadence,
     cadenceCaps: cadenceCaps,
     adminMemory: adminMemory,
@@ -639,6 +661,7 @@ Future<void> main(List<String> args) async {
       thresholds: thresholds,
       cadence: cadence,
       pinnedServices: pinnedServices,
+      powerWaits: powerWaits,
       overviewLayout: overviewLayout,
       fleetDensity: fleetDensity,
       cadenceCaps: cadenceCaps,

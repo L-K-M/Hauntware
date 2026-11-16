@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/power_waits.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart'
@@ -55,8 +56,19 @@ void main() {
   late SafetyController safety;
   late ValueNotifier<Sample?> core;
   late DateTime now;
+  late PowerWaits waits;
+  var built = false;
 
   setUp(() {
+    built = false;
+    now = DateTime.utc(2026, 10, 26, 12);
+  });
+
+  // Built inside the test's fake-async zone, so the engine's events reach
+  // the controllers there and the timers they arm follow the test clock.
+  void build() {
+    if (built) return;
+    built = true;
     engine = FakeEngineClient();
     admin = AdminController(engine);
     operations = OperationsController(engine);
@@ -67,10 +79,16 @@ void main() {
       apply: (_) {},
     );
     core = ValueNotifier(_core(_bootBefore));
-    now = DateTime.utc(2026, 10, 26, 12);
-  });
+    waits = PowerWaits(
+      core: (_) => core,
+      operations: operations,
+      now: () => now,
+    );
+  }
 
   tearDown(() async {
+    if (!built) return;
+    waits.dispose();
     admin.dispose();
     operations.dispose();
     safety.dispose();
@@ -79,6 +97,7 @@ void main() {
   });
 
   Future<void> pump(WidgetTester tester) async {
+    build();
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -95,10 +114,9 @@ void main() {
                 operations: operations,
                 child: AdminScope(
                   admin: admin,
-                  child: PowerSection(
-                    serverId: _server,
-                    core: core,
-                    now: () => now,
+                  child: PowerWaitsScope(
+                    waits: waits,
+                    child: const PowerSection(serverId: _server),
                   ),
                 ),
               ),
@@ -248,6 +266,107 @@ void main() {
     expect(find.textContaining('Waiting for the server'), findsNothing);
     expect(find.text('Reboot'), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('a reboot not back in time says so and offers the buttons '
+      'again; a later boot still ends the wait', (tester) async {
+    await pump(tester);
+    engine.emit(const AdminModeState(_server, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await confirm(tester, 'Reboot', PowerVerb.reboot);
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+
+    now = now.add(kRebootWaitTimeout);
+    await tester.pump(kRebootWaitTimeout);
+    expect(
+      find.text(
+        'The server has not answered again 15 minutes after the reboot. '
+        'It may still be starting, or need someone at its console.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('Reboot'), findsOneWidget);
+
+    now = now.add(const Duration(minutes: 2));
+    core.value = _core(now.subtract(const Duration(seconds: 20)), seq: 2);
+    await tester.pump();
+    expect(
+      find.text('The server answered again 17 minutes after the reboot.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the wait outlasts the section: shown again when it comes '
+      'back, and Stop waiting ends it', (tester) async {
+    await pump(tester);
+    engine.emit(const AdminModeState(_server, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await confirm(tester, 'Reboot', PowerVerb.reboot);
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    now = now.add(const Duration(seconds: 40));
+    await pump(tester);
+    expect(
+      find.text(
+        'Rebooting. Waiting for the server to answer again: '
+        '40 seconds so far.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Stop waiting'));
+    await tester.pump();
+    expect(find.textContaining('Waiting for the server'), findsNothing);
+    expect(waits.waitFor(_server), isNull);
+    expect(find.text('Reboot'), findsOneWidget);
+  });
+
+  test('a later boot read before the run\'s end is the server back once '
+      'the run says the host took the reboot; a failed run leaves no '
+      'wait', () async {
+    build();
+    const confirmation = ActionConfirmation(
+      tier: ConfirmationTier.typedPhrase,
+      phrase: 'web-01',
+    );
+    operations.run('plan-1', confirmation);
+    waits.start(_server, 'plan-1', PowerVerb.reboot);
+    expect(waits.waitFor(_server)!.phase, PowerWaitPhase.running);
+    expect(waits.waitFor(_server)!.rebootPending, isTrue);
+
+    now = now.add(const Duration(seconds: 50));
+    core.value = _core(now.subtract(const Duration(seconds: 10)), seq: 2);
+    expect(waits.waitFor(_server)!.phase, PowerWaitPhase.running);
+
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await pumpEventQueue();
+    final back = waits.waitFor(_server)!;
+    expect(back.phase, PowerWaitPhase.back);
+    expect(back.backAfter, const Duration(seconds: 50));
+    expect(back.rebootPending, isFalse);
+
+    operations.run('plan-2', confirmation);
+    waits.start(_server, 'plan-2', PowerVerb.reboot);
+    engine.emit(
+      const ActionFinished(
+        planId: 'plan-2',
+        outcome: ActionOutcome.failed,
+        failure: ActionFailure.stepFailed,
+        exitCode: 1,
+      ),
+    );
+    await pumpEventQueue();
+    expect(waits.waitFor(_server), isNull);
   });
 
   test('a later boot is one btime apart by more than its jitter, or up '

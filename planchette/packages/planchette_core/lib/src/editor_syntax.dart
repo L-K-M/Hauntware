@@ -1572,10 +1572,13 @@ final class SearchResult {
 /// A fold that *changes* the length of a run of text cannot be used on a
 /// document: matches are located in the folded text, so their offsets would
 /// address the wrong characters. [searchText] then compares exactly and
-/// reports [CaseFolding.lengthChanging]. The search itself expands `ß`, `ẞ`,
-/// `İ` and the Latin ligatures the way Unicode *full* case folding does,
+/// reports [CaseFolding.lengthChanging]. The search itself expands every
+/// character Unicode *full* case folding lengthens (CaseFolding.txt status
+/// F: `ß`, `İ`, the ligatures, Greek with iota subscript and the rest)
 /// before this fold sees the text, and maps offsets back through a sparse
-/// folded-offset map (ANALYSIS.md B37); a fold need not and should not.
+/// folded-offset map (ANALYSIS.md B37); a fold need not and should not. The
+/// default, [unicodeCaseFold], is Unicode's status C folding, which with
+/// those expansions makes the comparison Unicode full case folding.
 typedef CaseFolder = String Function(String value);
 
 /// Substring search used by the editor's find bar, reporting how the case
@@ -1598,7 +1601,7 @@ SearchResult searchText(
   bool caseSensitive = false,
   bool wholeWord = false,
   int limit = searchMatchLimit,
-  CaseFolder fold = _lowercase,
+  CaseFolder fold = unicodeCaseFold,
   int? start,
   ({int start, int end})? scope,
   bool reverse = false,
@@ -1730,8 +1733,6 @@ SearchResult searchText(
     precedingCount: counted,
   );
 }
-
-String _lowercase(String value) => value.toLowerCase();
 
 /// The matches only. Hosts that do not report case handling can use this, but
 /// prefer [searchText]: it is the difference between "no matches" and "no

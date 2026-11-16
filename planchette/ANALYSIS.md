@@ -814,6 +814,13 @@ its own it needs a decision on where a vanished document's recovery is offered
 added: the age rule reads only the file's mtime, which the existing fresh-file
 test already sets, so another process adds no new path.
 
+**Status (2026-11-15, branch `planchette/wave5`):** the missing-target
+case now reaches the user through A2: a document in the restored session
+that is gone is offered the `.edit`/`.backup` siblings beside it (Open,
+Delete or Keep, with the existing safeguards), and its kept text opens in
+an untitled tab. A document that was never in a session still needs Open
+Recent to offer its siblings.
+
 ### B11. Explain or defer quit during saving — S (inherited read)
 `_confirmQuit` returns false while a tab is busy/saving, and the window treats
 false as doing nothing. Reproduce Cmd+Q during a gated save. Queue quit until
@@ -1177,6 +1184,16 @@ a decision. The other expansions need Unicode's CaseFolding data, which is
 under the Unicode License v3 and would need a license chunk (a licensing
 decision). Full folding in regex mode would need a regex engine of our own,
 since Dart's `RegExp` folds one character to one.
+
+**Status (2026-11-15, branch `planchette/wave5-2`):** done for literal
+search per the user's decision (Q9). `tool/unicode/generate.dart` builds
+`unicode_case_fold_data.dart` from the pinned, hash-checked Unicode 17.0.0
+`CaseFolding.txt`: status C becomes the default fold (`unicodeCaseFold`,
+length-preserving by construction) and status F replaces the hand-written
+expansion list (104 entries). A test checks every C and F row against the
+search. `planchette_core/LICENSE` carries the Unicode License v3 as a
+license chunk; `check-flutter-notices.sh` now requires it for every app.
+Regex mode keeps Dart's simple folding, as decided.
 
 ## 4. Performance
 
@@ -1748,6 +1765,21 @@ and what Android restores after a process kill. The journal design, the
 interrupted-publication record (B10's missing target) and the
 forced-termination tests follow from those answers.
 
+**Status (2026-11-15, branch `planchette/wave5`):** done per the user's
+decision (Q7); see ARCHITECTURE.md. Quitting keeps every window's
+documents in an owner-only journal instead of asking; closing one window
+of several still asks. Unsaved text is journaled at once when a document
+opens, closes, is saved or becomes dirty, half a second after typing
+pauses, and on Android's pause; Don't Save and saving remove it. A restore
+never writes: kept edits come back unsaved over the file as it is on disk,
+a changed file is named in the banner, a missing one gives its text to an
+untitled tab. A setting (default on) restores the classic prompt and
+deletes the journal. A second instance or a failed write falls back to
+the prompt. Not done: scroll position, forced-termination tests at each
+save phase (the journal does not depend on the save), a preview before
+restoring, and Kotlin compilation of the Android identity persistence,
+which only CI can build.
+
 ### A3. Open Recent and a recent list in the empty state — M
 Keep the last 20 paths in settings. Show them in File › Open Recent (on
 macOS, prefer `NSDocumentController`'s recents) and in the empty state.
@@ -1772,6 +1804,15 @@ deferred. The per-type Save As directory needs the precedence decision above
 (the last directory for the type against the current document's). macOS
 `NSDocumentController` recents need native work and a macOS build, which
 cannot be made or verified here.
+
+**Status (2026-11-15, branch `planchette/wave5-2`):** per-type Save As
+folder done per the user's decision (Q8): a saved local file opens in its
+own folder; an untitled document (or a server copy) opens in the last
+folder used for its extension, then the last Save As folder, then the
+system default. The folders are recorded after a successful save to a
+chosen path (Save As, first save, HTML export) and cleared by Open
+Recent's Clear Menu. A remembered folder that no longer exists is not
+passed to the dialog. macOS `NSDocumentController` recents remain open.
 
 ### A4. Verify native file-drop intake after #43 — M
 #43 reports a `DragTarget<String>` around the shell, newline-separated path
@@ -2021,6 +2062,13 @@ other links, and the alternative is a warning or an in-place write without
 the guard. Owner and group need a per-platform `stat` through FFI, macOS ACLs
 and Windows streams need those platforms; none can be verified here.
 
+**Status (2026-11-15, branch `planchette/wave5-2`):** hard links done per
+the user's decision (Q10): a file whose link count is above one is saved
+in place behind a backup copy (see ARCHITECTURE.md); other files keep the
+atomic swap. Tested on Linux; the Windows path (`mklink /H` in the test)
+runs only in CI. Owner/group, macOS ACLs and Windows streams are still
+open for replaced files.
+
 ### I4. Directory write permission — S
 A writable file in a read-only directory can't be saved, because the
 temp sibling can't be created. Explain this in the error, and offer
@@ -2060,6 +2108,20 @@ English: the shell's menus and banners (`planchette_app.dart`,
 `document_workspace.dart`), the other services' messages (catalog, settings
 store, Android documents, remote files) and the `EditorStrings` feed, about
 500 literals in all. They are split off so each review stays small.
+
+**Status (2026-11-15, branch `planchette/wave5-3`):** phase 3 moves the
+`EditorStrings` feed, the largest part (about 340 of those literals):
+`lib/ui/editor_strings.dart` (`PlanchetteEditorStrings`) adapts the shared
+editor's copy to the catalog the way Poltergeist and Klabautermann do,
+with their reviewed keys, and the shell passes it to every editor, the
+status row and the Text menu. A test checks that the English catalog says
+what the package says, so no copy changed. Still English: the shell's
+menus and banners and the services' messages (about 200 literals). They
+wait for the hot-exit and Save As branches, which edit the same lines of
+`planchette_app.dart` and `document_workspace.dart`; the menu labels also
+serve as menu identities (the Window and Edit checks, mnemonics), which
+needs ids first, and the workspace needs a strings seam since its messages
+are built without a `BuildContext`.
 
 ## 8. Visual design and theming
 

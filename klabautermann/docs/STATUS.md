@@ -1274,8 +1274,12 @@ is on main:
   then lead the fleet, ahead of imports, and stay after a restart; each round is
   started by the user, none runs at startup or on a timer. Synced
   servers have no connect config, so a `Connect` to one is rejected
-  until endpoint confirmation (K41) exists. Sign-out, switching
-  accounts, secrets and quarantine surfaces are not built. The
+  until endpoint confirmation (K41) exists. Settings > Sync signs out
+  as Poltergeist does (03 D63's notes): after a confirmation that names
+  the open connections it closes, the account's servers leave with
+  their vault entries, cached profiles and history, while imports and
+  host-key pins stay and the server is untouched. Switching accounts,
+  secrets and quarantine surfaces are not built. The
   pin-conflict surface is: Settings > Sync shows each quarantined host
   key with both fingerprints and resolves it by keeping this device's
   key or trusting the new one, in the route and the desktop settings
@@ -2279,8 +2283,10 @@ is on main:
   that rules are evaluated on this device while Klabautermann is open
   (Y3); it opens the alert center, whose rows open their server. Each
   fleet row badges its raised alerts with the icon of the highest
-  severity and their count, which its label and tooltip say too. The
-  app icon's badge waits on notifications (N51).
+  severity and their count, which its label and tooltip say too. On
+  iOS and macOS, while alert notifications are on, the app icon badges
+  the raised alerts not yet seen in the alert center (decision Q3);
+  other platforms show none, and delivery on a device is unverified.
 - Alert rule editor (M6 N50c, ALR-01, ALR-16): the engine reports the
   account's alert rules whenever they change. The server header's bell
   opens the rules that apply to that server, and the alert center every
@@ -2295,8 +2301,8 @@ is on main:
   raised alert and withdraws it on the clear. Turning it on first shows
   the app's prompt, which says rules are evaluated on this device while
   Klabautermann is open, then the system's request; the choice is kept
-  in settings.json. Each notification states the same limit (Y3). The
-  app icon's badge is not built, and whether the notifications show on
+  in settings.json. Each notification states the same limit (Y3).
+  Whether the notifications and the iOS and macOS icon badge show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
 - Label links (M6 N17b, CTR-11): a container whose labels point at web
   pages shows a Links section under its overview. It reads Dockhand's

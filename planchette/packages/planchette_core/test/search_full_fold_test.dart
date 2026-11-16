@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:isolate';
+
 import 'package:planchette_core/planchette_core.dart';
 import 'package:planchette_core/src/search_fold.dart';
 import 'package:test/test.dart';
@@ -138,5 +141,109 @@ void main() {
       // Another fold never sees the first fold's result.
       expect(searchText(edited, 'beta', fold: (value) => value).matches, []);
     });
+  });
+
+  group('Unicode full case folding (B37)', () {
+    test('strasse finds Straße with the default fold, with mapped ranges', () {
+      const text = 'Die Straße und die STRASSE';
+      expect(searchText(text, 'strasse').matches, [
+        const TextMatch(start: 4, end: 10),
+        const TextMatch(start: 19, end: 26),
+      ]);
+      expect(text.substring(4, 10), 'Straße');
+    });
+
+    test('every ligature and expansion from the table matches', () {
+      // Latin, Armenian, Greek with iota subscript, and ŉ.
+      expect(searchText('ﬀ ﬅ ﬆ', 'ST').matches, [
+        const TextMatch(start: 2, end: 3),
+        const TextMatch(start: 4, end: 5),
+      ]);
+      expect(searchText('ﬓ', 'մն').matches, [
+        const TextMatch(start: 0, end: 1),
+      ]);
+      expect(searchText('ᾳ', 'αι').matches, [
+        const TextMatch(start: 0, end: 1),
+      ]);
+      expect(searchText('ΑΙ', 'ᾳ').matches, [
+        const TextMatch(start: 0, end: 2),
+      ]);
+      expect(searchText('ŉ', 'ʼN').matches, [
+        const TextMatch(start: 0, end: 1),
+      ]);
+    });
+
+    test('a highlight after many expansions still covers its word', () {
+      final text = '${'ß' * 50} target ﬁ';
+      final match = searchText(text, 'TARGET').matches.single;
+      expect(text.substring(match.start, match.end), 'target');
+      final ligature = searchText(text, 'FI').matches.single;
+      expect(text.substring(ligature.start, ligature.end), 'ﬁ');
+    });
+
+    test('final sigma, Cherokee and Deseret fold without a host fold', () {
+      expect(searchText('σοφος', 'ΣΟΦΟΣ').matches, [
+        const TextMatch(start: 0, end: 5),
+      ]);
+      expect(searchText('ꭰ', 'Ꭰ').matches, [const TextMatch(start: 0, end: 1)]);
+      // U+10400 DESERET CAPITAL LONG I folds to U+10428.
+      expect(searchText('x\u{10428}', '\u{10400}').matches, [
+        const TextMatch(start: 1, end: 3),
+      ]);
+    });
+
+    test('a case-sensitive search does not fold', () {
+      expect(searchText('Straße', 'strasse', caseSensitive: true).matches, []);
+    });
+
+    test('unicodeCaseFold keeps length and leaves unchanged text alone', () {
+      const plain = 'already folded text';
+      expect(identical(unicodeCaseFold(plain), plain), isTrue);
+      expect(unicodeCaseFold('ÀΣ\u{10400}\ud800'), 'àσ\u{10428}\ud800');
+      // Turkic tailoring is not applied; İ expands in the search instead.
+      expect(unicodeCaseFold('I'), 'i');
+    });
+
+    test(
+      'matches the pinned CaseFolding.txt for every C and F mapping',
+      () async {
+        final library = await Isolate.resolvePackageUri(
+          Uri.parse('package:planchette_core/'),
+        );
+        final source = File.fromUri(
+          library!.resolve(
+            '../tool/unicode/CaseFolding-$unicodeCaseFoldingVersion.txt',
+          ),
+        );
+        var common = 0;
+        var full = 0;
+        for (final line in source.readAsLinesSync()) {
+          if (line.isEmpty || line.startsWith('#')) continue;
+          final fields = line.split(';').map((field) => field.trim()).toList();
+          final from = String.fromCharCode(int.parse(fields[0], radix: 16));
+          final to = String.fromCharCodes([
+            for (final value in fields[2].split(' '))
+              int.parse(value, radix: 16),
+          ]);
+          switch (fields[1]) {
+            case 'C':
+              expect(unicodeCaseFold(from), to, reason: fields[0]);
+              common++;
+            case 'F':
+              expect(
+                foldDocumentForSearch(from, unicodeCaseFold)!.text,
+                to,
+                reason: fields[0],
+              );
+              expect(searchText(from, to).matches, [
+                TextMatch(start: 0, end: from.length),
+              ], reason: fields[0]);
+              full++;
+          }
+        }
+        expect(common, greaterThan(1400));
+        expect(full, 104);
+      },
+    );
   });
 }

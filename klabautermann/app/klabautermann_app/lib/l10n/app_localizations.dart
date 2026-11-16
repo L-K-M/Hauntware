@@ -124,6 +124,18 @@ abstract class AppLocalizations {
   /// **'Imported'**
   String get fleetSectionImported;
 
+  /// Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides has a link up.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected server hidden'**
+  String get fleetSectionHiddenConnected;
+
+  /// Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides is connecting, none of them connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting server hidden'**
+  String get fleetSectionHiddenConnecting;
+
   /// A synced fleet row's menu verb that lists the server under the Pinned section on this device.
   ///
   /// In en, this message translates to:
@@ -6464,6 +6476,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The host key setting could not be changed.'**
   String get settingsPinPublicationNotChanged;
+
+  /// Heading of the Sync tab's section showing the enrolled sync account and its sign-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsSyncAccountTitle;
+
+  /// The enrolled sync account in Settings > Sync.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in as {username} on {server}'**
+  String settingsSyncAccount(String username, String server);
+
+  /// Button in Settings > Sync, and the confirming button of its dialog, that signs this device out of the sync account.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get settingsSyncSignOut;
+
+  /// Title of the dialog confirming the sync sign-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out of sync?'**
+  String get settingsSyncSignOutTitle;
+
+  /// Body of the dialog confirming the sync sign-out: what it removes and what it keeps.
+  ///
+  /// In en, this message translates to:
+  /// **'This device forgets its sign-in and removes the servers that came from your sync account, with their saved credentials, cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.'**
+  String get settingsSyncSignOutBody;
+
+  /// Warning in the sign-out dialog when servers it removes are connected.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 server it removes has an open connection, which closes.} other{{count} servers it removes have open connections, which close.}}'**
+  String settingsSyncSignOutOpenConnections(int count);
+
+  /// Button that closes the sign-out dialog without signing out.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsSyncSignOutCancel;
+
+  /// Toast when the engine did not sign out.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-out did not finish. This device is still signed in.'**
+  String get settingsSyncSignOutFailed;
 
   /// Settings, Sync: warning over one quarantined host key, naming the host:port whose synced key differs from the trusted pin (03 §4.9).
   ///
@@ -13616,6 +13676,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server answered again {elapsed} after the reboot.'**
   String systemPowerBack(String elapsed);
+
+  /// System tab, Power, and the Overview's quick actions: shown when a rebooted server has not reported a new boot within 15 minutes; elapsed is a duration such as '15 minutes'.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has not answered again {elapsed} after the reboot. It may still be starting, or need someone at its console.'**
+  String systemPowerNotBack(String elapsed);
 
   /// System tab, Power: shown after the shutdown was taken.
   ///

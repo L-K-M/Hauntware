@@ -319,7 +319,20 @@ Set<String> sectionsHoldingLive<T>(
 
 /// The servers of [sections] that each header in [rows] keeps out of view,
 /// by the header's key, so a folded group or a filter never hides a live
-/// connection without a trace.
+/// connection without a trace; [hiddenEntriesByHeader] for [ServerConfig]
+/// records.
+Map<String, List<ServerConfig>> hiddenByHeader({
+  required ServerSidebarSections sections,
+  required List<ServerListRow> rows,
+}) => hiddenEntriesByHeader(
+  sections: sections,
+  rows: rows,
+  idOf: (server) => server.id,
+);
+
+/// The servers of [sections] that each header in [rows] keeps out of view,
+/// by the header's key, each server told apart by [idOf], as
+/// [groupServerEntries]' adapter names it.
 ///
 /// [sections] is the whole list, [rows] what is drawn: a collapsed
 /// section's or group's members are hidden, and so are the ones a filter
@@ -329,26 +342,27 @@ Set<String> sectionsHoldingLive<T>(
 /// and not SERVERS as well. One whose every header is gone goes nowhere,
 /// which only a server that is not live can meet when [rows] kept the
 /// sections [sectionsHoldingLive] names.
-Map<String, List<ServerConfig>> hiddenByHeader({
-  required ServerSidebarSections sections,
-  required List<ServerListRow> rows,
+Map<String, List<T>> hiddenEntriesByHeader<T>({
+  required GhostServerSections<T> sections,
+  required List<GhostServerListRow<T>> rows,
+  required String Function(T server) idOf,
 }) {
   final shown = <String>{};
   final headers = <String>{};
   for (final row in rows) {
     switch (row) {
-      case ServerRow(:final server):
-        shown.add(server.id);
-      case ServerSectionRow(:final key):
+      case GhostServerRow(:final server):
+        shown.add(idOf(server));
+      case GhostServerSectionRow(:final key):
         headers.add(key);
-      case ServerGroupHeaderRow(:final key):
+      case GhostServerGroupHeaderRow(:final key):
         headers.add(key);
     }
   }
 
-  final hidden = <String, List<ServerConfig>>{};
-  void hide(ServerConfig server, List<String> keys) {
-    if (shown.contains(server.id)) return;
+  final hidden = <String, List<T>>{};
+  void hide(T server, List<String> keys) {
+    if (shown.contains(idOf(server))) return;
     for (final key in keys) {
       if (!headers.contains(key)) continue;
       (hidden[key] ??= []).add(server);

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Settings > Sync can sign this device out of the sync account. It asks
+  first and says how many connections it closes, then forgets the
+  sign-in and removes the servers that came from the account, with
+  their saved credentials, cached profiles and history. Servers
+  imported from ~/.ssh/config and host key pins stay, and nothing on
+  the sync server changes.
+- On iOS and macOS, while alert notifications are on, the app icon
+  shows how many raised alerts you have not seen yet. Opening the alert
+  center clears it. Turning notifications on asks for badge permission
+  too.
 - A crash during a sync enrollment's re-key no longer leaves saved
   credentials unreadable until the next enrollment: the engine settles
   the leftover re-key at its first vault read.
@@ -75,6 +85,15 @@
   twice when you switch servers and back.
 - The Overview's quick Reboot shows only in admin mode, and phone
   palette rows that did nothing are hidden.
+- A folded section or group header in the fleet list, the Imported
+  section's included, shows a dot when a server it hides is connected
+  or connecting, as Séance's does, and a filter keeps such a section's
+  header in view.
+- A reboot from the Overview's quick actions waits for the server to
+  answer again, as one from the System tab does, and the wait lasts
+  when you leave the tab or admin mode ends: the quick actions card
+  stays with only the reboot's progress until the server is back. After
+  15 minutes without an answer the wait says so.
 - A container's CPU chart scales past 100 %, the Top view's Select all
   and Remove count only the containers it shows, and a removed
   container's details drop its actions and charts. A crashed container's

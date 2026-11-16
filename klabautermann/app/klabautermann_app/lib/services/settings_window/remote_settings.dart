@@ -7,7 +7,11 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:ghost_update/ghost_update.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show SecretsRestoreSummary, SyncPinConflict, VaultRestorePolicy;
+    show
+        SecretsRestoreSummary,
+        SyncAccountInfo,
+        SyncPinConflict,
+        VaultRestorePolicy;
 
 import '../../controllers/account_size.dart';
 import '../../controllers/admin_memory.dart';
@@ -26,6 +30,7 @@ import '../../controllers/recovery_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
 import '../../controllers/sync_controller.dart' show PinConflictsSettings;
+import '../../controllers/sync_sign_out.dart';
 import '../../controllers/threshold_controller.dart';
 import '../../ui/charts/charts.dart' show ChartThresholds;
 import '../../ui/threshold_scope.dart';
@@ -193,6 +198,14 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         }),
   );
 
+  /// The Sync tab's account and sign-out (03 §4.3), from the latest
+  /// snapshot; null when the app offers no sign-out.
+  RemoteSyncSignOut? get signOut => _hasSignOut ? _signOut : null;
+  bool _hasSignOut = false;
+  late final RemoteSyncSignOut _signOut = RemoteSyncSignOut._(
+    (method) => invoke(method.name, null),
+  );
+
   /// The Sync tab's account size (SYN-09), from the latest snapshot.
   final ValueNotifier<AccountSize?> accountSize = ValueNotifier(null);
 
@@ -255,6 +268,9 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     accountSize.value = decodeAccountSize(
       snapshot[SettingsLinkKey.accountSize.name],
     );
+    final syncAccount = snapshot[SettingsLinkKey.syncAccount.name];
+    _hasSignOut = syncAccount != null;
+    _signOut._apply(decodeSyncAccount(syncAccount));
     final recovery = snapshot[SettingsLinkKey.recovery.name] as Map?;
     _hasRecovery = recovery != null;
     _recovery._apply(recovery?.cast<String, Object?>());
@@ -286,6 +302,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     pinPublication.dispose();
     pinConflicts.dispose();
     accountSize.dispose();
+    _signOut.dispose();
     _recovery.dispose();
     monitorSet.dispose();
     safety.dispose();
@@ -701,6 +718,46 @@ final class RemotePinConflicts extends ChangeNotifier
   void dispose() {
     _disposed = true;
     super.dispose();
+  }
+}
+
+/// [SyncSignOutSettings] over the link: the app's account as the latest
+/// snapshot carries it, and a sign-out that runs in the app's isolate.
+final class RemoteSyncSignOut extends ChangeNotifier
+    implements SyncSignOutSettings {
+  RemoteSyncSignOut._(this._call);
+
+  final Future<Object?> Function(SettingsLinkMethod method) _call;
+
+  SyncAccountInfo? _account;
+  bool _busy = false;
+
+  void _apply(({SyncAccountInfo? account, bool busy}) state) {
+    if (state.account == _account && state.busy == _busy) return;
+    _account = state.account;
+    _busy = state.busy;
+    notifyListeners();
+  }
+
+  @override
+  SyncAccountInfo? get account => _account;
+
+  @override
+  bool get busy => _busy;
+
+  @override
+  Future<int> openConnectionsRemoved() async =>
+      await _call(SettingsLinkMethod.openSyncConnections) as int;
+
+  /// A refusal crosses the link as a generic error; it is a failed
+  /// sign-out all the same.
+  @override
+  Future<void> signOut() async {
+    try {
+      await _call(SettingsLinkMethod.signOutSync);
+    } on Exception catch (error) {
+      throw SyncSignOutFailedException('$error');
+    }
   }
 }
 

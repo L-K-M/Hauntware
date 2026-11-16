@@ -599,6 +599,60 @@ void main() {
       expect(lines(tester), isNot(contains('  web-1')), reason: 'still folded');
     });
 
+    testWidgets('a folded or filtered header says when it hides a live '
+        'server, and a filter keeps a section holding one', (tester) async {
+      final rows = await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 720),
+      );
+      await rows.emit(tester, const [
+        LinkState('srv-web', LinkReady()),
+        LinkState('ssh-config:alpha', LinkConnecting()),
+      ]);
+      String? said(String key) => tester
+          .widget<SidebarSectionHeader>(find.byKey(fleetSectionHeaderKey(key)))
+          .statusLabel;
+
+      // Everything in view: no header has anything to say.
+      expect(said(kServersKey), isNull);
+      expect(said(' imported'), isNull);
+
+      await tester.tap(find.byKey(fleetSectionHeaderKey('production')));
+      await tester.pump();
+      await tester.tap(find.byKey(fleetSectionHeaderKey(' imported')));
+      await tester.pump();
+      await tester.tap(find.byKey(fleetSectionHeaderKey('ci')));
+      await tester.pump();
+      expect(said('production'), 'Connected server hidden');
+      expect(said(kServersKey), isNull, reason: 'its group row says it');
+      expect(said(' imported'), 'Connecting server hidden');
+      expect(said('ci'), isNull, reason: 'nothing live in it');
+
+      // A query that empties Production and IMPORTED: SERVERS holds the
+      // live web-1 now, and IMPORTED stays for alpha.
+      await tester.enterText(find.byType(TextField), 'runner');
+      await tester.pump();
+      expect(lines(tester), ['#Servers', '>CI', '  runner', '#Imported']);
+      expect(said(kServersKey), 'Connected server hidden');
+      expect(said(' imported'), 'Connecting server hidden');
+
+      // Nothing matches: the kept headers, and the miss said under them.
+      await tester.enterText(find.byType(TextField), 'nothing-like-it');
+      await tester.pump();
+      expect(lines(tester), ['#Servers', '#Imported']);
+      expect(find.text('No servers match'), findsOneWidget);
+
+      // With alpha's link closed, only SERVERS has a reason to stay.
+      await rows.emit(tester, [
+        LinkState(
+          'ssh-config:alpha',
+          LinkClosed(LinkClosedReason.closedByOwner),
+        ),
+      ]);
+      expect(lines(tester), ['#Servers']);
+    });
+
     testWidgets('the filter, folds and triage toggles live on the '
         'controller and reach the list', (tester) async {
       tester.view.physicalSize = const Size(260, 720);

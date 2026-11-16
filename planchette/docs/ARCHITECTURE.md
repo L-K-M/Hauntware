@@ -159,6 +159,17 @@ succeeds but removal of the source fails, both names are retained and the
 error identifies them for recovery; a complete destination can exist even
 though that exceptional cleanup failure is reported.
 
+A file with other hard links is not replaced: a new file would carry this
+name only, and the other names would keep the old text. The save checks the
+digest, writes an owner-only backup copy of the current text beside the
+file, rewrites the file in place, and deletes the backup; a write that fails
+puts the old text back, and when that fails too the backup is kept and
+named in the error. This path is not atomic (a crash mid-write leaves a
+partial file and the backup), but it keeps the inode, so owner, mode,
+attributes and ACLs stay. The link count comes from `statx` on Linux and
+Android API 30+, `lstat` on macOS and `GetFileInformationByHandle` on
+Windows; where it cannot be read the replacing save is used.
+
 New files and Save As have explicit create/replace contracts. A canceled or
 failed save does not change a document's identity or erase its dirty state.
 The save baseline advances only for the text revision actually written;
@@ -176,6 +187,27 @@ the cleanup is undoable and cannot leave hidden disk-only changes. A failed
 write keeps the cleanup visible and unsaved. Hosts preserving raw EOLs pass
 `TextNormalization.preserve` to the controller as well as their file APIs;
 this determines Normalize Line Endings and final-newline insertion.
+
+Hot exit (A2) keeps a journal of every open window in the app's private
+data folder: `session/` under the application support directory on the
+desktop, under the app's files folder on Android, where backup is off.
+The folder is 0700 and each `window-<id>.json` is replaced atomically with
+0600. A window's file holds its tabs in order, the caret, and a document's
+text and the digest it was edited from only while it has unsaved changes.
+A change to which documents are open or dirty is written at once, so a
+saved or discarded document's text leaves the disk with it; typing is
+written half a second after it pauses, and Android also writes on pause.
+Quitting the app then asks nothing and the journal is frozen for the
+teardown; closing one window of several still asks and deletes that
+window's file. The next launch reopens each file from disk and puts its
+kept text back over it, unsaved, never writing; a file changed on disk
+since is named in the banner, and a missing one gives its text to an
+untitled tab and is offered its save siblings (B10). The journal is locked
+by the first running instance; another instance, or a failed write, falls
+back to the "Save changes?" questions, as does the Settings switch, which
+also deletes the journal. On Android the runner keeps content-document
+identities in `document-identities.json` so paths in the journal still
+resolve after the system ends the process.
 
 ## Distribution and development
 

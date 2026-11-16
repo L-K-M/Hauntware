@@ -30,6 +30,7 @@ import 'controllers/snippets_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/cadence_controller.dart';
 import 'controllers/pinned_services.dart';
+import 'controllers/power_waits.dart';
 import 'controllers/fleet_density.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/recovery_controller.dart' show RecoverySettings;
@@ -47,6 +48,7 @@ import 'controllers/server_editor_controller.dart';
 import 'controllers/overview_layout.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/sync_sign_out.dart' show SyncSignOut;
 import 'controllers/threshold_controller.dart';
 import 'controllers/time_display.dart';
 import 'controllers/window_panes.dart';
@@ -58,6 +60,7 @@ import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/app_undo.dart' show UndoHistoryScope;
 import 'ui/overview_cards.dart' show OverviewLayoutScope;
+import 'ui/power.dart' show PowerWaitsScope;
 import 'ui/quick_actions.dart' show PinnedServicesScope;
 import 'ui/fleet_board.dart' show FleetDensityScope;
 import 'ui/adaptive_shell.dart';
@@ -113,6 +116,7 @@ class KlabautermannApp extends StatelessWidget {
     this.thresholds,
     this.cadence,
     this.pinnedServices,
+    this.powerWaits,
     this.overviewLayout,
     this.fleetDensity,
     this.cadenceCaps,
@@ -171,6 +175,10 @@ class KlabautermannApp extends StatelessWidget {
   /// OV-08's pinned services, for the Overview's quick actions and the
   /// unit pages' pins; null in tests that leave them out.
   final PinnedServicesController? pinnedServices;
+
+  /// SYS-03's waits after power actions, shared by the System tab and the
+  /// Overview's quick actions so a wait outlasts both and admin mode.
+  final PowerWaits? powerWaits;
 
   /// OV-06's Overview cards; null in tests that leave them out, which see
   /// the standard layout.
@@ -448,12 +456,16 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withDensity,
             };
+            final withWaits = switch (powerWaits) {
+              final waits? => PowerWaitsScope(waits: waits, child: withPins),
+              null => withPins,
+            };
             final withLayout = switch (overviewLayout) {
               final layout? => OverviewLayoutScope(
                 layout: layout,
-                child: withPins,
+                child: withWaits,
               ),
-              null => withPins,
+              null => withWaits,
             };
             final scoped = DockerNoticeScope(
               notice: dockerNotice,
@@ -611,25 +623,22 @@ class KlabautermannApp extends StatelessWidget {
                       undoHistory: undoHistory,
                       onOpenPalette: navigation == null
                           ? null
-                          : (context) =>
-                                _openOnce(_DialogKind.palette, () {
-                                  final l10n = AppLocalizations.of(
-                                    context,
-                                  );
-                                  return showCommandPalette(
-                                    context,
-                                    paletteCommands(
-                                      l10n: l10n,
-                                      platform: platform,
-                                      context: context,
-                                      actions: commands,
-                                      fleet: fleet,
-                                      monitoring: monitoring,
-                                      navigation: navigation,
-                                    ),
-                                    strings: paletteStrings(l10n),
-                                  );
-                                }),
+                          : (context) => _openOnce(_DialogKind.palette, () {
+                              final l10n = AppLocalizations.of(context);
+                              return showCommandPalette(
+                                context,
+                                paletteCommands(
+                                  l10n: l10n,
+                                  platform: platform,
+                                  context: context,
+                                  actions: commands,
+                                  fleet: fleet,
+                                  monitoring: monitoring,
+                                  navigation: navigation,
+                                ),
+                                strings: paletteStrings(l10n),
+                              );
+                            }),
                       onOpenPanel: navigation == null
                           ? null
                           : (context, panel) {
@@ -724,6 +733,10 @@ class KlabautermannApp extends StatelessWidget {
               pinConflicts: sync,
               accountSize: sync?.accountSize,
               recovery: recovery,
+              signOut: switch (sync) {
+                final sync? => SyncSignOut(sync, fleet),
+                null => null,
+              },
             ),
           },
         );

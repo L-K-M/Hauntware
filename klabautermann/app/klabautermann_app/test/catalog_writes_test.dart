@@ -31,6 +31,9 @@ bool _writes(EngineRequest request) => switch (request) {
   // SyncEnrollment.login pulls once and the engine applies what it
   // pulled; neither pushes.
   EnrollSync() => false,
+  // Sign-out forgets this device's state only; nothing reaches the
+  // account.
+  SignOutSync() => false,
   // Endpoint confirmation writes the device-local endpoint_pins.json,
   // which never syncs (03 §4.9).
   ConfirmEndpoints() => false,

@@ -14,6 +14,14 @@
   "@fleetSectionImported": {
     "description": "Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps."
   },
+  "fleetSectionHiddenConnected": "Connected server hidden",
+  "@fleetSectionHiddenConnected": {
+    "description": "Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides has a link up."
+  },
+  "fleetSectionHiddenConnecting": "Connecting server hidden",
+  "@fleetSectionHiddenConnecting": {
+    "description": "Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides is connecting, none of them connected."
+  },
   "fleetRowPin": "Pin to top",
   "@fleetRowPin": {
     "description": "A synced fleet row's menu verb that lists the server under the Pinned section on this device."
@@ -6131,6 +6139,54 @@
   "settingsPinPublicationNotChanged": "The host key setting could not be changed.",
   "@settingsPinPublicationNotChanged": {
     "description": "Toast when the engine did not take or keep a change of the host key sharing switch."
+  },
+  "settingsSyncAccountTitle": "Account",
+  "@settingsSyncAccountTitle": {
+    "description": "Heading of the Sync tab's section showing the enrolled sync account and its sign-out."
+  },
+  "settingsSyncAccount": "Signed in as {username} on {server}",
+  "@settingsSyncAccount": {
+    "description": "The enrolled sync account in Settings > Sync.",
+    "placeholders": {
+      "username": {
+        "type": "String",
+        "example": "ops"
+      },
+      "server": {
+        "type": "String",
+        "example": "https://sync.example.com"
+      }
+    }
+  },
+  "settingsSyncSignOut": "Sign out",
+  "@settingsSyncSignOut": {
+    "description": "Button in Settings > Sync, and the confirming button of its dialog, that signs this device out of the sync account."
+  },
+  "settingsSyncSignOutTitle": "Sign out of sync?",
+  "@settingsSyncSignOutTitle": {
+    "description": "Title of the dialog confirming the sync sign-out."
+  },
+  "settingsSyncSignOutBody": "This device forgets its sign-in and removes the servers that came from your sync account, with their saved credentials, cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.",
+  "@settingsSyncSignOutBody": {
+    "description": "Body of the dialog confirming the sync sign-out: what it removes and what it keeps."
+  },
+  "settingsSyncSignOutOpenConnections": "{count, plural, =1{1 server it removes has an open connection, which closes.} other{{count} servers it removes have open connections, which close.}}",
+  "@settingsSyncSignOutOpenConnections": {
+    "description": "Warning in the sign-out dialog when servers it removes are connected.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "settingsSyncSignOutCancel": "Cancel",
+  "@settingsSyncSignOutCancel": {
+    "description": "Button that closes the sign-out dialog without signing out."
+  },
+  "settingsSyncSignOutFailed": "Sign-out did not finish. This device is still signed in.",
+  "@settingsSyncSignOutFailed": {
+    "description": "Toast when the engine did not sign out."
   },
   "settingsPinConflictWarning": "A synced host key for {locator} conflicts with the key this device trusts. This can mean a man-in-the-middle attack.",
   "@settingsPinConflictWarning": {
@@ -12809,6 +12865,16 @@
       "elapsed": {
         "type": "String",
         "example": "2 minutes"
+      }
+    }
+  },
+  "systemPowerNotBack": "The server has not answered again {elapsed} after the reboot. It may still be starting, or need someone at its console.",
+  "@systemPowerNotBack": {
+    "description": "System tab, Power, and the Overview's quick actions: shown when a rebooted server has not reported a new boot within 15 minutes; elapsed is a duration such as '15 minutes'.",
+    "placeholders": {
+      "elapsed": {
+        "type": "String",
+        "example": "15 minutes"
       }
     }
   },
