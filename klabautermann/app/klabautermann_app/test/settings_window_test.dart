@@ -16,6 +16,7 @@ import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/admin_memory.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_keystore/testing.dart';
 import 'package:klabautermann_app/controllers/account_size.dart';
 import 'package:klabautermann_app/controllers/cadence_controller.dart';
 import 'package:klabautermann_app/controllers/log_display.dart';
@@ -57,7 +58,6 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         VaultRecoveryFailure,
         VaultRestorePolicy;
 
-import 'support/device_authenticator.dart';
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
 

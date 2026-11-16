@@ -8,7 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -24,7 +24,9 @@ internal fun documentCreationMimeType(name: String?): String =
         name?.endsWith(".htm", ignoreCase = true) == true) ClipDescription.MIMETYPE_TEXT_HTML
     else ClipDescription.MIMETYPE_UNKNOWN
 
-class MainActivity : FlutterActivity() {
+// A FragmentActivity: local_auth's biometric prompt for the app lock
+// needs one. The document channel and its pickers are unchanged.
+class MainActivity : FlutterFragmentActivity() {
     private companion object {
         const val CHANNEL = "planchette/documents"
         const val OPEN_DOCUMENT = 1
@@ -208,7 +210,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    @Deprecated("FlutterActivity uses the activity result bridge")
+    @Deprecated("The document pickers use the activity result bridge")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != OPEN_DOCUMENT && requestCode != CREATE_DOCUMENT) return

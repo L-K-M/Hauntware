@@ -1,5 +1,30 @@
 # Status
 
+## App lock (2026-11-16, branch `planchette/app-lock`)
+
+- Settings > App lock, off by default as in Séance and Poltergeist:
+  with it on, every window opens behind ghost_ui's lock screen and
+  locks again after five minutes in the background (ghost_keystore's
+  `AppLockController`). Turning it on or off asks for device
+  authentication first and is stored as `appLock` in `settings.json`
+  only once that write succeeds; a file without the key reads as off.
+  Linux has no system prompt, so the switch stays off and disabled.
+- Hot-exit documents are restored before the first frame but behind the
+  gate: no pointer, focus or semantics reaches them until unlock, and
+  while locked the macOS menu bar offers only Quit. Window titles still
+  name the open documents.
+- The remote catalog's keystore reads go through the lock.
+- Android's activity is now a `FlutterFragmentActivity` with AppCompat
+  themes and `USE_BIOMETRIC`, as local_auth 3.0.2 needs; the document
+  channel and pickers are unchanged.
+- `AppLockGateModel` and the test `FakeDeviceAuthenticator` moved into
+  ghost_keystore from Poltergeist and Klabautermann. The authentication
+  plugin stays app-side (`docs/design/catalog-library.md` section 9).
+
+Still manual: the lock prompt on Android, macOS and Windows devices,
+Android activity behavior (open intents, pickers, recoveries) after the
+activity change, and resume after five minutes in the background.
+
 ## Wave 5 (2026-11-15/16)
 
 Merged to main:

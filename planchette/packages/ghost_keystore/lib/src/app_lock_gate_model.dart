@@ -1,10 +1,12 @@
 import 'package:flutter/widgets.dart';
-import 'package:ghost_keystore/app_lock.dart';
-import 'package:ghost_ui/ghost_ui.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostAppLockGateModel, GhostAppLockUnlock;
 
-/// The app's [AppLockController] as the shared gate's model seam
-/// (cred-05): the gate's own widgets live in ghost_ui now, over the same
-/// lock screen and lifecycle the controller has always driven.
+import 'app_lock_controller.dart';
+
+/// An app's [AppLockController] as ghost_ui's lock gate seam, so every
+/// app hands `GhostAppLockGate` the same adapter instead of its own copy.
+/// ghost_ui keeps no keystore import, which is why the mapping lives here.
 final class AppLockGateModel implements GhostAppLockGateModel {
   const AppLockGateModel(this._lock);
 

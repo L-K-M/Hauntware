@@ -16,5 +16,6 @@ library;
 
 export 'src/app_lock.dart';
 export 'src/app_lock_controller.dart';
+export 'src/app_lock_gate_model.dart';
 export 'src/app_lock_section.dart';
 export 'src/master_key_manager.dart';

@@ -1,6 +1,11 @@
+/// Test doubles for the app lock, shared by the package's own tests and
+/// every app that wires the lock: one fake device instead of a copy per
+/// app. Never imported by app code.
+library;
+
 import 'dart:async';
 
-import 'package:ghost_keystore/ghost_keystore.dart';
+import 'src/app_lock.dart';
 
 /// A device whose authentication the test decides: [available] says
 /// whether it has any, [accept] whether the next prompts pass, and

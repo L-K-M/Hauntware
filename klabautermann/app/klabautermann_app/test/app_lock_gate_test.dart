@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_keystore/testing.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
-import 'package:klabautermann_app/ui/app_lock_gate.dart';
-
-import 'support/device_authenticator.dart';
 
 /// SAF-20: the shared gate over the app's own lock controller.
 void main() {
@@ -20,27 +18,6 @@ void main() {
     supported: true,
     enabled: enabled,
   );
-
-  test('the model reports the lock and maps each unlock outcome', () async {
-    final lock = controller();
-    final model = AppLockGateModel(lock);
-    addTearDown(lock.dispose);
-
-    expect(model.locked, isTrue);
-    await model.refreshAvailability();
-    expect(model.locked, isTrue);
-
-    device.accept = false;
-    expect(await model.unlock(), GhostAppLockUnlock.failed);
-
-    device.available = false;
-    expect(await model.unlock(), GhostAppLockUnlock.unavailable);
-
-    device.available = true;
-    device.accept = true;
-    expect(await model.unlock(), GhostAppLockUnlock.unlocked);
-    expect(model.locked, isFalse);
-  });
 
   Widget app(AppLockController lock) => MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,

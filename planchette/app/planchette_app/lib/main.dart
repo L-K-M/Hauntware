@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'android_app.dart';
 import 'planchette_app.dart';
+import 'services/app_lock.dart';
 import 'services/app_settings.dart';
 import 'services/app_version.dart';
 import 'services/desktop_window.dart';
@@ -41,6 +42,9 @@ Future<void> main(List<String> arguments) async {
     store: LocalSettingsStore.defaultLocation(),
   );
   await settings.load();
+  // Before any window: the first frame of every window is already behind
+  // the lock screen when the lock is on.
+  final appLock = openAppLock(settings);
 
   // The hot-exit journal, in the app's private support folder; a second
   // running instance finds it locked and keeps nothing.
@@ -71,6 +75,8 @@ Future<void> main(List<String> arguments) async {
       directory: directory,
       catalog: WorkspaceCatalog(
         directory: Directory(paths.join(directory.path, 'catalog')),
+        // A locked app hands the catalog no credential.
+        credentialReads: appLock.read,
       ),
       prompts: AppWorkspaceConnectionPrompts(
         () {
@@ -154,6 +160,7 @@ Future<void> main(List<String> arguments) async {
             (window.workspace.dialogs as AppDocumentDialogs).pickDirectory,
         remoteFiles: openRemoteFiles,
         appVersion: appVersion,
+        appLock: appLock,
       ),
     ),
   );

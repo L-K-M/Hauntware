@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostUndoHistory, GhostUndoableChange;
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_keystore/testing.dart';
 import 'package:klabautermann_app/app.dart' show appNavigatorKey;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -16,7 +17,6 @@ import 'package:klabautermann_app/ui/actions/quit_guard.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/harness.dart';
-import 'support/device_authenticator.dart';
 import 'support/sync_sign_in.dart';
 
 const _servers = [

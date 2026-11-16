@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'planchette_app.dart';
 import 'services/android_documents.dart';
+import 'services/app_lock.dart';
 import 'services/app_settings.dart';
 import 'services/document_dialogs.dart';
 import 'services/document_workspace.dart';
@@ -22,6 +24,7 @@ Future<void> runAndroidApp({String? appVersion}) async {
     store: LocalSettingsStore(File(settingsPath)),
   );
   await settings.load();
+  final appLock = openAppLock(settings);
   // Beside the settings in the app's files folder, which is private and,
   // with backup off, never leaves the device.
   final journal = SessionJournal(
@@ -49,7 +52,16 @@ Future<void> runAndroidApp({String? appVersion}) async {
   } else if (workspace.documents.isEmpty) {
     workspace.newDocument();
   }
-  runApp(_AndroidApp(workspace, settings, journal, navigatorKey, appVersion));
+  runApp(
+    _AndroidApp(
+      workspace,
+      settings,
+      journal,
+      navigatorKey,
+      appLock,
+      appVersion,
+    ),
+  );
 }
 
 class _AndroidApp extends StatefulWidget {
@@ -58,6 +70,7 @@ class _AndroidApp extends StatefulWidget {
     this.settings,
     this.journal,
     this.navigatorKey,
+    this.appLock,
     this.appVersion,
   );
 
@@ -65,6 +78,7 @@ class _AndroidApp extends StatefulWidget {
   final SettingsController settings;
   final SessionJournal journal;
   final GlobalKey<NavigatorState> navigatorKey;
+  final AppLockController appLock;
   final String? appVersion;
 
   @override
@@ -112,11 +126,13 @@ class _AndroidAppState extends State<_AndroidApp> {
     navigatorKey: widget.navigatorKey,
     onQuit: _quit,
     appVersion: widget.appVersion,
+    appLock: widget.appLock,
   );
 
   @override
   void dispose() {
     _lifecycle.dispose();
+    widget.appLock.dispose();
     widget.journal.dispose();
     widget.workspace.dispose();
     widget.settings.dispose();

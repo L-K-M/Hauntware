@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/app_lock.dart';
-
-import 'support/device_authenticator.dart';
+import 'package:ghost_keystore/testing.dart';
 
 /// SAF-20: the app lock over ghost_keystore's AppLock.
 void main() {
@@ -81,6 +80,14 @@ void main() {
     lock.dispose();
     pending.complete('key');
     expect(await read, 'key');
+  });
+
+  test('an availability answer after disposal does not notify', () async {
+    // A gate asks on mount; an app torn down meanwhile disposes the lock.
+    final lock = controller();
+    final answer = lock.refreshAvailability();
+    lock.dispose();
+    await answer;
   });
 
   test('a keystore read while locked asks once, sharing the lock '

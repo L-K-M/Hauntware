@@ -42,6 +42,7 @@ final class AppSettings {
     this.sidebarWidth = defaultSidebarWidth,
     this.unsavedOnQuit = UnsavedOnQuit.keep,
     this.saveAsFolders = const SaveAsFolders(),
+    this.appLock = false,
   });
 
   /// Bounds a stored size so a bad file cannot make the editor unreadable.
@@ -124,6 +125,12 @@ final class AppSettings {
   /// on this device with Open Recent, and cleared with it.
   final SaveAsFolders saveAsFolders;
 
+  /// Whether the app opens behind the app lock and locks again after a
+  /// while in the background. Off unless the user turned it on; only
+  /// [SettingsController.saveAppLock] changes it, after the lock's own
+  /// device authentication.
+  final bool appLock;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     int? fontSize,
@@ -137,6 +144,7 @@ final class AppSettings {
     double? sidebarWidth,
     UnsavedOnQuit? unsavedOnQuit,
     SaveAsFolders? saveAsFolders,
+    bool? appLock,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontSize: fontSize ?? this.fontSize,
@@ -150,6 +158,7 @@ final class AppSettings {
     sidebarWidth: sidebarWidth ?? this.sidebarWidth,
     unsavedOnQuit: unsavedOnQuit ?? this.unsavedOnQuit,
     saveAsFolders: saveAsFolders ?? this.saveAsFolders,
+    appLock: appLock ?? this.appLock,
   );
 
   Map<String, Object?> toJson() => {
@@ -172,6 +181,7 @@ final class AppSettings {
     if (unsavedOnQuit != UnsavedOnQuit.keep)
       'unsavedOnQuit': unsavedOnQuit.name,
     if (!saveAsFolders.isEmpty) 'saveAsFolders': saveAsFolders.toJson(),
+    if (appLock) 'appLock': true,
   };
 
   /// Read a stored document, falling back field by field. One bad value costs
@@ -202,8 +212,17 @@ final class AppSettings {
           ? UnsavedOnQuit.ask
           : fallback.unsavedOnQuit,
       saveAsFolders: SaveAsFolders.fromJson(json['saveAsFolders']),
+      appLock: _appLock(json['appLock']),
     );
   }
+
+  /// An absent key, as in every file written before the lock existed,
+  /// reads as off. Any other value than `false` reads as on, so a damaged
+  /// value never drops a lock the user turned on.
+  static bool _appLock(Object? value) => switch (value) {
+    null || false => false,
+    _ => true,
+  };
 
   static ThemeMode? _themeMode(Object? value) => switch (value) {
     'system' => ThemeMode.system,
@@ -279,6 +298,7 @@ final class AppSettings {
       other.sidebarWidth == sidebarWidth &&
       other.unsavedOnQuit == unsavedOnQuit &&
       other.saveAsFolders == saveAsFolders &&
+      other.appLock == appLock &&
       _listsEqual(other.recentTextTools, recentTextTools) &&
       _listsEqual(other.recentDocuments, recentDocuments);
 
@@ -301,6 +321,7 @@ final class AppSettings {
     sidebarWidth,
     unsavedOnQuit,
     saveAsFolders,
+    appLock,
     jsonEncode(recentTextTools),
     Object.hashAll(recentDocuments),
   );
@@ -455,6 +476,17 @@ final class _SessionSettingsStore implements SettingsStore {
   Future<void> save(AppSettings settings) async => _settings = settings;
 }
 
+/// A setting that had to reach the disk did not; [message] is the
+/// worded failure [SettingsController.error] shows too.
+final class SettingsNotSavedException implements Exception {
+  const SettingsNotSavedException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// The live settings, kept saved as they change.
 final class SettingsController extends ChangeNotifier {
   SettingsController({
@@ -535,6 +567,22 @@ final class SettingsController extends ChangeNotifier {
     } finally {
       _writing = false;
     }
+  }
+
+  /// Stores [enabled] as the app lock setting and waits until it is on
+  /// disk, for the lock's controller: unlike [update], a failed write
+  /// throws, and the value in force goes back to what it was, so the
+  /// lock never runs in a mode the next launch would not read back.
+  Future<void> saveAppLock(bool enabled) async {
+    if (_value.appLock == enabled) return;
+    await update(_value.copyWith(appLock: enabled));
+    // update() shares the running drain; flush() waits for the write
+    // that carries this value, or a newer one that carries it too.
+    await flush();
+    if (_error == null) return;
+    _value = _value.copyWith(appLock: !enabled);
+    notifyListeners();
+    throw SettingsNotSavedException(_error!);
   }
 
   /// Wait for every write [update] has started. A test asserts on the store

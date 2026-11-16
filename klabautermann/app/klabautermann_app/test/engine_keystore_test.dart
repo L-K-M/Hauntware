@@ -4,10 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_keystore/testing.dart';
 import 'package:klabautermann_app/services/engine_keystore.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
-import 'support/device_authenticator.dart';
 import 'support/fake_engine.dart';
 
 /// A keystore in memory that logs each access as `<op> <entry>`, so the
