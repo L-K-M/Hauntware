@@ -32,6 +32,25 @@ class MasterKeyUnavailableException implements Exception {
       'vault.';
 }
 
+/// Thrown when the OS keystore holds a master key entry that is not a
+/// base64-encoded 32-byte key while an encrypted vault is on disk.
+///
+/// It is the same refusal as its supertype, so every caller that stops on a
+/// missing key stops on this too: the entry cannot open the vault, a retry
+/// will not repair it, and replacing it would strand every saved secret. The
+/// entry is left as found.
+class MasterKeyDamagedException extends MasterKeyUnavailableException {
+  const MasterKeyDamagedException();
+
+  @override
+  String toString() =>
+      'The vault master key in the system keystore is damaged: it is not a '
+      '32-byte key, so it cannot open the encrypted vault. Séance stopped '
+      'rather than replace it, which would make your saved passwords and '
+      'private keys unreadable. Restore the matching key from a backup (a '
+      'keychain backup on macOS) before reopening this vault.';
+}
+
 /// The OS keystore could not be read or written — on Linux that is usually a
 /// locked login keyring (auto-login leaves it locked) or a desktop without a
 /// Secret Service daemon (gnome-keyring/KWallet) at all. [message] is
@@ -72,6 +91,9 @@ class MasterKeyManager {
   final FlutterSecureStorage _storage;
   AppLock? _appLock;
   static const _keyName = 'seance.vault.masterKey.v1';
+
+  /// The vault seals with AES-256-GCM, so its key is exactly 32 bytes.
+  static const _keyLength = 32;
 
   /// Last observed keystore health. The bootstrap toast keys off this.
   KeystoreStatus keystoreStatus = KeystoreStatus.unknown;
@@ -138,21 +160,32 @@ class MasterKeyManager {
   /// [MasterKeyUnavailableException] rather than guess. A read that throws
   /// instead is a keystore that cannot answer at all — the locked-vault null
   /// above, not a refusal: nothing is minted either way.
-  Future<List<int>?> probeKeystore({bool hasExistingVault = false}) async {
+  ///
+  /// An entry that is not a base64-encoded 32-byte key is damaged, which no
+  /// retry repairs: with a vault on disk the probe throws
+  /// [MasterKeyDamagedException] and leaves the entry alone; without one
+  /// nothing was sealed with it, so it is replaced like a missing key.
+  ///
+  /// Required, not defaulted: a caller that forgot it would mint over the
+  /// vault it did not mention, the one mistake that cannot be taken back.
+  Future<List<int>?> probeKeystore({required bool hasExistingVault}) async {
+    final String? existing;
     try {
-      final existing = await _storage.read(key: _keyName);
-      // An empty entry decodes to no bytes: no key, as an absent one.
-      if (existing != null && existing.isNotEmpty) {
-        _markAvailable();
-        return base64.decode(existing);
-      }
-      // The keystore answered: reachable, holding nothing.
-      _markAvailable();
+      existing = await _storage.read(key: _keyName);
     } catch (e) {
       _markUnavailable(e);
       return null;
     }
-    if (hasExistingVault) throw const MasterKeyUnavailableException();
+    // The keystore answered: reachable, whatever it holds.
+    _markAvailable();
+    // An empty entry decodes to no bytes: no key, as an absent one.
+    if (existing != null && existing.isNotEmpty) {
+      final key = _decodeKey(existing);
+      if (key != null) return key;
+      if (hasExistingVault) throw const MasterKeyDamagedException();
+    } else if (hasExistingVault) {
+      throw const MasterKeyUnavailableException();
+    }
     try {
       final key = secureRandomBytes(32);
       await _storage.write(key: _keyName, value: base64.encode(key));
@@ -165,7 +198,7 @@ class MasterKeyManager {
   }
 
   /// The master key the OS keystore actually holds right now, or null when it
-  /// holds none, cannot be read, or holds something undecodable.
+  /// holds none, cannot be read, or holds something that is not a key.
   ///
   /// Unlike [probeKeystore] this never *creates* one, which is what makes it
   /// usable as a witness: a failed [setKeystoreKey] needs to know which key
@@ -188,10 +221,22 @@ class MasterKeyManager {
       final existing = await _storage.read(key: _keyName);
       // An empty entry decodes to no bytes, which is no key either.
       if (existing == null || existing.isEmpty) return null;
-      return base64.decode(existing);
+      return _decodeKey(existing);
     } catch (_) {
       return null;
     }
+  }
+
+  /// The key a stored entry encodes, or null when it is not base64 of
+  /// exactly [_keyLength] bytes.
+  static List<int>? _decodeKey(String stored) {
+    final List<int> key;
+    try {
+      key = base64.decode(stored);
+    } on FormatException {
+      return null;
+    }
+    return key.length == _keyLength ? key : null;
   }
 
   /// Whether a master key is stored. Tolerant like [getApiKey]: a keystore
