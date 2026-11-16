@@ -6132,6 +6132,54 @@
   "@settingsPinPublicationNotChanged": {
     "description": "Toast when the engine did not take or keep a change of the host key sharing switch."
   },
+  "settingsSyncAccountTitle": "Account",
+  "@settingsSyncAccountTitle": {
+    "description": "Heading of the Sync tab's section showing the enrolled sync account and its sign-out."
+  },
+  "settingsSyncAccount": "Signed in as {username} on {server}",
+  "@settingsSyncAccount": {
+    "description": "The enrolled sync account in Settings > Sync.",
+    "placeholders": {
+      "username": {
+        "type": "String",
+        "example": "ops"
+      },
+      "server": {
+        "type": "String",
+        "example": "https://sync.example.com"
+      }
+    }
+  },
+  "settingsSyncSignOut": "Sign out",
+  "@settingsSyncSignOut": {
+    "description": "Button in Settings > Sync, and the confirming button of its dialog, that signs this device out of the sync account."
+  },
+  "settingsSyncSignOutTitle": "Sign out of sync?",
+  "@settingsSyncSignOutTitle": {
+    "description": "Title of the dialog confirming the sync sign-out."
+  },
+  "settingsSyncSignOutBody": "This device forgets its sign-in and removes the servers that came from your sync account, with their saved credentials, cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.",
+  "@settingsSyncSignOutBody": {
+    "description": "Body of the dialog confirming the sync sign-out: what it removes and what it keeps."
+  },
+  "settingsSyncSignOutOpenConnections": "{count, plural, =1{1 server it removes has an open connection, which closes.} other{{count} servers it removes have open connections, which close.}}",
+  "@settingsSyncSignOutOpenConnections": {
+    "description": "Warning in the sign-out dialog when servers it removes are connected.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "settingsSyncSignOutCancel": "Cancel",
+  "@settingsSyncSignOutCancel": {
+    "description": "Button that closes the sign-out dialog without signing out."
+  },
+  "settingsSyncSignOutFailed": "Sign-out did not finish. This device is still signed in.",
+  "@settingsSyncSignOutFailed": {
+    "description": "Toast when the engine did not sign out."
+  },
   "settingsPinConflictWarning": "A synced host key for {locator} conflicts with the key this device trusts. This can mean a man-in-the-middle attack.",
   "@settingsPinConflictWarning": {
     "description": "Settings, Sync: warning over one quarantined host key, naming the host:port whose synced key differs from the trusted pin (03 §4.9).",

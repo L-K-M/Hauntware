@@ -48,6 +48,7 @@ import 'controllers/server_editor_controller.dart';
 import 'controllers/overview_layout.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/sync_sign_out.dart' show SyncSignOut;
 import 'controllers/threshold_controller.dart';
 import 'controllers/time_display.dart';
 import 'controllers/window_panes.dart';
@@ -732,6 +733,10 @@ class KlabautermannApp extends StatelessWidget {
               pinConflicts: sync,
               accountSize: sync?.accountSize,
               recovery: recovery,
+              signOut: switch (sync) {
+                final sync? => SyncSignOut(sync, fleet),
+                null => null,
+              },
             ),
           },
         );

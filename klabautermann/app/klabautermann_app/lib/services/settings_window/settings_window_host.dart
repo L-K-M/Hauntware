@@ -28,6 +28,7 @@ import '../../controllers/recovery_controller.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
 import '../../controllers/sync_controller.dart' show PinConflictsSettings;
+import '../../controllers/sync_sign_out.dart' show SyncSignOutSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/threshold_scope.dart' show ThresholdMetric;
 import '../stored_safety.dart';
@@ -49,6 +50,7 @@ SettingsWindowHost? settingsWindowHostFor(
   PinPublicationSettings? pinPublication,
   PinConflictsSettings? pinConflicts,
   ValueListenable<AccountSize?>? accountSize,
+  SyncSignOutSettings? signOut,
   AppLockSettings? appLock,
   CadenceSettings? cadence,
   CadenceCapSettings? cadenceCaps,
@@ -73,6 +75,7 @@ SettingsWindowHost? settingsWindowHostFor(
     pinPublication: pinPublication,
     pinConflicts: pinConflicts,
     accountSize: accountSize,
+    signOut: signOut,
     appLock: appLock,
     cadence: cadence,
     cadenceCaps: cadenceCaps,
@@ -111,6 +114,7 @@ final class SettingsWindowHost {
     PinPublicationSettings? pinPublication,
     PinConflictsSettings? pinConflicts,
     ValueListenable<AccountSize?>? accountSize,
+    SyncSignOutSettings? signOut,
     AppLockSettings? appLock,
     CadenceSettings? cadence,
     CadenceCapSettings? cadenceCaps,
@@ -133,6 +137,7 @@ final class SettingsWindowHost {
        _pinPublication = pinPublication,
        _pinConflicts = pinConflicts,
        _accountSize = accountSize,
+       _signOut = signOut,
        _appLock = appLock,
        _cadence = cadence,
        _cadenceCaps = cadenceCaps,
@@ -160,6 +165,7 @@ final class SettingsWindowHost {
           ?pinPublication,
           ?pinConflicts,
           ?accountSize,
+          ?signOut,
           ?appLock,
           ?cadence,
           ?cadenceCaps,
@@ -187,6 +193,7 @@ final class SettingsWindowHost {
   final PinPublicationSettings? _pinPublication;
   final PinConflictsSettings? _pinConflicts;
   final ValueListenable<AccountSize?>? _accountSize;
+  final SyncSignOutSettings? _signOut;
   final AppLockSettings? _appLock;
   final CadenceSettings? _cadence;
   final CadenceCapSettings? _cadenceCaps;
@@ -254,6 +261,10 @@ final class SettingsWindowHost {
       final size? => encodeAccountSize(size),
       null => null,
     },
+    SettingsLinkKey.syncAccount.name: switch (_signOut) {
+      final signOut? => encodeSyncAccount(signOut.account, busy: signOut.busy),
+      null => null,
+    },
     SettingsLinkKey.appVersion.name: _appVersion,
     SettingsLinkKey.monitorSet.name: encodeMonitorCandidates(_monitorSet.value),
     SettingsLinkKey.safety.name: encodeStoredSafety(_safety.value),
@@ -274,6 +285,9 @@ final class SettingsWindowHost {
 
   RecoverySettings _requireRecovery() =>
       _recovery ?? (throw StateError('No recovery settings'));
+
+  SyncSignOutSettings _requireSignOut() =>
+      _signOut ?? (throw StateError('No sync sign-out'));
 
   Future<Object?> _handleCall(String name, Object? argument) async {
     // A locked app changes nothing from the settings window, which covers
@@ -354,6 +368,10 @@ final class SettingsWindowHost {
           ),
           keepLocal: change[SettingsLinkKey.keepLocal.name]! as bool,
         );
+      case SettingsLinkMethod.openSyncConnections:
+        return _requireSignOut().openConnectionsRemoved();
+      case SettingsLinkMethod.signOutSync:
+        await _requireSignOut().signOut();
       case SettingsLinkMethod.setMonitored:
         final change = (argument! as Map).cast<String, Object?>();
         await _monitorSet.setMonitored(

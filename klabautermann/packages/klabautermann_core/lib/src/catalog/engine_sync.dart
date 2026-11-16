@@ -41,6 +41,7 @@ import 'package:seance_core/seance_core.dart'
         Snippet,
         duplicateServerConfig,
         duplicateServerLabel,
+        isReservedVaultId,
         nextUpdatedAt,
         plannedCredential,
         plannedCredentialReadsStored,
@@ -122,20 +123,28 @@ final class EngineSync {
     required this._keystore,
     required this._vault,
     required this._transport,
-    required String Function(String name) path,
+    required this._path,
     required this._account,
     required this._klabautermannRecords,
     required this._snippets,
-  }) : _records = PersistentLocalRecordStore(path: path(_syncRecordsFileName)),
-       _servers = FileServerConfigStore(
-         path: path(_serversFileName),
-         syncDeviceId: () => _deviceId,
-       ) {
+  }) {
+    _openCatalog();
+    _snippetHandler = SnippetMirrorHandler(_snippets);
+  }
+
+  /// Opens the record store and the server catalog over their files, and
+  /// the handler that materializes `klabautermann:` records into them.
+  /// Neither store reads its file before an operation needs it.
+  void _openCatalog() {
+    _records = PersistentLocalRecordStore(path: _path(_syncRecordsFileName));
+    _servers = FileServerConfigStore(
+      path: _path(_serversFileName),
+      syncDeviceId: () => _deviceId,
+    );
     _handler = KlabautermannRecordHandler(
       store: _klabautermannRecords,
       servers: _servers,
     );
-    _snippetHandler = SnippetMirrorHandler(_snippets);
   }
 
   /// Opens the sync state files in [supportDirectory] (none of the catalog
@@ -209,11 +218,14 @@ final class EngineSync {
   final ConflictAwareHostKeyStore _hostKeys;
   final SyncKeystore _keystore;
   final SyncTransportFactory _transport;
-  final PersistentLocalRecordStore _records;
-  final FileServerConfigStore _servers;
+  final String Function(String name) _path;
+  // Replaced, with the handler over them, when a sign-out deletes their
+  // files: the stores keep what they loaded in memory.
+  late PersistentLocalRecordStore _records;
+  late FileServerConfigStore _servers;
+  late KlabautermannRecordHandler _handler;
   final EngineVault _vault;
   final KlabautermannRecordStore _klabautermannRecords;
-  late final KlabautermannRecordHandler _handler;
   final SnippetMirror _snippets;
   late final SnippetMirrorHandler _snippetHandler;
   final HostKeyMutationGate _hostKeyMutations = HostKeyMutationGate();
@@ -488,6 +500,58 @@ final class EngineSync {
     } finally {
       api.close();
     }
+  }
+
+  /// Signs this device out of the enrolled account, as Poltergeist's
+  /// sign-out does (03 §4.3): the account's records, its servers with the
+  /// vault entries they name, the synced preferences, rules and snippets,
+  /// the enrollment and the session token are forgotten. The imported
+  /// servers are not the account's and stay, as do the host-key pins, the
+  /// endpoint confirmations and the vault master key, under which nothing
+  /// of the account's is left. Nothing is sent to the sync server, where
+  /// the token stays valid.
+  ///
+  /// The catalog goes before the enrollment: a sign-out that stops partway
+  /// leaves this device enrolled, and the next round pulls the account
+  /// again, rather than leaving records a later enrollment, perhaps in
+  /// another account, would push. The token goes last and its delete
+  /// completes even while the keystore is down.
+  Future<SyncStatus> signOut() async {
+    const operation = SyncOperation.signOut;
+    if (_refusal(operation) case final refused?) return refused;
+    if (_account == null) {
+      return _failed(operation, SyncFailure.notEnrolled, null);
+    }
+    final enrollment = _enrollment!;
+
+    try {
+      // Held as a round holds it, so no save or pulled secret lands in the
+      // vault or the catalog while they are cleared.
+      await _vault.exclusive(() async {
+        final secretRefs = {
+          for (final server in await _servers.load())
+            if (server.secretRef case final ref? when !isReservedVaultId(ref))
+              ref,
+        };
+        for (final name in [_syncRecordsFileName, _serversFileName]) {
+          final file = File(_path(name));
+          if (await file.exists()) await file.delete();
+        }
+        _openCatalog();
+        await _klabautermannRecords.clear();
+        await _snippets.clear();
+        for (final ref in secretRefs) {
+          await _vault.store.deleteSecret(ref);
+        }
+        await enrollment.clear();
+        _account = null;
+      });
+      await KeystoreSyncCredentialStore(keystore: _keystore).deleteToken();
+    } on Object catch (error) {
+      _account = _info(await enrollment.account());
+      return _failedWith(operation, error);
+    }
+    return _status(operation, SyncPhase.succeeded, pinConflicts: const []);
   }
 
   /// The host-key quarantine diff as it stands: every stored `hostkey:`

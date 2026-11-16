@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Settings > Sync can sign this device out of the sync account. It asks
+  first and says how many connections it closes, then forgets the
+  sign-in and removes the servers that came from the account, with
+  their saved credentials, cached profiles and history. Servers
+  imported from ~/.ssh/config and host key pins stay, and nothing on
+  the sync server changes.
 - On iOS and macOS, while alert notifications are on, the app icon
   shows how many raised alerts you have not seen yet. Opening the alert
   center clears it. Turning notifications on asks for badge permission

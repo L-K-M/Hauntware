@@ -134,6 +134,14 @@ final class SyncController extends ChangeNotifier
     (requestId) => RunSyncRound(requestId: requestId),
   );
 
+  /// Signs this device out of the account (03 §4.3) and completes with the
+  /// engine's answer: the account's servers leave the fleet, the imports
+  /// stay, and nothing on the sync server changes.
+  Future<SyncStatus> signOut() => _send(
+    SyncOperation.signOut,
+    (requestId) => SignOutSync(requestId: requestId),
+  );
+
   /// Asks the engine for the quarantine diff as it stands and updates
   /// [conflicts] with its answer. A read the engine refuses leaves the
   /// list as it is, since a startup read must not stop the app.

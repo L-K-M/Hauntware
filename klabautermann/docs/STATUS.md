@@ -1274,8 +1274,12 @@ is on main:
   then lead the fleet, ahead of imports, and stay after a restart; each round is
   started by the user, none runs at startup or on a timer. Synced
   servers have no connect config, so a `Connect` to one is rejected
-  until endpoint confirmation (K41) exists. Sign-out, switching
-  accounts, secrets and quarantine surfaces are not built. The
+  until endpoint confirmation (K41) exists. Settings > Sync signs out
+  as Poltergeist does (03 D63's notes): after a confirmation that names
+  the open connections it closes, the account's servers leave with
+  their vault entries, cached profiles and history, while imports and
+  host-key pins stay and the server is untouched. Switching accounts,
+  secrets and quarantine surfaces are not built. The
   pin-conflict surface is: Settings > Sync shows each quarantined host
   key with both fingerprints and resolves it by keeping this device's
   key or trusting the new one, in the route and the desktop settings
