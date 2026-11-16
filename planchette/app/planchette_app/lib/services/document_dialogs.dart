@@ -10,6 +10,7 @@ import 'android_documents.dart';
 import 'document_windows.dart';
 import 'document_workspace.dart';
 import 'document_store.dart';
+import 'template_strings.dart';
 
 final class AppDocumentDialogs implements DocumentDialogs {
   AppDocumentDialogs(this.navigatorKey, {this.pickers, this.android});
@@ -24,10 +25,11 @@ final class AppDocumentDialogs implements DocumentDialogs {
 
   /// The window's strings. A native picker can be asked for before the
   /// navigator has a context; its button then reads in English, the
-  /// catalog's template locale.
-  AppLocalizations get _l10n {
+  /// catalog's template locale. The window's workspace reads its messages
+  /// here too.
+  AppLocalizations get strings {
     final context = navigatorKey.currentContext;
-    if (context == null) return lookupAppLocalizations(const Locale('en'));
+    if (context == null) return templateStrings();
     return AppLocalizations.of(context);
   }
 
@@ -42,14 +44,14 @@ final class AppDocumentDialogs implements DocumentDialogs {
     if (window != null && window.available) {
       return window.pickOpenFiles();
     }
-    final files = await openFiles(confirmButtonText: _l10n.actionOpen);
+    final files = await openFiles(confirmButtonText: strings.actionOpen);
     return [for (final file in files) file.path];
   }
 
   Future<String?> pickDirectory() {
     final window = pickers;
     if (window != null && window.available) return window.pickDirectory();
-    return getDirectoryPath(confirmButtonText: _l10n.pickerOpenFolder);
+    return getDirectoryPath(confirmButtonText: strings.pickerOpenFolder);
   }
 
   /// Key picking shares the window-owned dialog and bounded UTF-8 reader.
@@ -57,7 +59,7 @@ final class AppDocumentDialogs implements DocumentDialogs {
     final selected = await pickOpenFiles();
     if (selected.isEmpty) return null;
     if (selected.length != 1) {
-      throw FormatException(_l10n.pickerOneKeyFile);
+      throw FormatException(strings.pickerOneKeyFile);
     }
     return (await LocalDocumentStore().load(selected.single)).text;
   }
@@ -78,7 +80,7 @@ final class AppDocumentDialogs implements DocumentDialogs {
     final location = await getSaveLocation(
       suggestedName: paths.basename(suggestedName),
       initialDirectory: _initialDirectory(suggestedName),
-      confirmButtonText: _l10n.actionSave,
+      confirmButtonText: strings.actionSave,
     );
     return location?.path;
   }

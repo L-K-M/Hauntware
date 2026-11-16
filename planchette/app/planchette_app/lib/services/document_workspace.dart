@@ -5,12 +5,14 @@ import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 import 'package:seance_core/seance_core.dart' show DownloadProvenance;
 
+import '../l10n/app_localizations.dart';
 import 'document_store.dart';
 import 'document_publication.dart';
 import 'folder_workspace.dart';
 import 'save_as_folders.dart';
 import 'save_siblings.dart';
 import 'session_state.dart';
+import 'template_strings.dart';
 
 // DocumentDialogs answers with it, so its implementers need no second import.
 export 'save_siblings.dart' show SaveSiblingChoice;
@@ -24,6 +26,9 @@ enum ReadOnlyChoice { saveAs, saveAnyway, cancel }
 enum BulkCloseChoice { saveAll, discardAll, cancel }
 
 enum _CloseScope { tab, application }
+
+/// Which reread of a tab's file failed, for its message.
+enum _RereadAction { revert, reload }
 
 /// What a [DocumentWorkspace.confirmQuit] is for.
 enum QuitScope {
@@ -247,9 +252,11 @@ final class DocumentWorkspace extends ChangeNotifier {
     DownloadProvenance? provenance,
     this.recoveries,
     this.saveSiblings,
+    AppLocalizations Function()? strings,
   }) : _paths = pathContext ?? paths.context,
+       _strings = strings ?? templateStrings,
        toolHistory = toolHistory ?? TextToolHistory(),
-       folders = folders ?? FolderWorkspace(),
+       folders = folders ?? FolderWorkspace(strings: strings),
        _provenance = provenance ?? DownloadProvenance(agent: 'Planchette') {
     this.folders.addListener(_notify);
   }
@@ -268,6 +275,14 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   final DocumentStore store;
   final DocumentDialogs dialogs;
+
+  /// The window's strings, read when a message is made so it follows the
+  /// window's locale. The workspace never reaches for a widget context.
+  final AppLocalizations Function() _strings;
+
+  /// The strings the workspace's messages come from, for the hosts that
+  /// report on its banner.
+  AppLocalizations get strings => _strings();
 
   /// Null where the store keeps no recovery copies.
   final RecoveryCopies? recoveries;
@@ -386,13 +401,17 @@ final class DocumentWorkspace extends ChangeNotifier {
   bool get interactionLocked =>
       _dialogCount > 0 || _closingAll || _quitAccepted;
   String get windowTitle {
+    final l10n = strings;
     final tab = active;
-    final root = folders.isOpen ? '${folders.label} | ' : '';
-    if (tab == null) return '${root}Planchette';
-    if (!folders.isOpen) {
-      return '${tab.hasUnsavedChanges ? '● ' : ''}${tab.name} — Planchette';
+    if (tab == null) {
+      return folders.isOpen
+          ? l10n.windowTitleFolder(folders.label)
+          : 'Planchette';
     }
-    return '${tab.hasUnsavedChanges ? '● ' : ''}${tab.name} | ${root}Planchette';
+    final title = folders.isOpen
+        ? l10n.windowTitleDocumentInFolder(tab.name, folders.label)
+        : l10n.windowTitleDocument(tab.name);
+    return tab.hasUnsavedChanges ? l10n.windowTitleUnsaved(title) : title;
   }
 
   DocumentTab? newDocument() {
@@ -532,7 +551,9 @@ final class DocumentWorkspace extends ChangeNotifier {
   String _freeUntitledName() {
     final used = {for (final tab in _documents) tab.name};
     for (var number = 1; ; number++) {
-      final name = number == 1 ? 'Untitled' : 'Untitled $number';
+      final name = number == 1
+          ? strings.untitledName
+          : strings.untitledNameNumbered(number);
       if (!used.contains(name)) return name;
     }
   }
@@ -549,7 +570,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       final selected = await _dialog(dialogs.pickOpenFiles);
       await openAll(selected);
     } catch (error) {
-      _reportError('Could not open documents: $error');
+      _reportError(strings.openDocumentsFailed(error));
     }
   }
 
@@ -660,9 +681,9 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// rest of the batch. The enumeration is capped so a large multi-select
   /// stays readable.
   String _openFailureMessage(List<_OpenFailure> failures) {
+    final l10n = strings;
     if (failures.length == 1) {
-      return 'Could not open ${failures.single.name}: '
-          '${failures.single.message}';
+      return l10n.openFailed(failures.single.name, failures.single.message);
     }
     const maxListed = 5;
     // Two files from different folders can share a basename; fall back to
@@ -681,11 +702,12 @@ final class DocumentWorkspace extends ChangeNotifier {
         : failure.name;
     final listed = failures
         .take(maxListed)
-        .map((failure) => '${label(failure)} (${failure.message})')
-        .join(', ');
+        .map((failure) => l10n.failureItem(label(failure), failure.message))
+        .join(l10n.listSeparator);
     final extra = failures.length - maxListed;
-    return 'Could not open ${failures.length} files: '
-        '$listed${extra > 0 ? ', and $extra more' : ''}';
+    return extra > 0
+        ? l10n.openFailedSeveralMore(failures.length, listed, extra)
+        : l10n.openFailedSeveral(failures.length, listed);
   }
 
   Future<_OpenFailure?> _openDeduped(
@@ -880,7 +902,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (tab._reverting) {
       // Reachable only through a shortcut pressed before the menus caught up;
       // writing now would put the discarded edits back on disk.
-      _saveFailures[tab] = 'it is being reverted';
+      _saveFailures[tab] = strings.saveReasonReverting;
       return false;
     }
     if (tab.editor.isLoading || tab.editor.error != null) {
@@ -889,7 +911,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       // still-opening case speaks.
       if (tab.editor.error == null) {
         _reportNotReady(tab);
-        _saveFailures[tab] = 'still opening';
+        _saveFailures[tab] = strings.saveReasonOpening;
       }
       return false;
     }
@@ -901,7 +923,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       if (target == null) return false;
       if (saveAs && tab._publication != null) {
         if (_pathKey(target.path) == _pathKey(tab.path!)) {
-          throw StateError('Choose another location for the local copy.');
+          throw StateError(strings.localCopySameLocation);
         }
         await store.write(
           path: target.path,
@@ -924,17 +946,13 @@ final class DocumentWorkspace extends ChangeNotifier {
         // input method still owns. Say so: nothing else on screen explains
         // why the save did nothing.
         if (tab.editor.text.value.composing.isValid) {
-          _reportTabRefusal(
-            '${tab.name} was not saved. Finish typing in the input method, '
-            'then save again.',
-            tab,
-          );
-          _saveFailures[tab] = 'the input method is still composing';
+          _reportTabRefusal(strings.saveComposing(tab.name), tab);
+          _saveFailures[tab] = strings.saveReasonComposing;
         }
         return false;
       }
       if (result.publishRequested && !result.published) {
-        throw StateError('The local copy was saved, but it was not uploaded.');
+        throw StateError(strings.localCopyNotUploaded);
       }
       // Consent to replace a protected file covers the write it was given
       // for, so it is remembered only once that write lands.
@@ -960,7 +978,7 @@ final class DocumentWorkspace extends ChangeNotifier {
           )) {
         return _saveOnce(tab, saveAs: true, access: access);
       }
-      _reportError('Could not save ${tab.name}: $error', scope: tab);
+      _reportError(strings.saveFailed(tab.name, error), scope: tab);
       _saveFailures[tab] = '$error';
       return false;
     } finally {
@@ -993,7 +1011,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         target = await store.canonicalSavePath(selected);
         final other = _findPath(target, except: tab);
         if (other != null) {
-          final message = '${other.name} is already open in another tab.';
+          final message = strings.alreadyOpenInTab(other.name);
           _reportError(message, scope: tab);
           _saveFailures[tab] = message;
           return null;
@@ -1001,7 +1019,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         // A file open in another window is the same conflict across the
         // app boundary: two buffers must never share one save target.
         if (peers?.tabHolding(target, except: this) case final held?) {
-          final message = '${held.tab.name} is already open in another window.';
+          final message = strings.alreadyOpenInWindow(held.tab.name);
           _reportError(message, scope: tab);
           _saveFailures[tab] = message;
           return null;
@@ -1114,7 +1132,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         // asking and keep the window, without calling it a failure.
         if (run == _SaveRun.quit) return false;
       } else if (_saveFailures[tab] case final detail?) {
-        failures.add('${tab.name} (${_withoutFinalStop(detail)})');
+        failures.add(strings.failureItem(tab.name, _withoutFinalStop(detail)));
       } else {
         failures.add(tab.name);
       }
@@ -1127,14 +1145,16 @@ final class DocumentWorkspace extends ChangeNotifier {
     // them saving later makes it untrue.
     if (failures.isNotEmpty && dirty.length > 1) {
       _reportError(
-        'Saved $saved of ${dirty.length}. '
-        'Could not save: ${failures.join(', ')}.',
+        strings.saveAllFailed(
+          saved,
+          dirty.length,
+          failures.join(strings.listSeparator),
+        ),
       );
     } else if (skipped > 0 && dirty.length > 1) {
       final notSaved = dirty.sublist(attempted).map((tab) => tab.name);
       _reportError(
-        'Save All stopped with $skipped document'
-        '${skipped == 1 ? '' : 's'} not saved: ${notSaved.join(', ')}.',
+        strings.saveAllStopped(skipped, notSaved.join(strings.listSeparator)),
       );
     }
     return failures.isEmpty && saved + vanished == dirty.length;
@@ -1158,10 +1178,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     // read, since a revert can start while the export settles its target.
     bool reverting() {
       if (!tab._reverting) return false;
-      _reportError(
-        '${tab.name} is being reverted. Export it once the file is read.',
-        scope: scope,
-      );
+      _reportError(strings.exportReverting(tab.name), scope: scope);
       return true;
     }
 
@@ -1177,18 +1194,11 @@ final class DocumentWorkspace extends ChangeNotifier {
         target = await store.canonicalSavePath(selected);
         final open = _findPath(target);
         if (open != null) {
-          _reportError(
-            '${open.name} is open in a tab. Export to another file.',
-            scope: scope,
-          );
+          _reportError(strings.exportOpenInTab(open.name), scope: scope);
           return false;
         }
         if (peers?.tabHolding(target, except: this) case final held?) {
-          _reportError(
-            '${held.tab.name} is open in another window. Export to another '
-            'file.',
-            scope: scope,
-          );
+          _reportError(strings.exportOpenInWindow(held.tab.name), scope: scope);
           return false;
         }
         digest = await store.existingDigest(target);
@@ -1227,9 +1237,11 @@ final class DocumentWorkspace extends ChangeNotifier {
       );
       if (pageBytes > htmlExportMaximumBytes) {
         _reportError(
-          '${tab.name} is too large to export as HTML: the page would be '
-          '${_megabytes(pageBytes, digits: 1)} MB, over the '
-          '${_megabytes(htmlExportMaximumBytes)} MB limit.',
+          strings.exportTooLarge(
+            tab.name,
+            _megabytes(pageBytes, digits: 1),
+            _megabytes(htmlExportMaximumBytes),
+          ),
           scope: scope,
         );
         return false;
@@ -1250,7 +1262,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       _clearScope(scope);
       return true;
     } catch (error) {
-      _reportError('Could not export ${tab.name}: $error', scope: scope);
+      _reportError(strings.exportFailed(tab.name, error), scope: scope);
       return false;
     } finally {
       _notify();
@@ -1295,24 +1307,15 @@ final class DocumentWorkspace extends ChangeNotifier {
     // one left to tell.
     String? staleReason() {
       if (_disposed || !_documents.contains(tab)) return '';
-      if (tab._reverting) {
-        return '$name is being reverted. Compare it again once the file is '
-            'read.';
-      }
-      if (tab.busy) {
-        return '$name is busy. Compare it again once it finishes.';
-      }
+      if (tab._reverting) return strings.compareReverting(name);
+      if (tab.busy) return strings.compareBusy(name);
       if (tab.path == null || _pathKey(tab.path!) != _pathKey(path)) {
-        return '$name was saved somewhere else while it was being compared. '
-            'Compare it again.';
+        return strings.compareSavedElsewhere(name);
       }
       if (tab.editor.text.text != bufferText) {
-        return '$name changed while it was being compared. Compare it again.';
+        return strings.compareChanged(name);
       }
-      if (interactionLocked) {
-        return 'A dialog is open, so the comparison of $name could not be '
-            'shown. Compare it again after closing it.';
-      }
+      if (interactionLocked) return strings.compareDialogOpen(name);
       return null;
     }
 
@@ -1325,8 +1328,8 @@ final class DocumentWorkspace extends ChangeNotifier {
       final result = await boundedUnifiedDiff(
         document.text,
         bufferText,
-        oldLabel: '$name (on disk)',
-        newLabel: '$name (in the editor)',
+        oldLabel: strings.compareOnDisk(name),
+        newLabel: strings.compareInEditor(name),
       );
       if (staleReason() case final reason?) {
         if (reason.isNotEmpty) _reportError(reason, scope: scope);
@@ -1334,38 +1337,24 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
       switch (result.status) {
         case UnifiedDiffStatus.identical:
-          _reportError(
-            '$name has no differences from the file on disk.',
-            scope: scope,
-          );
+          _reportError(strings.compareIdentical(name), scope: scope);
           return false;
         case UnifiedDiffStatus.differs:
           _diffDocument(name, result.text);
           return true;
         case UnifiedDiffStatus.tooLarge:
-          _reportError(
-            'The differences between $name and the file on disk are too '
-            'large to show as a diff.',
-            scope: scope,
-          );
+          _reportError(strings.compareTooLarge(name), scope: scope);
         case UnifiedDiffStatus.timedOut:
-          _reportError(
-            'Comparing $name with the file on disk ran out of time. Compare '
-            'it again.',
-            scope: scope,
-          );
+          _reportError(strings.compareTimedOut(name), scope: scope);
         case UnifiedDiffStatus.failed:
           _reportError(
-            'Could not compare $name with the file on disk: ${result.detail}',
+            strings.compareFailed(name, result.detail),
             scope: scope,
           );
       }
       return false;
     } catch (error) {
-      _reportError(
-        'Could not compare $name with the file on disk: $error',
-        scope: scope,
-      );
+      _reportError(strings.compareFailed(name, error), scope: scope);
       return false;
     }
   }
@@ -1375,7 +1364,8 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// Matches's destination.
   void _diffDocument(String name, String diff) {
     if (interactionLocked) return;
-    final base = '$name vs saved.diff';
+    // The extension gives the tab diff highlighting, so it stays as is.
+    final base = '${strings.compareTabName(name)}.diff';
     final used = {for (final tab in _documents) tab.name};
     var label = base;
     for (var number = 2; used.contains(label); number++) {
@@ -1490,18 +1480,32 @@ final class DocumentWorkspace extends ChangeNotifier {
           try {
             await siblings.delete(path, sibling);
           } on SaveSiblingException catch (error) {
-            failures.add('${_paths.basename(sibling.path)}: $error');
+            failures.add(
+              strings.siblingDeleteFailure(
+                _paths.basename(sibling.path),
+                error,
+              ),
+            );
           } catch (error, stackTrace) {
             // Not a refusal the store explains, so likely a bug: keep it
             // diagnosable, say it with the rest, and try the others.
             FlutterError.reportError(
               FlutterErrorDetails(exception: error, stack: stackTrace),
             );
-            failures.add('${_paths.basename(sibling.path)}: $error');
+            failures.add(
+              strings.siblingDeleteFailure(
+                _paths.basename(sibling.path),
+                error,
+              ),
+            );
           }
         }
         if (failures.isNotEmpty) {
-          _reportError('Could not delete ${failures.join('; ')}.');
+          _reportError(
+            strings.siblingsDeleteFailed(
+              failures.join(strings.sentenceListSeparator),
+            ),
+          );
         }
     }
   }
@@ -1514,7 +1518,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       return true;
     } on Object catch (error) {
       // Unscoped: the tab it was about has closed.
-      _reportError('Could not delete the recovery copy $name: $error');
+      _reportError(strings.recoveryDeleteFailed(name, error));
       return false;
     }
   }
@@ -1574,18 +1578,14 @@ final class DocumentWorkspace extends ChangeNotifier {
             }
             return true;
           } on Object catch (error) {
-            _reportError('Could not discard ${tab.name}: $error', scope: tab);
+            _reportError(strings.discardFailed(tab.name, error), scope: tab);
             return false;
           }
         }
         // The buffer moved on while the prompt was open, so the reviewed text
         // is no longer what would be dropped. Say so instead of closing
         // nothing in silence.
-        _reportTabRefusal(
-          '${tab.name} changed while the prompt was open, so nothing was '
-          'discarded. Review it, then close again.',
-          tab,
-        );
+        _reportTabRefusal(strings.discardChangedClose(tab.name), tab);
         return false;
       case CloseChoice.save:
         return await _save(tab, access: EditorSaveAccess.confirmedClose) &&
@@ -1598,18 +1598,15 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// the dialog and knows why.
   void _reportBusy(DocumentTab tab) => _reportTabRefusal(
     tab.editor.isSaving
-        ? '${tab.name} is still being saved. Close it again once the save '
-              'finishes.'
-        : '${tab.name} is busy. Close it again in a moment.',
+        ? strings.closeSaving(tab.name)
+        : strings.closeBusy(tab.name),
     tab,
   );
 
   /// Copy that fits both a refused close and a refused save: the document is
   /// not ready yet, and it will be.
-  void _reportNotReady(DocumentTab tab) => _reportTabRefusal(
-    '${tab.name} is still opening. Try again in a moment.',
-    tab,
-  );
+  void _reportNotReady(DocumentTab tab) =>
+      _reportTabRefusal(strings.notReady(tab.name), tab);
 
   /// A retryable refusal is scoped to the tab it is about, like that tab's
   /// save failures: it retires when that tab saves or closes, and closing
@@ -1626,14 +1623,14 @@ final class DocumentWorkspace extends ChangeNotifier {
       final confirmed = await _dialog(() => dialogs.confirmRevert(tab.name));
       if (!confirmed) return false;
     }
-    return _rereadChosen(tab, 'revert');
+    return _rereadChosen(tab, _RereadAction.revert);
   }
 
   /// The disk notice's Reload. Choosing it already says to drop the edits
   /// for the version on disk, so unlike [revert] it does not ask again.
   Future<bool> reloadFromDisk(DocumentTab tab) async {
     if (!_canReread(tab)) return false;
-    return _rereadChosen(tab, 'reload');
+    return _rereadChosen(tab, _RereadAction.reload);
   }
 
   bool _canReread(DocumentTab tab) =>
@@ -1643,13 +1640,16 @@ final class DocumentWorkspace extends ChangeNotifier {
       tab.path != null &&
       !tab.editor.isBusy;
 
-  Future<bool> _rereadChosen(DocumentTab tab, String verb) async {
+  Future<bool> _rereadChosen(DocumentTab tab, _RereadAction action) async {
     try {
       return await _reread(tab, _Reread.chosen);
     } catch (error) {
       // Runs unawaited from the menu and the notice; report instead of
       // leaking an unhandled async error.
-      _reportError('Could not $verb ${tab.name}: $error', scope: tab);
+      _reportError(switch (action) {
+        _RereadAction.revert => strings.revertFailed(tab.name, error),
+        _RereadAction.reload => strings.reloadFailed(tab.name, error),
+      }, scope: tab);
       return false;
     }
   }
@@ -1793,11 +1793,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
     } catch (error) {
       if (!superseded()) {
-        _reportUnreadable(
-          tab,
-          stamp,
-          'Could not check ${tab.name} for changes on disk: $error',
-        );
+        _reportUnreadable(tab, stamp, strings.diskCheckFailed(tab.name, error));
       }
       return null;
     }
@@ -1825,11 +1821,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       } catch (error) {
         if (superseded()) return null;
         _flagChanged(tab, digest, decision);
-        _reportUnreadable(
-          tab,
-          stamp,
-          'Could not read the new version of ${tab.name}: $error',
-        );
+        _reportUnreadable(tab, stamp, strings.diskReadFailed(tab.name, error));
       }
       return (digest: digest);
     }
@@ -1853,8 +1845,8 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (found == null || found.digest == target.digest) return null;
     return switch (tab.disk) {
       DiskState.current => null,
-      DiskState.changed => 'it changed on disk',
-      DiskState.missing => 'it was deleted or moved',
+      DiskState.changed => strings.saveReasonChangedOnDisk,
+      DiskState.missing => strings.saveReasonMissing,
     };
   }
 
@@ -1961,8 +1953,7 @@ final class DocumentWorkspace extends ChangeNotifier {
             );
             if (changed.isNotEmpty) {
               _reportTabRefusal(
-                '${changed.first.name} changed while the prompt was open, so '
-                'nothing was discarded. Review it, then quit again.',
+                strings.discardChangedQuit(changed.first.name),
                 changed.first,
               );
               return false;
@@ -2107,8 +2098,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (active != null && _documents.contains(active)) _active = active;
     if (problems.isNotEmpty) {
       _reportError(
-        'Some documents from the last session need attention: '
-        '${problems.join('; ')}.',
+        strings.restoreProblems(problems.join(strings.sentenceListSeparator)),
       );
     }
     _notify();
@@ -2140,10 +2130,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       final text = kept.text;
       if (text != null) {
         if (tab.baseline?.sha256 != kept.baselineSha256) {
-          problems.add(
-            '$name changed on disk after its unsaved edits were kept. They '
-            'are back over the new version: compare before saving',
-          );
+          problems.add(strings.restoreChangedOnDisk(name));
         }
         tab.editor.setMetadata(kept.metadata);
         tab.editor.text.text = text;
@@ -2155,15 +2142,12 @@ final class DocumentWorkspace extends ChangeNotifier {
     // Gone, not merely unreadable: an interrupted save may have left its
     // only copy beside it.
     if (await _isMissing(path)) unawaited(_offerSaveSiblingsAt(path, name));
-    final reason = failure?.message ?? 'it is open in another window';
+    final reason = failure?.message ?? strings.restoreOpenElsewhere;
     if (kept.text == null) {
-      problems.add('$name could not be reopened ($reason)');
+      problems.add(strings.restoreFailed(name, reason));
       return null;
     }
-    problems.add(
-      '$name could not be reopened ($reason); its unsaved text is in an '
-      'untitled tab',
-    );
+    problems.add(strings.restoreFailedKept(name, reason));
     return _restoreUntitled(name, kept);
   }
 
@@ -2312,11 +2296,10 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// so the two can never disagree about whether the wait is over.
   String? get _quitBlocker {
     if (_dialogCount > 0 || _closingTabs.isNotEmpty || _opening.isNotEmpty) {
-      return 'A document is still opening or closing, or a dialog is '
-          'waiting. Quit again once it finishes.';
+      return strings.quitBlockedBusy;
     }
     if (_documents.any((tab) => tab.busy || tab.editor.isSaving)) {
-      return 'A save is still running. Quit again once it finishes.';
+      return strings.quitBlockedSaving;
     }
     return null;
   }

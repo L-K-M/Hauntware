@@ -4,13 +4,22 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as paths;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+import '../l10n/app_localizations.dart';
+import 'template_strings.dart';
+
 /// A window's browser. Listing commits are generation-checked, so a slow
 /// request cannot replace a newer folder or revive a closed workspace.
 final class FolderWorkspace extends ChangeNotifier {
-  FolderWorkspace({RemoteFileSystem? localFileSystem})
-    : _local = localFileSystem ?? LocalFileSystem();
+  FolderWorkspace({
+    RemoteFileSystem? localFileSystem,
+    AppLocalizations Function()? strings,
+  }) : _local = localFileSystem ?? LocalFileSystem(),
+       _strings = strings ?? templateStrings;
 
   final RemoteFileSystem _local;
+
+  /// The window's strings, read when a message is made.
+  final AppLocalizations Function() _strings;
   PaneChannel? _channel;
   ServerConfig? _server;
   String? _root;
@@ -118,7 +127,7 @@ final class FolderWorkspace extends ChangeNotifier {
     if (root == null || _disposed) return;
     final target = _paths.normalize(folder);
     if (!_paths.equals(root, target) && !_paths.isWithin(root, target)) {
-      _error = 'Choose a folder inside this workspace.';
+      _error = _strings().folderOutsideWorkspace;
       _notify();
       return;
     }

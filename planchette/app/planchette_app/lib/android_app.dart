@@ -29,15 +29,16 @@ Future<void> runAndroidApp({String? appVersion}) async {
       Directory(paths.join(paths.dirname(settingsPath), 'session')),
     ),
     settings: settings,
-    onError: (workspace, error) => workspace.reportError(
-      'Unsaved changes could not be kept for the next launch: $error',
-    ),
+    onError: (workspace, error) =>
+        workspace.reportError(workspace.strings.journalWriteFailed(error)),
   );
   final kept = await journal.open();
   final navigatorKey = GlobalKey<NavigatorState>();
+  final dialogs = AppDocumentDialogs(navigatorKey, android: documents);
   final workspace = DocumentWorkspace(
     store: documents,
-    dialogs: AppDocumentDialogs(navigatorKey, android: documents),
+    dialogs: dialogs,
+    strings: () => dialogs.strings,
     toolHistory: TextToolHistory.decode(settings.value.recentTextTools),
     recoveries: documents,
   );

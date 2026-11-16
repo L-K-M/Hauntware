@@ -2693,4 +2693,350 @@ class AppLocalizationsEn extends AppLocalizations {
   String editorTextToolPreviewRefused(String reason) {
     return 'not applied, $reason';
   }
+
+  @override
+  String windowTitleDocument(String name) {
+    return '$name — Planchette';
+  }
+
+  @override
+  String windowTitleDocumentInFolder(String name, String folder) {
+    return '$name | $folder | Planchette';
+  }
+
+  @override
+  String windowTitleFolder(String folder) {
+    return '$folder | Planchette';
+  }
+
+  @override
+  String windowTitleUnsaved(String title) {
+    return '● $title';
+  }
+
+  @override
+  String get untitledName => 'Untitled';
+
+  @override
+  String untitledNameNumbered(int number) {
+    return 'Untitled $number';
+  }
+
+  @override
+  String get listSeparator => ', ';
+
+  @override
+  String get sentenceListSeparator => '; ';
+
+  @override
+  String failureItem(String name, String detail) {
+    return '$name ($detail)';
+  }
+
+  @override
+  String openDocumentsFailed(Object error) {
+    return 'Could not open documents: $error';
+  }
+
+  @override
+  String openFailed(String name, String detail) {
+    return 'Could not open $name: $detail';
+  }
+
+  @override
+  String openFailedSeveral(int count, String files) {
+    return 'Could not open $count files: $files';
+  }
+
+  @override
+  String openFailedSeveralMore(int count, String files, int more) {
+    return 'Could not open $count files: $files, and $more more';
+  }
+
+  @override
+  String get saveReasonReverting => 'it is being reverted';
+
+  @override
+  String get saveReasonOpening => 'still opening';
+
+  @override
+  String get saveReasonComposing => 'the input method is still composing';
+
+  @override
+  String get saveReasonChangedOnDisk => 'it changed on disk';
+
+  @override
+  String get saveReasonMissing => 'it was deleted or moved';
+
+  @override
+  String get localCopySameLocation =>
+      'Choose another location for the local copy.';
+
+  @override
+  String saveComposing(String name) {
+    return '$name was not saved. Finish typing in the input method, then save again.';
+  }
+
+  @override
+  String get localCopyNotUploaded =>
+      'The local copy was saved, but it was not uploaded.';
+
+  @override
+  String saveFailed(String name, Object error) {
+    return 'Could not save $name: $error';
+  }
+
+  @override
+  String alreadyOpenInTab(String name) {
+    return '$name is already open in another tab.';
+  }
+
+  @override
+  String alreadyOpenInWindow(String name) {
+    return '$name is already open in another window.';
+  }
+
+  @override
+  String saveAllFailed(int saved, int total, String failures) {
+    return 'Saved $saved of $total. Could not save: $failures.';
+  }
+
+  @override
+  String saveAllStopped(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Save All stopped with $count documents not saved: $names.',
+      one: 'Save All stopped with $count document not saved: $names.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String exportReverting(String name) {
+    return '$name is being reverted. Export it once the file is read.';
+  }
+
+  @override
+  String exportOpenInTab(String name) {
+    return '$name is open in a tab. Export to another file.';
+  }
+
+  @override
+  String exportOpenInWindow(String name) {
+    return '$name is open in another window. Export to another file.';
+  }
+
+  @override
+  String exportTooLarge(String name, String size, String limit) {
+    return '$name is too large to export as HTML: the page would be $size MB, over the $limit MB limit.';
+  }
+
+  @override
+  String exportFailed(String name, Object error) {
+    return 'Could not export $name: $error';
+  }
+
+  @override
+  String compareReverting(String name) {
+    return '$name is being reverted. Compare it again once the file is read.';
+  }
+
+  @override
+  String compareBusy(String name) {
+    return '$name is busy. Compare it again once it finishes.';
+  }
+
+  @override
+  String compareSavedElsewhere(String name) {
+    return '$name was saved somewhere else while it was being compared. Compare it again.';
+  }
+
+  @override
+  String compareChanged(String name) {
+    return '$name changed while it was being compared. Compare it again.';
+  }
+
+  @override
+  String compareDialogOpen(String name) {
+    return 'A dialog is open, so the comparison of $name could not be shown. Compare it again after closing it.';
+  }
+
+  @override
+  String compareOnDisk(String name) {
+    return '$name (on disk)';
+  }
+
+  @override
+  String compareInEditor(String name) {
+    return '$name (in the editor)';
+  }
+
+  @override
+  String compareIdentical(String name) {
+    return '$name has no differences from the file on disk.';
+  }
+
+  @override
+  String compareTooLarge(String name) {
+    return 'The differences between $name and the file on disk are too large to show as a diff.';
+  }
+
+  @override
+  String compareTimedOut(String name) {
+    return 'Comparing $name with the file on disk ran out of time. Compare it again.';
+  }
+
+  @override
+  String compareFailed(String name, Object error) {
+    return 'Could not compare $name with the file on disk: $error';
+  }
+
+  @override
+  String compareTabName(String name) {
+    return '$name vs saved';
+  }
+
+  @override
+  String siblingDeleteFailure(String name, Object error) {
+    return '$name: $error';
+  }
+
+  @override
+  String siblingsDeleteFailed(String failures) {
+    return 'Could not delete $failures.';
+  }
+
+  @override
+  String recoveryDeleteFailed(String name, Object error) {
+    return 'Could not delete the recovery copy $name: $error';
+  }
+
+  @override
+  String discardFailed(String name, Object error) {
+    return 'Could not discard $name: $error';
+  }
+
+  @override
+  String discardChangedClose(String name) {
+    return '$name changed while the prompt was open, so nothing was discarded. Review it, then close again.';
+  }
+
+  @override
+  String discardChangedQuit(String name) {
+    return '$name changed while the prompt was open, so nothing was discarded. Review it, then quit again.';
+  }
+
+  @override
+  String closeSaving(String name) {
+    return '$name is still being saved. Close it again once the save finishes.';
+  }
+
+  @override
+  String closeBusy(String name) {
+    return '$name is busy. Close it again in a moment.';
+  }
+
+  @override
+  String notReady(String name) {
+    return '$name is still opening. Try again in a moment.';
+  }
+
+  @override
+  String revertFailed(String name, Object error) {
+    return 'Could not revert $name: $error';
+  }
+
+  @override
+  String reloadFailed(String name, Object error) {
+    return 'Could not reload $name: $error';
+  }
+
+  @override
+  String diskCheckFailed(String name, Object error) {
+    return 'Could not check $name for changes on disk: $error';
+  }
+
+  @override
+  String diskReadFailed(String name, Object error) {
+    return 'Could not read the new version of $name: $error';
+  }
+
+  @override
+  String restoreProblems(String problems) {
+    return 'Some documents from the last session need attention: $problems.';
+  }
+
+  @override
+  String restoreChangedOnDisk(String name) {
+    return '$name changed on disk after its unsaved edits were kept. They are back over the new version: compare before saving';
+  }
+
+  @override
+  String get restoreOpenElsewhere => 'it is open in another window';
+
+  @override
+  String restoreFailed(String name, String reason) {
+    return '$name could not be reopened ($reason)';
+  }
+
+  @override
+  String restoreFailedKept(String name, String reason) {
+    return '$name could not be reopened ($reason); its unsaved text is in an untitled tab';
+  }
+
+  @override
+  String get quitBlockedBusy =>
+      'A document is still opening or closing, or a dialog is waiting. Quit again once it finishes.';
+
+  @override
+  String get quitBlockedSaving =>
+      'A save is still running. Quit again once it finishes.';
+
+  @override
+  String get folderOutsideWorkspace => 'Choose a folder inside this workspace.';
+
+  @override
+  String windowOpenFailed(Object error) {
+    return 'Could not open a window: $error';
+  }
+
+  @override
+  String windowRaiseFailed(Object error) {
+    return 'Could not bring a window forward to close it: $error';
+  }
+
+  @override
+  String appCloseFailed(Object error) {
+    return 'Could not close Planchette: $error';
+  }
+
+  @override
+  String windowCloseFailed(Object error) {
+    return 'Could not close the window: $error';
+  }
+
+  @override
+  String journalWriteFailed(Object error) {
+    return 'Unsaved changes could not be kept for the next launch: $error';
+  }
+
+  @override
+  String remoteFileFailed(Object error) {
+    return 'Remote file: $error';
+  }
+
+  @override
+  String get settingsUnreadable =>
+      'Your settings file could not be read, so Planchette started with its default settings.';
+
+  @override
+  String settingsUnreadableKept(String path) {
+    return 'Your settings file could not be read, so Planchette started with its default settings. The file was kept as $path.';
+  }
+
+  @override
+  String settingsSaveFailed(String detail) {
+    return 'Could not save settings: $detail';
+  }
 }

@@ -390,7 +390,7 @@ void main() {
       expect(await aside.readAsString(), '{"fontSize": 18,');
       expect(await file.exists(), isFalse);
       expect(settings.error, contains(aside.path));
-      expect(store.loadIssue, settings.error);
+      expect(store.loadIssue, SettingsLoadIssue(keptAs: aside.path));
 
       await settings.update(const AppSettings(fontSize: 20));
       await settings.flush();

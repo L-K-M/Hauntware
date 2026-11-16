@@ -2234,5 +2234,325 @@
   "@editorTextToolPreviewRefused": {
     "description": "The tool bar's count line for a refused dry run.",
     "placeholders": {"reason": {"type": "String"}}
+  },
+  "windowTitleDocument": "{name} — Planchette",
+  "@windowTitleDocument": {
+    "description": "Window title: the active document.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "windowTitleDocumentInFolder": "{name} | {folder} | Planchette",
+  "@windowTitleDocumentInFolder": {
+    "description": "Window title: the active document in a folder workspace.",
+    "placeholders": {"name": {"type": "String"}, "folder": {"type": "String"}}
+  },
+  "windowTitleFolder": "{folder} | Planchette",
+  "@windowTitleFolder": {
+    "description": "Window title: a folder workspace with no document open.",
+    "placeholders": {"folder": {"type": "String"}}
+  },
+  "windowTitleUnsaved": "● {title}",
+  "@windowTitleUnsaved": {
+    "description": "Window title of a document with unsaved changes.",
+    "placeholders": {"title": {"type": "String"}}
+  },
+  "untitledName": "Untitled",
+  "@untitledName": {"description": "The name of the first new untitled document."},
+  "untitledNameNumbered": "Untitled {number}",
+  "@untitledNameNumbered": {
+    "description": "The name of a further untitled document.",
+    "placeholders": {"number": {"type": "int"}}
+  },
+  "listSeparator": ", ",
+  "@listSeparator": {"description": "Joins the items of a list inside a sentence."},
+  "sentenceListSeparator": "; ",
+  "@sentenceListSeparator": {"description": "Joins list items that may contain commas themselves."},
+  "failureItem": "{name} ({detail})",
+  "@failureItem": {
+    "description": "One failed document in a list, with why it failed.",
+    "placeholders": {"name": {"type": "String"}, "detail": {"type": "String"}}
+  },
+  "openDocumentsFailed": "Could not open documents: {error}",
+  "@openDocumentsFailed": {
+    "description": "Error when the open dialog fails.",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "openFailed": "Could not open {name}: {detail}",
+  "@openFailed": {
+    "description": "Error when one file fails to open.",
+    "placeholders": {"name": {"type": "String"}, "detail": {"type": "String"}}
+  },
+  "openFailedSeveral": "Could not open {count} files: {files}",
+  "@openFailedSeveral": {
+    "description": "Error when several files fail to open, listing each.",
+    "placeholders": {"count": {"type": "int"}, "files": {"type": "String"}}
+  },
+  "openFailedSeveralMore": "Could not open {count} files: {files}, and {more} more",
+  "@openFailedSeveralMore": {
+    "description": "Error when more files fail to open than are listed.",
+    "placeholders": {"count": {"type": "int"}, "files": {"type": "String"}, "more": {"type": "int"}}
+  },
+  "saveReasonReverting": "it is being reverted",
+  "@saveReasonReverting": {"description": "Why a save did not run, quoted in a Save All summary."},
+  "saveReasonOpening": "still opening",
+  "@saveReasonOpening": {"description": "Why a save did not run, quoted in a Save All summary."},
+  "saveReasonComposing": "the input method is still composing",
+  "@saveReasonComposing": {"description": "Why a save did not run, quoted in a Save All summary."},
+  "saveReasonChangedOnDisk": "it changed on disk",
+  "@saveReasonChangedOnDisk": {"description": "Why a save did not run, quoted in a Save All summary."},
+  "saveReasonMissing": "it was deleted or moved",
+  "@saveReasonMissing": {"description": "Why a save did not run, quoted in a Save All summary."},
+  "localCopySameLocation": "Choose another location for the local copy.",
+  "@localCopySameLocation": {"description": "Save a Local Copy chose the server file's own working copy."},
+  "saveComposing": "{name} was not saved. Finish typing in the input method, then save again.",
+  "@saveComposing": {
+    "description": "A save refused while an input method composes.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "localCopyNotUploaded": "The local copy was saved, but it was not uploaded.",
+  "@localCopyNotUploaded": {"description": "A server file saved locally whose upload did not happen."},
+  "saveFailed": "Could not save {name}: {error}",
+  "@saveFailed": {
+    "description": "Error when a save fails.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "alreadyOpenInTab": "{name} is already open in another tab.",
+  "@alreadyOpenInTab": {
+    "description": "Save As chose a file another tab holds.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "alreadyOpenInWindow": "{name} is already open in another window.",
+  "@alreadyOpenInWindow": {
+    "description": "Save As chose a file another window holds.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "saveAllFailed": "Saved {saved} of {total}. Could not save: {failures}.",
+  "@saveAllFailed": {
+    "description": "Save All summary when some saves failed.",
+    "placeholders": {"saved": {"type": "int"}, "total": {"type": "int"}, "failures": {"type": "String"}}
+  },
+  "saveAllStopped": "{count, plural, =1{Save All stopped with {count} document not saved: {names}.} other{Save All stopped with {count} documents not saved: {names}.}}",
+  "@saveAllStopped": {
+    "description": "Save All summary when it stopped before the end.",
+    "placeholders": {"count": {"type": "int"}, "names": {"type": "String"}}
+  },
+  "exportReverting": "{name} is being reverted. Export it once the file is read.",
+  "@exportReverting": {
+    "description": "Export refused during a revert.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "exportOpenInTab": "{name} is open in a tab. Export to another file.",
+  "@exportOpenInTab": {
+    "description": "Export chose a file a tab holds.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "exportOpenInWindow": "{name} is open in another window. Export to another file.",
+  "@exportOpenInWindow": {
+    "description": "Export chose a file another window holds.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "exportTooLarge": "{name} is too large to export as HTML: the page would be {size} MB, over the {limit} MB limit.",
+  "@exportTooLarge": {
+    "description": "Export refused for size; sizes are formatted numbers.",
+    "placeholders": {"name": {"type": "String"}, "size": {"type": "String"}, "limit": {"type": "String"}}
+  },
+  "exportFailed": "Could not export {name}: {error}",
+  "@exportFailed": {
+    "description": "Error when an export fails.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "compareReverting": "{name} is being reverted. Compare it again once the file is read.",
+  "@compareReverting": {
+    "description": "Compare with Saved interrupted by a revert.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareBusy": "{name} is busy. Compare it again once it finishes.",
+  "@compareBusy": {
+    "description": "Compare with Saved interrupted by a save.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareSavedElsewhere": "{name} was saved somewhere else while it was being compared. Compare it again.",
+  "@compareSavedElsewhere": {
+    "description": "Compare with Saved interrupted by a Save As.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareChanged": "{name} changed while it was being compared. Compare it again.",
+  "@compareChanged": {
+    "description": "Compare with Saved interrupted by an edit.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareDialogOpen": "A dialog is open, so the comparison of {name} could not be shown. Compare it again after closing it.",
+  "@compareDialogOpen": {
+    "description": "Compare with Saved finished under a dialog.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareOnDisk": "{name} (on disk)",
+  "@compareOnDisk": {
+    "description": "The diff header naming the saved file.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareInEditor": "{name} (in the editor)",
+  "@compareInEditor": {
+    "description": "The diff header naming the editor's text.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareIdentical": "{name} has no differences from the file on disk.",
+  "@compareIdentical": {
+    "description": "Compare with Saved found no differences.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareTooLarge": "The differences between {name} and the file on disk are too large to show as a diff.",
+  "@compareTooLarge": {
+    "description": "Compare with Saved found too many differences.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareTimedOut": "Comparing {name} with the file on disk ran out of time. Compare it again.",
+  "@compareTimedOut": {
+    "description": "Compare with Saved timed out.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "compareFailed": "Could not compare {name} with the file on disk: {error}",
+  "@compareFailed": {
+    "description": "Error when Compare with Saved fails.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "compareTabName": "{name} vs saved",
+  "@compareTabName": {
+    "description": "The name of the tab that shows a comparison; the app adds a .diff extension.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "siblingDeleteFailure": "{name}: {error}",
+  "@siblingDeleteFailure": {
+    "description": "One leftover save file that could not be deleted.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "siblingsDeleteFailed": "Could not delete {failures}.",
+  "@siblingsDeleteFailed": {
+    "description": "Error when leftover save files could not be deleted.",
+    "placeholders": {"failures": {"type": "String"}}
+  },
+  "recoveryDeleteFailed": "Could not delete the recovery copy {name}: {error}",
+  "@recoveryDeleteFailed": {
+    "description": "Error when an Android recovery copy cannot be deleted.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "discardFailed": "Could not discard {name}: {error}",
+  "@discardFailed": {
+    "description": "Error when discarding a document fails.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "discardChangedClose": "{name} changed while the prompt was open, so nothing was discarded. Review it, then close again.",
+  "@discardChangedClose": {
+    "description": "Don't Save refused because the text changed.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "discardChangedQuit": "{name} changed while the prompt was open, so nothing was discarded. Review it, then quit again.",
+  "@discardChangedQuit": {
+    "description": "Discard All refused because the text changed.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "closeSaving": "{name} is still being saved. Close it again once the save finishes.",
+  "@closeSaving": {
+    "description": "Close refused during a save.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "closeBusy": "{name} is busy. Close it again in a moment.",
+  "@closeBusy": {
+    "description": "Close refused while the document is busy.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "notReady": "{name} is still opening. Try again in a moment.",
+  "@notReady": {
+    "description": "Close or save refused while the document opens.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "revertFailed": "Could not revert {name}: {error}",
+  "@revertFailed": {
+    "description": "Error when Revert to Saved fails.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "reloadFailed": "Could not reload {name}: {error}",
+  "@reloadFailed": {
+    "description": "Error when reloading a changed file fails.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "diskCheckFailed": "Could not check {name} for changes on disk: {error}",
+  "@diskCheckFailed": {
+    "description": "Error when the file cannot be checked for outside changes.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "diskReadFailed": "Could not read the new version of {name}: {error}",
+  "@diskReadFailed": {
+    "description": "Error when an outside change cannot be read.",
+    "placeholders": {"name": {"type": "String"}, "error": {"type": "Object"}}
+  },
+  "restoreProblems": "Some documents from the last session need attention: {problems}.",
+  "@restoreProblems": {
+    "description": "Hot exit restore: the documents that need attention.",
+    "placeholders": {"problems": {"type": "String"}}
+  },
+  "restoreChangedOnDisk": "{name} changed on disk after its unsaved edits were kept. They are back over the new version: compare before saving",
+  "@restoreChangedOnDisk": {
+    "description": "Hot exit restore: a file changed since its edits were kept.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "restoreOpenElsewhere": "it is open in another window",
+  "@restoreOpenElsewhere": {"description": "Hot exit restore: why a file could not be reopened."},
+  "restoreFailed": "{name} could not be reopened ({reason})",
+  "@restoreFailed": {
+    "description": "Hot exit restore: a file that could not be reopened.",
+    "placeholders": {"name": {"type": "String"}, "reason": {"type": "String"}}
+  },
+  "restoreFailedKept": "{name} could not be reopened ({reason}); its unsaved text is in an untitled tab",
+  "@restoreFailedKept": {
+    "description": "Hot exit restore: a file that could not be reopened, its edits moved to an untitled tab.",
+    "placeholders": {"name": {"type": "String"}, "reason": {"type": "String"}}
+  },
+  "quitBlockedBusy": "A document is still opening or closing, or a dialog is waiting. Quit again once it finishes.",
+  "@quitBlockedBusy": {"description": "Quit refused while work is in progress."},
+  "quitBlockedSaving": "A save is still running. Quit again once it finishes.",
+  "@quitBlockedSaving": {"description": "Quit refused during a save."},
+  "folderOutsideWorkspace": "Choose a folder inside this workspace.",
+  "@folderOutsideWorkspace": {"description": "The folder browser refused a folder outside the workspace."},
+  "windowOpenFailed": "Could not open a window: {error}",
+  "@windowOpenFailed": {
+    "description": "Error when a new window fails to open.",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "windowRaiseFailed": "Could not bring a window forward to close it: {error}",
+  "@windowRaiseFailed": {
+    "description": "Error when quit cannot raise a window to ask about it.",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "appCloseFailed": "Could not close Planchette: {error}",
+  "@appCloseFailed": {
+    "description": "Error when quitting fails after consent.",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "windowCloseFailed": "Could not close the window: {error}",
+  "@windowCloseFailed": {
+    "description": "Error when a window fails to close.",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "journalWriteFailed": "Unsaved changes could not be kept for the next launch: {error}",
+  "@journalWriteFailed": {
+    "description": "Error when the hot exit journal cannot be written.",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "remoteFileFailed": "Remote file: {error}",
+  "@remoteFileFailed": {
+    "description": "Error from a server file operation.",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "settingsUnreadable": "Your settings file could not be read, so Planchette started with its default settings.",
+  "@settingsUnreadable": {"description": "The settings file could not be used; the defaults took over."},
+  "settingsUnreadableKept": "Your settings file could not be read, so Planchette started with its default settings. The file was kept as {path}.",
+  "@settingsUnreadableKept": {
+    "description": "The damaged settings file was moved aside; the defaults took over.",
+    "placeholders": {"path": {"type": "String"}}
+  },
+  "settingsSaveFailed": "Could not save settings: {detail}",
+  "@settingsSaveFailed": {
+    "description": "Error when the settings file cannot be written.",
+    "placeholders": {"detail": {"type": "String"}}
   }
 }
