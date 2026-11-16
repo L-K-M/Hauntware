@@ -150,6 +150,11 @@ export 'package:seance_core/seance_core.dart'
         PushResult,
         RecordCodec,
         RecordKind,
+        // A round's records the server refused, worded as Séance words
+        // them (the backup status names each too-large record).
+        RefusedRecord,
+        SyncOutcome,
+        SyncRecordsRefused,
         RegisterRequest,
         SyncApi,
         PagedSyncApi,

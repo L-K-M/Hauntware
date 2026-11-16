@@ -210,6 +210,10 @@ final class FakeSyncServer {
   /// `authFailed` — the dead-account notice path.
   bool unauthorized = false;
 
+  /// Record ids push() refuses as too large to store (413
+  /// `payload_too_large`), whatever else the push holds.
+  final tooLarge = <String>{};
+
   /// The records pull() serves — pre-seeded for the trial-decrypt and the
   /// §4.4 quarantine tests.
   final records = <EncryptedRecord>[];
@@ -307,6 +311,12 @@ final class FakeSyncTransport implements SyncTransport {
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
     _requireAuth();
+    if (records.any((record) => server.tooLarge.contains(record.id))) {
+      throw const ApiError(
+        code: 'payload_too_large',
+        message: 'record too large',
+      );
+    }
     server.pushed.addAll(records);
     final results = [
       for (final record in records)
