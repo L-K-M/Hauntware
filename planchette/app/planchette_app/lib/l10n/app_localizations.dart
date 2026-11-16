@@ -376,6 +376,528 @@ abstract class AppLocalizations {
   /// **'Show sidebar'**
   String get sidebarShow;
 
+  /// The File menu.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get menuFile;
+
+  /// The Edit menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get menuEdit;
+
+  /// The Text menu of text tools.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get menuText;
+
+  /// The Find menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Find'**
+  String get menuFind;
+
+  /// The View menu.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get menuView;
+
+  /// The Window menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Window'**
+  String get menuWindow;
+
+  /// File menu: opens a new untitled tab.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get menuNew;
+
+  /// File menu: opens a new window.
+  ///
+  /// In en, this message translates to:
+  /// **'New Window'**
+  String get menuNewWindow;
+
+  /// File menu: picks files to open.
+  ///
+  /// In en, this message translates to:
+  /// **'Open…'**
+  String get menuOpen;
+
+  /// File menu: the submenu of recently opened files.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Recent'**
+  String get menuOpenRecent;
+
+  /// The disabled row of an empty Open Recent submenu.
+  ///
+  /// In en, this message translates to:
+  /// **'No Recent Documents'**
+  String get menuNoRecentDocuments;
+
+  /// An Open Recent row whose file name another row shares, with its folder.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({folder})'**
+  String menuRecentDocumentInFolder(String name, String folder);
+
+  /// Open Recent: forgets the remembered files.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Menu'**
+  String get menuClearRecentDocuments;
+
+  /// File menu: opens a local folder as the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Folder…'**
+  String get menuOpenFolder;
+
+  /// File menu: opens a server folder as the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Server…'**
+  String get menuOpenServer;
+
+  /// File menu: lists server files saved locally but not uploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Recover Remote Edits…'**
+  String get menuRecoverRemoteEdits;
+
+  /// File menu: opens the active file's folder as the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Containing Folder'**
+  String get menuOpenContainingFolder;
+
+  /// File menu: closes the folder workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Folder Workspace'**
+  String get menuCloseFolderWorkspace;
+
+  /// File menu: saves the active document.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get menuSave;
+
+  /// File menu: saves the active document under a new name.
+  ///
+  /// In en, this message translates to:
+  /// **'Save As…'**
+  String get menuSaveAs;
+
+  /// File menu: Save As for a server file, which saves a local copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Save a Local Copy…'**
+  String get menuSaveLocalCopy;
+
+  /// File menu: saves every document with changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Save All'**
+  String get menuSaveAll;
+
+  /// File menu: discards edits and rereads the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert to Saved'**
+  String get menuRevertToSaved;
+
+  /// File menu: exports the document as highlighted HTML.
+  ///
+  /// In en, this message translates to:
+  /// **'Export as HTML…'**
+  String get menuExportHtml;
+
+  /// File menu: copies the active file's path.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Path'**
+  String get menuCopyPath;
+
+  /// Opens Settings, in the File menu or the macOS application menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings…'**
+  String get menuSettings;
+
+  /// File menu: closes the active tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Tab'**
+  String get menuCloseTab;
+
+  /// File menu: closes this window.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Window'**
+  String get menuCloseWindow;
+
+  /// File menu: reopens the last closed tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen Closed Tab'**
+  String get menuReopenClosedTab;
+
+  /// File menu: quits the app, off macOS.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get menuQuit;
+
+  /// macOS application menu: quits the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit Planchette'**
+  String get menuQuitApp;
+
+  /// Edit menu: undoes the last edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get menuUndo;
+
+  /// Edit menu: redoes the last undone edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Redo'**
+  String get menuRedo;
+
+  /// Edit menu: cuts the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Cut'**
+  String get menuCut;
+
+  /// Edit menu: copies the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get menuCopy;
+
+  /// Edit menu: pastes the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get menuPaste;
+
+  /// Edit menu: selects the whole document.
+  ///
+  /// In en, this message translates to:
+  /// **'Select All'**
+  String get menuSelectAll;
+
+  /// Text menu: the submenu of recent text-tool runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get menuRecentRuns;
+
+  /// The disabled row of an empty recent text-tool runs submenu.
+  ///
+  /// In en, this message translates to:
+  /// **'No Recent Runs'**
+  String get menuNoRecentRuns;
+
+  /// Find menu: opens the find bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Find…'**
+  String get menuFindEllipsis;
+
+  /// Find menu: opens find and replace.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace…'**
+  String get menuReplace;
+
+  /// Find menu: selects the next match.
+  ///
+  /// In en, this message translates to:
+  /// **'Find Next'**
+  String get menuFindNext;
+
+  /// Find menu: selects the previous match.
+  ///
+  /// In en, this message translates to:
+  /// **'Find Previous'**
+  String get menuFindPrevious;
+
+  /// Find menu: opens the Go to Line bar.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Line…'**
+  String get menuGoToLine;
+
+  /// Find menu: shows the edits against the saved file as a diff.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare with Saved'**
+  String get menuCompareWithSaved;
+
+  /// View menu: hides the workspace sidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide Sidebar'**
+  String get menuHideSidebar;
+
+  /// View menu: shows the workspace sidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Sidebar'**
+  String get menuShowSidebar;
+
+  /// View menu: makes the text larger.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom In'**
+  String get menuZoomIn;
+
+  /// View menu: makes the text smaller.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom Out'**
+  String get menuZoomOut;
+
+  /// View menu: restores the chosen text size.
+  ///
+  /// In en, this message translates to:
+  /// **'Actual Size'**
+  String get menuActualSize;
+
+  /// Window menu: opens the command palette.
+  ///
+  /// In en, this message translates to:
+  /// **'Command Palette…'**
+  String get menuCommandPalette;
+
+  /// Window menu: selects the next tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Next Tab'**
+  String get menuNextTab;
+
+  /// Window menu: selects the previous tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous Tab'**
+  String get menuPreviousTab;
+
+  /// Window menu: the front window's row, check-marked.
+  ///
+  /// In en, this message translates to:
+  /// **'✓ {title}'**
+  String menuActiveWindow(String title);
+
+  /// Tab context menu: closes the tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get tabMenuClose;
+
+  /// Tab context menu: closes every other tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Others'**
+  String get tabMenuCloseOthers;
+
+  /// Tab context menu: closes every tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Close All Tabs'**
+  String get tabMenuCloseAll;
+
+  /// Tab context menu: copies the file's path.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Full Path'**
+  String get tabMenuCopyFullPath;
+
+  /// Tooltip of the tab strip's new-tab button, with its shortcut.
+  ///
+  /// In en, this message translates to:
+  /// **'New ({shortcut})'**
+  String tabStripNewTooltip(String shortcut);
+
+  /// Tooltip of the tab strip's open button, with its shortcut.
+  ///
+  /// In en, this message translates to:
+  /// **'Open… ({shortcut})'**
+  String tabStripOpenTooltip(String shortcut);
+
+  /// Tooltip of the tab strip's save button, with its shortcut.
+  ///
+  /// In en, this message translates to:
+  /// **'Save ({shortcut})'**
+  String tabStripSaveTooltip(String shortcut);
+
+  /// Tooltip of the Android app bar button that opens the command palette.
+  ///
+  /// In en, this message translates to:
+  /// **'Commands'**
+  String get commandsTooltip;
+
+  /// Error for an Open Recent file that is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is no longer at {path}, so it was removed from Open Recent.'**
+  String recentDocumentMissing(String name, String path);
+
+  /// Error for an Open Recent file whose folder cannot be reached.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {name}: the folder {folder} is not available. If it is on a disk or share that is not connected, connect it and try again.'**
+  String recentDocumentFolderUnavailable(String name, String folder);
+
+  /// Error when a workspace folder fails to open.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open folder: {error}'**
+  String folderOpenFailed(Object error);
+
+  /// Error when opening a workspace fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open workspace: {error}'**
+  String workspaceOpenFailed(Object error);
+
+  /// Title of the dialog that lists unuploaded server edits.
+  ///
+  /// In en, this message translates to:
+  /// **'Recover Remote Edits'**
+  String get recoverRemoteEditsTitle;
+
+  /// Shown when no server edits await upload.
+  ///
+  /// In en, this message translates to:
+  /// **'No remote edits are awaiting upload.'**
+  String get recoverRemoteEditsEmpty;
+
+  /// Subtitle of each unuploaded server edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved locally. Open its server before retrying upload.'**
+  String get recoverRemoteEditsItem;
+
+  /// Heading of a window with no tabs.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with a blank page'**
+  String get emptyStateTitle;
+
+  /// Button of a window with no tabs: opens a new tab.
+  ///
+  /// In en, this message translates to:
+  /// **'New document'**
+  String get emptyStateNew;
+
+  /// Button of a window with no tabs: picks files to open.
+  ///
+  /// In en, this message translates to:
+  /// **'Open…'**
+  String get emptyStateOpen;
+
+  /// Heading of the recent files under a window with no tabs.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get emptyStateRecent;
+
+  /// Server file notice: a save is uploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving to server…'**
+  String get remoteSaving;
+
+  /// Server file notice: the editor has unsaved changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved editor changes'**
+  String get remoteUnsaved;
+
+  /// Server file notice: saved locally, not yet uploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved locally. Upload pending.'**
+  String get remoteUploadPending;
+
+  /// Server file notice: the server has the saved text.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to server'**
+  String get remoteSaved;
+
+  /// Server file notice: the file's server path above its state.
+  ///
+  /// In en, this message translates to:
+  /// **'{path}\n{state}'**
+  String remoteNotice(String path, String state);
+
+  /// Server file notice: uploads the local save again.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry upload'**
+  String get remoteRetryUpload;
+
+  /// Tooltip of the error banner's encoding menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the file in another encoding'**
+  String get reopenWithEncodingTooltip;
+
+  /// Error banner menu: rereads the file in a chosen encoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen with Encoding…'**
+  String get reopenWithEncoding;
+
+  /// Tooltip of the error banner's close button.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss error'**
+  String get dismissErrorTooltip;
+
+  /// Placeholder of an empty untitled document.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing. The spirits are listening…'**
+  String get ghostLineSpirits;
+
+  /// Placeholder of an empty untitled document.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing. The board is waiting…'**
+  String get ghostLineBoard;
+
+  /// Placeholder of an empty untitled document.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing. Something wants to be written…'**
+  String get ghostLineWritten;
+
+  /// Placeholder of an empty untitled document.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing. Rest a finger on the planchette…'**
+  String get ghostLineFinger;
+
+  /// Placeholder of an empty untitled document.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing. Ask, and it will answer…'**
+  String get ghostLineAnswer;
+
   /// A tooltip naming an action and its keyboard shortcut, such as Ctrl+B.
   ///
   /// In en, this message translates to:

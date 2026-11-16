@@ -6,11 +6,10 @@ import 'package:l10n_contract/l10n_contract.dart';
 
 // Planchette's localization contract (s07 F7), on the suite's shared
 // scanner (`tool/l10n_contract`) as in Poltergeist and Klabautermann. It
-// covers the directories and the service files already routed through the
-// ARB catalog. The shell, the workspace services and the editor's
-// `EditorStrings` feed still hold English literals and join the scan as
-// they move to the catalog. The allowlist holds technical literals only,
-// reviewed per file.
+// covers the directories, the shell and the service files already routed
+// through the ARB catalog. The remaining workspace services still hold
+// English literals and join the scan as they move to the catalog. The
+// allowlist holds technical literals only, reviewed per file.
 
 const _generatedLocalizationPrefix = 'lib/l10n/app_localizations';
 const _generatedLocalizationPaths = {
@@ -22,6 +21,7 @@ const _scannedDirectories = ['lib/ui', 'lib/widgets'];
 
 /// Files routed through the catalog in directories that are not yet whole.
 const _scannedFiles = [
+  'lib/planchette_app.dart',
   'lib/services/document_dialogs.dart',
   'lib/services/settings_dialog.dart',
 ];
@@ -143,6 +143,113 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'lines\'',
     '\'unmapped:\'',
     'r\'\\u{…}\'',
+  },
+  'lib/planchette_app.dart': {
+    // The product name: window title, application menu, app bar.
+    "'Planchette'",
+    // Menu command ids the palette resolves commands by, never shown.
+    "'browseTextTools'",
+    "'clearRecentDocuments'",
+    "'closeFolderWorkspace'",
+    "'closeTab'",
+    "'closeWindow'",
+    "'commandPalette'",
+    "'compareWithSaved'",
+    "'copy'",
+    "'copyLine'",
+    "'copyPath'",
+    "'cut'",
+    "'cutLine'",
+    "'decrementNumber'",
+    "'deleteLines'",
+    "'duplicateLines'",
+    "'exportHtml'",
+    "'extractMatches'",
+    "'find'",
+    "'findInSelection'",
+    "'findNext'",
+    "'findPrevious'",
+    "'goToLine'",
+    "'goToMatchingBracket'",
+    "'incrementNumber'",
+    "'insertLineAbove'",
+    "'insertLineBelow'",
+    "'joinLines'",
+    "'moveLinesDown'",
+    "'moveLinesUp'",
+    "'new'",
+    "'newWindow'",
+    "'nextProblem'",
+    "'nextTab'",
+    "'noRecentDocuments'",
+    "'noRecentRuns'",
+    "'open'",
+    "'openContainingFolder'",
+    "'openFolder'",
+    "'openServer'",
+    "'paste'",
+    "'pasteMatchIndentation'",
+    "'previousProblem'",
+    "'previousTab'",
+    "'quit'",
+    "'recoverRemoteEdits'",
+    "'redo'",
+    "'reopenClosedTab'",
+    "'repeatTextTool'",
+    "'replace'",
+    "'revertToSaved'",
+    "'save'",
+    "'saveAll'",
+    "'saveAs'",
+    "'selectAll'",
+    "'selectEnclosingBrackets'",
+    "'selectLine'",
+    "'selectParagraph'",
+    "'selectToMatchingBracket'",
+    "'settings'",
+    "'toggleComment'",
+    "'toggleSidebar'",
+    "'undo'",
+    r"'openRecent:$index'",
+    r"'recentTextTool:$index'",
+    r"'window:${other.serial}'",
+    // Alt mnemonic letters, matched against the localized label; a label
+    // without the letter shows unmarked.
+    "'a'",
+    "'b'",
+    "'c'",
+    "'d'",
+    "'e'",
+    "'f'",
+    "'g'",
+    "'i'",
+    "'j'",
+    "'l'",
+    "'n'",
+    "'o'",
+    "'p'",
+    "'q'",
+    "'r'",
+    "'s'",
+    "'t'",
+    "'u'",
+    "'v'",
+    "'w'",
+    "'x'",
+    // Widget keys, an Expando's debug name and a connection's window id.
+    "'reopen-with-encoding'",
+    "'settings-error-banner'",
+    "'workspace-error-banner'",
+    "'window-drop-highlight'",
+    r"'disk-notice-${tab.id}'",
+    "'recorded path'",
+    r"'window-${window?.serial ?? identityHashCode(workspace)}'",
+    // A CSS hex color for the HTML export, and its zero padding.
+    r"'#${(color.toARGB32() & 0xffffff).toRadixString(16).padLeft(6, '0')}'",
+    "'0'",
+    // The palette's menu-path joiner and an empty tool description.
+    r"'$path > $label'",
+    "''",
   },
   // The login home, the default remote folder a path field starts at.
   'lib/ui/workspace_remote_folder_dialog.dart': {"'~'"},

@@ -172,6 +172,289 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidebarShow => 'Show sidebar';
 
   @override
+  String get menuFile => 'File';
+
+  @override
+  String get menuEdit => 'Edit';
+
+  @override
+  String get menuText => 'Text';
+
+  @override
+  String get menuFind => 'Find';
+
+  @override
+  String get menuView => 'View';
+
+  @override
+  String get menuWindow => 'Window';
+
+  @override
+  String get menuNew => 'New';
+
+  @override
+  String get menuNewWindow => 'New Window';
+
+  @override
+  String get menuOpen => 'Open…';
+
+  @override
+  String get menuOpenRecent => 'Open Recent';
+
+  @override
+  String get menuNoRecentDocuments => 'No Recent Documents';
+
+  @override
+  String menuRecentDocumentInFolder(String name, String folder) {
+    return '$name ($folder)';
+  }
+
+  @override
+  String get menuClearRecentDocuments => 'Clear Menu';
+
+  @override
+  String get menuOpenFolder => 'Open Folder…';
+
+  @override
+  String get menuOpenServer => 'Open Server…';
+
+  @override
+  String get menuRecoverRemoteEdits => 'Recover Remote Edits…';
+
+  @override
+  String get menuOpenContainingFolder => 'Open Containing Folder';
+
+  @override
+  String get menuCloseFolderWorkspace => 'Close Folder Workspace';
+
+  @override
+  String get menuSave => 'Save';
+
+  @override
+  String get menuSaveAs => 'Save As…';
+
+  @override
+  String get menuSaveLocalCopy => 'Save a Local Copy…';
+
+  @override
+  String get menuSaveAll => 'Save All';
+
+  @override
+  String get menuRevertToSaved => 'Revert to Saved';
+
+  @override
+  String get menuExportHtml => 'Export as HTML…';
+
+  @override
+  String get menuCopyPath => 'Copy Path';
+
+  @override
+  String get menuSettings => 'Settings…';
+
+  @override
+  String get menuCloseTab => 'Close Tab';
+
+  @override
+  String get menuCloseWindow => 'Close Window';
+
+  @override
+  String get menuReopenClosedTab => 'Reopen Closed Tab';
+
+  @override
+  String get menuQuit => 'Quit';
+
+  @override
+  String get menuQuitApp => 'Quit Planchette';
+
+  @override
+  String get menuUndo => 'Undo';
+
+  @override
+  String get menuRedo => 'Redo';
+
+  @override
+  String get menuCut => 'Cut';
+
+  @override
+  String get menuCopy => 'Copy';
+
+  @override
+  String get menuPaste => 'Paste';
+
+  @override
+  String get menuSelectAll => 'Select All';
+
+  @override
+  String get menuRecentRuns => 'Recent';
+
+  @override
+  String get menuNoRecentRuns => 'No Recent Runs';
+
+  @override
+  String get menuFindEllipsis => 'Find…';
+
+  @override
+  String get menuReplace => 'Replace…';
+
+  @override
+  String get menuFindNext => 'Find Next';
+
+  @override
+  String get menuFindPrevious => 'Find Previous';
+
+  @override
+  String get menuGoToLine => 'Go to Line…';
+
+  @override
+  String get menuCompareWithSaved => 'Compare with Saved';
+
+  @override
+  String get menuHideSidebar => 'Hide Sidebar';
+
+  @override
+  String get menuShowSidebar => 'Show Sidebar';
+
+  @override
+  String get menuZoomIn => 'Zoom In';
+
+  @override
+  String get menuZoomOut => 'Zoom Out';
+
+  @override
+  String get menuActualSize => 'Actual Size';
+
+  @override
+  String get menuCommandPalette => 'Command Palette…';
+
+  @override
+  String get menuNextTab => 'Next Tab';
+
+  @override
+  String get menuPreviousTab => 'Previous Tab';
+
+  @override
+  String menuActiveWindow(String title) {
+    return '✓ $title';
+  }
+
+  @override
+  String get tabMenuClose => 'Close';
+
+  @override
+  String get tabMenuCloseOthers => 'Close Others';
+
+  @override
+  String get tabMenuCloseAll => 'Close All Tabs';
+
+  @override
+  String get tabMenuCopyFullPath => 'Copy Full Path';
+
+  @override
+  String tabStripNewTooltip(String shortcut) {
+    return 'New ($shortcut)';
+  }
+
+  @override
+  String tabStripOpenTooltip(String shortcut) {
+    return 'Open… ($shortcut)';
+  }
+
+  @override
+  String tabStripSaveTooltip(String shortcut) {
+    return 'Save ($shortcut)';
+  }
+
+  @override
+  String get commandsTooltip => 'Commands';
+
+  @override
+  String recentDocumentMissing(String name, String path) {
+    return '$name is no longer at $path, so it was removed from Open Recent.';
+  }
+
+  @override
+  String recentDocumentFolderUnavailable(String name, String folder) {
+    return 'Could not open $name: the folder $folder is not available. If it is on a disk or share that is not connected, connect it and try again.';
+  }
+
+  @override
+  String folderOpenFailed(Object error) {
+    return 'Could not open folder: $error';
+  }
+
+  @override
+  String workspaceOpenFailed(Object error) {
+    return 'Could not open workspace: $error';
+  }
+
+  @override
+  String get recoverRemoteEditsTitle => 'Recover Remote Edits';
+
+  @override
+  String get recoverRemoteEditsEmpty => 'No remote edits are awaiting upload.';
+
+  @override
+  String get recoverRemoteEditsItem =>
+      'Saved locally. Open its server before retrying upload.';
+
+  @override
+  String get emptyStateTitle => 'Start with a blank page';
+
+  @override
+  String get emptyStateNew => 'New document';
+
+  @override
+  String get emptyStateOpen => 'Open…';
+
+  @override
+  String get emptyStateRecent => 'Recent';
+
+  @override
+  String get remoteSaving => 'Saving to server…';
+
+  @override
+  String get remoteUnsaved => 'Unsaved editor changes';
+
+  @override
+  String get remoteUploadPending => 'Saved locally. Upload pending.';
+
+  @override
+  String get remoteSaved => 'Saved to server';
+
+  @override
+  String remoteNotice(String path, String state) {
+    return '$path\n$state';
+  }
+
+  @override
+  String get remoteRetryUpload => 'Retry upload';
+
+  @override
+  String get reopenWithEncodingTooltip => 'Read the file in another encoding';
+
+  @override
+  String get reopenWithEncoding => 'Reopen with Encoding…';
+
+  @override
+  String get dismissErrorTooltip => 'Dismiss error';
+
+  @override
+  String get ghostLineSpirits => 'Start typing. The spirits are listening…';
+
+  @override
+  String get ghostLineBoard => 'Start typing. The board is waiting…';
+
+  @override
+  String get ghostLineWritten => 'Start typing. Something wants to be written…';
+
+  @override
+  String get ghostLineFinger =>
+      'Start typing. Rest a finger on the planchette…';
+
+  @override
+  String get ghostLineAnswer => 'Start typing. Ask, and it will answer…';
+
+  @override
   String tooltipWithShortcut(String action, String shortcut) {
     return '$action $shortcut';
   }
