@@ -25,6 +25,14 @@ next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
   #778): the registry, launcher and Settings section moved into the
   shared `ghost_editors` package with Séance. The stored document and
   the `poltergeist/files` channel are unchanged.
+- One link queue for the suite: `DeepLinkCoordinator`'s queue moved
+  into `seance_core` as `LinkQueue` (reached through the core barrel),
+  and Séance's link intake runs on it too. `deep_links.dart` keeps the
+  parsing, the endpoint coalescing and the handler; the review, discard,
+  cancel and handoff rules are unchanged, and catalog links still open
+  without a review. Its cases are `seance_core`'s
+  `link_queue_test.dart`; the app keeps the lane, dialog, shell and
+  corpus tests.
 
 Deferred: batch-rename undo; a root renamed by Keep Both keeps its
 "(2)" name when a move is undone; a regression test for #775's

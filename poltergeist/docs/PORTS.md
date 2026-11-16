@@ -1,5 +1,38 @@
 # Séance ports and pin audits
 
+## Shared link queue (2026-11-16)
+
+Poltergeist's deep-link queue moves into `seance_core`, and Séance's
+own `seance://connect` queue is replaced by it
+(`../../docs/design/suite-links.md` section 6).
+
+| Left | Now |
+|---|---|
+| `poltergeist_app/lib/services/deep_links.dart`, `DeepLinkCoordinator` and its review, operation and handler types | `seance_core/lib/src/links/link_queue.dart` (`LinkQueue`, `LinkReview`, `LinkOperation`, `LinkQueueHandler`) |
+| `seance_app/lib/services/link_intake.dart`, `SeanceLinkIntake` | the same `LinkQueue`, with Séance's rules in `SeanceLinkHandler` |
+| `poltergeist_app/test/services/deep_links_test.dart`, the coordinator group | `seance_core/test/links/link_queue_test.dart` |
+
+- Same: the coordinator's rules, carried over as written (endpoint
+  coalescing, discard of the listed hosts only, cancellation and handoff
+  between workspaces, requeue and pause after a failure, the limit of 16
+  and its dropped-link count). The queue is generic over the reviewed
+  and direct link types; each app passes its classification, key and
+  merge. `deep_links.dart` keeps `DeepLinkCoordinator` as a typedef with
+  `createDeepLinkCoordinator`, and `poltergeist_core` re-exports the
+  queue types, so app code keeps importing them from the barrel.
+- Different: the queue is pure Dart, so a review publishes its
+  snapshots on a stream (the dialog uses a `StreamBuilder`) instead of
+  being a `ValueNotifier`; catalog links that name a missing server now
+  show their failure from `WorkspaceShell.openDirect` rather than from
+  the queue; `idle` also completes while no handler is bound or the
+  queue is paused, as Séance's did.
+- The dialogs stay app-side: they show different things (Séance's
+  saved server record, Poltergeist's link endpoint and its script
+  warnings), Séance's strings are English literals and Poltergeist's
+  are ARB, and the `ghost_*` packages take `seance_core` only as
+  `ghost_update`'s documented exception.
+- Pin audit: see the record below.
+
 ## Secrets recovery files and SAF export, CRED-05 (2026-11-10)
 
 Poltergeist's recovery-code export (cred-05) takes its file plumbing from

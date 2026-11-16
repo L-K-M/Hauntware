@@ -20,7 +20,7 @@ const _serverId = '123e4567-e89b-42d3-a456-426614174000';
 
 void main() {
   testWidgets('the active workspace owns queued link dialogs', (tester) async {
-    final coordinator = DeepLinkCoordinator();
+    final coordinator = createDeepLinkCoordinator();
     coordinator.add(
       Uri(
         scheme: poltergeistDeepLinkScheme,
@@ -60,7 +60,7 @@ void main() {
     );
     addTearDown(windows.dispose);
     await windows.start();
-    final coordinator = DeepLinkCoordinator();
+    final coordinator = createDeepLinkCoordinator();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -107,7 +107,7 @@ void main() {
     await windows.openWindow();
     final main = windows.windows.first;
     final extra = windows.windows.last;
-    final coordinator = DeepLinkCoordinator();
+    final coordinator = createDeepLinkCoordinator();
 
     await tester.pumpWidget(
       _MultiWorkspaceHarness(windows: windows, coordinator: coordinator),
@@ -165,7 +165,7 @@ void main() {
     await windows.openWindow();
     final main = windows.windows.first;
     final extra = windows.windows.last;
-    final coordinator = DeepLinkCoordinator();
+    final coordinator = createDeepLinkCoordinator();
     await tester.pumpWidget(
       _MultiWorkspaceHarness(windows: windows, coordinator: coordinator),
     );
@@ -203,7 +203,7 @@ void main() {
   });
 
   testWidgets('an unresolved catalog link stops at an error', (tester) async {
-    final coordinator = DeepLinkCoordinator();
+    final coordinator = createDeepLinkCoordinator();
     coordinator.add(
       Uri.parse(
         'poltergeist://browse?'
@@ -296,7 +296,7 @@ void main() {
     addTearDown(backup.dispose);
     await backup.load();
 
-    final coordinator = DeepLinkCoordinator();
+    final coordinator = createDeepLinkCoordinator();
     coordinator.add(
       Uri.parse(
         'poltergeist://browse?serverId=$_serverId&'

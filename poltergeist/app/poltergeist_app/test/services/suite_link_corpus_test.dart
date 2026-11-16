@@ -5,6 +5,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/deep_links.dart';
+import 'package:poltergeist_core/poltergeist_core.dart'
+    show
+        LinkOpenResult,
+        LinkOperation,
+        LinkQueueHandler,
+        LinkReview,
+        LinkReviewDecision;
 
 const _corpusPath =
     '../../../seance/packages/seance_core/test/fixtures/suite_link_corpus.json';
@@ -26,7 +33,7 @@ void main() {
       '${accepted ? 'opens' : 'refuses'} $form: ${row['note'] ?? uri}',
       () async {
         final handler = _Handler();
-        final coordinator = DeepLinkCoordinator()..activate(handler);
+        final coordinator = createDeepLinkCoordinator()..activate(handler);
 
         coordinator.add(Uri.parse(uri));
         await coordinator.idle;
@@ -54,44 +61,44 @@ void main() {
   }
 }
 
-final class _Handler implements DeepLinkHandler {
+final class _Handler implements LinkQueueHandler<HostDeepLink, ServerDeepLink> {
   var reviews = 0;
   final hosts = <HostDeepLink>[];
   final servers = <ServerDeepLink>[];
   final failures = <DeepLinkFailure>[];
 
   @override
-  Future<DeepLinkReviewDecision> reviewHost(DeepLinkReview review) async {
+  Future<LinkReviewDecision> review(LinkReview<HostDeepLink> review) async {
     reviews++;
-    return DeepLinkReviewDecision.connect;
+    return LinkReviewDecision.connect;
   }
 
   @override
-  Future<DeepLinkHostResult> openHost(
+  Future<LinkOpenResult> open(
     HostDeepLink link,
-    DeepLinkOperation operation,
+    LinkOperation operation,
   ) async {
     hosts.add(link);
-    return DeepLinkHostResult.committed;
+    return LinkOpenResult.committed;
   }
 
   @override
-  Future<DeepLinkServerResult> openServer(
+  Future<LinkOpenResult> openDirect(
     ServerDeepLink link,
-    DeepLinkOperation operation,
+    LinkOperation operation,
   ) async {
     servers.add(link);
-    return DeepLinkServerResult.opened;
+    return LinkOpenResult.committed;
   }
 
   @override
   Future<void> showFailure(
     DeepLinkFailure failure,
-    DeepLinkOperation operation,
+    LinkOperation operation,
   ) async {
     failures.add(failure);
   }
 
   @override
-  Future<void> showIgnoredLinks(int count, DeepLinkOperation operation) async {}
+  Future<void> showIgnoredLinks(int count, LinkOperation operation) async {}
 }

@@ -443,10 +443,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The brand preset's and the initial preset's stored names: English
   // and the same as Séance's, so a pasted preset keeps its name in either
   // app. Shown through ARB (themePreset*), never as these literals.
-  'lib/theme/theme_presets.dart': {
-    "'Poltergeist'",
-    "'Vapor'",
-  },
+  'lib/theme/theme_presets.dart': {"'Poltergeist'", "'Vapor'"},
   // The Settings window's wire (D36): channel names, the argument its
   // engine starts with, and the diagnostics of a malformed or orphaned
   // call — plumbing between two isolates, never rendered. A window that
@@ -1328,9 +1325,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'sftp://${split.username}@${split.hostport}$suffix'",
     r"'/$path'",
   },
-  // The deep-link queue's programmer diagnostic; the link grammar moved to
-  // seance_core (docs/design/suite-links.md section 5).
-  'lib/services/deep_links.dart': {"'unknown deep-link request'"},
   // The Séance launcher's programmer diagnostic.
   'lib/services/seance_links.dart': {
     "'The Séance link handler refused the request.'",
@@ -2055,9 +2049,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The registry document's settings.json key — machine data, never ARB
   // copy.
-  'lib/services/editor_registry_controller.dart': {
-    "'editorRegistry'",
-  },
+  'lib/services/editor_registry_controller.dart': {"'editorRegistry'"},
   // The submenuItems/menuPlacement.submenu exclusivity assert — a
   // dev-facing invariant message, never rendered copy.
   'lib/services/registered_command.dart': {

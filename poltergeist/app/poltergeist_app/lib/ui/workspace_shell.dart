@@ -208,8 +208,7 @@ class WorkspaceShell extends StatefulWidget {
     this.dragOutBackend,
     this.pickDirectory,
     this.quickLook,
-    this.initialPreviewThresholdBytes =
-        defaultLargeDownloadThresholdBytes,
+    this.initialPreviewThresholdBytes = defaultLargeDownloadThresholdBytes,
     this.onPreviewCacheCapacityChanged,
     this.onPreviewThresholdChanged,
     this.syncEnvironment,
@@ -569,7 +568,9 @@ class WorkspaceShell extends StatefulWidget {
 }
 
 class _WorkspaceShellState extends State<WorkspaceShell>
-    implements WorkspaceWindowContent, DeepLinkHandler {
+    implements
+        WorkspaceWindowContent,
+        LinkQueueHandler<HostDeepLink, ServerDeepLink> {
   /// App commands running through [_runCommand] right now. A count, not
   /// a flag: an always-enabled command (the macOS menu bar stays live under
   /// an in-app dialog) can start and finish inside another command's
@@ -721,14 +722,13 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// macOS, the in-window overlay on Linux and Windows. Touch platforms
   /// have no surface; Space answers on the Info tab there. Every
   /// workspace window drives the one panel (00 D39), each by its view.
-  QuickLookChannel _platformQuickLook() =>
-      switch (defaultTargetPlatform) {
-        TargetPlatform.macOS => MethodChannelQuickLook(
-          viewId: widget.window?.viewId ?? mainWindowViewId,
-        ),
-        TargetPlatform.linux || TargetPlatform.windows => InAppQuickLook(),
-        _ => const NoopQuickLookChannel(),
-      };
+  QuickLookChannel _platformQuickLook() => switch (defaultTargetPlatform) {
+    TargetPlatform.macOS => MethodChannelQuickLook(
+      viewId: widget.window?.viewId ?? mainWindowViewId,
+    ),
+    TargetPlatform.linux || TargetPlatform.windows => InAppQuickLook(),
+    _ => const NoopQuickLookChannel(),
+  };
 
   /// The pane pair and active pane (03 §6's WorkspaceController, foundation
   /// slice) plus the per-pane listing focus nodes (02 §8.2). Rebuilt when
@@ -737,9 +737,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   WorkspaceController? _workspace;
   // Pane activity and tab changes repaint their own surfaces. Only
   // visibility intent changes need to rebuild the surrounding layout.
-  final _workspaceLayout = ValueNotifier<
-    ({bool sidebarHidden, bool inspectorHidden, bool secondPaneHidden})?
-  >(null);
+  final _workspaceLayout =
+      ValueNotifier<
+        ({bool sidebarHidden, bool inspectorHidden, bool secondPaneHidden})?
+      >(null);
   FocusNode? _leftFocus;
   FocusNode? _rightFocus;
 
@@ -747,6 +748,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// a workspace rebuild rebinds panes, not the queue mirror — so it
   /// lives on the shell state, not inside [_buildWorkspace].
   late final ActivityPanelController _activity;
+
   /// The pane file verbs over the composed queue (New Folder, Delete,
   /// Duplicate — the bridged engine's queue tasks); null without a queue.
   PaneFileOps? _fileOps;
@@ -858,9 +860,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _sidebar = _buildSidebar();
     _probes = _buildProbes();
     _attachBookmarkBackup(widget.bookmarkBackup);
-    _probes?.syncCatalog(
-      widget.bookmarkBackup?.catalog?.servers ?? const [],
-    );
+    _probes?.syncCatalog(widget.bookmarkBackup?.catalog?.servers ?? const []);
     _attachLifecycle();
     _buildWorkspace();
     widget.workspaces?.addListener(_onWorkspacesChanged);
@@ -895,9 +895,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   }
 
   void _onBookmarkBackupChanged() {
-    _probes?.syncCatalog(
-      widget.bookmarkBackup?.catalog?.servers ?? const [],
-    );
+    _probes?.syncCatalog(widget.bookmarkBackup?.catalog?.servers ?? const []);
   }
 
   /// The command list is built in [build] — a workspace save or open
@@ -984,9 +982,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       // the sidebar reload too; syncFavorites is a reconcile, not an
       // append, so the second seeding is a no-op).
       _probes?.syncFavorites(_sidebar?.bookmarks ?? const []);
-      _probes?.syncCatalog(
-        widget.bookmarkBackup?.catalog?.servers ?? const [],
-      );
+      _probes?.syncCatalog(widget.bookmarkBackup?.catalog?.servers ?? const []);
     }
     if (!identical(oldWidget.engineSession, widget.engineSession)) {
       // Carry the sidebar's live hidden intent across the workspace
@@ -1355,7 +1351,6 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     }
   }
 
-
   /// 06 §3.7's review surface: the pane banner's `Review…` and the
   /// remotePath favorite's `Local Edits…` both open the same dialog —
   /// server-scoped, so records no pane currently touches still list.
@@ -1394,9 +1389,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       onDiscard: (record) =>
           _reportedLocalEditAction(() => session.discard(record)),
       onOpenRecovered: (recovered, name) => _reportedLocalEditAction(
-        () => _openRecoveredLocalFile(
-          session.recoveredFile(recovered, name),
-        ),
+        () => _openRecoveredLocalFile(session.recoveredFile(recovered, name)),
       ),
       onDiscardRecovered: (recovered, name) => _reportedLocalEditAction(
         () => session.forgetRecoveredFile(recovered, name),
@@ -1407,9 +1400,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// The dialog verbs' shared error posture — the same report + toast
   /// as the dirty-prompt's upload path, so a failing row action never
   /// dies silently inside the modal.
-  Future<void> _reportedLocalEditAction(
-    Future<void> Function() action,
-  ) async {
+  Future<void> _reportedLocalEditAction(Future<void> Function() action) async {
     try {
       await action();
     } on ExecutableLaunchRefused catch (refusal) {
@@ -1450,7 +1441,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
             basenameOf: remoteBasename,
             onSaved: () => session.reconcile(record),
             onUpload: _editorUploader(
-              session, record, bookmark?.label ?? record.serverId,
+              session,
+              record,
+              bookmark?.label ?? record.serverId,
             ),
           ).catchError((Object error, StackTrace stackTrace) {
             // The fire-and-forget push would otherwise escape the row's
@@ -1466,26 +1459,25 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// same `effectiveDefaultFor` chain (the registry's extension rules
   /// still apply), with the built-in opening it in place like a local
   /// file: no record, so no remote seams.
-  Future<void> _openRecoveredLocalFile(File file) =>
-      _openLocalEditFile(
-        file,
-        registryPath: file.path,
-        onBuiltIn: (resolved) async {
-          if (!mounted) return;
-          unawaited(
-            _pushEditorRoute(
-              key: 'local:${resolved.absolute.path}',
-              file: resolved,
-              remotePath: null,
-              basenameOf: p.basename,
-              onSaved: null,
-              onUpload: null,
-            ).catchError((Object error, StackTrace stackTrace) {
-              ApplicationErrorReporter().report(error, stackTrace);
-            }),
-          );
-        },
+  Future<void> _openRecoveredLocalFile(File file) => _openLocalEditFile(
+    file,
+    registryPath: file.path,
+    onBuiltIn: (resolved) async {
+      if (!mounted) return;
+      unawaited(
+        _pushEditorRoute(
+          key: 'local:${resolved.absolute.path}',
+          file: resolved,
+          remotePath: null,
+          basenameOf: p.basename,
+          onSaved: null,
+          onUpload: null,
+        ).catchError((Object error, StackTrace stackTrace) {
+          ApplicationErrorReporter().report(error, stackTrace);
+        }),
       );
+    },
+  );
 
   /// The `effectiveDefaultFor` chain shared by the review dialog's Open
   /// verbs: the built-in selector preflights the copy — an over-cap or
@@ -1894,11 +1886,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           },
         ),
       if (Theme.of(context).platform
-          case TargetPlatform.linux || TargetPlatform.windows)
-        ...[
-          buildAboutCommand(version: widget.appVersion),
-          buildQuitCommand(requestClose: widget.window?.quitApplication),
-        ],
+          case TargetPlatform.linux || TargetPlatform.windows) ...[
+        buildAboutCommand(version: widget.appVersion),
+        buildQuitCommand(requestClose: widget.window?.quitApplication),
+      ],
       // 00 D39's File ▸ New Window and Close Window.
       if (widget.window case final window? when window.canOpenWindows)
         ...buildWindowCommands(window: window),
@@ -2122,40 +2113,40 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           child: FileClipboardScope(
             clipboard: _fileClipboard,
             child: CommandChordScope(
-            commands: commands,
-            onRun: _runCommand,
-            child: ListenableBuilder(
-              listenable: enablement,
-              builder: (context, child) => AppMenuHost(
-                commands: commands,
-                onRun: _runCommand,
-                showMenuBar: false,
-                child: child!,
-              ),
-              child: workspace == null || leftFocus == null
-                  ? const SizedBox.shrink()
-                  : LayoutBuilder(
-                      builder: (context, constraints) => ListenableBuilder(
-                        listenable: _workspaceLayout,
-                        builder: (context, _) => _buildWorkspaceLayout(
-                          context,
-                          constraints.maxWidth,
-                          mac: mac,
-                          unifiedToolbar: mac,
-                          workspace: workspace,
-                          leftFocus: leftFocus,
-                          rightFocus: rightFocus,
-                          sidebar: sidebar,
-                          preview: preview,
-                          commands: commands,
-                          enablement: enablement,
-                          dropDelegate: dropDelegate,
-                          onReviewLocalEdits: onReviewLocalEdits,
-                          sshImportCommand: sshImportCommand,
+              commands: commands,
+              onRun: _runCommand,
+              child: ListenableBuilder(
+                listenable: enablement,
+                builder: (context, child) => AppMenuHost(
+                  commands: commands,
+                  onRun: _runCommand,
+                  showMenuBar: false,
+                  child: child!,
+                ),
+                child: workspace == null || leftFocus == null
+                    ? const SizedBox.shrink()
+                    : LayoutBuilder(
+                        builder: (context, constraints) => ListenableBuilder(
+                          listenable: _workspaceLayout,
+                          builder: (context, _) => _buildWorkspaceLayout(
+                            context,
+                            constraints.maxWidth,
+                            mac: mac,
+                            unifiedToolbar: mac,
+                            workspace: workspace,
+                            leftFocus: leftFocus,
+                            rightFocus: rightFocus,
+                            sidebar: sidebar,
+                            preview: preview,
+                            commands: commands,
+                            enablement: enablement,
+                            dropDelegate: dropDelegate,
+                            onReviewLocalEdits: onReviewLocalEdits,
+                            sshImportCommand: sshImportCommand,
+                          ),
                         ),
                       ),
-                    ),
-            ),
+              ),
             ),
           ),
         ),
@@ -2245,9 +2236,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       // Every launch verb routes onto the focused ENTRY — never the
       // `preview-cache/` path (06 §5.3's open-boundary rule).
       // The preview's Open opens, whatever the Double-click action.
-      onOpen: (pane, entry) => unawaited(
-        pane.openEntry(entry, action: DoubleClickAction.open),
-      ),
+      onOpen: (pane, entry) =>
+          unawaited(pane.openEntry(entry, action: DoubleClickAction.open)),
       onOpenWith: (context, pane, entry) =>
           unawaited(_chooseEditorFor(pane, entry)),
       onOpenInEditor: (pane, entry) =>
@@ -2268,30 +2258,33 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       );
     }
 
-    Widget paneTabs(PaneTabsController tabs, FocusNode focus, PaneTabsController other) =>
-        PaneTabsView(
-          tabs: tabs,
-          workspace: workspace,
-          focusNode: focus,
-          preview: preview,
-          onSwapFocus: () => _focusPane(other),
-          onCancelRecovery: () =>
-              _cancelPaneRecovery(workspace, tabs.activeTabController),
-          bookmarks: widget.bookmarks,
-          dropDelegate: dropDelegate,
-          dragOut: _dragOut,
-          checkoutSession: widget.checkoutSession,
-          onReviewLocalEdits: onReviewLocalEdits,
-          onSyncSaveAsFavorite: widget.bookmarks == null
-              ? null
-              : _saveSyncAsFavorite,
-          onSyncEditRules: widget.bookmarks == null ? null : _editSyncRules,
-          onImportSshConfig: sshImportCommand == null
-              ? null
-              : () => unawaited(_runCommand(sshImportCommand)),
-          commands: commands,
-          onRunCommand: _runCommand,
-        );
+    Widget paneTabs(
+      PaneTabsController tabs,
+      FocusNode focus,
+      PaneTabsController other,
+    ) => PaneTabsView(
+      tabs: tabs,
+      workspace: workspace,
+      focusNode: focus,
+      preview: preview,
+      onSwapFocus: () => _focusPane(other),
+      onCancelRecovery: () =>
+          _cancelPaneRecovery(workspace, tabs.activeTabController),
+      bookmarks: widget.bookmarks,
+      dropDelegate: dropDelegate,
+      dragOut: _dragOut,
+      checkoutSession: widget.checkoutSession,
+      onReviewLocalEdits: onReviewLocalEdits,
+      onSyncSaveAsFavorite: widget.bookmarks == null
+          ? null
+          : _saveSyncAsFavorite,
+      onSyncEditRules: widget.bookmarks == null ? null : _editSyncRules,
+      onImportSshConfig: sshImportCommand == null
+          ? null
+          : () => unawaited(_runCommand(sshImportCommand)),
+      commands: commands,
+      onRunCommand: _runCommand,
+    );
 
     final panes = Stack(
       fit: StackFit.expand,
@@ -2807,9 +2800,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       context,
       servers: _connectChoices(),
       onConnect: (bookmark, initialPath) {
-        final tab = workspace.activePane.newTab(
-          target: NewTabTarget.launcher,
-        );
+        final tab = workspace.activePane.newTab(target: NewTabTarget.launcher);
         unawaited(
           tab.controller.connectRemote(bookmark, initialPath: initialPath),
         );
@@ -2850,8 +2841,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
             open: () => _openFavorite(bookmark, SidebarOpenAction.newTab),
           ),
       for (final server
-          in widget.bookmarkBackup?.catalog?.servers ??
-              const <ServerConfig>[])
+          in widget.bookmarkBackup?.catalog?.servers ?? const <ServerConfig>[])
         ConnectServerChoice(
           id: server.id,
           label: server.label,
@@ -3160,9 +3150,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         // the Open With ▸ router — never a silent system hand-off (06
         // §4.2): preflight the fetched copy so a binary/non-UTF-8 file
         // declines the same way the over-cap checkout does.
-        await loadBuiltInTextDocumentDetails(
-          session.localFile(record),
-        );
+        await loadBuiltInTextDocumentDetails(session.localFile(record));
       } on CheckoutLimitException catch (error) {
         if (mounted) {
           _toastRefusalWithRouter(error, pane, entry);
@@ -3531,10 +3519,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       );
       if (remember == null || !context.mounted) return;
       if (remember) {
-        await widget.editorRegistry?.setExtensionDefault(
-          extension,
-          picked.id,
-        );
+        await widget.editorRegistry?.setExtensionDefault(extension, picked.id);
         if (!context.mounted) return;
       }
       await _openWithExternal(pane, entry, picked.id);
@@ -3897,10 +3882,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       if (mounted) {
         showTopToastIn(
           context,
-          message: l10n.sidebarCatalogDuplicateFailed(
-            server.label,
-            '$error',
-          ),
+          message: l10n.sidebarCatalogDuplicateFailed(server.label, '$error'),
         );
       }
       return;
@@ -3936,7 +3918,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     if (backups == null) return;
     final l10n = AppLocalizations.of(context);
     final session = widget.checkoutSession;
-    final edits = (session?.copiesFor(server.id).length ?? 0) +
+    final edits =
+        (session?.copiesFor(server.id).length ?? 0) +
         (session?.displacedFor(server.id).length ?? 0);
     final ok = await showDialog<bool>(
       context: context,
@@ -4007,54 +3990,72 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       );
 
   @override
-  Future<DeepLinkReviewDecision> reviewHost(DeepLinkReview review) async {
+  Future<LinkReviewDecision> review(LinkReview<HostDeepLink> review) async {
     if (!await _prepareDeepLinkOperation(review)) {
-      return DeepLinkReviewDecision.cancel;
+      return LinkReviewDecision.cancel;
     }
 
     final promptContext = _deepLinkPromptContext;
-    if (!promptContext.mounted) return DeepLinkReviewDecision.cancel;
+    if (!promptContext.mounted) return LinkReviewDecision.cancel;
 
     return showDeepLinkReviewDialog(promptContext, review);
   }
 
   @override
-  Future<DeepLinkHostResult> openHost(
+  Future<LinkOpenResult> open(
     HostDeepLink link,
-    DeepLinkOperation operation,
+    LinkOperation operation,
   ) async {
     if (!await _prepareDeepLinkOperation(operation)) {
-      return DeepLinkHostResult.notCommitted;
+      return LinkOpenResult.notCommitted;
     }
 
     _openFavorite(
       buildQuickConnectBookmark(link.target),
       SidebarOpenAction.plain,
     );
-    return DeepLinkHostResult.committed;
+    return LinkOpenResult.committed;
   }
 
+  /// A catalog link opens its saved server without a review; one whose
+  /// server is gone ends at a failure dialog.
   @override
-  Future<DeepLinkServerResult> openServer(
+  Future<LinkOpenResult> openDirect(
     ServerDeepLink link,
-    DeepLinkOperation operation,
+    LinkOperation operation,
   ) async {
     if (!await _prepareDeepLinkOperation(operation)) {
-      return DeepLinkServerResult.notFound;
+      return LinkOpenResult.notCommitted;
     }
     final server = _serverConfigById(link.serverId);
-    if (server == null) return DeepLinkServerResult.notFound;
-    _openFavorite(
-      _catalogOpenBookmark(server, remotePath: link.remotePath),
-      SidebarOpenAction.plain,
+    if (server != null) {
+      _openFavorite(
+        _catalogOpenBookmark(server, remotePath: link.remotePath),
+        SidebarOpenAction.plain,
+      );
+      return LinkOpenResult.committed;
+    }
+
+    final promptContext = _deepLinkPromptContext;
+    if (!promptContext.mounted) return LinkOpenResult.notCommitted;
+    await showDeepLinkFailureDialog(
+      promptContext,
+      DeepLinkFailure(
+        DeepLinkFailureKind.serverNotFound,
+        serverId: link.serverId,
+      ),
+      operation: operation,
     );
-    return DeepLinkServerResult.opened;
+    // Moved to another workspace mid-dialog: that one shows it again.
+    return operation.isCancelled
+        ? LinkOpenResult.notCommitted
+        : LinkOpenResult.committed;
   }
 
   @override
   Future<void> showFailure(
     DeepLinkFailure failure,
-    DeepLinkOperation operation,
+    LinkOperation operation,
   ) async {
     if (!await _prepareDeepLinkOperation(operation)) return;
 
@@ -4069,26 +4070,19 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   }
 
   @override
-  Future<void> showIgnoredLinks(
-    int count,
-    DeepLinkOperation operation,
-  ) async {
+  Future<void> showIgnoredLinks(int count, LinkOperation operation) async {
     if (!await _prepareDeepLinkOperation(operation)) return;
 
     final promptContext = _deepLinkPromptContext;
     if (!promptContext.mounted) return;
 
-    await showDeepLinkIgnoredDialog(
-      promptContext,
-      count,
-      operation: operation,
-    );
+    await showDeepLinkIgnoredDialog(promptContext, count, operation: operation);
   }
 
   BuildContext get _deepLinkPromptContext =>
       widget.window?.navigatorKey.currentContext ?? context;
 
-  Future<bool> _prepareDeepLinkOperation(DeepLinkOperation operation) async {
+  Future<bool> _prepareDeepLinkOperation(LinkOperation operation) async {
     if (!mounted) return false;
     final window = widget.window;
     if (window != null && !window.isActiveWorkspace) {
@@ -4232,8 +4226,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         onFavorite: (bookmark, action) =>
             _openFavorite(bookmark, _sidebarAction(action)),
         onRecent: _openRecentLocation,
-        localHome: (widget.localVolumes ?? SystemLocalVolumes.host)
-            .homeDirectory,
+        localHome:
+            (widget.localVolumes ?? SystemLocalVolumes.host).homeDirectory,
       ).whenComplete(() => _quickOpenOpen = false),
     );
   }
@@ -4327,12 +4321,12 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     if (controller == null) return null;
     return switch (controller.location) {
       LocalPaneLocation(:final path) => LocalEndpoint(path),
-      RemotePaneLocation(:final path) =>
-        switch (controller.remoteBookmark?.server) {
-          final BookmarkServerRef ref =>
-            RemoteEndpoint(server: ref, path: path),
-          _ => null,
-        },
+      RemotePaneLocation(:final path) => switch (controller
+          .remoteBookmark
+          ?.server) {
+        final BookmarkServerRef ref => RemoteEndpoint(server: ref, path: path),
+        _ => null,
+      },
       _ => null,
     };
   }
@@ -4431,11 +4425,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     AppLocalizations l10n,
     SyncEndpoint left,
     SyncEndpoint right,
-  ) =>
-      l10n.syncPairLabel(
-        syncEndpointLabel(left, shortenRemotePath: true),
-        syncEndpointLabel(right, shortenRemotePath: true),
-      );
+  ) => l10n.syncPairLabel(
+    syncEndpointLabel(left, shortenRemotePath: true),
+    syncEndpointLabel(right, shortenRemotePath: true),
+  );
 
   /// `sync.synchronizePanes` (05 §9, D32 §7): the ad-hoc pair from
   /// both panes' live locations, shown in the Sync sheet first — the
@@ -4811,10 +4804,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         // 05 §2.1's export seam: shared-mode `serverConfigId` refs
         // resolve through the pulled Séance catalog; embedded
         // identities resolve directly (rsync_endpoints.dart).
-        rsyncEndpoints: (p) => resolveRsyncEndpoints(
-          p,
-          serverConfig: _serverConfigById,
-        ),
+        rsyncEndpoints: (p) =>
+            resolveRsyncEndpoints(p, serverConfig: _serverConfigById),
       ),
     );
     workspace.setActivePane(target);
@@ -5242,7 +5233,11 @@ class _HeaderFilterFieldState extends State<_HeaderFilterField> {
             fillColor: chrome.capsuleFill,
             hintText: l10n.headerFilterHint,
             contentPadding: const EdgeInsets.symmetric(vertical: 6),
-            prefixIcon: Icon(Icons.search, size: 16, color: chrome.secondaryText),
+            prefixIcon: Icon(
+              Icons.search,
+              size: 16,
+              color: chrome.secondaryText,
+            ),
             prefixIconConstraints: const BoxConstraints(minWidth: 28),
             suffixIcon: active
                 ? Padding(
