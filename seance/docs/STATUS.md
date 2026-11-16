@@ -3,6 +3,47 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Wave 6 (2026-11-16)
+
+- Damaged vault master key (#787, #794): a keystore entry that is not
+  base64 of exactly 32 bytes now throws `MasterKeyDamagedException`
+  while an encrypted vault exists, so startup and the unlock retry
+  refuse it through the existing `MasterKeyUnavailableException` paths
+  and leave the entry as found. Without a vault it is replaced like a
+  missing key. `probeKeystore`'s `hasExistingVault` is required, a new
+  key is minted at `_keyLength`, and both hints point to a backup of
+  the system credential store instead of the macOS keychain. Entry
+  names and stored data are unchanged.
+- iOS Download / Save as for remote files works (#791). The files pane
+  asked file_selector for a save location, which iOS does not
+  implement; it now goes through `ghost_marks_picker`'s `saveAs`, which
+  exports through the document picker on iOS and keeps the desktop
+  panels. The picker needs the bytes in memory, so files over 100 MB
+  are refused before or after the download with a pointer to Share…
+  and Save to Files.
+- The picked-file reader, the save-as split and the picker fakes are
+  shared with Poltergeist in `ghost_marks_picker`; the direct
+  `file_selector` dependency is gone. The Android Gradle block that
+  re-applied Kotlin to `file_picker` is removed: on 13.3.3 no subproject
+  has that name, and CI's Android leg built the APK without it (#791).
+- `dart-runtime-licenses.py --refresh` no longer raises `KeyError` when
+  a component gains a pin (#794). The vendored notices themselves
+  (#787) and the shared link queue (#795) are described in Wave 5
+  below.
+
+Deferred: Séance's link review shows no activation count for a
+repeated link, which Poltergeist's review does. Suite follow-ups:
+moving `LocalDeviceAuthenticator` into a shared package once
+`docs/design/catalog-library.md` section 9 is revised; the
+`FLAG_SECURE` and locked window title product decision; and the app
+directories are not format-checked in CI.
+
+Proof: analysis and the full app suite passed locally, and CI passed on
+each PR's last head; #795's macOS Poltergeist pure-Dart job was
+cancelled there and passed on main's merge run. Still manual: the iOS
+document-picker save and the desktop save panels on devices, real
+`seance://` delivery on each platform and handoff between real windows.
+
 ## Wave 5 (2026-11-15/16)
 
 - Per-extension default editors (F7, decision Q6, #779): Settings >
