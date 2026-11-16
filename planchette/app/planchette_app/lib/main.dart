@@ -87,7 +87,14 @@ Future<void> main(List<String> arguments) async {
       ),
       onError: (error, stack) {
         final workspace = windows.activeWindow?.workspace;
-        workspace?.reportError(workspace.strings.remoteFileFailed(error));
+        if (workspace == null) {
+          // No window can show the banner; the error log still gets it.
+          FlutterError.reportError(
+            FlutterErrorDetails(exception: error, stack: stack),
+          );
+          return;
+        }
+        workspace.reportError(workspace.strings.remoteFileFailed(error));
       },
     );
   }();
