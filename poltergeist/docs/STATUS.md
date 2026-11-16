@@ -33,7 +33,7 @@ moving `normalizeEditorExtensions` and `validateEditorDisplayName` from
 planchette_editor into `ghost_editors`.
 
 Proof: analysis and the full app suite passed locally, `ghost_editors`
-has 44 tests, and CI passed on each merged head. Automated compilation
+has 46 tests, and CI passed on each merged head. Automated compilation
 is not a device smoke test: still manual are the Copy to sheet on a
 phone, Put Back against a real macOS trash, cross-host move and its
 undo against live servers, and real external editor launches and
