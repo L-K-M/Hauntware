@@ -51,9 +51,8 @@ Future<void> main(List<String> arguments) async {
       ),
     ),
     settings: settings,
-    onError: (workspace, error) => workspace.reportError(
-      'Unsaved changes could not be kept for the next launch: $error',
-    ),
+    onError: (workspace, error) =>
+        workspace.reportError(workspace.strings.journalWriteFailed(error)),
   );
   final kept = await journal.open();
 
@@ -86,8 +85,10 @@ Future<void> main(List<String> arguments) async {
       isDocumentOpen: (path) => windows.windows.any(
         (window) => window.workspace.tabForPath(path) != null,
       ),
-      onError: (error, stack) =>
-          windows.activeWindow?.workspace.reportError('Remote file: $error'),
+      onError: (error, stack) {
+        final workspace = windows.activeWindow?.workspace;
+        workspace?.reportError(workspace.strings.remoteFileFailed(error));
+      },
     );
   }();
   final desktop = DesktopWindow(
@@ -115,15 +116,19 @@ Future<void> main(List<String> arguments) async {
   );
   windows = DocumentWindows(
     host: host,
-    workspaceFactory: (window) => DocumentWorkspace(
-      store: LocalDocumentStore(),
-      dialogs: AppDocumentDialogs(
+    workspaceFactory: (window) {
+      final dialogs = AppDocumentDialogs(
         window.navigatorKey,
         pickers: WindowPickers(window),
-      ),
-      toolHistory: toolHistory,
-      saveSiblings: LocalSaveSiblings(),
-    ),
+      );
+      return DocumentWorkspace(
+        store: LocalDocumentStore(),
+        dialogs: dialogs,
+        toolHistory: toolHistory,
+        saveSiblings: LocalSaveSiblings(),
+        strings: () => dialogs.strings,
+      );
+    },
     quitApplication: desktop.requestQuit,
     mainTitle: desktop.setTitle,
   );

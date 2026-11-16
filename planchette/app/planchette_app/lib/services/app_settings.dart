@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 
+import '../l10n/app_localizations.dart';
 import 'json_file.dart';
 import 'save_as_folders.dart';
+import 'template_strings.dart';
 
 export 'save_as_folders.dart' show SaveAsFolders;
 
@@ -316,8 +318,24 @@ abstract interface class SettingsStore {
 /// A [SettingsStore] that can say what its last [SettingsStore.load] found
 /// wrong, such as a damaged file it kept aside.
 abstract interface class SettingsLoadReport {
-  /// A sentence for the user, or null when the load found nothing to report.
-  String? get loadIssue;
+  /// What the load found wrong, or null when it found nothing to report.
+  SettingsLoadIssue? get loadIssue;
+}
+
+/// A settings file that could not be used, so the defaults took over. The
+/// controller words it for the user.
+final class SettingsLoadIssue {
+  const SettingsLoadIssue({this.keptAs});
+
+  /// Where a damaged file was moved aside, or null when it stayed put.
+  final String? keptAs;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SettingsLoadIssue && other.keptAs == keptAs;
+
+  @override
+  int get hashCode => keptAs.hashCode;
 }
 
 /// The settings file, wherever the platform says a per-user application keeps
@@ -329,8 +347,8 @@ final class LocalSettingsStore implements SettingsStore, SettingsLoadReport {
   final DateTime Function() _clock;
 
   @override
-  String? get loadIssue => _loadIssue;
-  String? _loadIssue;
+  SettingsLoadIssue? get loadIssue => _loadIssue;
+  SettingsLoadIssue? _loadIssue;
 
   /// `settings.json` in the platform's per-user configuration directory. With
   /// no such directory to be found, the settings last for this session only.
@@ -366,9 +384,7 @@ final class LocalSettingsStore implements SettingsStore, SettingsLoadReport {
     } on Exception {
       // Unreadable rather than damaged (permissions, a locked file, bytes
       // that are not text): say so, but leave the file where it is.
-      _loadIssue =
-          'Your settings file could not be read, so Planchette started with '
-          'its default settings.';
+      _loadIssue = const SettingsLoadIssue();
       return null;
     }
   }
@@ -387,13 +403,9 @@ final class LocalSettingsStore implements SettingsStore, SettingsLoadReport {
     final aside = '${file.path}.corrupt-$stamp';
     try {
       await file.rename(aside);
-      _loadIssue =
-          'Your settings file could not be read, so Planchette started with '
-          'its default settings. The file was kept as $aside.';
+      _loadIssue = SettingsLoadIssue(keptAs: aside);
     } on FileSystemException {
-      _loadIssue =
-          'Your settings file could not be read, so Planchette started with '
-          'its default settings.';
+      _loadIssue = const SettingsLoadIssue();
     }
   }
 
@@ -448,9 +460,14 @@ final class SettingsController extends ChangeNotifier {
   SettingsController({
     required this.store,
     AppSettings initial = const AppSettings(),
-  }) : _value = initial;
+    AppLocalizations Function()? strings,
+  }) : _value = initial,
+       _strings = strings ?? templateStrings;
 
   final SettingsStore store;
+
+  /// The strings [error] is worded in, read when it is made.
+  final AppLocalizations Function() _strings;
   AppSettings _value;
   String? _error;
 
@@ -481,7 +498,12 @@ final class SettingsController extends ChangeNotifier {
       _value = const AppSettings();
     }
     if (store case final SettingsLoadReport report) {
-      _error = report.loadIssue;
+      _error = switch (report.loadIssue) {
+        null => null,
+        SettingsLoadIssue(keptAs: final path?) =>
+          _strings().settingsUnreadableKept(path),
+        SettingsLoadIssue() => _strings().settingsUnreadable,
+      };
     }
     notifyListeners();
   }
@@ -534,7 +556,7 @@ final class SettingsController extends ChangeNotifier {
       final detail = error is FileSystemException
           ? error.osError?.message ?? error.message
           : '$error';
-      _error = 'Could not save settings: $detail';
+      _error = _strings().settingsSaveFailed(detail);
       notifyListeners();
     }
   }

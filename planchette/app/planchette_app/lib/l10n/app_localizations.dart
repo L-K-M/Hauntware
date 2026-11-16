@@ -4020,6 +4020,444 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'not applied, {reason}'**
   String editorTextToolPreviewRefused(String reason);
+
+  /// Window title: the active document.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} — Planchette'**
+  String windowTitleDocument(String name);
+
+  /// Window title: the active document in a folder workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} | {folder} | Planchette'**
+  String windowTitleDocumentInFolder(String name, String folder);
+
+  /// Window title: a folder workspace with no document open.
+  ///
+  /// In en, this message translates to:
+  /// **'{folder} | Planchette'**
+  String windowTitleFolder(String folder);
+
+  /// Window title of a document with unsaved changes.
+  ///
+  /// In en, this message translates to:
+  /// **'● {title}'**
+  String windowTitleUnsaved(String title);
+
+  /// The name of the first new untitled document.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled'**
+  String get untitledName;
+
+  /// The name of a further untitled document.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled {number}'**
+  String untitledNameNumbered(int number);
+
+  /// Joins the items of a list inside a sentence.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get listSeparator;
+
+  /// Joins list items that may contain commas themselves.
+  ///
+  /// In en, this message translates to:
+  /// **'; '**
+  String get sentenceListSeparator;
+
+  /// One failed document in a list, with why it failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({detail})'**
+  String failureItem(String name, String detail);
+
+  /// Error when the open dialog fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open documents: {error}'**
+  String openDocumentsFailed(Object error);
+
+  /// Error when one file fails to open.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {name}: {detail}'**
+  String openFailed(String name, String detail);
+
+  /// Error when several files fail to open, listing each.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {count} files: {files}'**
+  String openFailedSeveral(int count, String files);
+
+  /// Error when more files fail to open than are listed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {count} files: {files}, and {more} more'**
+  String openFailedSeveralMore(int count, String files, int more);
+
+  /// Why a save did not run, quoted in a Save All summary.
+  ///
+  /// In en, this message translates to:
+  /// **'it is being reverted'**
+  String get saveReasonReverting;
+
+  /// Why a save did not run, quoted in a Save All summary.
+  ///
+  /// In en, this message translates to:
+  /// **'still opening'**
+  String get saveReasonOpening;
+
+  /// Why a save did not run, quoted in a Save All summary.
+  ///
+  /// In en, this message translates to:
+  /// **'the input method is still composing'**
+  String get saveReasonComposing;
+
+  /// Why a save did not run, quoted in a Save All summary.
+  ///
+  /// In en, this message translates to:
+  /// **'it changed on disk'**
+  String get saveReasonChangedOnDisk;
+
+  /// Why a save did not run, quoted in a Save All summary.
+  ///
+  /// In en, this message translates to:
+  /// **'it was deleted or moved'**
+  String get saveReasonMissing;
+
+  /// Save a Local Copy chose the server file's own working copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose another location for the local copy.'**
+  String get localCopySameLocation;
+
+  /// A save refused while an input method composes.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was not saved. Finish typing in the input method, then save again.'**
+  String saveComposing(String name);
+
+  /// A server file saved locally whose upload did not happen.
+  ///
+  /// In en, this message translates to:
+  /// **'The local copy was saved, but it was not uploaded.'**
+  String get localCopyNotUploaded;
+
+  /// Error when a save fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save {name}: {error}'**
+  String saveFailed(String name, Object error);
+
+  /// Save As chose a file another tab holds.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is already open in another tab.'**
+  String alreadyOpenInTab(String name);
+
+  /// Save As chose a file another window holds.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is already open in another window.'**
+  String alreadyOpenInWindow(String name);
+
+  /// Save All summary when some saves failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {saved} of {total}. Could not save: {failures}.'**
+  String saveAllFailed(int saved, int total, String failures);
+
+  /// Save All summary when it stopped before the end.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Save All stopped with {count} document not saved: {names}.} other{Save All stopped with {count} documents not saved: {names}.}}'**
+  String saveAllStopped(int count, String names);
+
+  /// Export refused during a revert.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is being reverted. Export it once the file is read.'**
+  String exportReverting(String name);
+
+  /// Export chose a file a tab holds.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is open in a tab. Export to another file.'**
+  String exportOpenInTab(String name);
+
+  /// Export chose a file another window holds.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is open in another window. Export to another file.'**
+  String exportOpenInWindow(String name);
+
+  /// Export refused for size; sizes are formatted numbers.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is too large to export as HTML: the page would be {size} MB, over the {limit} MB limit.'**
+  String exportTooLarge(String name, String size, String limit);
+
+  /// Error when an export fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export {name}: {error}'**
+  String exportFailed(String name, Object error);
+
+  /// Compare with Saved interrupted by a revert.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is being reverted. Compare it again once the file is read.'**
+  String compareReverting(String name);
+
+  /// Compare with Saved interrupted by a save.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is busy. Compare it again once it finishes.'**
+  String compareBusy(String name);
+
+  /// Compare with Saved interrupted by a Save As.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was saved somewhere else while it was being compared. Compare it again.'**
+  String compareSavedElsewhere(String name);
+
+  /// Compare with Saved interrupted by an edit.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed while it was being compared. Compare it again.'**
+  String compareChanged(String name);
+
+  /// Compare with Saved finished under a dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'A dialog is open, so the comparison of {name} could not be shown. Compare it again after closing it.'**
+  String compareDialogOpen(String name);
+
+  /// The diff header naming the saved file.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (on disk)'**
+  String compareOnDisk(String name);
+
+  /// The diff header naming the editor's text.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (in the editor)'**
+  String compareInEditor(String name);
+
+  /// Compare with Saved found no differences.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} has no differences from the file on disk.'**
+  String compareIdentical(String name);
+
+  /// Compare with Saved found too many differences.
+  ///
+  /// In en, this message translates to:
+  /// **'The differences between {name} and the file on disk are too large to show as a diff.'**
+  String compareTooLarge(String name);
+
+  /// Compare with Saved timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'Comparing {name} with the file on disk ran out of time. Compare it again.'**
+  String compareTimedOut(String name);
+
+  /// Error when Compare with Saved fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not compare {name} with the file on disk: {error}'**
+  String compareFailed(String name, Object error);
+
+  /// The name of the tab that shows a comparison; the app adds a .diff extension.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} vs saved'**
+  String compareTabName(String name);
+
+  /// One leftover save file that could not be deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {error}'**
+  String siblingDeleteFailure(String name, Object error);
+
+  /// Error when leftover save files could not be deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete {failures}.'**
+  String siblingsDeleteFailed(String failures);
+
+  /// Error when an Android recovery copy cannot be deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete the recovery copy {name}: {error}'**
+  String recoveryDeleteFailed(String name, Object error);
+
+  /// Error when discarding a document fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not discard {name}: {error}'**
+  String discardFailed(String name, Object error);
+
+  /// Don't Save refused because the text changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed while the prompt was open, so nothing was discarded. Review it, then close again.'**
+  String discardChangedClose(String name);
+
+  /// Discard All refused because the text changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed while the prompt was open, so nothing was discarded. Review it, then quit again.'**
+  String discardChangedQuit(String name);
+
+  /// Close refused during a save.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is still being saved. Close it again once the save finishes.'**
+  String closeSaving(String name);
+
+  /// Close refused while the document is busy.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is busy. Close it again in a moment.'**
+  String closeBusy(String name);
+
+  /// Close or save refused while the document opens.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is still opening. Try again in a moment.'**
+  String notReady(String name);
+
+  /// Error when Revert to Saved fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not revert {name}: {error}'**
+  String revertFailed(String name, Object error);
+
+  /// Error when reloading a changed file fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reload {name}: {error}'**
+  String reloadFailed(String name, Object error);
+
+  /// Error when the file cannot be checked for outside changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check {name} for changes on disk: {error}'**
+  String diskCheckFailed(String name, Object error);
+
+  /// Error when an outside change cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the new version of {name}: {error}'**
+  String diskReadFailed(String name, Object error);
+
+  /// Hot exit restore: the documents that need attention.
+  ///
+  /// In en, this message translates to:
+  /// **'Some documents from the last session need attention: {problems}.'**
+  String restoreProblems(String problems);
+
+  /// Hot exit restore: a file changed since its edits were kept.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed on disk after its unsaved edits were kept. They are back over the new version: compare before saving'**
+  String restoreChangedOnDisk(String name);
+
+  /// Hot exit restore: why a file could not be reopened.
+  ///
+  /// In en, this message translates to:
+  /// **'it is open in another window'**
+  String get restoreOpenElsewhere;
+
+  /// Hot exit restore: a file that could not be reopened.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} could not be reopened ({reason})'**
+  String restoreFailed(String name, String reason);
+
+  /// Hot exit restore: a file that could not be reopened, its edits moved to an untitled tab.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} could not be reopened ({reason}); its unsaved text is in an untitled tab'**
+  String restoreFailedKept(String name, String reason);
+
+  /// Quit refused while work is in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'A document is still opening or closing, or a dialog is waiting. Quit again once it finishes.'**
+  String get quitBlockedBusy;
+
+  /// Quit refused during a save.
+  ///
+  /// In en, this message translates to:
+  /// **'A save is still running. Quit again once it finishes.'**
+  String get quitBlockedSaving;
+
+  /// The folder browser refused a folder outside the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a folder inside this workspace.'**
+  String get folderOutsideWorkspace;
+
+  /// Error when a new window fails to open.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open a window: {error}'**
+  String windowOpenFailed(Object error);
+
+  /// Error when quit cannot raise a window to ask about it.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not bring a window forward to close it: {error}'**
+  String windowRaiseFailed(Object error);
+
+  /// Error when quitting fails after consent.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not close Planchette: {error}'**
+  String appCloseFailed(Object error);
+
+  /// Error when a window fails to close.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not close the window: {error}'**
+  String windowCloseFailed(Object error);
+
+  /// Error when the hot exit journal cannot be written.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved changes could not be kept for the next launch: {error}'**
+  String journalWriteFailed(Object error);
+
+  /// Error from a server file operation.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote file: {error}'**
+  String remoteFileFailed(Object error);
+
+  /// The settings file could not be used; the defaults took over.
+  ///
+  /// In en, this message translates to:
+  /// **'Your settings file could not be read, so Planchette started with its default settings.'**
+  String get settingsUnreadable;
+
+  /// The damaged settings file was moved aside; the defaults took over.
+  ///
+  /// In en, this message translates to:
+  /// **'Your settings file could not be read, so Planchette started with its default settings. The file was kept as {path}.'**
+  String settingsUnreadableKept(String path);
+
+  /// Error when the settings file cannot be written.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save settings: {detail}'**
+  String settingsSaveFailed(String detail);
 }
 
 class _AppLocalizationsDelegate

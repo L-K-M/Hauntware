@@ -13,7 +13,9 @@ import 'dart:async';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../l10n/app_localizations.dart';
 import 'document_workspace.dart';
+import 'template_strings.dart';
 import 'window_host.dart';
 
 enum DocumentWindowKind {
@@ -248,7 +250,7 @@ final class DocumentWindows extends ChangeNotifier
         main._dispose();
         notifyListeners();
         _report(error, stack);
-        _reportError('Could not open a window: $error');
+        _reportError((l10n) => l10n.windowOpenFailed(error));
         return null;
       }
       return main;
@@ -259,7 +261,7 @@ final class DocumentWindows extends ChangeNotifier
       viewId = await _host.create();
     } on Object catch (error, stack) {
       _report(error, stack);
-      _reportError('Could not open a window: $error');
+      _reportError((l10n) => l10n.windowOpenFailed(error));
       return null;
     }
     if (_disposed || _quitting) {
@@ -342,7 +344,7 @@ final class DocumentWindows extends ChangeNotifier
           // A raise that fails must cancel the quit, not throw out of the
           // review: the finally below releases every consented lock.
           _report(error, stack);
-          _reportError('Could not bring a window forward to close it: $error');
+          _reportError((l10n) => l10n.windowRaiseFailed(error));
           return false;
         }
         if (!await window.workspace.confirmQuit()) return false;
@@ -369,7 +371,7 @@ final class DocumentWindows extends ChangeNotifier
     for (final window in _windows) {
       window.workspace.releaseQuit();
     }
-    _reportError('Could not close Planchette: $error');
+    _reportError((l10n) => l10n.appCloseFailed(error));
   }
 
   /// Close Window and a window's close button: closes [window] once its
@@ -416,7 +418,9 @@ final class DocumentWindows extends ChangeNotifier
       _watchTitleSync(window);
       _activate(window);
       notifyListeners();
-      window.workspace.reportError('Could not close the window: $error');
+      window.workspace.reportError(
+        window.workspace.strings.windowCloseFailed(error),
+      );
       _report(error, stack);
       return;
     }
@@ -582,13 +586,17 @@ final class DocumentWindows extends ChangeNotifier
 
   /// The failure on the active window's banner, or nowhere visible when no
   /// window can carry it (then the log still has it).
-  void _reportError(String message) {
+  /// Shows [message] on the active window's banner, in that window's
+  /// strings; with no window left it goes to the error log in English.
+  void _reportError(String Function(AppLocalizations) message) {
     final window = activeWindow;
     if (window == null) {
-      FlutterError.reportError(FlutterErrorDetails(exception: message));
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: message(templateStrings())),
+      );
       return;
     }
-    window.workspace.reportError(message);
+    window.workspace.reportError(message(window.workspace.strings));
   }
 
   void _report(Object error, StackTrace stack) {

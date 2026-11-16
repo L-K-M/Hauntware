@@ -23,7 +23,15 @@ const _scannedDirectories = ['lib/ui', 'lib/widgets'];
 const _scannedFiles = [
   'lib/planchette_app.dart',
   'lib/services/document_dialogs.dart',
+  // The workspace and its window registry read their strings through an
+  // injected function, as do the entry points' messages.
+  'lib/android_app.dart',
+  'lib/main.dart',
+  'lib/services/document_windows.dart',
+  'lib/services/document_workspace.dart',
+  'lib/services/folder_workspace.dart',
   'lib/services/settings_dialog.dart',
+  'lib/services/template_strings.dart',
 ];
 
 const _allowedTechnicalLiterals = <String, Set<String>>{
@@ -258,8 +266,44 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'the bulk close question covers several files'",
     // File names, one per line.
     r"'\n'",
-    // The template locale, for a picker opened before any window context.
-    "'en'",
+  },
+  // The catalog's template locale.
+  'lib/services/template_strings.dart': {"'en'"},
+  // Folder names under the app's support directory.
+  'lib/main.dart': {"'session'", "'workspaces'", "'catalog'"},
+  'lib/android_app.dart': {"'session'"},
+  // Focus scope and navigator debug labels.
+  'lib/services/document_windows.dart': {
+    r"'window $serial navigator'",
+    r"'window $serial'",
+  },
+  'lib/services/document_workspace.dart': {
+    // The product name: the download mark's agent and the bare window
+    // title.
+    "'Planchette'",
+    // An internal invariant: a save always has its target first.
+    "'Choose a save destination first.'",
+    // An error's own text, quoted inside a localized sentence.
+    r"'$error'",
+    // File names: the export's suggested name, the comparison tab with
+    // the extension that highlights it, and its number when taken.
+    r"'${tab.name}.html'",
+    r"'${strings.compareTabName(name)}.diff'",
+    r"'$base $number'",
+    // Path separators and extension dots, and empty results.
+    "'/'",
+    "'.'",
+    "''",
+  },
+  'lib/services/folder_workspace.dart': {
+    // Paths, the home folder and an SSH location in user@host:path form.
+    "'.'",
+    "'~'",
+    "'~/'",
+    r"'${_server!.username}@${_server!.host}:${_path ?? _root ?? ''}'",
+    "''",
+    // An error's own text, kept for the browser's message.
+    r"'$error'",
   },
   'lib/services/settings_dialog.dart': {
     // The product name the license page shows above the notices.
