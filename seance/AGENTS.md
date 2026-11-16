@@ -450,14 +450,6 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   tree from the first frame, so assertions about the widget itself need none
   of this; only its decoded result does. See `server_list_pane_test.dart` and
   `server_mark_picker_test.dart`.
-- **file_picker ≥11 breaks the APK build** ("cannot find symbol:
-  FilePickerPlugin" in GeneratedPluginRegistrant.java): on AGP 9+ the plugin
-  stops applying the Kotlin plugin and expects AGP's built-in Kotlin, which the
-  Flutter template disables (`android.builtInKotlin=false`).
-  `app/seance_app/android/build.gradle.kts` re-applies Kotlin to that one
-  subproject as a workaround — remove it once file_picker fixes
-  [issue #1973](https://github.com/miguelpruivo/flutter_file_picker/issues/1973)
-  or Flutter enables built-in Kotlin.
 
 - **`flutter_pty` does not inherit the process environment.** `Pty.start`
   builds a fresh one from `TERM`, `LANG`, and exactly six copied names

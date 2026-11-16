@@ -3,9 +3,8 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_marks_picker/testing.dart';
 import 'package:seance_app/services/private_key_file.dart';
-
-import 'support/fake_file_picker.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

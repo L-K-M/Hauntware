@@ -21,12 +21,7 @@ dependencies:
   desktop_drop: 0.8.0
   # The native executable picker behind Open With ▸ Other… on
   # Windows/Linux (06 §4.3); macOS uses the poltergeist/files channel.
-  # Needs the AGP-9 Kotlin re-apply in android/build.gradle.kts.
   file_picker: 13.3.3
-  # The desktop save panel's destination alone: file_picker's save writes
-  # the bytes itself, so it cannot leave an earlier secrets export intact
-  # until the owner-only atomic replacement commits.
-  file_selector: 1.1.0
   # SVG rasterization for imported server-badge images (the mark picker's
   # image tab; the same use Séance's badge_image port makes of it).
   flutter_svg: 2.3.0

@@ -186,9 +186,6 @@ copies of the standalone workflows, kept only because tests and
   members declare `resolution: workspace` — verified in Séance).
 - **`pkill -f <name>` kills your own shell** when the pattern matches the
   bash command line running it. Kill by PID.
-- **file_picker ≥11 breaks APK builds** on AGP 9+ unless Kotlin is re-applied
-  to that subproject (see Séance's `android/build.gradle.kts` workaround and
-  [flutter_file_picker#1973](https://github.com/miguelpruivo/flutter_file_picker/issues/1973)).
 - macOS: the restricted `keychain-access-groups` entitlement blocks ad-hoc
   signed builds from launching; use the legacy login keychain
   (`MacOsOptions(usesDataProtectionKeychain: false)`) like Séance does.

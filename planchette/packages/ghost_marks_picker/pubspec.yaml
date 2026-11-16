@@ -1,9 +1,10 @@
 name: ghost_marks_picker
 description: >-
-  The platform image picker behind ghost_marks' mark picker for Seance and
-  Poltergeist, over file_picker 13. Kept out of ghost_marks so an app on
-  another picker, or on a file_picker major that needs a different win32
-  major, takes the shared appearance without it.
+  Seance's and Poltergeist's file glue over file_picker 13 and
+  file_selector: the platform image picker behind ghost_marks' mark picker,
+  bounded reads of picked files and the save-as panels. Kept out of
+  ghost_marks so an app on another picker, or on a file_picker major that
+  needs a different win32 major, takes the shared appearance without it.
 version: 1.9.4
 publish_to: none
 
@@ -15,6 +16,11 @@ dependencies:
   flutter:
     sdk: flutter
   file_picker: ^13.3.3
+  # The desktop save panels: only the destination, so each app keeps its
+  # own atomic or streamed write (see picked_files.dart).
+  file_selector: ^1.1.0
+  # The save panel's types, for the scripted platform in testing.dart.
+  file_selector_platform_interface: ^2.7.0
   # The badge image extensions the desktop picker offers.
   ghost_ui:
     path: ../ghost_ui

@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_marks_picker/testing.dart';
 import 'package:poltergeist_app/services/third_party_bookmark_import_setup.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../support/fake_bookmark_store.dart';
-import '../support/fake_file_picker.dart';
 
 void main() {
   test('keeps the caller bookmark store and picker', () async {

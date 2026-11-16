@@ -2,14 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:file_selector/file_selector.dart' show getSaveLocation;
 import 'package:flutter/foundation.dart';
+import 'package:ghost_marks_picker/picked_files.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
 import 'file_export_service.dart';
-import 'picked_file_bytes.dart';
 
 // The recovery policy, summary and failure types moved to seance_core with
 // VaultRecovery; the export keeps every importer of this library compiling.
@@ -78,26 +77,21 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
   @override
   Future<String?> save(Uint8List bytes, String fileName) async {
     if (Platform.isAndroid) return _saveThroughSaf(bytes, fileName);
-    if (Platform.isIOS) {
-      // The document picker writes the bytes itself.
-      final saved = await FilePicker.saveFile(fileName: fileName, bytes: bytes);
-      if (saved == null) return null;
-      return saved.isScheme('file') ? saved.toFilePath() : saved.toString();
-    }
-    // Only the destination comes from the panel: file_picker's own save
-    // writes before returning, which would truncate an earlier export before
-    // the owner-only replacement below commits.
-    final location = await getSaveLocation(suggestedName: fileName);
-    if (location == null) return null;
-    final destination = location.path;
-    // Encrypted, but still the whole vault: kept from other local accounts
-    // like vault.json itself.
-    await writeStringAtomically(
-      File(destination),
-      utf8.decode(bytes),
-      privacy: AtomicFilePrivacy.ownerOnly,
+    // Only the destination comes from a desktop panel: file_picker's own
+    // save writes before returning, which would truncate an earlier export
+    // before the owner-only replacement below commits. iOS's document
+    // picker writes the bytes itself.
+    return saveAs(
+      fileName: fileName,
+      readBytes: () async => bytes,
+      // Encrypted, but still the whole vault: kept from other local
+      // accounts like vault.json itself.
+      writeTo: (destination) => writeStringAtomically(
+        File(destination),
+        utf8.decode(bytes),
+        privacy: AtomicFilePrivacy.ownerOnly,
+      ),
     );
-    return destination;
   }
 
   /// Stages the export in the app's own cache, owner-only, hands it to the

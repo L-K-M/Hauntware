@@ -8,12 +8,11 @@ import 'dart:ui' show Locale;
 // The plugin's static API delegates here; swapping it keeps real open logic.
 import 'package:file_picker/file_picker.dart' show FilePickerPlatform;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_marks_picker/testing.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/secrets_recovery.dart';
 import 'package:poltergeist_app/services/secure_master_key.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
-
-import '../support/fake_file_picker.dart';
 
 Secret _secret(String id, [String? value]) =>
     Secret(id: id, kind: SecretKind.password, value: value ?? 'value-$id');
