@@ -14,6 +14,14 @@
   "@fleetSectionImported": {
     "description": "Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps."
   },
+  "fleetSectionHiddenConnected": "Connected server hidden",
+  "@fleetSectionHiddenConnected": {
+    "description": "Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides has a link up."
+  },
+  "fleetSectionHiddenConnecting": "Connecting server hidden",
+  "@fleetSectionHiddenConnecting": {
+    "description": "Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides is connecting, none of them connected."
+  },
   "fleetRowPin": "Pin to top",
   "@fleetRowPin": {
     "description": "A synced fleet row's menu verb that lists the server under the Pinned section on this device."

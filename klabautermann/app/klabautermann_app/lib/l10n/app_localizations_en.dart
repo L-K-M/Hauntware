@@ -24,6 +24,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fleetSectionImported => 'Imported';
 
   @override
+  String get fleetSectionHiddenConnected => 'Connected server hidden';
+
+  @override
+  String get fleetSectionHiddenConnecting => 'Connecting server hidden';
+
+  @override
   String get fleetRowPin => 'Pin to top';
 
   @override

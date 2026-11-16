@@ -124,6 +124,18 @@ abstract class AppLocalizations {
   /// **'Imported'**
   String get fleetSectionImported;
 
+  /// Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides has a link up.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected server hidden'**
+  String get fleetSectionHiddenConnected;
+
+  /// Fleet list section or group header: what a screen reader hears, and the dot means, when the header is folded or filtered and a server it hides is connecting, none of them connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting server hidden'**
+  String get fleetSectionHiddenConnecting;
+
   /// A synced fleet row's menu verb that lists the server under the Pinned section on this device.
   ///
   /// In en, this message translates to:
