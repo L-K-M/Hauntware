@@ -10,6 +10,16 @@ import 'save_as_folders.dart';
 
 export 'save_as_folders.dart' show SaveAsFolders;
 
+/// What quitting does with documents that have unsaved changes (A2).
+enum UnsavedOnQuit {
+  /// Quit without asking, and restore the open windows and their unsaved
+  /// changes at the next launch from a journal kept on this device.
+  keep,
+
+  /// Ask "Save changes?" for each unsaved document, and keep no journal.
+  ask,
+}
+
 /// What the user chose, as one immutable value.
 ///
 /// Everything here survives a restart, so it is deliberately small and
@@ -28,6 +38,7 @@ final class AppSettings {
     this.saveOptions = const TextSaveOptions(),
     this.sidebarVisible = true,
     this.sidebarWidth = defaultSidebarWidth,
+    this.unsavedOnQuit = UnsavedOnQuit.keep,
     this.saveAsFolders = const SaveAsFolders(),
   });
 
@@ -104,6 +115,9 @@ final class AppSettings {
   /// logical pixels. New windows and a relaunch start from it.
   final double sidebarWidth;
 
+  /// Whether quitting keeps unsaved changes for the next launch or asks.
+  final UnsavedOnQuit unsavedOnQuit;
+
   /// Where Save As opens for a document without a folder of its own. Kept
   /// on this device with Open Recent, and cleared with it.
   final SaveAsFolders saveAsFolders;
@@ -119,6 +133,7 @@ final class AppSettings {
     TextSaveOptions? saveOptions,
     bool? sidebarVisible,
     double? sidebarWidth,
+    UnsavedOnQuit? unsavedOnQuit,
     SaveAsFolders? saveAsFolders,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
@@ -131,6 +146,7 @@ final class AppSettings {
     saveOptions: saveOptions ?? this.saveOptions,
     sidebarVisible: sidebarVisible ?? this.sidebarVisible,
     sidebarWidth: sidebarWidth ?? this.sidebarWidth,
+    unsavedOnQuit: unsavedOnQuit ?? this.unsavedOnQuit,
     saveAsFolders: saveAsFolders ?? this.saveAsFolders,
   );
 
@@ -151,6 +167,8 @@ final class AppSettings {
     // The defaults need no keys: an older file stays valid unchanged.
     if (!sidebarVisible) 'sidebarVisible': false,
     if (sidebarWidth != defaultSidebarWidth) 'sidebarWidth': sidebarWidth,
+    if (unsavedOnQuit != UnsavedOnQuit.keep)
+      'unsavedOnQuit': unsavedOnQuit.name,
     if (!saveAsFolders.isEmpty) 'saveAsFolders': saveAsFolders.toJson(),
   };
 
@@ -178,6 +196,9 @@ final class AppSettings {
           : fallback.sidebarVisible,
       sidebarWidth:
           _sidebarWidth(json['sidebarWidth']) ?? fallback.sidebarWidth,
+      unsavedOnQuit: json['unsavedOnQuit'] == UnsavedOnQuit.ask.name
+          ? UnsavedOnQuit.ask
+          : fallback.unsavedOnQuit,
       saveAsFolders: SaveAsFolders.fromJson(json['saveAsFolders']),
     );
   }
@@ -254,6 +275,7 @@ final class AppSettings {
       other.saveOptions == saveOptions &&
       other.sidebarVisible == sidebarVisible &&
       other.sidebarWidth == sidebarWidth &&
+      other.unsavedOnQuit == unsavedOnQuit &&
       other.saveAsFolders == saveAsFolders &&
       _listsEqual(other.recentTextTools, recentTextTools) &&
       _listsEqual(other.recentDocuments, recentDocuments);
@@ -275,6 +297,7 @@ final class AppSettings {
     saveOptions,
     sidebarVisible,
     sidebarWidth,
+    unsavedOnQuit,
     saveAsFolders,
     jsonEncode(recentTextTools),
     Object.hashAll(recentDocuments),

@@ -10,6 +10,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   write through symbolic links.
 
 ### Added
+- Hot exit: quitting no longer asks about unsaved changes. The open
+  windows, untitled documents and unsaved edits come back at the next
+  launch, also after a crash or after Android ends the app in the
+  background. They are kept in a private folder on the device until
+  saved or discarded. Settings > Keep unsaved changes when quitting turns
+  it off and brings back the "Save changes?" questions.
 - The editor's find and replace bars, Go to Line, text tools, status row
   and problem messages take their text from the app's localization
   catalog, ready for translation. The English text is unchanged.

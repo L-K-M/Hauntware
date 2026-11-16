@@ -205,6 +205,19 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   ),
                 ),
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.settingsKeepUnsaved),
+                subtitle: Text(l10n.settingsKeepUnsavedDetail),
+                value: _value.unsavedOnQuit == UnsavedOnQuit.keep,
+                onChanged: (enabled) => _apply(
+                  _value.copyWith(
+                    unsavedOnQuit: enabled
+                        ? UnsavedOnQuit.keep
+                        : UnsavedOnQuit.ask,
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               _section(theme, l10n.settingsAbout),
               // The running build, so a bug report can name it; the licenses

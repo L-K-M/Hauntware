@@ -19,6 +19,7 @@ import 'services/document_workspace.dart';
 import 'services/open_documents.dart';
 import 'services/save_siblings.dart';
 import 'services/semantics_view_routing.dart';
+import 'services/session_journal.dart';
 import 'services/window_host.dart';
 import 'services/workspace_catalog.dart';
 import 'services/workspace_remote_files.dart';
@@ -40,6 +41,21 @@ Future<void> main(List<String> arguments) async {
     store: LocalSettingsStore.defaultLocation(),
   );
   await settings.load();
+
+  // The hot-exit journal, in the app's private support folder; a second
+  // running instance finds it locked and keeps nothing.
+  final journal = SessionJournal(
+    store: SessionJournalStore(
+      Directory(
+        paths.join((await getApplicationSupportDirectory()).path, 'session'),
+      ),
+    ),
+    settings: settings,
+    onError: (workspace, error) => workspace.reportError(
+      'Unsaved changes could not be kept for the next launch: $error',
+    ),
+  );
+  final kept = await journal.open();
 
   // The runner's window host and the app's windows: every window is a view
   // on the one engine, holding its own workspace over the shared settings
@@ -78,13 +94,19 @@ Future<void> main(List<String> arguments) async {
     confirmQuit: () async {
       // Quit reviews every window's documents, not only the main one's.
       if (!await windows.confirmAllClose()) return false;
+      // Every window wrote its journal when it consented; the teardown
+      // that follows must not change what the next launch restores.
+      journal.freeze();
       // A zoom or setting chosen just before quitting may still be on its
       // way to disk.
       await settings.flush();
       return true;
     },
     // Closures, not tear-offs: `windows` is assigned below them.
-    onQuitFailed: (error) => windows.quitFailed(error),
+    onQuitFailed: (error) {
+      journal.thaw();
+      windows.quitFailed(error);
+    },
     closeInstead: () => windows.closeMainWindowInstead(),
     onFocus: () => windows.onWindowActivated(mainWindowViewId),
     windowBackgroundColor: windowBackdrop(
@@ -130,6 +152,10 @@ Future<void> main(List<String> arguments) async {
       ),
     ),
   );
+
+  // Last session's windows come back before this launch's files open, so
+  // those land in the restored active window.
+  await journal.restoreInto(windows, kept);
 
   // Finder/argv opens route through the windows: to whoever holds the file,
   // the active window, or a fresh one.

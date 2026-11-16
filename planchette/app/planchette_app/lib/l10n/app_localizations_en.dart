@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -263,6 +264,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsFinalNewline => 'Ensure final newline on save';
+
+  @override
+  String get settingsKeepUnsaved => 'Keep unsaved changes when quitting';
+
+  @override
+  String get settingsKeepUnsavedDetail =>
+      'Quit without being asked; the open windows and unsaved changes come back at the next launch. They are kept in a private folder on this device until saved or discarded. Turn off to be asked to save instead.';
 
   @override
   String get settingsAbout => 'About';

@@ -294,6 +294,30 @@ void main() {
     expect(documentStyle(tester).fontFeatures ?? const [], isEmpty);
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
+  testWidgets('the hot-exit switch makes quitting ask, and Done keeps it', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    await mount(tester);
+    expect(settings.value.unsavedOnQuit, UnsavedOnQuit.keep);
+
+    await openSettings(tester);
+    final keep = find.widgetWithText(
+      SwitchListTile,
+      'Keep unsaved changes when quitting',
+    );
+    await tester.ensureVisible(keep);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(keep).value, isTrue);
+    await tester.tap(keep);
+    await tester.pumpAndSettle();
+    expect(settings.value.unsavedOnQuit, UnsavedOnQuit.ask);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Done'));
+    await tester.pumpAndSettle();
+    expect(settings.value.unsavedOnQuit, UnsavedOnQuit.ask);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets('View › Zoom changes the stored text size', (tester) async {
     workspace.newDocument();
     await mount(tester);
