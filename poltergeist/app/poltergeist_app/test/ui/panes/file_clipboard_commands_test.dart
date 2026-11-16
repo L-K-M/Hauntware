@@ -79,6 +79,7 @@ void main() {
       hostChannel: (host) => fileHostChannelIn(workspace, host),
       confirmCopyUndo: (_, _) async => true,
       hostLabel: (_) => 'this Mac',
+      notify: (_) {},
       strings: () => l10n,
     );
     final ops = PaneFileOps(queue);

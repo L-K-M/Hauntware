@@ -12949,6 +12949,30 @@ abstract class AppLocalizations {
   /// **'Rename'**
   String get fileUndoRenameName;
 
+  /// P4-21: the Edit ▸ Undo name of a Rename Items run; undoing it renames every item back ("Undo Rename Items").
+  ///
+  /// In en, this message translates to:
+  /// **'Rename Items'**
+  String get fileUndoRenameItemsName;
+
+  /// P4-21: after Undo moved back an item that Keep Both had renamed ("notes 2"), its original name could not be restored. {reason} is fileUndoNameTaken, fileUndoNameNoTab or an error.
+  ///
+  /// In en, this message translates to:
+  /// **'“{current}” was moved back but kept that name. {reason}'**
+  String fileUndoNameKept(String current, String reason);
+
+  /// P4-21: fileUndoNameKept's reason when another item already has the original name.
+  ///
+  /// In en, this message translates to:
+  /// **'“{original}” is taken there.'**
+  String fileUndoNameTaken(String original);
+
+  /// P4-21: fileUndoNameKept's reason when no live tab on that host can rename the item.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a tab on {host} to rename it.'**
+  String fileUndoNameNoTab(String host);
+
   /// P4-21: the Edit ▸ Undo name of a local Move to Trash; undoing it puts the items back ("Undo Move to Trash").
   ///
   /// In en, this message translates to:

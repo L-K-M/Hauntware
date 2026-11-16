@@ -1704,6 +1704,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'fileUndoCopy.confirm'",
   },
   // The paste destination's child-path join: machine path data.
+  // The error a Keep Both name restore failed with, shown as the reason.
+  'lib/services/file_operations.dart': {r"'$error'"},
   'lib/services/file_clipboard.dart': {
     r"'$folder$name'",
     r"'$folder$separator$name'",

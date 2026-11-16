@@ -196,6 +196,7 @@ class PaneTabsController extends ChangeNotifier {
     this.otherPaneTransfer,
     this.onLocationCommitted,
     this.onEntryRenamed,
+    this.onEntriesRenamed,
     this.serverConfigLookup,
     this.confirmClose,
     this.serverStillShared,
@@ -301,6 +302,13 @@ class PaneTabsController extends ChangeNotifier {
   /// like [onLocationCommitted].
   final void Function(PaneLocation location, String from, String to)?
   onEntryRenamed;
+
+  /// Rename Items' feed for Edit ▸ Undo, stamped like [onEntryRenamed].
+  final void Function(
+    PaneLocation location,
+    List<({String from, String to})> renames,
+  )?
+  onEntriesRenamed;
 
   /// Fresh shared-catalog lookup for every remote bind and rebind.
   final PaneServerConfigLookup? serverConfigLookup;
@@ -921,6 +929,7 @@ class PaneTabsController extends ChangeNotifier {
     controller.otherPaneTransfer = otherPaneTransfer;
     controller.onLocationCommitted = onLocationCommitted;
     controller.onEntryRenamed = onEntryRenamed;
+    controller.onEntriesRenamed = onEntriesRenamed;
     controller.serverConfigLookup = serverConfigLookup;
     final tab = PaneTab(
       id: controller.paneTabId,

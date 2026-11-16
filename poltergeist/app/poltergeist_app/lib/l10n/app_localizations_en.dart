@@ -9140,6 +9140,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fileUndoRenameName => 'Rename';
 
   @override
+  String get fileUndoRenameItemsName => 'Rename Items';
+
+  @override
+  String fileUndoNameKept(String current, String reason) {
+    return '“$current” was moved back but kept that name. $reason';
+  }
+
+  @override
+  String fileUndoNameTaken(String original) {
+    return '“$original” is taken there.';
+  }
+
+  @override
+  String fileUndoNameNoTab(String host) {
+    return 'Open a tab on $host to rename it.';
+  }
+
+  @override
   String get fileUndoTrashName => 'Move to Trash';
 
   @override
