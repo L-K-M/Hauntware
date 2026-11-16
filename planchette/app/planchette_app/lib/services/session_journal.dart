@@ -35,7 +35,7 @@ final class SessionJournalStore {
 
   final Directory directory;
 
-  /// Held for the process's life once [acquire] succeeds.
+  /// Held from a successful [acquire] until [release].
   RandomAccessFile? _lock;
 
   static final _windowFile = RegExp(r'^window-([0-9a-f]{16})\.json$');
@@ -61,6 +61,15 @@ final class SessionJournalStore {
     } on FileSystemException {
       return false;
     }
+  }
+
+  /// Gives the journal up by closing the lock file, for a store that is
+  /// done: another instance may then take it, and on Windows the folder
+  /// cannot be deleted while the lock is open.
+  void release() {
+    final lock = _lock;
+    _lock = null;
+    lock?.closeSync();
   }
 
   Future<void> _prepareDirectory() async {
@@ -527,5 +536,9 @@ final class SessionJournal {
       journal.stop();
     }
     _journals.clear();
+    if (_owned) {
+      _owned = false;
+      store.release();
+    }
   }
 }

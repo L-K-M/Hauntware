@@ -310,6 +310,7 @@ void main() {
         Directory(paths.join(temp.path, 'session')),
       );
       expect(await journal.acquire(), isTrue);
+      addTearDown(journal.release);
       await journal.write(
         'a1b2c3d4e5f60718',
         const SessionWindow(
@@ -365,7 +366,26 @@ void main() {
       expect(await SessionJournalStore(temp).acquire(), isFalse);
       await holder.stdin.close();
       await holder.exitCode;
-      expect(await SessionJournalStore(temp).acquire(), isTrue);
+      final store = SessionJournalStore(temp);
+      expect(await store.acquire(), isTrue);
+      store.release();
+    }, skip: Platform.isWindows ? 'POSIX record locks only' : false);
+
+    test('a disposed journal lets the journal go', () async {
+      final journal = SessionJournal(
+        store: SessionJournalStore(temp),
+        settings: testSettings(),
+      );
+      await journal.open();
+      journal.dispose();
+      // Another process can take the lock only once this one closed it.
+      final probe = await Process.run('python3', [
+        '-c',
+        'import fcntl,sys;f=open(sys.argv[1],"a");'
+            'fcntl.lockf(f,fcntl.LOCK_EX|fcntl.LOCK_NB);print("taken")',
+        paths.join(temp.path, '.lock'),
+      ]);
+      expect(probe.stdout, contains('taken'), reason: '${probe.stderr}');
     }, skip: Platform.isWindows ? 'POSIX record locks only' : false);
   });
 
@@ -374,6 +394,7 @@ void main() {
     setUp(() async {
       journalStore = SessionJournalStore(temp);
       await journalStore.acquire();
+      addTearDown(journalStore.release);
     });
 
     Future<SessionWindow?> onDisk(String id) async {
