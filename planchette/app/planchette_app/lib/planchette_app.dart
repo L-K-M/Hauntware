@@ -110,7 +110,7 @@ class PlanchetteApp extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: settings,
     builder: (context, _) => MaterialApp(
-      title: 'Planchette',
+      title: _productName,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       navigatorKey: navigatorKey ?? window?.navigatorKey,
@@ -374,19 +374,16 @@ class _DocumentShellState extends State<_DocumentShell>
   Future<void> _openRecent(String path) async {
     if (workspace.interactionLocked) return;
     final name = paths.basename(path);
+    final l10n = AppLocalizations.of(context);
     switch (await recentDocumentState(workspace.store, path)) {
       case RecentDocumentState.available:
         await workspace.open(path);
       case RecentDocumentState.missing:
         await settings.update(settings.value.withoutRecentDocument(path));
-        workspace.reportError(
-          '$name is no longer at $path, so it was removed from Open Recent.',
-        );
+        workspace.reportError(l10n.recentDocumentMissing(name, path));
       case RecentDocumentState.folderUnavailable:
         workspace.reportError(
-          'Could not open $name: the folder ${paths.dirname(path)} is not '
-          'available. If it is on a disk or share that is not connected, '
-          'connect it and try again.',
+          l10n.recentDocumentFolderUnavailable(name, paths.dirname(path)),
         );
     }
   }
@@ -402,7 +399,10 @@ class _DocumentShellState extends State<_DocumentShell>
     if (android || recent.isEmpty) return const [];
     return [
       const SizedBox(height: 24),
-      Text('Recent', style: Theme.of(context).textTheme.titleSmall),
+      Text(
+        AppLocalizations.of(context).emptyStateRecent,
+        style: Theme.of(context).textTheme.titleSmall,
+      ),
       const SizedBox(height: 8),
       for (final path in recent.take(_emptyStateRecentLimit))
         Tooltip(
@@ -421,13 +421,15 @@ class _DocumentShellState extends State<_DocumentShell>
   /// folder too, so the rows can be told apart.
   List<_Command> _recentDocumentCommands({required bool unlocked}) {
     final recent = settings.value.recentDocuments;
+    final l10n = AppLocalizations.of(context);
     if (recent.isEmpty) {
-      return const [
+      return [
         _Command(
-          'No Recent Documents',
+          l10n.menuNoRecentDocuments,
           _noop,
           enabled: false,
           inPalette: false,
+          id: 'noRecentDocuments',
         ),
       ];
     }
@@ -436,14 +438,17 @@ class _DocumentShellState extends State<_DocumentShell>
       for (final (index, path) in recent.indexed)
         _Command(
           names.where((name) => name == names[index]).length > 1
-              ? '${names[index]} (${paths.dirname(path)})'
+              ? l10n.menuRecentDocumentInFolder(
+                  names[index],
+                  paths.dirname(path),
+                )
               : names[index],
           () => unawaited(_openRecent(path)),
           enabled: unlocked,
           id: 'openRecent:$index',
         ),
       _Command(
-        'Clear Menu',
+        l10n.menuClearRecentDocuments,
         () => unawaited(
           // The remembered Save As folders name the same places, so a
           // clear for privacy takes them too.
@@ -518,11 +523,17 @@ class _DocumentShellState extends State<_DocumentShell>
           !workspace.folders.isOpen &&
           workspace.folders.error != null) {
         workspace.reportError(
-          'Could not open folder: ${workspace.folders.error}',
+          AppLocalizations.of(
+            context,
+          ).folderOpenFailed(workspace.folders.error!),
         );
       }
     } on Object catch (error) {
-      if (mounted) workspace.reportError('Could not open workspace: $error');
+      if (mounted) {
+        workspace.reportError(
+          AppLocalizations.of(context).workspaceOpenFailed(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _openingWorkspace = false);
     }
@@ -605,11 +616,11 @@ class _DocumentShellState extends State<_DocumentShell>
         () => showDialog<RemoteWorkspaceDocument>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Recover Remote Edits'),
+            title: Text(AppLocalizations.of(context).recoverRemoteEditsTitle),
             content: SizedBox(
               width: 520,
               child: copies.isEmpty
-                  ? const Text('No remote edits are awaiting upload.')
+                  ? Text(AppLocalizations.of(context).recoverRemoteEditsEmpty)
                   : ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 400),
                       child: ListView(
@@ -618,8 +629,10 @@ class _DocumentShellState extends State<_DocumentShell>
                           for (final copy in copies)
                             ListTile(
                               title: Text(copy.publication.displayPath),
-                              subtitle: const Text(
-                                'Saved locally. Open its server before retrying upload.',
+                              subtitle: Text(
+                                AppLocalizations.of(
+                                  context,
+                                ).recoverRemoteEditsItem,
                               ),
                               onTap: () => Navigator.pop(context, copy),
                             ),
@@ -630,7 +643,7 @@ class _DocumentShellState extends State<_DocumentShell>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(context).actionCancel),
               ),
             ],
           ),
@@ -721,6 +734,7 @@ class _DocumentShellState extends State<_DocumentShell>
     final overlay =
         Overlay.of(context).context.findRenderObject()! as RenderBox;
     final hasOthers = workspace.documents.length > 1;
+    final l10n = AppLocalizations.of(context);
     showMenu<void>(
       context: context,
       position: RelativeRect.fromRect(
@@ -730,21 +744,21 @@ class _DocumentShellState extends State<_DocumentShell>
       items: [
         GhostMenuItem<void>(
           context: context,
-          label: 'Close',
+          label: l10n.tabMenuClose,
           icon: Icons.close,
           enabled: !workspace.interactionLocked && !tab.busy,
           onTap: () => unawaited(workspace.closeTab(tab)),
         ),
         GhostMenuItem<void>(
           context: context,
-          label: 'Close Others',
+          label: l10n.tabMenuCloseOthers,
           icon: Icons.tab_unselected,
           enabled: hasOthers && !workspace.interactionLocked,
           onTap: () => unawaited(workspace.closeOthers(tab)),
         ),
         GhostMenuItem<void>(
           context: context,
-          label: 'Close All Tabs',
+          label: l10n.tabMenuCloseAll,
           icon: Icons.clear_all,
           enabled: !workspace.interactionLocked,
           onTap: () => unawaited(workspace.closeAllTabs()),
@@ -753,7 +767,7 @@ class _DocumentShellState extends State<_DocumentShell>
         // From #66.
         GhostMenuItem<void>(
           context: context,
-          label: 'Copy Full Path',
+          label: l10n.tabMenuCopyFullPath,
           icon: Icons.copy,
           enabled: tab.path != null,
           onTap: () => _copyPath(tab.sourcePath),
@@ -797,8 +811,8 @@ class _DocumentShellState extends State<_DocumentShell>
   Future<void> _openPalette() async {
     if (_paletteOpen || workspace.interactionLocked) return;
     final commands = <PaletteCommand>[];
-    // A command can appear in two menus (a catalog id next to an explicit
-    // one); the palette keeps the first, the resolution _commandById does.
+    // A command can appear in two menus under one id; the palette keeps
+    // the first, the resolution _commandById does.
     final seenIds = <String>{};
     void collect(List<_MenuEntry> items, String path) {
       for (final entry in items) {
@@ -806,9 +820,8 @@ class _DocumentShellState extends State<_DocumentShell>
           case _Submenu(:final items, :final label):
             collect(items, '$path > $label');
           case _Command() when entry.run != _openPalette && entry.inPalette:
-            final tool = entry.id == null ? null : textToolById(entry.id!);
-            final id = _paletteId(entry, path);
-            if (!seenIds.add(id)) continue;
+            final tool = textToolById(entry.id);
+            if (!seenIds.add(entry.id)) continue;
             commands.add(
               PaletteCommand(
                 label: entry.label,
@@ -820,7 +833,7 @@ class _DocumentShellState extends State<_DocumentShell>
                     ? const []
                     : _editorStrings.textToolKeywords(tool.id),
                 enabled: entry.enabled,
-                run: () => _runCurrent(_paletteId(entry, path)),
+                run: () => _runCurrent(entry.id),
                 shortcut: entry.shortcut,
               ),
             );
@@ -840,21 +853,15 @@ class _DocumentShellState extends State<_DocumentShell>
     }
   }
 
-  /// What identifies a command to the palette: the explicit id when the
-  /// command declares one, else its menu path — two same-named commands
-  /// in different menus would otherwise collide on their label.
-  static String _paletteId(_Command command, String path) =>
-      command.id ?? '$path > ${command.label}';
-
   /// The menu's command for [commandId], descending into submenus.
   _Command? _commandById(String commandId) {
-    _Command? find(List<_MenuEntry> items, String path) {
+    _Command? find(List<_MenuEntry> items) {
       for (final entry in items) {
         switch (entry) {
-          case _Submenu(:final items, :final label):
-            final found = find(items, '$path > $label');
+          case _Submenu(:final items):
+            final found = find(items);
             if (found != null) return found;
-          case _Command() when _paletteId(entry, path) == commandId:
+          case _Command() when entry.id == commandId:
             return entry;
           case _Command() || _Separator():
         }
@@ -863,7 +870,7 @@ class _DocumentShellState extends State<_DocumentShell>
     }
 
     for (final menu in _menus()) {
-      final found = find(menu.items, menu.label);
+      final found = find(menu.items);
       if (found != null) return found;
     }
     return null;
@@ -937,6 +944,7 @@ class _DocumentShellState extends State<_DocumentShell>
     return _Command(
       label,
       () => _zoom(zoom),
+      id: zoom.name,
       mnemonic: mnemonic,
       shortcut: chords.first,
       aliases: chords.skip(1).toList(),
@@ -962,10 +970,13 @@ class _DocumentShellState extends State<_DocumentShell>
     final hasProblems =
         ready &&
         (active?.editor.canRunCommand(EditorCommand.nextProblem) ?? false);
+    final l10n = AppLocalizations.of(context);
+    final strings = _editorStrings;
     return [
-      _ShellMenu('File', [
+      _ShellMenu(_ShellMenuId.file, l10n.menuFile, [
         _Command(
-          'New',
+          l10n.menuNew,
+          id: 'new',
           _new,
           mnemonic: 'n',
           shortcut: _shortcut(LogicalKeyboardKey.keyN),
@@ -975,43 +986,52 @@ class _DocumentShellState extends State<_DocumentShell>
         // more than the one it launched with.
         if (window case final w?)
           _Command(
-            'New Window',
+            l10n.menuNewWindow,
+            id: 'newWindow',
             () => unawaited(w.openWindow()),
             mnemonic: 'w',
             shortcut: _shortcut(LogicalKeyboardKey.keyN, shift: true),
             enabled: w.canOpenWindows,
           ),
         _Command(
-          'Open…',
+          l10n.menuOpen,
+          id: 'open',
           () => unawaited(workspace.openDialog()),
           mnemonic: 'o',
           shortcut: _shortcut(LogicalKeyboardKey.keyO),
           enabled: unlocked,
         ),
         if (!android)
-          _Submenu('Open Recent', _recentDocumentCommands(unlocked: unlocked)),
+          _Submenu(
+            l10n.menuOpenRecent,
+            _recentDocumentCommands(unlocked: unlocked),
+          ),
         if (widget.pickFolder != null)
           _Command(
-            'Open Folder…',
+            l10n.menuOpenFolder,
+            id: 'openFolder',
             _openFolder,
             enabled: unlocked && !_openingWorkspace,
             shortcut: _shortcut(LogicalKeyboardKey.keyO, shift: true),
           ),
         if (widget.remoteFiles != null)
           _Command(
-            'Open Server…',
+            l10n.menuOpenServer,
+            id: 'openServer',
             _openServer,
             enabled: unlocked && !_openingWorkspace,
           ),
         if (widget.remoteFiles != null)
           _Command(
-            'Recover Remote Edits…',
+            l10n.menuRecoverRemoteEdits,
+            id: 'recoverRemoteEdits',
             _recoverRemoteEdits,
             enabled: unlocked && !_openingWorkspace,
           ),
         if (!android)
           _Command(
-            'Open Containing Folder',
+            l10n.menuOpenContainingFolder,
+            id: 'openContainingFolder',
             _openContainingFolder,
             enabled:
                 unlocked &&
@@ -1021,27 +1041,33 @@ class _DocumentShellState extends State<_DocumentShell>
           ),
         if (workspace.folders.isOpen)
           _Command(
-            'Close Folder Workspace',
+            l10n.menuCloseFolderWorkspace,
+            id: 'closeFolderWorkspace',
             () => unawaited(workspace.folders.close()),
             enabled: unlocked && !_openingWorkspace,
           ),
         const _Separator(),
         _Command(
-          'Save',
+          l10n.menuSave,
+          id: 'save',
           _save,
           mnemonic: 's',
           shortcut: _shortcut(LogicalKeyboardKey.keyS),
           enabled: ready,
         ),
         _Command(
-          active?.publication == null ? 'Save As…' : 'Save a Local Copy…',
+          active?.publication == null
+              ? l10n.menuSaveAs
+              : l10n.menuSaveLocalCopy,
+          id: 'saveAs',
           () => _save(saveAs: true),
           mnemonic: 'a',
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
           enabled: ready,
         ),
         _Command(
-          'Save All',
+          l10n.menuSaveAll,
+          id: 'saveAll',
           _saveAll,
           // Menu-only off macOS: Windows reports AltGr as Ctrl+Alt, so
           // Ctrl+Alt+S would swallow text such as Polish AltGr+S.
@@ -1054,7 +1080,8 @@ class _DocumentShellState extends State<_DocumentShell>
         // No shortcut: no platform convention names one, Cmd+R and Ctrl+R
         // mean other things elsewhere, and a revert cannot be undone.
         _Command(
-          'Revert to Saved',
+          l10n.menuRevertToSaved,
+          id: 'revertToSaved',
           _revert,
           // A deleted file has no saved version to go back to.
           mnemonic: 'r',
@@ -1063,9 +1090,15 @@ class _DocumentShellState extends State<_DocumentShell>
               active?.path != null &&
               active?.disk != DiskState.missing,
         ),
-        _Command('Export as HTML…', _exportHtml, mnemonic: 'x', enabled: ready),
         _Command(
-          'Copy Path',
+          l10n.menuExportHtml,
+          _exportHtml,
+          mnemonic: 'x',
+          enabled: ready,
+          id: 'exportHtml',
+        ),
+        _Command(
+          l10n.menuCopyPath,
           _copyActivePath,
           mnemonic: 'p',
           enabled: active?.path != null,
@@ -1075,14 +1108,16 @@ class _DocumentShellState extends State<_DocumentShell>
         // macOS keeps Settings in the application menu instead.
         if (!mac)
           _Command(
-            'Settings…',
+            l10n.menuSettings,
+            id: 'settings',
             _showSettings,
             mnemonic: 'e',
             shortcut: _shortcut(LogicalKeyboardKey.comma),
             enabled: !workspace.interactionLocked,
           ),
         _Command(
-          'Close Tab',
+          l10n.menuCloseTab,
+          id: 'closeTab',
           _close,
           mnemonic: 'c',
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
@@ -1092,12 +1127,14 @@ class _DocumentShellState extends State<_DocumentShell>
         // runs, and the last window quits the app.
         if (window case final w?)
           _Command(
-            'Close Window',
+            l10n.menuCloseWindow,
+            id: 'closeWindow',
             () => unawaited(w.close()),
             shortcut: _shortcut(LogicalKeyboardKey.keyW, shift: true),
           ),
         _Command(
-          'Reopen Closed Tab',
+          l10n.menuReopenClosedTab,
+          id: 'reopenClosedTab',
           () => unawaited(workspace.reopenClosed()),
           mnemonic: 't',
           shortcut: _shortcut(LogicalKeyboardKey.keyT, shift: true),
@@ -1106,7 +1143,8 @@ class _DocumentShellState extends State<_DocumentShell>
         if (!mac && widget.onQuit != null) ...[
           const _Separator(),
           _Command(
-            'Quit',
+            l10n.menuQuit,
+            id: 'quit',
             () => unawaited(widget.onQuit!()),
             mnemonic: 'q',
             shortcut: _shortcut(LogicalKeyboardKey.keyQ),
@@ -1114,9 +1152,10 @@ class _DocumentShellState extends State<_DocumentShell>
           ),
         ],
       ], mnemonic: 'f'),
-      _ShellMenu('Edit', [
+      _ShellMenu(_ShellMenuId.edit, l10n.menuEdit, [
         _Command(
-          'Undo',
+          l10n.menuUndo,
+          id: 'undo',
           () =>
               _textAction(const UndoTextIntent(SelectionChangedCause.keyboard)),
           mnemonic: 'u',
@@ -1124,7 +1163,8 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: ready,
         ),
         _Command(
-          'Redo',
+          l10n.menuRedo,
+          id: 'redo',
           () =>
               _textAction(const RedoTextIntent(SelectionChangedCause.keyboard)),
           mnemonic: 'r',
@@ -1140,7 +1180,8 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
         const _Separator(),
         _Command(
-          'Cut',
+          l10n.menuCut,
+          id: 'cut',
           () => _textAction(
             const CopySelectionTextIntent.cut(SelectionChangedCause.keyboard),
           ),
@@ -1149,14 +1190,16 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: ready,
         ),
         _Command(
-          'Copy',
+          l10n.menuCopy,
+          id: 'copy',
           () => _textAction(CopySelectionTextIntent.copy),
           mnemonic: 'c',
           shortcut: _shortcut(LogicalKeyboardKey.keyC),
           enabled: ready,
         ),
         _Command(
-          'Paste',
+          l10n.menuPaste,
+          id: 'paste',
           () => _textAction(
             const PasteTextIntent(SelectionChangedCause.keyboard),
           ),
@@ -1165,7 +1208,8 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: ready,
         ),
         _Command(
-          'Select All',
+          l10n.menuSelectAll,
+          id: 'selectAll',
           () => _textAction(
             const SelectAllTextIntent(SelectionChangedCause.keyboard),
           ),
@@ -1175,14 +1219,16 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
         const _Separator(),
         _Command(
-          'Duplicate Line',
+          strings.editorCommandLabel(EditorCommand.duplicateLines),
+          id: 'duplicateLines',
           () => active?.editor.duplicateLines(),
           mnemonic: 'd',
           shortcut: _shortcut(LogicalKeyboardKey.keyD, shift: true),
           enabled: lineCommands,
         ),
         _Command(
-          'Move Line Up',
+          strings.editorCommandLabel(EditorCommand.moveLinesUp),
+          id: 'moveLinesUp',
           () => active?.editor.moveLines(LineDirection.up),
           shortcut: const SingleActivator(
             LogicalKeyboardKey.arrowUp,
@@ -1191,7 +1237,8 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: lineCommands,
         ),
         _Command(
-          'Move Line Down',
+          strings.editorCommandLabel(EditorCommand.moveLinesDown),
+          id: 'moveLinesDown',
           () => active?.editor.moveLines(LineDirection.down),
           shortcut: const SingleActivator(
             LogicalKeyboardKey.arrowDown,
@@ -1200,14 +1247,16 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: lineCommands,
         ),
         _Command(
-          'Delete Line',
+          strings.editorCommandLabel(EditorCommand.deleteLines),
+          id: 'deleteLines',
           () => active?.editor.deleteLines(),
           mnemonic: 'l',
           shortcut: _shortcut(LogicalKeyboardKey.keyK, shift: true),
           enabled: lineCommands,
         ),
         _Command(
-          'Join Lines',
+          strings.editorCommandLabel(EditorCommand.joinLines),
+          id: 'joinLines',
           () => active?.editor.joinLines(),
           mnemonic: 'j',
           shortcut: _shortcut(LogicalKeyboardKey.keyJ),
@@ -1215,7 +1264,8 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
         const _Separator(),
         _Command(
-          'Toggle Comment',
+          strings.editorCommandLabel(EditorCommand.toggleComment),
+          id: 'toggleComment',
           () => active?.editor.toggleComment(),
           shortcut: _shortcut(LogicalKeyboardKey.slash),
           enabled: inDocument && (active?.editor.canToggleComment ?? false),
@@ -1225,41 +1275,41 @@ class _DocumentShellState extends State<_DocumentShell>
         // desktop environments and input methods.
         const _Separator(),
         _Command(
-          'Select Line',
+          strings.editorCommandLabel(EditorCommand.selectLine),
           () => active?.editor.selectLine(),
           mnemonic: 's',
           enabled: selectionCommands,
           id: 'selectLine',
         ),
         _Command(
-          'Select Paragraph',
+          strings.editorCommandLabel(EditorCommand.selectParagraph),
           () => active?.editor.selectParagraph(),
           enabled: selectionCommands,
           id: 'selectParagraph',
         ),
         _Command(
-          'Select Enclosing Brackets',
+          strings.editorCommandLabel(EditorCommand.selectEnclosingBrackets),
           () => active?.editor.selectEnclosingBrackets(),
           enabled: selectionCommands,
           id: 'selectEnclosingBrackets',
         ),
         const _Separator(),
         _Command(
-          'Insert Line Above',
+          strings.editorCommandLabel(EditorCommand.insertLineAbove),
           () => active?.editor.insertLineAbove(),
           mnemonic: 'v',
           enabled: lineCommands,
           id: 'insertLineAbove',
         ),
         _Command(
-          'Insert Line Below',
+          strings.editorCommandLabel(EditorCommand.insertLineBelow),
           () => active?.editor.insertLineBelow(),
           mnemonic: 'b',
           enabled: lineCommands,
           id: 'insertLineBelow',
         ),
         _Command(
-          'Copy Line',
+          strings.editorCommandLabel(EditorCommand.copyLine),
           () {
             final editor = active?.editor;
             if (editor != null) unawaited(editor.copyLine().then<void>((_) {}));
@@ -1268,7 +1318,7 @@ class _DocumentShellState extends State<_DocumentShell>
           id: 'copyLine',
         ),
         _Command(
-          'Cut Line',
+          strings.editorCommandLabel(EditorCommand.cutLine),
           () {
             final editor = active?.editor;
             if (editor != null) unawaited(editor.cutLine().then<void>((_) {}));
@@ -1277,19 +1327,19 @@ class _DocumentShellState extends State<_DocumentShell>
           id: 'cutLine',
         ),
         _Command(
-          'Increment Number',
+          strings.editorCommandLabel(EditorCommand.incrementNumber),
           () => active?.editor.incrementNumber(),
           enabled: lineCommands,
           id: 'incrementNumber',
         ),
         _Command(
-          'Decrement Number',
+          strings.editorCommandLabel(EditorCommand.decrementNumber),
           () => active?.editor.decrementNumber(),
           enabled: lineCommands,
           id: 'decrementNumber',
         ),
         _Command(
-          'Paste and Match Indentation',
+          strings.editorCommandLabel(EditorCommand.pasteAndMatchIndentation),
           () {
             final editor = active?.editor;
             if (editor != null) {
@@ -1304,22 +1354,23 @@ class _DocumentShellState extends State<_DocumentShell>
       // submenu per group that has at least one built tool — a group not
       // yet built is absent rather than empty. A tool that declares
       // options opens the tool bar instead of running at its defaults.
-      _ShellMenu('Text', [
+      _ShellMenu(_ShellMenuId.text, l10n.menuText, [
         _Command(
-          _editorStrings.repeatTextToolLabel(workspace.toolHistory.last),
+          strings.repeatTextToolLabel(workspace.toolHistory.last),
           _repeatTextTool,
           mnemonic: 'r',
           shortcut: _shortcut(LogicalKeyboardKey.keyR, shift: true),
           enabled: lineCommands && workspace.toolHistory.last != null,
           id: 'repeatTextTool',
         ),
-        _Submenu('Recent', [
+        _Submenu(l10n.menuRecentRuns, [
           if (workspace.toolHistory.recent.isEmpty)
-            const _Command(
-              'No Recent Runs',
+            _Command(
+              l10n.menuNoRecentRuns,
               _noop,
               enabled: false,
               inPalette: false,
+              id: 'noRecentRuns',
             )
           else
             for (final (index, record) in workspace.toolHistory.recent.indexed)
@@ -1334,7 +1385,7 @@ class _DocumentShellState extends State<_DocumentShell>
         // The browser is the phone and header-icon entry to the same
         // catalog the submenus below list; the menus stay primary.
         _Command(
-          _editorStrings.browseTextTools,
+          strings.browseTextTools,
           () => active?.editor.openTextTools(),
           mnemonic: 'b',
           enabled: ready,
@@ -1344,27 +1395,29 @@ class _DocumentShellState extends State<_DocumentShell>
           if (textToolCatalog.any(
             (tool) => tool.group == group && tool.showsInMenu,
           ))
-            _Submenu(_editorStrings.textToolGroupName(group), [
+            _Submenu(strings.textToolGroupName(group), [
               for (final tool in textToolCatalog)
                 if (tool.group == group && tool.showsInMenu)
                   _Command(
-                    _editorStrings.textToolMenuLabel(tool.id),
+                    strings.textToolMenuLabel(tool.id),
                     () => _runOrOpenTextTool(tool),
                     enabled: lineCommands,
                     id: tool.id,
                   ),
             ]),
       ], mnemonic: 't'),
-      _ShellMenu('Find', [
+      _ShellMenu(_ShellMenuId.find, l10n.menuFind, [
         _Command(
-          'Find…',
+          l10n.menuFindEllipsis,
+          id: 'find',
           _find,
           mnemonic: 'f',
           shortcut: _shortcut(LogicalKeyboardKey.keyF),
           enabled: ready,
         ),
         _Command(
-          'Replace…',
+          l10n.menuReplace,
+          id: 'replace',
           () => _find(replace: true),
           mnemonic: 'r',
           shortcut: mac
@@ -1373,7 +1426,8 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: ready,
         ),
         _Command(
-          'Find Next',
+          l10n.menuFindNext,
+          id: 'findNext',
           () => active?.editor.nextMatch(),
           mnemonic: 'n',
           shortcut: mac
@@ -1382,7 +1436,8 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: ready,
         ),
         _Command(
-          'Find Previous',
+          l10n.menuFindPrevious,
+          id: 'findPrevious',
           () => active?.editor.previousMatch(),
           mnemonic: 'p',
           shortcut: mac
@@ -1391,13 +1446,14 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: ready,
         ),
         _Command(
-          _editorStrings.findInSelection,
+          strings.findInSelection,
+          id: 'findInSelection',
           () => active?.editor.findInSelection(),
           mnemonic: 's',
           enabled: hasSelection,
         ),
         _Command(
-          _editorStrings.textToolMenuLabel('extractMatches'),
+          strings.textToolMenuLabel('extractMatches'),
           () => active?.editor.openFindTool('extractMatches'),
           mnemonic: 'x',
           enabled: lineCommands,
@@ -1405,14 +1461,16 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
         const _Separator(),
         _Command(
-          'Go to Matching Bracket',
+          strings.editorCommandLabel(EditorCommand.goToMatchingBracket),
+          id: 'goToMatchingBracket',
           () => active?.editor.goToMatchingBracket(),
           mnemonic: 'g',
           shortcut: _shortcut(LogicalKeyboardKey.keyB),
           enabled: inDocument,
         ),
         _Command(
-          'Select to Matching Bracket',
+          strings.editorCommandLabel(EditorCommand.selectToMatchingBracket),
+          id: 'selectToMatchingBracket',
           () => active?.editor.goToMatchingBracket(extend: true),
           mnemonic: 't',
           shortcut: _shortcut(LogicalKeyboardKey.keyB, shift: true),
@@ -1420,7 +1478,8 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
         const _Separator(),
         _Command(
-          'Go to Line…',
+          l10n.menuGoToLine,
+          id: 'goToLine',
           () => workspace.active?.editor.openGoToLine(),
           mnemonic: 'l',
           shortcut: _shortcut(
@@ -1431,14 +1490,16 @@ class _DocumentShellState extends State<_DocumentShell>
         // F8 on every platform, as in the common code editors; the editor
         // binds the same keys for hosts without menus.
         _Command(
-          'Next Problem',
+          strings.editorCommandLabel(EditorCommand.nextProblem),
+          id: 'nextProblem',
           () => active?.editor.nextProblem(),
           mnemonic: 'o',
           shortcut: const SingleActivator(LogicalKeyboardKey.f8),
           enabled: hasProblems,
         ),
         _Command(
-          'Previous Problem',
+          strings.editorCommandLabel(EditorCommand.previousProblem),
+          id: 'previousProblem',
           () => active?.editor.previousProblem(),
           mnemonic: 'v',
           shortcut: const SingleActivator(LogicalKeyboardKey.f8, shift: true),
@@ -1446,7 +1507,7 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
         const _Separator(),
         _Command(
-          'Compare with Saved',
+          l10n.menuCompareWithSaved,
           _compareWithSaved,
           // A deleted file has no saved version on disk to compare with,
           // the same rule Revert to Saved follows.
@@ -1458,10 +1519,13 @@ class _DocumentShellState extends State<_DocumentShell>
           id: 'compareWithSaved',
         ),
       ], mnemonic: 'n'),
-      _ShellMenu('View', [
+      _ShellMenu(_ShellMenuId.view, l10n.menuView, [
         if (workspace.folders.isOpen) ...[
           _Command(
-            settings.value.sidebarVisible ? 'Hide Sidebar' : 'Show Sidebar',
+            settings.value.sidebarVisible
+                ? l10n.menuHideSidebar
+                : l10n.menuShowSidebar,
+            id: 'toggleSidebar',
             _toggleSidebar,
             mnemonic: 's',
             shortcut: sidebarShortcut(defaultTargetPlatform),
@@ -1472,13 +1536,14 @@ class _DocumentShellState extends State<_DocumentShell>
           ),
           const _Separator(),
         ],
-        _zoomCommand('Zoom In', EditorZoom.zoomIn, mnemonic: 'i'),
-        _zoomCommand('Zoom Out', EditorZoom.zoomOut, mnemonic: 'o'),
-        _zoomCommand('Actual Size', EditorZoom.actualSize, mnemonic: 'a'),
+        _zoomCommand(l10n.menuZoomIn, EditorZoom.zoomIn, mnemonic: 'i'),
+        _zoomCommand(l10n.menuZoomOut, EditorZoom.zoomOut, mnemonic: 'o'),
+        _zoomCommand(l10n.menuActualSize, EditorZoom.actualSize, mnemonic: 'a'),
       ], mnemonic: 'v'),
-      _ShellMenu('Window', [
+      _ShellMenu(_ShellMenuId.window, l10n.menuWindow, [
         _Command(
-          'Command Palette…',
+          l10n.menuCommandPalette,
+          id: 'commandPalette',
           _openPalette,
           mnemonic: 'c',
           shortcut: _shortcut(LogicalKeyboardKey.keyP, shift: true),
@@ -1486,7 +1551,8 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
         const _Separator(),
         _Command(
-          'Next Tab',
+          l10n.menuNextTab,
+          id: 'nextTab',
           _nextTab,
           mnemonic: 'n',
           shortcut: const SingleActivator(
@@ -1496,7 +1562,8 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: unlocked && workspace.documents.length > 1,
         ),
         _Command(
-          'Previous Tab',
+          l10n.menuPreviousTab,
+          id: 'previousTab',
           () => _nextTab(previous: true),
           mnemonic: 'p',
           shortcut: const SingleActivator(
@@ -1511,10 +1578,13 @@ class _DocumentShellState extends State<_DocumentShell>
           const _Separator(),
           for (final other in w.owner.windows)
             _Command(
-              '${other.isActive ? '✓ ' : ''}${other.workspace.windowTitle}',
+              other.isActive
+                  ? l10n.menuActiveWindow(other.workspace.windowTitle)
+                  : other.workspace.windowTitle,
               () => unawaited(other.activate()),
               enabled: true,
               inPalette: false,
+              id: 'window:${other.serial}',
             ),
         ],
       ], mnemonic: 'w'),
@@ -1584,7 +1654,7 @@ class _DocumentShellState extends State<_DocumentShell>
   /// to this window's own `PlatformMenuBar`.
   List<PlatformMenuItem> _nativeMenus(List<_ShellMenu> menus) => [
     PlatformMenu(
-      label: 'Planchette',
+      label: _productName,
       menus: [
         const PlatformProvidedMenuItem(
           type: PlatformProvidedMenuItemType.about,
@@ -1593,7 +1663,7 @@ class _DocumentShellState extends State<_DocumentShell>
         PlatformMenuItemGroup(
           members: [
             PlatformMenuItem(
-              label: 'Settings…',
+              label: AppLocalizations.of(context).menuSettings,
               shortcut: _shortcut(LogicalKeyboardKey.comma),
               onSelected: workspace.interactionLocked ? null : _showSettings,
             ),
@@ -1614,7 +1684,7 @@ class _DocumentShellState extends State<_DocumentShell>
           ],
         ),
         PlatformMenuItem(
-          label: 'Quit Planchette',
+          label: AppLocalizations.of(context).menuQuitApp,
           shortcut: _shortcut(LogicalKeyboardKey.keyQ),
           onSelected: widget.onQuit == null
               ? null
@@ -1627,7 +1697,7 @@ class _DocumentShellState extends State<_DocumentShell>
         label: menu.label,
         menus: [
           ..._nativeItems(menu.items),
-          if (menu.label == 'Window') ...const [
+          if (menu.id == _ShellMenuId.window) ...const [
             PlatformMenuItemGroup(
               members: [
                 PlatformProvidedMenuItem(
@@ -1709,6 +1779,7 @@ class _DocumentShellState extends State<_DocumentShell>
     final tabs = workspace.documents;
     final active = workspace.active;
     final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     final shortcuts = <ShortcutActivator, VoidCallback>{};
     final chords = <GhostChordBinding>[];
     void bindShortcuts(List<_MenuEntry> items) {
@@ -1743,7 +1814,7 @@ class _DocumentShellState extends State<_DocumentShell>
 
     for (final menu in menus) {
       // The field owns Edit's chords, so they are not bound here.
-      if (menu.label != 'Edit') bindShortcuts(menu.items);
+      if (menu.id != _ShellMenuId.edit) bindShortcuts(menu.items);
     }
     for (var number = 1; number <= 9; number++) {
       shortcuts[_shortcut(_digits[number])] = () => _selectNumbered(number);
@@ -1785,10 +1856,10 @@ class _DocumentShellState extends State<_DocumentShell>
             child: Scaffold(
               appBar: android
                   ? AppBar(
-                      title: const Text('Planchette'),
+                      title: const Text(_productName),
                       actions: [
                         IconButton(
-                          tooltip: 'Commands',
+                          tooltip: AppLocalizations.of(context).commandsTooltip,
                           onPressed: workspace.interactionLocked
                               ? null
                               : _openPalette,
@@ -1842,11 +1913,15 @@ class _DocumentShellState extends State<_DocumentShell>
                       onNew: _new,
                       onOpen: () => unawaited(workspace.openDialog()),
                       onSave: _documentReady ? _save : null,
-                      newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
-                      openTooltip:
-                          'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
-                      saveTooltip:
-                          'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
+                      newTooltip: l10n.tabStripNewTooltip(
+                        _keyLabel(LogicalKeyboardKey.keyN),
+                      ),
+                      openTooltip: l10n.tabStripOpenTooltip(
+                        _keyLabel(LogicalKeyboardKey.keyO),
+                      ),
+                      saveTooltip: l10n.tabStripSaveTooltip(
+                        _keyLabel(LogicalKeyboardKey.keyS),
+                      ),
                     ),
                     if (workspace.error case final error?)
                       _errorBanner(
@@ -1878,7 +1953,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                   ),
                                   const SizedBox(height: 16),
                                   Text(
-                                    'Start with a blank page',
+                                    l10n.emptyStateTitle,
                                     style: Theme.of(
                                       context,
                                     ).textTheme.titleLarge,
@@ -1893,7 +1968,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                         onPressed: workspace.interactionLocked
                                             ? null
                                             : _new,
-                                        child: const Text('New document'),
+                                        child: Text(l10n.emptyStateNew),
                                       ),
                                       const SizedBox(width: 12),
                                       OutlinedButton(
@@ -1902,7 +1977,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                             : () => unawaited(
                                                 workspace.openDialog(),
                                               ),
-                                        child: const Text('Open…'),
+                                        child: Text(l10n.emptyStateOpen),
                                       ),
                                     ],
                                   ),
@@ -1946,7 +2021,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                     placeholder:
                                         tab.path == null &&
                                             !workspace.interactionLocked
-                                        ? ghostLineFor(tab.id)
+                                        ? ghostLineFor(l10n, tab.id)
                                         : null,
                                   ),
                               ],
@@ -2018,13 +2093,14 @@ class _DocumentShellState extends State<_DocumentShell>
 
   Widget _remoteNotice(DocumentTab tab) {
     final pending = tab.publication!.pending;
+    final l10n = AppLocalizations.of(context);
     final state = tab.busy
-        ? 'Saving to server…'
+        ? l10n.remoteSaving
         : tab.editor.isDirty
-        ? 'Unsaved editor changes'
+        ? l10n.remoteUnsaved
         : pending
-        ? 'Saved locally. Upload pending.'
-        : 'Saved to server';
+        ? l10n.remoteUploadPending
+        : l10n.remoteSaved;
     return Semantics(
       liveRegion: true,
       child: Material(
@@ -2037,13 +2113,16 @@ class _DocumentShellState extends State<_DocumentShell>
             children: [
               Expanded(
                 child: Text(
-                  '${tab.displayPath}\n$state',
+                  l10n.remoteNotice(tab.displayPath, state),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (pending && _documentReady)
-                TextButton(onPressed: _save, child: const Text('Retry upload')),
+                TextButton(
+                  onPressed: _save,
+                  child: Text(l10n.remoteRetryUpload),
+                ),
             ],
           ),
         ),
@@ -2071,9 +2150,10 @@ class _DocumentShellState extends State<_DocumentShell>
   /// encoding the user names. Never offered as a guess.
   Widget _reopenWithEncoding(String path) {
     final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     return PopupMenuButton<TextEncoding>(
       key: const ValueKey('reopen-with-encoding'),
-      tooltip: 'Read the file in another encoding',
+      tooltip: l10n.reopenWithEncodingTooltip,
       onSelected: (encoding) =>
           unawaited(workspace.reopenWithEncoding(path, encoding)),
       itemBuilder: (_) => [
@@ -2083,7 +2163,7 @@ class _DocumentShellState extends State<_DocumentShell>
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         child: Text(
-          'Reopen with Encoding…',
+          l10n.reopenWithEncoding,
           style: TextStyle(
             color: scheme.onErrorContainer,
             fontWeight: FontWeight.w600,
@@ -2117,7 +2197,7 @@ class _DocumentShellState extends State<_DocumentShell>
               ),
               ?action,
               IconButton(
-                tooltip: 'Dismiss error',
+                tooltip: AppLocalizations.of(context).dismissErrorTooltip,
                 onPressed: onDismiss,
                 icon: const Icon(Icons.close),
               ),
@@ -2149,18 +2229,25 @@ class _DocumentShellState extends State<_DocumentShell>
 /// What an untitled document shows while it is empty. Each line leads with
 /// the instruction, which is what a screen reader announces first; the rest
 /// is the board talking.
-const _ghostLines = [
-  'Start typing. The spirits are listening…',
-  'Start typing. The board is waiting…',
-  'Start typing. Something wants to be written…',
-  'Start typing. Rest a finger on the planchette…',
-  'Start typing. Ask, and it will answer…',
+List<String> _ghostLines(AppLocalizations l10n) => [
+  l10n.ghostLineSpirits,
+  l10n.ghostLineBoard,
+  l10n.ghostLineWritten,
+  l10n.ghostLineFinger,
+  l10n.ghostLineAnswer,
 ];
 
 /// The ghost line for a tab: fixed for that tab, and different for the tab
 /// created right after it.
 @visibleForTesting
-String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
+String ghostLineFor(AppLocalizations l10n, int tabId) {
+  final lines = _ghostLines(l10n);
+  return lines[tabId % lines.length];
+}
+
+/// The product name: the window, application menu and app bar title. A
+/// name, so it is not translated.
+const _productName = 'Planchette';
 
 const _digits = [
   LogicalKeyboardKey.digit0,
@@ -2175,8 +2262,13 @@ const _digits = [
   LogicalKeyboardKey.digit9,
 ];
 
+/// A top-level menu's identity, which code matches on; the label is display
+/// text only and changes with the locale.
+enum _ShellMenuId { file, edit, text, find, view, window }
+
 class _ShellMenu {
-  const _ShellMenu(this.label, this.items, {this.mnemonic});
+  const _ShellMenu(this.id, this.label, this.items, {this.mnemonic});
+  final _ShellMenuId id;
   final String label;
   final List<_MenuEntry> items;
 
@@ -2217,16 +2309,16 @@ final class _Command extends _MenuEntry {
     this.shortcut,
     this.aliases = const [],
     this.enabled = true,
-    this.id,
+    required this.id,
     this.inPalette = true,
     this.mnemonic,
     this.leftAltOnly = false,
   });
 
   /// The stable identifier the palette resolves the command by, so a row
-  /// whose label changes — Repeat names its target — still resolves.
-  /// Commands without one are identified by their menu path.
-  final String? id;
+  /// whose label changes (Repeat names its target, a locale renames
+  /// everything) still resolves. Never display text.
+  final String id;
   final String label;
   final VoidCallback run;
   final SingleActivator? shortcut;

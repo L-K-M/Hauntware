@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show commandPaletteQueryKey;
+import 'package:planchette_app/l10n/app_localizations_en.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 import 'package:planchette_core/planchette_core.dart'
@@ -14,6 +15,8 @@ import 'package:planchette_core/planchette_core.dart'
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
 import 'services/memory_settings.dart';
+
+final _en = AppLocalizationsEn();
 
 void main() {
   late MemoryDocuments store;
@@ -314,12 +317,12 @@ void main() {
     TextField field(DocumentTab tab) =>
         tester.widget<TextField>(editorField(tab));
 
-    expect(field(first).decoration!.hintText, ghostLineFor(first.id));
-    expect(ghostLineFor(first.id), startsWith('Start typing.'));
+    expect(field(first).decoration!.hintText, ghostLineFor(_en, first.id));
+    expect(ghostLineFor(_en, first.id), startsWith('Start typing.'));
     final second = workspace.newDocument()!;
     await tester.pumpAndSettle();
-    expect(field(second).decoration!.hintText, ghostLineFor(second.id));
-    expect(ghostLineFor(second.id), isNot(ghostLineFor(first.id)));
+    expect(field(second).decoration!.hintText, ghostLineFor(_en, second.id));
+    expect(ghostLineFor(_en, second.id), isNot(ghostLineFor(_en, first.id)));
 
     await workspace.open(testPath('empty.txt'));
     await tester.pumpAndSettle();
@@ -347,7 +350,7 @@ void main() {
         )
         .decoration!
         .hintText;
-    expect(hint(), ghostLineFor(empty.id));
+    expect(hint(), ghostLineFor(_en, empty.id));
 
     final quitting = workspace.confirmQuit();
     await tester.pump();
@@ -357,7 +360,7 @@ void main() {
     dialogs.choiceGate!.complete(CloseChoice.cancel);
     expect(await quitting, isFalse);
     await tester.pumpAndSettle();
-    expect(hint(), ghostLineFor(empty.id));
+    expect(hint(), ghostLineFor(_en, empty.id));
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
