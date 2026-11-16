@@ -33,8 +33,8 @@ class MasterKeyUnavailableException implements Exception {
       'The system keystore returned no vault master key, but an encrypted '
       'vault already exists. No new key was created, because it would make '
       'the saved passwords and private keys unreadable. Restore the matching '
-      'key from a backup (a keychain backup on macOS) before reopening this '
-      'vault.';
+      'key from a backup of your system credential store before reopening '
+      'this vault.';
 }
 
 /// The OS keystore could not be read or written — on Linux that is usually a

@@ -119,6 +119,8 @@ final class AppLockController extends ChangeNotifier
   Future<void> refreshAvailability() async {
     if (!_supported) return;
     await _lock.refreshAvailability();
+    // The gate asks when it mounts; the app may be gone by the answer.
+    if (_disposed) return;
     notifyListeners();
   }
 

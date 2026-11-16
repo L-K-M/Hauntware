@@ -1078,6 +1078,78 @@ abstract class AppLocalizations {
   /// **'Quit without being asked; the open windows and unsaved changes come back at the next launch. They are kept in a private folder on this device until saved or discarded. Turn off to be asked to save instead.'**
   String get settingsKeepUnsavedDetail;
 
+  /// Settings section heading over the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings: what the app lock switch does, and that open documents are not closed by it.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Planchette opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Your documents stay open behind the lock.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Planchette can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
+
+  /// App lock screen: its heading, shown over the whole window while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Planchette is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open documents are kept while locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Your open documents and unsaved changes are kept.'**
+  String get appLockDetail;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Planchette'**
+  String get appLockReason;
+
   /// Settings section heading for the version and licenses.
   ///
   /// In en, this message translates to:

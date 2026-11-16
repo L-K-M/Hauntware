@@ -8,8 +8,8 @@ enum GhostAppLockUnlock { unlocked, failed, unavailable }
 
 /// What [GhostAppLockGate] needs of an app's lock: its locked state, a
 /// probe of the device prompt's availability, an unlock ask, and the
-/// app's lifecycle. Each app adapts its own controller to this seam —
-/// Klabautermann's `AppLockGateModel` over `AppLockController`, say.
+/// app's lifecycle. The apps adapt their lock controller to this seam
+/// through ghost_keystore's `AppLockGateModel`.
 abstract interface class GhostAppLockGateModel implements Listenable {
   /// Whether the lock screen covers the app.
   bool get locked;

@@ -173,6 +173,33 @@ void main() {
       );
     });
 
+    test('the app lock round-trips and an absent key means off', () {
+      expect(const AppSettings().appLock, isFalse);
+      // A file from before the lock existed has no key and stays unlocked.
+      expect(AppSettings.fromJson(const {'fontSize': 15}).appLock, isFalse);
+      expect(const AppSettings().toJson(), isNot(contains('appLock')));
+
+      const locked = AppSettings(appLock: true);
+      expect(locked.toJson()['appLock'], isTrue);
+      expect(AppSettings.fromJson(locked.toJson()), locked);
+      expect(
+        AppSettings.fromJson(jsonDecode(jsonEncode(locked.toJson()))),
+        locked,
+      );
+      expect(locked, isNot(const AppSettings()));
+      expect(AppSettings.fromJson(const {'appLock': false}).appLock, isFalse);
+    });
+
+    test('a damaged app lock value keeps the lock on', () {
+      for (final value in ['yes', 1, const <String, Object?>{}]) {
+        expect(
+          AppSettings.fromJson({'appLock': value}).appLock,
+          isTrue,
+          reason: '$value',
+        );
+      }
+    });
+
     test('the JSON is readable', () {
       final json = const AppSettings(fontSize: 15).toJson();
       expect(json.keys, containsAll(['themeMode', 'fontSize', 'indent']));
@@ -350,6 +377,43 @@ void main() {
       unawaited(settings.update(settings.value.copyWith(fontSize: 25)));
       await settings.flush();
       expect(settings.error, isNotNull);
+    });
+
+    test('saveAppLock waits for the write and reads back', () async {
+      final store = MemorySettings();
+      final settings = SettingsController(store: store);
+      addTearDown(settings.dispose);
+      await settings.load();
+
+      await settings.saveAppLock(true);
+      expect(settings.value.appLock, isTrue);
+      expect(store.writes, 1);
+
+      final reloaded = SettingsController(store: store);
+      addTearDown(reloaded.dispose);
+      await reloaded.load();
+      expect(reloaded.value.appLock, isTrue);
+
+      await settings.saveAppLock(false);
+      expect(store.stored, isNot(contains('appLock')));
+    });
+
+    test('a failed saveAppLock throws and puts the old value back', () async {
+      final store = MemorySettings()..failSaves = true;
+      final settings = SettingsController(store: store);
+      addTearDown(settings.dispose);
+      await settings.load();
+
+      await expectLater(
+        settings.saveAppLock(true),
+        throwsA(isA<SettingsNotSavedException>()),
+      );
+      expect(settings.value.appLock, isFalse);
+
+      // The next save of another setting does not carry the lock to disk.
+      store.failSaves = false;
+      await settings.update(settings.value.copyWith(fontSize: 18));
+      expect(store.stored, isNot(contains('appLock')));
     });
 
     test('a later successful save clears the error', () async {

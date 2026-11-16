@@ -34,6 +34,7 @@ class WorkspaceCatalog extends ChangeNotifier {
     required Directory directory,
     MasterKeyManager? masterKeys,
     WorkspaceCatalogTransportFactory? transportFactory,
+    this._credentialReads,
   }) : _directory = directory,
        // Keep the injectable collaborator private.
        // ignore: prefer_initializing_formals
@@ -61,6 +62,9 @@ class WorkspaceCatalog extends ChangeNotifier {
 
   final Directory _directory;
   MasterKeyManager? _masterKeys;
+
+  /// The app lock's gate for keystore reads; null reads without one.
+  final CredentialReadGuard? _credentialReads;
   final WorkspaceCatalogTransportFactory _transportFactory;
   final _CatalogState _state;
   final FileServerConfigStore _serverStore;
@@ -261,10 +265,17 @@ class WorkspaceCatalog extends ChangeNotifier {
     await _state.setNotice(_hostKeyNotice, _hostKeyConflicts.isNotEmpty);
   });
 
-  MasterKeyManager get _keys => _masterKeys ??= MasterKeyManager(
-    masterKeyEntry: 'planchette.vault.masterKey.v1',
-    apiKeyPrefix: 'planchette.apikey.',
+  MasterKeyManager get _keys => _masterKeys ??= _guarded(
+    MasterKeyManager(
+      masterKeyEntry: 'planchette.vault.masterKey.v1',
+      apiKeyPrefix: 'planchette.apikey.',
+    ),
   );
+
+  MasterKeyManager _guarded(MasterKeyManager keys) {
+    if (_credentialReads case final guard?) keys.protectCredentialReads(guard);
+    return keys;
+  }
 
   Future<_ReportingVault> _unlockVault() async {
     final hasVault =

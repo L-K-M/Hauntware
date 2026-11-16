@@ -743,7 +743,7 @@ void main() {
     );
     expect(find.textContaining('Unlock or restore'), findsNothing);
     expect(
-      find.textContaining('keychain backup'),
+      find.textContaining('before reopening this vault'),
       findsNothing,
       reason: 'the raw port exception never renders (D20)',
     );

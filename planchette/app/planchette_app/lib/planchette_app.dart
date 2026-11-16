@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockController, AppLockGateModel;
 import 'package:path/path.dart' as paths;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:ghost_ui/ghost_ui.dart'
@@ -13,6 +15,8 @@ import 'package:ghost_ui/ghost_ui.dart'
         GhostChordBinding,
         GhostChordScope,
         GhostCommandRow,
+        GhostAppLockGate,
+        GhostAppLockStrings,
         GhostCommandSpec,
         GhostMenu,
         GhostMenuDivider,
@@ -77,6 +81,7 @@ class PlanchetteApp extends StatelessWidget {
     this.pickFolder,
     this.remoteFiles,
     this.appVersion,
+    this.appLock,
   });
 
   /// This window's documents. Equals `window.workspace` when [window] is
@@ -106,6 +111,12 @@ class PlanchetteApp extends StatelessWidget {
   /// not tell.
   final String? appVersion;
 
+  /// The app lock every window shares; null runs without one, as the
+  /// tests that build the app directly do. While it is locked, its screen
+  /// covers this window's routes and dialogs, the hot-exit documents
+  /// restored at launch included.
+  final AppLockController? appLock;
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: settings,
@@ -118,6 +129,23 @@ class PlanchetteApp extends StatelessWidget {
       theme: planchetteTheme(Brightness.light),
       darkTheme: planchetteTheme(Brightness.dark),
       themeMode: settings.value.themeMode,
+      builder: switch (appLock) {
+        null => null,
+        final lock => (context, child) {
+          final l10n = AppLocalizations.of(context);
+          return GhostAppLockGate(
+            model: AppLockGateModel(lock),
+            strings: GhostAppLockStrings(
+              title: l10n.appLockTitle,
+              detail: l10n.appLockDetail,
+              unlock: l10n.appLockUnlock,
+              failed: l10n.appLockFailed,
+              unavailable: l10n.appLockUnavailable,
+            ),
+            child: child!,
+          );
+        },
+      },
       home: _DocumentShell(
         workspace: workspace,
         settings: settings,
@@ -127,6 +155,7 @@ class PlanchetteApp extends StatelessWidget {
         pickFolder: pickFolder,
         remoteFiles: remoteFiles,
         appVersion: appVersion,
+        appLock: appLock,
       ),
     ),
   );
@@ -142,6 +171,7 @@ class _DocumentShell extends StatefulWidget {
     this.pickFolder,
     this.remoteFiles,
     this.appVersion,
+    this.appLock,
   });
   final DocumentWorkspace workspace;
   final SettingsController settings;
@@ -151,6 +181,7 @@ class _DocumentShell extends StatefulWidget {
   final Future<String?> Function()? pickFolder;
   final Future<WorkspaceRemoteFiles> Function()? remoteFiles;
   final String? appVersion;
+  final AppLockController? appLock;
 
   @override
   State<_DocumentShell> createState() => _DocumentShellState();
@@ -163,6 +194,13 @@ class _DocumentShellState extends State<_DocumentShell>
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   bool get android => defaultTargetPlatform == TargetPlatform.android;
   bool get windows => defaultTargetPlatform == TargetPlatform.windows;
+
+  /// Whether the app lock covers the window. Its gate keeps pointer, focus
+  /// and semantics from the shell, but the macOS menu bar is native and
+  /// reaches the shell regardless, so while locked every command but Quit
+  /// is disabled there: Copy, Save As or a text tool must not reach a
+  /// document nobody has unlocked.
+  bool get _appLocked => widget.appLock?.locked ?? false;
 
   /// Native file drops are wired on the desktops; the mobile runners have
   /// no drop bridge, so the target stays unregistered there.
@@ -246,6 +284,7 @@ class _DocumentShellState extends State<_DocumentShell>
         context,
         settings: settings,
         appVersion: widget.appVersion,
+        appLock: widget.appLock,
       );
     } finally {
       _settingsOpen = false;
@@ -263,6 +302,7 @@ class _DocumentShellState extends State<_DocumentShell>
     // this workspace's: which shell publishes the macOS menu and which
     // window rows the Window menu lists both follow it.
     window?.owner.addListener(_changed);
+    widget.appLock?.addListener(_appLockChanged);
     _applySettings();
     FocusManager.instance.addListener(_rememberTextFocus);
   }
@@ -275,6 +315,10 @@ class _DocumentShellState extends State<_DocumentShell>
   @override
   void didUpdateWidget(_DocumentShell oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.appLock != widget.appLock) {
+      oldWidget.appLock?.removeListener(_appLockChanged);
+      widget.appLock?.addListener(_appLockChanged);
+    }
     if (oldWidget.settings != settings) {
       oldWidget.settings.removeListener(_settingsChanged);
       settings.addListener(_settingsChanged);
@@ -323,6 +367,11 @@ class _DocumentShellState extends State<_DocumentShell>
 
   void _changed() {
     _scheduleRecentDocuments();
+    if (mounted) setState(() {});
+  }
+
+  /// The menus follow the lock (see [_appLocked]).
+  void _appLockChanged() {
     if (mounted) setState(() {});
   }
 
@@ -1596,7 +1645,7 @@ class _DocumentShellState extends State<_DocumentShell>
   GhostCommandSpec _commandSpec(_Command command) => GhostCommandSpec(
     id: command.id,
     label: command.label,
-    enabled: command.enabled,
+    enabled: command.enabled && !_appLocked,
     mnemonic: command.mnemonic,
     activators: [?command.shortcut, ...command.aliases],
     onSelected: command.run,
@@ -1665,7 +1714,9 @@ class _DocumentShellState extends State<_DocumentShell>
             PlatformMenuItem(
               label: AppLocalizations.of(context).menuSettings,
               shortcut: _shortcut(LogicalKeyboardKey.comma),
-              onSelected: workspace.interactionLocked ? null : _showSettings,
+              onSelected: workspace.interactionLocked || _appLocked
+                  ? null
+                  : _showSettings,
             ),
           ],
         ),
@@ -1725,6 +1776,7 @@ class _DocumentShellState extends State<_DocumentShell>
     final signature = <Object?>[
       workspace.active,
       workspace.interactionLocked,
+      _appLocked,
       widget.onQuit != null,
       ...workspace.toolHistory.recent,
       ...?window?.owner.windows,
@@ -2219,6 +2271,7 @@ class _DocumentShellState extends State<_DocumentShell>
     // Detaching notifies the owner; the listener has to go first or the
     // notification reaches a defunct State.
     window?.owner.removeListener(_changed);
+    widget.appLock?.removeListener(_appLockChanged);
     window?.detachContent(this);
     if (window != null) widget.menuSlot?.clear(window);
     FocusManager.instance.removeListener(_rememberTextFocus);

@@ -278,7 +278,7 @@ void main() {
     test('a refusal names the backup to restore', () {
       final message = const MasterKeyUnavailableException().toString();
       expect(message, contains('vault'));
-      expect(message, contains('keychain backup'));
+      expect(message, contains('backup of your system credential store'));
     });
   });
 

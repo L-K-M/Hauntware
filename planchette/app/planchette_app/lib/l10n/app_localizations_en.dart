@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -554,6 +553,66 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsKeepUnsavedDetail =>
       'Quit without being asked; the open windows and unsaved changes come back at the next launch. They are kept in a private folder on this device until saved or discarded. Turn off to be asked to save instead.';
+
+  @override
+  String get settingsAppLockTitle => 'App lock';
+
+  @override
+  String get settingsAppLock => 'Require device authentication';
+
+  @override
+  String settingsAppLockDetail(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes minutes',
+      one: '1 minute',
+    );
+    return 'Ask for this device\'s passcode, PIN or biometrics when Planchette opens and after $_temp0 in the background. Your documents stay open behind the lock.';
+  }
+
+  @override
+  String get settingsAppLockUnsupported =>
+      'This platform has no device authentication Planchette can ask for.';
+
+  @override
+  String get settingsAppLockUnavailable =>
+      'Set up a passcode, PIN or biometrics on this device to use the app lock.';
+
+  @override
+  String settingsAppLockNotChanged(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notAuthenticated':
+          'The app lock did not change: authentication failed or was cancelled.',
+      'unavailable':
+          'The app lock did not change: this device has no authentication to ask for.',
+      'notSaved':
+          'The app lock did not change: the setting could not be saved.',
+      'other': 'The app lock did not change.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get appLockTitle => 'Planchette is locked';
+
+  @override
+  String get appLockDetail =>
+      'Unlock with this device\'s passcode, PIN or biometrics. Your open documents and unsaved changes are kept.';
+
+  @override
+  String get appLockUnlock => 'Unlock';
+
+  @override
+  String get appLockFailed =>
+      'Authentication failed or was cancelled. Try again.';
+
+  @override
+  String get appLockUnavailable =>
+      'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.';
+
+  @override
+  String get appLockReason => 'Unlock Planchette';
 
   @override
   String get settingsAbout => 'About';

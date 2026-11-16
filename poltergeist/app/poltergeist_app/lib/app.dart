@@ -3,7 +3,8 @@ import 'dart:async' show FutureOr;
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:ghost_keystore/app_lock.dart' show AppLockController;
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockController, AppLockGateModel;
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostAppLockGate, GhostAppLockStrings;
 import 'package:ghost_update/ghost_update.dart';
@@ -62,7 +63,6 @@ import 'services/workspace_windows/workspace_windows.dart';
 import 'theme/app_appearance.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
-import 'ui/app_lock_gate.dart';
 import 'ui/inspector/inspector_view.dart' show inspectorDefaultWidth;
 import 'ui/server_editor.dart' show ServerEditorDelegate;
 import 'ui/workspace_shell.dart';

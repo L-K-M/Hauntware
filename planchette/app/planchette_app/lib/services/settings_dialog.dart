@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ghost_fonts/ghost_fonts.dart';
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockSettings, GhostAppLockSection, GhostAppLockSectionStrings;
 import 'package:planchette_editor/planchette_editor.dart';
 
 import '../l10n/app_localizations.dart';
@@ -15,9 +17,18 @@ import 'app_settings.dart';
 /// a click outside the dialog does nothing, so a preview is never kept or
 /// dropped by accident.
 class SettingsDialog extends StatefulWidget {
-  const SettingsDialog({super.key, required this.settings, this.appVersion});
+  const SettingsDialog({
+    super.key,
+    required this.settings,
+    this.appVersion,
+    this.appLock,
+  });
 
   final SettingsController settings;
+
+  /// The app lock's switch; null leaves the section out, as in tests that
+  /// build the dialog without a lock.
+  final AppLockSettings? appLock;
 
   /// The running build, as `readAppVersion` reported it; null when the
   /// platform could not tell.
@@ -28,11 +39,15 @@ class SettingsDialog extends StatefulWidget {
     BuildContext context, {
     required SettingsController settings,
     String? appVersion,
+    AppLockSettings? appLock,
   }) => showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (context) =>
-        SettingsDialog(settings: settings, appVersion: appVersion),
+    builder: (context) => SettingsDialog(
+      settings: settings,
+      appVersion: appVersion,
+      appLock: appLock,
+    ),
   );
 
   @override
@@ -218,6 +233,21 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   ),
                 ),
               ),
+              if (widget.appLock case final lock?) ...[
+                const SizedBox(height: 16),
+                GhostAppLockSection(
+                  lock: lock,
+                  strings: GhostAppLockSectionStrings(
+                    title: l10n.settingsAppLockTitle,
+                    toggle: l10n.settingsAppLock,
+                    detail: l10n.settingsAppLockDetail,
+                    unsupported: l10n.settingsAppLockUnsupported,
+                    unavailable: l10n.settingsAppLockUnavailable,
+                    notChanged: (change) =>
+                        l10n.settingsAppLockNotChanged(change?.name ?? ''),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               _section(theme, l10n.settingsAbout),
               // The running build, so a bug report can name it; the licenses
@@ -369,13 +399,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
   void _apply(AppSettings next) => unawaited(widget.settings.update(next));
 
   /// Restore the preview without replacing layout changes from another
-  /// window or the View menu.
+  /// window or the View menu, or the app lock: its switch takes effect at
+  /// once, after its own authentication, so Cancel has nothing to undo.
   void _cancel() {
     unawaited(
       widget.settings.update(
         _starting.copyWith(
           sidebarVisible: _value.sidebarVisible,
           sidebarWidth: _value.sidebarWidth,
+          appLock: _value.appLock,
         ),
       ),
     );

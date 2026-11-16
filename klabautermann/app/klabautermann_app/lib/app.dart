@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
-import 'package:ghost_keystore/app_lock.dart' show AppLockController;
+import 'package:ghost_keystore/app_lock.dart'
+    show AppLockController, AppLockGateModel;
 import 'package:ghost_desktop/ghost_desktop.dart' show withMacosToolbarBand;
 import 'package:ghost_ui/ghost_ui.dart'
     show
@@ -70,7 +71,6 @@ import 'ui/alert_rules.dart' show AlertRulesScope;
 import 'ui/logs/log_view.dart' show LogDisplayScope;
 import 'ui/snippets.dart' show SnippetsScope;
 import 'ui/alerts.dart' show AlertScope;
-import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/edit/editor_display_scope.dart' show EditorDisplayScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
