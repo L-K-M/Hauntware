@@ -4,6 +4,7 @@ import 'package:poltergeist_core/poltergeist_core.dart'
 
 import 'pane_controller.dart';
 import 'pane_drop.dart';
+import 'pane_location.dart' show RemotePaneLocation;
 import 'pane_tabs_controller.dart';
 import 'workspace_controller.dart';
 
@@ -48,6 +49,7 @@ class OtherPaneCopyPlan {
     required this.target,
     required this.destination,
     required this.folder,
+    this.serverLabel,
   });
 
   final FsLocation source;
@@ -59,6 +61,13 @@ class OtherPaneCopyPlan {
 
   /// The other pane's folder when the plan was taken.
   final String folder;
+
+  /// What the sheet calls a remote [destination]: the bookmark's label
+  /// when the plan was taken, else the server id. Null for this device.
+  /// Taken with the plan because the other pane drops its location and
+  /// bookmark the moment it starts a rebind, while Copy still enqueues
+  /// to [destination].
+  final String? serverLabel;
 
   /// Whether copying the roots into [destinationFolder] passes 02 §5.1's
   /// containment rules (never into a root or below it).
@@ -90,6 +99,9 @@ OtherPaneCopyPlan? planSelectionCopyToOtherPane(WorkspaceController workspace) {
     target: target,
     destination: fsLocationForLocation(targetLocation),
     folder: targetLocation.path,
+    serverLabel: targetLocation is RemotePaneLocation
+        ? target.remoteBookmark?.label ?? targetLocation.serverId
+        : null,
   );
 }
 

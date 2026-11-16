@@ -631,6 +631,16 @@ class PaneController extends ChangeNotifier {
   void Function(PaneLocation location, String from, String to)?
   onEntryRenamed;
 
+  /// The same feed for Rename Items: invoked once a run that renamed
+  /// anything settles, with the renames in the order they ran, so Undo
+  /// can take them back last first (a chained rename then frees each
+  /// name before it is needed again).
+  void Function(
+    PaneLocation location,
+    List<({String from, String to})> renames,
+  )?
+  onEntriesRenamed;
+
   /// Catalog lookup stamped by the owning tab strip. Reconnects resolve
   /// again so a synchronized route edit cannot revive the stale route.
   PaneServerConfigLookup? serverConfigLookup;
@@ -3135,6 +3145,7 @@ class PaneController extends ChangeNotifier {
     notifyListeners();
     session._publish();
 
+    final renamed = <({String from, String to})>[];
     final stop = await executeBatchRename(
       channel,
       plan,
@@ -3150,10 +3161,19 @@ class PaneController extends ChangeNotifier {
       },
       onOutcome: (row, outcome) {
         session._outcomes[row] = outcome;
+        if (outcome is BatchRenameRenamed) {
+          final rename = plan.rows[row];
+          renamed.add((from: rename.target.path, to: rename.newPath));
+        }
         session._publish();
       },
       onFault: _report,
     );
+    // Reported even when the tab moved on or closed: the renames applied
+    // on that host all the same, as an inline rename's do.
+    if (renamed.isNotEmpty && location != null) {
+      onEntriesRenamed?.call(location, List.unmodifiable(renamed));
+    }
     // dispose ended the session; nothing is left to settle into.
     if (_disposed) return true;
 

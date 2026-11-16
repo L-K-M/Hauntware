@@ -541,8 +541,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The §3.3 status keys, the §4.4 retained-account record's field
   // names, and the programmer-error diagnostics (missing token, wrong
   // mode, failed typed confirmation) — machine data and reported
-  // faults, never authored copy.
+  // faults, never authored copy. Also the sync id prefixes that name a
+  // refused record in the status.
   'lib/services/bookmark_backup_service.dart': {
+    "'bookmark:'",
+    "'hostkey:'",
+    "'secret:'",
+    "':'",
     "'poltergeist.sync.lastSyncAt'",
     "'poltergeist.sync.lastSyncError'",
     "'poltergeist.sync.retainedAccount'",
@@ -1704,6 +1709,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'fileUndoCopy.confirm'",
   },
   // The paste destination's child-path join: machine path data.
+  // The error a Keep Both name restore failed with, shown as the reason.
+  'lib/services/file_operations.dart': {r"'$error'"},
   'lib/services/file_clipboard.dart': {
     r"'$folder$name'",
     r"'$folder$separator$name'",

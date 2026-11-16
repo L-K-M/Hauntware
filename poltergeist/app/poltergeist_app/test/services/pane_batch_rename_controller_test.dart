@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/pane_batch_rename.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
+import 'package:poltergeist_app/services/pane_location.dart';
 import 'package:poltergeist_app/services/selection_state.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -406,6 +407,57 @@ void main() {
       expect(session.outcomes[0], isA<BatchRenameFailed>());
       expect(session.outcomes[1], isA<BatchRenameRenamed>());
       expect(channel.renameCalls, hasLength(2));
+    });
+
+    test('reports what it renamed, in run order, for Undo', () async {
+      final reports = <(PaneLocation, List<({String from, String to})>)>[];
+      pane.onEntriesRenamed = (location, renames) =>
+          reports.add((location, renames));
+      await open([_file('f 1.txt'), _file('f 2.txt'), _file('g.txt')]);
+      select(['f 1.txt', 'f 2.txt', 'g.txt']);
+      pane.startBatchRename();
+      // "g.txt" is refused, so it is left out of the report.
+      channel.renameFailures['$_home/g.txt'] = const RemoteFileException(
+        kind: RemoteFileErrorKind.permissionDenied,
+        operation: 'rename',
+        message: 'denied',
+      );
+
+      // f 1 -> f 2 takes f 2's old name, so f 2 -> f 3 runs first.
+      await pane.runBatchRename(
+        const FormatRule(
+          name: 'f',
+          placement: BatchRenamePlacement.afterName,
+          startAt: 2,
+        ),
+      );
+
+      expect(reports, hasLength(1));
+      expect(reports.single.$1.path, _home);
+      expect(reports.single.$2, [
+        (from: '$_home/f 2.txt', to: '$_home/f 3.txt'),
+        (from: '$_home/f 1.txt', to: '$_home/f 2.txt'),
+      ]);
+    });
+
+    test('a run that renamed nothing reports nothing', () async {
+      var reported = false;
+      pane.onEntriesRenamed = (_, _) => reported = true;
+      await open([_file('a.txt'), _file('b.txt')]);
+      select(['a.txt', 'b.txt']);
+      pane.startBatchRename();
+      for (final name in ['a.txt', 'b.txt']) {
+        channel.renameFailures['$_home/$name'] = const RemoteFileException(
+          kind: RemoteFileErrorKind.permissionDenied,
+          operation: 'rename',
+          message: 'denied',
+        );
+      }
+
+      await pane.runBatchRename(_addX);
+
+      expect(pane.batchRename!.renamedCount, 0);
+      expect(reported, isFalse);
     });
   });
 

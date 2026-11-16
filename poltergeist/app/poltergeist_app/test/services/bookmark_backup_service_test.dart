@@ -22,10 +22,10 @@ import '../support/fake_sync_backup.dart';
 
 final _fixedNow = DateTime.utc(2026, 1, 1, 12);
 
-Bookmark _bookmark(String id) => Bookmark(
+Bookmark _bookmark(String id, {String? label}) => Bookmark(
       id: id,
       kind: BookmarkKind.remotePath,
-      label: id,
+      label: label ?? id,
       server: const BookmarkServerRef(
         identity: EmbeddedHostIdentity(
           host: 'web.example.com',
@@ -279,6 +279,62 @@ void main() {
       expect(h.service.lastSyncError, isNull);
       // A separate-mode success never arms the §4.4 delete offer.
       expect(h.service.deleteSeparateOffered, isFalse);
+    });
+
+    test('a record refused as too large is named in the round status, '
+        'and the status clears once it syncs', () async {
+      await h.enrollSeparateDirectly();
+      final bookmark = _bookmark('big', label: 'Build logs');
+      await h.bookmarks.upsertAll([bookmark]);
+      final crypto =
+          RecordCrypto(RecordCodec(h.credentials.vaultKey!));
+      await h.records.putLocal(await crypto.seal(DecryptedRecord(
+        id: 'bookmark:big',
+        kind: RecordKind.bookmark,
+        updatedAt: _fixedNow.millisecondsSinceEpoch,
+        deviceId: 'test-device',
+        data: bookmark.toJson(),
+      )));
+      h.server.tooLarge.add('bookmark:big');
+
+      final result = await h.service.backUpNow();
+
+      expect(result!.refusedIds, ['bookmark:big']);
+      expect(
+        h.service.lastSyncError,
+        'Bookmark "Build logs" is too large for the sync server, so it '
+        'stays on this device until you make it smaller. Everything else '
+        'synced.',
+      );
+      // The round itself completed.
+      expect(h.service.lastSyncAt, _fixedNow);
+
+      h.server.tooLarge.clear();
+      await h.service.backUpNow();
+      expect(h.server.pushed.map((r) => r.id), ['bookmark:big']);
+      expect(h.service.lastSyncError, isNull);
+    });
+
+    test('a refused record without a readable name is named by its id',
+        () async {
+      await h.enrollSeparateDirectly();
+      final crypto =
+          RecordCrypto(RecordCodec(h.credentials.vaultKey!));
+      await h.records.putLocal(await crypto.seal(DecryptedRecord(
+        id: 'bookmark:gone',
+        kind: RecordKind.bookmark,
+        updatedAt: _fixedNow.millisecondsSinceEpoch,
+        deviceId: 'test-device',
+        data: _bookmark('gone').toJson(),
+      )));
+      h.server.tooLarge.add('bookmark:gone');
+
+      await h.service.backUpNow();
+
+      expect(
+        h.service.lastSyncError,
+        startsWith('Bookmark (bookmark:gone) is too large'),
+      );
     });
 
     test('a 401 round raises the durable dead-account notice', () async {

@@ -642,6 +642,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       );
     },
     hostLabel: _fileHostLabel,
+    notify: (message) {
+      if (mounted) showTopToastIn(context, message: message);
+    },
     strings: () => AppLocalizations.of(context),
   );
 
@@ -1581,6 +1584,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           from,
           to,
         ),
+        onEntriesRenamed: (location, renames) => _fileOperations
+            .recordBatchRename(fsLocationForLocation(location), renames),
         serverConfigLookup: _serverConfigById,
         confirmClose: _confirmTabClose,
         // The cross-pane half of a remote tab's last-binding check: read

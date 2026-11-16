@@ -5,8 +5,11 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/services/pane_location.dart';
 import 'package:poltergeist_app/ui/compact/compact_posture.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -254,6 +257,48 @@ void main() {
     expect(spec.source, const LocalFsLocation());
     expect(spec.destination, const ServerFsLocation('demo'));
     expect(spec.destinationDir, '/srv/www');
+  });
+
+  testWidgets('the sheet keeps naming the server while the destination pane '
+      'rebinds to this device', (tester) async {
+    final harness = CompactHarness(
+      bookmarks: [serverBookmark('demo', label: 'Demo box')],
+    );
+    await harness.pump(tester);
+    await tester.tap(find.byKey(const ValueKey('sidebar.favorite.demo')));
+    await tester.pumpAndSettle();
+    final paneA = harness.workspace(tester).left.activeTab!.controller;
+    await tester.tap(_key(CompactKey.paneSwitcher));
+    await tester.pumpAndSettle();
+    await tester.longPress(compactRow('/home/deploy/old.log'));
+    await tester.pumpAndSettle();
+    await tester.tap(_key(CompactKey.actionCopy));
+    await tester.pumpAndSettle();
+    expect(_fieldText(tester, CompactKey.copyToHost), 'Host | Demo box');
+
+    // Pane A starts back to this device under the open sheet; the local
+    // open is held, so the pane has left the server but not landed.
+    final gate = harness.engine.localOpenGate = Completer<void>();
+    final rebind = paneA.openLocalHome();
+    await tester.pump();
+    expect(paneA.location, isNot(isA<RemotePaneLocation>()));
+    expect(paneA.remoteBookmark, isNull);
+
+    // Anything that rebuilds the sheet (here a theme change) must still
+    // name the host Copy enqueues to.
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pump();
+    expect(_fieldText(tester, CompactKey.copyToHost), 'Host | Demo box');
+    await tester.tap(_key(CompactKey.copyToConfirm));
+    await tester.pump();
+    final spec = harness.queue.enqueuedSpecs.single;
+    expect(spec.destination, const ServerFsLocation('demo'));
+    expect(spec.destinationDir, '/srv/www');
+
+    gate.complete();
+    await rebind;
+    // The queued copy's pill spinner never settles.
+    await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('a folder inside the copied folder disables Copy and says why', (

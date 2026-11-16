@@ -76,8 +76,8 @@ class FilePasteResult {
 /// renames and deletes, recorded on the app's [GhostUndoHistory].
 ///
 /// What Undo can reverse:
-/// - a same-server move or an inline rename (local or remote): renamed
-///   back through a live channel on that host;
+/// - a same-server move, an inline rename or a Rename Items run (local
+///   or remote): renamed back through a live channel on that host;
 /// - a transfer-queue move (local, or across hosts): moved back through
 ///   the queue once the move has finished;
 /// - a copy: after the user confirms, the items the copy created are
@@ -101,6 +101,7 @@ class FileOperations {
     required this._hostChannel,
     required this._confirmCopyUndo,
     required this._hostLabel,
+    required this._notify,
     required this._strings,
   });
 
@@ -110,6 +111,10 @@ class FileOperations {
   final FileHostLookup _hostChannel;
   final FileCopyUndoConfirm _confirmCopyUndo;
   final String Function(FsLocation host) _hostLabel;
+
+  /// Tells the user something an Undo that still succeeded could not do
+  /// (a moved-back item that kept its Keep Both name).
+  final void Function(String message) _notify;
   final AppLocalizations Function() _strings;
 
   final Expando<bool> _irreversible = Expando();
@@ -229,6 +234,18 @@ class FileOperations {
       _renameChange(_strings().fileUndoRenameName, host, [
         (from: from, to: to),
       ]),
+    );
+  }
+
+  /// Records a Rename Items run on [host], [renames] in the order they
+  /// ran, so Undo can rename each item back (last first) as one change.
+  void recordBatchRename(
+    FsLocation host,
+    List<({String from, String to})> renames,
+  ) {
+    if (renames.isEmpty) return;
+    _history.record(
+      _renameChange(_strings().fileUndoRenameItemsName, host, renames),
     );
   }
 
@@ -366,8 +383,10 @@ class FileOperations {
   }
 
   /// Moves what [paste] created back to the folders it came from. A root
-  /// the move renamed on a clash ("name 2") keeps that name, as a queue
-  /// move keeps its root names.
+  /// that comes back under another name (Keep Both renamed it "name 2"
+  /// on the way out, or on the way back) then gets its own name again
+  /// when that name is free; otherwise it keeps the name it has, and the
+  /// user is told why.
   Future<void> _undoQueuedMove(_QueuedPaste paste) async {
     final moved = _createdRoots(paste);
     final delegate = _requireDelegate();
@@ -387,8 +406,51 @@ class FileOperations {
           operation: TransferOperation.move,
         ),
     ].nonNulls;
-    for (final task in tasks) {
-      await _awaitCompleted(delegate.queue, task);
+    final settled = [
+      for (final task in tasks) await _awaitCompleted(delegate.queue, task),
+    ];
+    final originals = {for (final root in moved) root.created: root.original};
+    for (final task in settled) {
+      for (final item in task.items) {
+        final original = originals[item.sourcePath];
+        if (original == null) continue;
+        await _restoreName(paste.source, item.destinationPath, original);
+      }
+    }
+  }
+
+  /// Renames [current] on [host] back to [original], its name before a
+  /// Keep Both rename, unless that name is taken or no tab can rename.
+  /// Never fails the Undo: the item is back either way.
+  Future<void> _restoreName(
+    FsLocation host,
+    String current,
+    String original,
+  ) async {
+    if (current == original) return;
+    final l10n = _strings();
+    final currentName = paneLastSegment(current);
+    final channel = _hostChannel(host);
+    if (channel == null) {
+      _notify(
+        l10n.fileUndoNameKept(
+          currentName,
+          l10n.fileUndoNameNoTab(_hostLabel(host)),
+        ),
+      );
+      return;
+    }
+    try {
+      // The channel refuses a taken name rather than replacing it.
+      await channel.rename(current, original);
+    } on Object catch (error) {
+      final taken =
+          error is RemoteFileException &&
+          error.kind == RemoteFileErrorKind.conflict;
+      final reason = taken
+          ? l10n.fileUndoNameTaken(paneLastSegment(original))
+          : '$error';
+      _notify(l10n.fileUndoNameKept(currentName, reason));
     }
   }
 
@@ -451,8 +513,9 @@ class FileOperations {
     );
   }
 
-  /// Waits for [task] and throws unless every item completed.
-  Future<void> _awaitCompleted(
+  /// Waits for [task] and throws unless every item completed; returns
+  /// the settled task.
+  Future<TransferTask> _awaitCompleted(
     AppTransferQueue queue,
     TransferTask task,
   ) async {
@@ -468,7 +531,7 @@ class FileOperations {
         settled.items.every(
           (item) => item.state == TransferItemState.completed,
         )) {
-      return;
+      return settled;
     }
     throw FileOperationFailed(settled.error ?? _strings().fileUndoIncomplete);
   }

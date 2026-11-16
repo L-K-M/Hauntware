@@ -11740,6 +11740,40 @@
   "@fileUndoRenameName": {
     "description": "P4-21: the Edit ▸ Undo name of an inline rename (\"Undo Rename\")."
   },
+  "fileUndoRenameItemsName": "Rename Items",
+  "@fileUndoRenameItemsName": {
+    "description": "P4-21: the Edit ▸ Undo name of a Rename Items run; undoing it renames every item back (\"Undo Rename Items\")."
+  },
+  "fileUndoNameKept": "“{current}” was moved back but kept that name. {reason}",
+  "@fileUndoNameKept": {
+    "description": "P4-21: after Undo moved back an item that Keep Both had renamed (\"notes 2\"), its original name could not be restored. {reason} is fileUndoNameTaken, fileUndoNameNoTab or an error.",
+    "placeholders": {
+      "current": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "fileUndoNameTaken": "“{original}” is taken there.",
+  "@fileUndoNameTaken": {
+    "description": "P4-21: fileUndoNameKept's reason when another item already has the original name.",
+    "placeholders": {
+      "original": {
+        "type": "String"
+      }
+    }
+  },
+  "fileUndoNameNoTab": "Open a tab on {host} to rename it.",
+  "@fileUndoNameNoTab": {
+    "description": "P4-21: fileUndoNameKept's reason when no live tab on that host can rename the item.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
   "fileUndoTrashName": "Move to Trash",
   "@fileUndoTrashName": {
     "description": "P4-21: the Edit ▸ Undo name of a local Move to Trash; undoing it puts the items back (\"Undo Move to Trash\")."

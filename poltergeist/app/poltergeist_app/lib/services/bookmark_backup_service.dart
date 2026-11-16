@@ -604,7 +604,9 @@ final class BookmarkBackupService extends ChangeNotifier
       try {
         final result = await coordinator.runRound(api);
         _lastSyncAt = _now().toUtc();
-        _lastSyncError = null;
+        // The round completed, but a record it could not store is not
+        // backed up: say which, where the status says what went wrong.
+        _lastSyncError = await _describeRefused(result);
         await _persistStatus();
         if (account.mode == SyncAccountMode.shared && !result.authFailed) {
           // §4.4: the optional delete offer unlocks only after the first
@@ -626,6 +628,54 @@ final class BookmarkBackupService extends ChangeNotifier
       _syncing = false;
       notifyListeners();
     }
+  }
+
+  /// The status for records [result]'s server refused as too large,
+  /// named as the user knows them, or null when it refused none. Records
+  /// waiting for account space are not here: the round throws for those.
+  Future<String?> _describeRefused(SyncRoundResult result) async {
+    if (result.refusedIds.isEmpty) return null;
+    final records = [
+      for (final id in result.refusedIds) await _refusedRecord(id),
+    ];
+    return SyncRecordsRefused(
+      records,
+      outcome: SyncOutcome(
+        pulled: result.pulled,
+        pushed: result.pushed,
+        rounds: result.rounds,
+      ),
+    ).message;
+  }
+
+  /// [id] with its kind and, where this device holds the row, its name.
+  /// Naming only serves the message, so a failed lookup names the record
+  /// by its id rather than failing the round's status.
+  Future<RefusedRecord> _refusedRecord(String id) async {
+    const bookmarkPrefix = 'bookmark:';
+    try {
+      if (id.startsWith(bookmarkPrefix)) {
+        final row = await _bookmarks.byId(id.substring(bookmarkPrefix.length));
+        return RefusedRecord(id, kind: RecordKind.bookmark, name: row?.label);
+      }
+      if (id.startsWith('hostkey:')) {
+        return RefusedRecord(id, kind: RecordKind.hostKey);
+      }
+      if (id.startsWith('secret:')) {
+        return RefusedRecord(id, kind: RecordKind.secret);
+      }
+      if (!id.contains(':')) {
+        final server = await _servers.byId(id);
+        return RefusedRecord(
+          id,
+          kind: RecordKind.serverConfig,
+          name: server?.label,
+        );
+      }
+    } on Object {
+      return RefusedRecord(id);
+    }
+    return RefusedRecord(id);
   }
 
   Future<void> _persistStatus() async {

@@ -52,6 +52,7 @@ class _Harness {
         return confirmAnswer;
       },
       hostLabel: (host) => host is ServerFsLocation ? host.serverId : 'device',
+      notify: notices.add,
       strings: () => l10n,
     );
   }
@@ -62,6 +63,7 @@ class _Harness {
   final queue = FakeAppTransferQueue();
   final channels = <FsLocation, _FakeChannel>{};
   final confirmCalls = <(FsLocation, List<String>)>[];
+  final notices = <String>[];
   bool confirmAnswer = true;
   bool queueBound = true;
   late final FileOperations operations;
@@ -539,11 +541,85 @@ void main() {
           task,
           items: [
             for (final root in task.rootPaths)
-              item(root, '${task.destinationDir}/x'),
+              item(root, '${task.destinationDir}/${root.split('/').last}'),
           ],
         );
       }
       await undo;
+      expect(h.notices, isEmpty);
+    });
+
+    group('a root Keep Both renamed', () {
+      /// Cuts /a/notes from the server into /home on this device, where
+      /// Keep Both lands it as "notes 2", and undoes the move with the
+      /// move back landing at [backAt].
+      Future<void> moveAndUndo({String backAt = '/a/notes 2'}) async {
+        h.channels[_local] = _FakeChannel({'notes'});
+        h.clipboard.put(
+          source: _srv,
+          rootPaths: ['/a/notes'],
+          mode: FileClipboardMode.cut,
+        );
+        await h.operations.paste(destination: _local, destinationDir: '/home');
+        h.settle(
+          h.queue.tasks.single,
+          items: [item('/a/notes', '/home/notes 2')],
+        );
+
+        final undo = h.history.undo();
+        for (var i = 0; i < 20 && h.queue.tasks.length < 2; i++) {
+          await Future<void>.delayed(Duration.zero);
+        }
+        final back = h.queue.tasks.last;
+        expect(back.rootPaths, ['/home/notes 2']);
+        h.settle(back, items: [item('/home/notes 2', backAt)]);
+        await undo;
+      }
+
+      test('gets its own name back when the name is free', () async {
+        final channel = h.channels[_srv] = _FakeChannel();
+
+        await moveAndUndo();
+
+        expect(channel.renames, [('/a/notes 2', '/a/notes')]);
+        expect(h.notices, isEmpty);
+      });
+
+      test('keeps its name, and says so, when the name is taken', () async {
+        h.channels[_srv] = _FakeChannel()
+          ..failRenames['/a/notes 2'] = const RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'rename',
+            message: 'exists',
+          );
+
+        await moveAndUndo();
+
+        expect(h.notices, [
+          h.l10n.fileUndoNameKept('notes 2', h.l10n.fileUndoNameTaken('notes')),
+        ]);
+        // The move itself was undone.
+        expect(h.history.redoName, 'Move');
+      });
+
+      test('keeps its name, and says so, without a tab on the host', () async {
+        await moveAndUndo();
+
+        expect(h.notices, [
+          h.l10n.fileUndoNameKept('notes 2', h.l10n.fileUndoNameNoTab('srv')),
+        ]);
+      });
+
+      test(
+        'a move back that clashed again is renamed from where it landed',
+        () async {
+          final channel = h.channels[_srv] = _FakeChannel();
+
+          await moveAndUndo(backAt: '/a/notes 3');
+
+          expect(channel.renames, [('/a/notes 3', '/a/notes')]);
+        },
+      );
     });
 
     test(
@@ -613,6 +689,34 @@ void main() {
       expect(channel.renames.single, ('/a/new', '/a/old'));
       await h.history.redo();
       expect(channel.renames.last, ('/a/old', '/a/new'));
+    });
+  });
+
+  group('Rename Items', () {
+    test('Undo renames every item back, last first; Redo replays', () async {
+      final h = _Harness();
+      final channel = h.channels[_srv] = _FakeChannel();
+      // A chain, in the order the run sent it: f 2 made room for f 1.
+      h.operations.recordBatchRename(_srv, [
+        (from: '/a/f 2', to: '/a/f 3'),
+        (from: '/a/f 1', to: '/a/f 2'),
+      ]);
+      expect(h.history.undoName, 'Rename Items');
+
+      await h.history.undo();
+      expect(channel.renames, [('/a/f 2', '/a/f 1'), ('/a/f 3', '/a/f 2')]);
+
+      channel.renames.clear();
+      await h.history.redo();
+      expect(channel.renames, [('/a/f 2', '/a/f 3'), ('/a/f 1', '/a/f 2')]);
+    });
+
+    test('Undo needs a live tab on the host', () async {
+      final h = _Harness();
+      h.operations.recordBatchRename(_srv, [(from: '/a/x', to: '/a/y')]);
+
+      await expectDeclined(h.history.undo(), 'Open a tab on srv to undo this.');
+      expect(h.history.undoName, 'Rename Items');
     });
   });
 
