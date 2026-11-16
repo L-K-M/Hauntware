@@ -28,8 +28,8 @@ class MasterKeyUnavailableException implements Exception {
       'an encrypted vault already exists. Séance stopped rather than create a '
       'new key, which would make your saved passwords and private keys '
       'unreadable. The keystore returned no master key. Restore the matching '
-      'key from a backup (a keychain backup on macOS) before reopening this '
-      'vault.';
+      'key from a backup of your system credential store before reopening '
+      'this vault.';
 }
 
 /// Thrown when the OS keystore holds a master key entry that is not a
@@ -47,8 +47,8 @@ class MasterKeyDamagedException extends MasterKeyUnavailableException {
       'The vault master key in the system keystore is damaged: it is not a '
       '32-byte key, so it cannot open the encrypted vault. Séance stopped '
       'rather than replace it, which would make your saved passwords and '
-      'private keys unreadable. Restore the matching key from a backup (a '
-      'keychain backup on macOS) before reopening this vault.';
+      'private keys unreadable. Restore the matching key from a backup of '
+      'your system credential store before reopening this vault.';
 }
 
 /// The OS keystore could not be read or written — on Linux that is usually a
@@ -187,7 +187,7 @@ class MasterKeyManager {
       throw const MasterKeyUnavailableException();
     }
     try {
-      final key = secureRandomBytes(32);
+      final key = secureRandomBytes(_keyLength);
       await _storage.write(key: _keyName, value: base64.encode(key));
       _markAvailable();
       return key;

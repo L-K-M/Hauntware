@@ -355,8 +355,15 @@ final class FakeSyncTrackingBookmarkStore
   @override
   Future<List<Bookmark>> load() => _inner.load();
 
+  /// When set, [byId] throws it, as a store that cannot be read.
+  Object? byIdError;
+
   @override
-  Future<Bookmark?> byId(String id) => _inner.byId(id);
+  Future<Bookmark?> byId(String id) async {
+    final error = byIdError;
+    if (error != null) throw error;
+    return _inner.byId(id);
+  }
 
   @override
   Future<List<BookmarkGroupSection>> sections() => _inner.sections();

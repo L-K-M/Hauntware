@@ -305,6 +305,20 @@ void main() {
     expect(sync.recordsTooLarge, 1);
     expect(sync.holdsRecords, isTrue);
 
+    // Waiting records hold on their own, without the full-account failure.
+    engine.emit(
+      const SyncStatus(
+        SyncPhase.succeeded,
+        operation: SyncOperation.round,
+        account: account,
+        recordsAwaitingSpace: 3,
+      ),
+    );
+    await pumpEventQueue();
+    expect(sync.accountFull, isFalse);
+    expect(sync.recordsTooLarge, 0);
+    expect(sync.holdsRecords, isTrue);
+
     engine.emit(
       const SyncStatus(
         SyncPhase.succeeded,

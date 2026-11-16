@@ -41,8 +41,8 @@ class _TooLargeForDocumentPickerException implements Exception {
 
   @override
   String toString() =>
-      'Files over 100 MB cannot be saved this way on iOS. Use Share… and '
-      'choose Save to Files.';
+      'Files over ${_documentPickerSaveBytes ~/ (1024 * 1024)} MB cannot be '
+      'saved this way on iOS. Use Share… and choose Save to Files.';
 }
 
 class FilesScreen extends StatelessWidget {

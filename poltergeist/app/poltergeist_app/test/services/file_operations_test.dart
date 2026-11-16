@@ -570,6 +570,11 @@ void main() {
         for (var i = 0; i < 20 && h.queue.tasks.length < 2; i++) {
           await Future<void>.delayed(Duration.zero);
         }
+        expect(
+          h.queue.tasks,
+          hasLength(2),
+          reason: 'undo never enqueued the move back',
+        );
         final back = h.queue.tasks.last;
         expect(back.rootPaths, ['/home/notes 2']);
         h.settle(back, items: [item('/home/notes 2', backAt)]);
@@ -620,6 +625,47 @@ void main() {
           expect(channel.renames, [('/a/notes 3', '/a/notes')]);
         },
       );
+
+      test('several kept names share one notice', () async {
+        h.channels[_local] = _FakeChannel({'notes', 'todo'});
+        h.clipboard.put(
+          source: _srv,
+          rootPaths: ['/a/notes', '/a/todo'],
+          mode: FileClipboardMode.cut,
+        );
+        await h.operations.paste(destination: _local, destinationDir: '/home');
+        h.settle(
+          h.queue.tasks.single,
+          items: [
+            item('/a/notes', '/home/notes 2'),
+            item('/a/todo', '/home/todo 2'),
+          ],
+        );
+
+        final undo = h.history.undo();
+        for (var i = 0; i < 20 && h.queue.tasks.length < 2; i++) {
+          await Future<void>.delayed(Duration.zero);
+        }
+        expect(
+          h.queue.tasks,
+          hasLength(2),
+          reason: 'undo never enqueued the move back',
+        );
+        h.settle(
+          h.queue.tasks.last,
+          items: [
+            item('/home/notes 2', '/a/notes 2'),
+            item('/home/todo 2', '/a/todo 2'),
+          ],
+        );
+        await undo;
+
+        final noTab = h.l10n.fileUndoNameNoTab('srv');
+        expect(h.notices, [
+          '${h.l10n.fileUndoNameKept('notes 2', noTab)}\n'
+              '${h.l10n.fileUndoNameKept('todo 2', noTab)}',
+        ]);
+      });
     });
 
     test(
