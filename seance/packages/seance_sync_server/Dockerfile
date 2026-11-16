@@ -37,8 +37,9 @@ RUN cd packages/seance_sync_server && dart build cli -o /app/build
 
 # Third-party notices for the bundle: the pub packages it compiles in, the
 # Dart SDK, the third-party code its AOT runtime embeds and the bundled
-# SQLite (seance-sync-overrides.json). The runtime texts are fetched at
-# this SDK's exact revision, whichever the pin holds.
+# SQLite (seance-sync-overrides.json). The runtime texts are taken at
+# this SDK's exact revision from scripts/licenses/dart-runtime/, which
+# records the pinned SDK; a new pin without a refresh fetches them live.
 COPY scripts/licenses scripts/licenses
 RUN python3 scripts/licenses/dart-runtime-licenses.py --out /tmp/dart-runtime \
     && python3 scripts/licenses/go-dart-notices.py dart --workspace . \
