@@ -484,8 +484,10 @@ jobs:
           ../../dist/bin/seance_sync_server --help
       # Third-party notices beside the bundle: the pub packages it compiles
       # in, the Dart SDK and the third-party code its AOT runtime embeds,
-      # fetched at this SDK's exact revision (the SDK floats), and the
-      # bundled SQLite. The generator fails on a package without license
+      # at this SDK's exact revision from the texts vendored in
+      # seance/scripts/licenses/dart-runtime/ (fetched live with a warning
+      # for an SDK not recorded there; the SDK floats), and the bundled
+      # SQLite. The generator fails on a package without license
       # text.
       - name: Third-party notices
         working-directory: seance

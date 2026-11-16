@@ -118,6 +118,44 @@ void main() {
       },
     );
 
+    // A stored value that is not base64 of a 32-byte key is no key: an
+    // AES-256 vault cannot open with it, and no retry changes it.
+    for (final (label, stored) in [
+      ('a 16-byte key', base64.encode(List<int>.filled(16, 7))),
+      ('a 33-byte key', base64.encode(List<int>.filled(33, 7))),
+      ('a value that is not base64', 'not base64!'),
+    ]) {
+      test('$label is refused as damaged while a vault exists', () async {
+        final keystore = FakeKeystore(readReturns: stored);
+        final keys = MasterKeyManager(keystore);
+
+        await expectLater(
+          keys.probeKeystore(hasExistingVault: true),
+          throwsA(isA<MasterKeyDamagedException>()),
+        );
+        expect(keys.keystoreStatus, KeystoreStatus.available);
+        expect(keystore.written, isEmpty, reason: 'the entry stays as found');
+        expect(await keys.readKeystoreKey(), isNull);
+      });
+
+      test('$label is replaced when no vault depends on it', () async {
+        final keystore = FakeKeystore(readReturns: stored);
+        final key = await MasterKeyManager(
+          keystore,
+        ).probeKeystore(hasExistingVault: false);
+
+        expect(key, hasLength(32));
+        expect(base64.decode(keystore.written.values.single!), key);
+      });
+    }
+
+    test('a damaged key is the existing-vault refusal, worded for it', () {
+      const error = MasterKeyDamagedException();
+      expect(error, isA<MasterKeyUnavailableException>());
+      expect(error.toString(), contains('damaged'));
+      expect(error.toString(), contains('keychain backup'));
+    });
+
     // flutter_secure_storage defaults resetOnError to true, which deletes
     // the entry on any Android read error, so one transient Keystore
     // failure would erase the vault master key for good.

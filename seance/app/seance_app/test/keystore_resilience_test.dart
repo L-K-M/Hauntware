@@ -88,7 +88,7 @@ void main() {
     test('probeKeystore returns null and marks the keystore unavailable',
         () async {
       final keys = MasterKeyManager(_LockedKeystore());
-      final key = await keys.probeKeystore();
+      final key = await keys.probeKeystore(hasExistingVault: false);
       expect(key, isNull);
       expect(keys.keystoreStatus, KeystoreStatus.unavailable);
       expect(keys.lastKeystoreError, contains('KeyringLocked'));
@@ -117,18 +117,18 @@ void main() {
       final storage = _ToggleableKeystore()..locked = true;
       final keys = MasterKeyManager(storage);
 
-      expect(await keys.probeKeystore(), isNull);
+      expect(await keys.probeKeystore(hasExistingVault: false), isNull);
       expect(keys.keystoreStatus, KeystoreStatus.unavailable);
 
       storage.locked = false;
-      final key = await keys.probeKeystore();
+      final key = await keys.probeKeystore(hasExistingVault: false);
       expect(key, isNotNull);
       expect(key, hasLength(32));
       expect(keys.keystoreStatus, KeystoreStatus.available);
       expect(keys.lastKeystoreError, isNull);
 
       // The created key persists: a second probe returns the same one.
-      expect(await keys.probeKeystore(), equals(key));
+      expect(await keys.probeKeystore(hasExistingVault: false), equals(key));
     });
 
     test('probeKeystore never fabricates an ephemeral key while locked',
@@ -138,8 +138,8 @@ void main() {
       // this session would decrypt to garbage (or appear corrupt) forever
       // after — "unavailable" is the only honest answer.
       final keys = MasterKeyManager(_LockedKeystore());
-      expect(await keys.probeKeystore(), isNull);
-      expect(await keys.probeKeystore(), isNull);
+      expect(await keys.probeKeystore(hasExistingVault: false), isNull);
+      expect(await keys.probeKeystore(hasExistingVault: false), isNull);
     });
   });
 

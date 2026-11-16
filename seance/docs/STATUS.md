@@ -19,11 +19,11 @@ Read [AGENTS.md](../AGENTS.md) first for how to build/test.
   stored instead of the unsaved change, and a definition for another
   platform now decodes (it still cannot launch there).
 
-Follow-up: the sync server's notices generator fetches the Dart
-runtime's third-party notice texts live from googlesource.com, so a 503
-there fails the Sync server binary job (it did on #761 and #779 and
-passed on a re-run). Caching or vendoring those texts would remove the
-dependency.
+The sync server's notices generator no longer depends on
+googlesource.com: the Dart runtime's third-party notice texts are
+vendored in `scripts/licenses/dart-runtime/` (Dart 3.13.2 and 3.14.0).
+A floating CI SDK the cache lacks is still fetched live, with retries
+and a warning to run `dart-runtime-licenses.py --refresh`.
 
 Proof: analysis and the full app suite passed locally and CI passed on
 the merged head. Real launches and pickers on macOS, Linux and Windows

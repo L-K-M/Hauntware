@@ -1,0 +1,3 @@
+# Preserve the vendored license bytes on Windows checkouts too: the
+# generator checks each file against its sha256 in cache.json.
+*.txt -text
