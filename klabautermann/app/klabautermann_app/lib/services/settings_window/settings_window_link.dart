@@ -12,7 +12,7 @@
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show SyncPinConflict, VaultRecoveryFailure;
+    show SyncAccountInfo, SyncPinConflict, VaultRecoveryFailure;
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 
 import '../../controllers/account_size.dart';
@@ -134,6 +134,13 @@ enum SettingsLinkMethod {
   /// [SettingsLinkKey.keepLocal].
   resolvePinConflict,
 
+  /// How many of the servers the Sync tab's sign-out removes have an
+  /// open connection now (03 §4.3); no argument, answered with an int.
+  openSyncConnections,
+
+  /// The Sync tab's sign-out (03 §4.3); no argument.
+  signOutSync,
+
   /// A Servers tab toggle of FL-21's monitor set; the argument is an
   /// object of [SettingsLinkKey.serverId] and [SettingsLinkKey.monitored].
   setMonitored,
@@ -223,6 +230,11 @@ enum SettingsLinkKey {
   /// The host-key quarantine diff as [encodePinConflicts] writes it, or
   /// null when the app offers none (03 §4.9).
   pinConflicts,
+
+  /// The enrolled sync account and whether a sync operation runs, as
+  /// [encodeSyncAccount] writes them, or null when the app offers no
+  /// sign-out (03 §4.3).
+  syncAccount,
 
   /// One conflict's `host:port` locator, and the fingerprints of the key
   /// this device trusts and the one the other device synced.
@@ -325,6 +337,25 @@ SyncPinConflict? decodePinConflict(Object? value) {
 List<Map<String, Object?>> encodePinConflicts(
   List<SyncPinConflict> conflicts,
 ) => [for (final conflict in conflicts) encodePinConflict(conflict)];
+
+/// [account] and [busy] for the link: `[username, baseUrl, busy]`, or
+/// `[null, null, busy]` while no account is enrolled.
+List<Object?> encodeSyncAccount(
+  SyncAccountInfo? account, {
+  required bool busy,
+}) => [account?.username, account?.baseUrl, busy];
+
+/// The inverse of [encodeSyncAccount]; a value it did not write reads as
+/// no account, not busy.
+({SyncAccountInfo? account, bool busy}) decodeSyncAccount(Object? value) =>
+    switch (value) {
+      [final String username, final String baseUrl, final bool busy] => (
+        account: SyncAccountInfo(baseUrl: baseUrl, username: username),
+        busy: busy,
+      ),
+      [null, null, final bool busy] => (account: null, busy: busy),
+      _ => (account: null, busy: false),
+    };
 
 /// The inverse of [encodePinConflicts]; null for null, and a value it did
 /// not write reads as no conflicts.

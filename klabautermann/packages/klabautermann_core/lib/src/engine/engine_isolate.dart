@@ -197,7 +197,7 @@ final class EngineStart {
 /// which follows the engine's events into [DockerListChanged] lists
 /// (03 §7.12), [SetDockerEndpoint] sets the socket it tries first
 /// (CN-09) and [SetDockerProgram] the `docker` it runs (CN-16),
-/// [EnrollSync] and [RunSyncRound] run sync one at a time
+/// [EnrollSync], [RunSyncRound] and [SignOutSync] run sync one at a time
 /// beside the request queue (03 §4.3, D63), answered by
 /// [SyncStatus] and, when they succeed, the fleet, after an
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
@@ -1475,6 +1475,10 @@ void engineMain(
         );
       case RunSyncRound(:final requestId):
         runSync(SyncOperation.round, sync.runRound, requestId: requestId);
+      case SignOutSync(:final requestId):
+        // The fleet refresh after it drops the account's servers, which
+        // closes their links and forgets their profiles and history.
+        runSync(SyncOperation.signOut, sync.signOut, requestId: requestId);
       case ReadPinConflicts():
         // Behind any round already queued, so a read never races the diff
         // that round is about to change.

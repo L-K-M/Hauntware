@@ -533,17 +533,17 @@ void main() {
     // The document side of the guard. Paired with 'a length-changing query is
     // still folded' below, which is the side that must NOT report limited.
     test('a length-changing document is reported and matched exactly', () {
-      // The search expands ß itself (see search_full_fold_test.dart), so a
-      // host fold that changes a run's length is reached with a character
-      // the search leaves alone: ŉ, which a full case fold expands to ʼn.
-      String fold(String value) => value.replaceAll('ŉ', 'ʼn');
-      final result = searchText('ŉ Straße', 'STRASSE', fold: fold);
+      // The search expands every Unicode full fold itself (see
+      // search_full_fold_test.dart), so a host fold that changes a run's
+      // length is reached only with a fold of its own invention.
+      String fold(String value) => value.replaceAll('x', 'xx');
+      final result = searchText('x Straße', 'STRASSE', fold: fold);
       expect(result.caseFolding, CaseFolding.lengthChanging);
       expect(result.caseFoldedExactly, isFalse);
       // Reported as limited, and the match is the exact one — the honest
       // outcome is "fewer matches than you asked for", not a wrong range.
       expect(result.matches, isEmpty);
-      expect(searchText('ŉ Straße', 'Straße', fold: fold).matches, [
+      expect(searchText('x Straße', 'Straße', fold: fold).matches, [
         const TextMatch(start: 2, end: 8),
       ]);
       expect(findSearchMatches('ab ab', 'ab', start: 99), isEmpty);
@@ -577,8 +577,15 @@ void main() {
     test('a length-preserving fold fixes what toLowerCase misses', () {
       // Greek words end in the final sigma, which `toLowerCase` never
       // produces: it maps capital sigma to plain sigma unconditionally.
+      // Unicode folding, the default, maps the final sigma to sigma.
       const text = 'η σοφος';
-      expect(findSearchMatches(text, 'ΣΟΦΟΣ'), isEmpty);
+      expect(
+        searchText(text, 'ΣΟΦΟΣ', fold: (value) => value.toLowerCase()).matches,
+        isEmpty,
+      );
+      expect(findSearchMatches(text, 'ΣΟΦΟΣ'), [
+        const TextMatch(start: 2, end: 7),
+      ]);
       expect(
         searchText(
           text,

@@ -24,6 +24,7 @@ import 'package:seance_core/seance_core.dart'
         SecretKind,
         SecretVault,
         ServerConfig,
+        Snippet,
         secureRandomBytes;
 import 'package:test/test.dart';
 
@@ -1171,6 +1172,160 @@ void main() {
       final status = await sync.runRound();
       expect(status.failure, SyncFailure.keystoreUnavailable);
       expect(status.detail, 'no vault key');
+    });
+  });
+
+  group('sign-out (03 §4.3)', () {
+    const secret = Secret(
+      id: 'secret-a',
+      kind: SecretKind.password,
+      value: 'from-seance',
+    );
+    final pinned = HostKey(
+      host: 'alpha.example.com',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:alpha',
+      pinnedAt: 1000,
+    );
+
+    // An account holding a server with a synced credential, a pref, a
+    // rule and a snippet, enrolled with the secrets switch on.
+    Future<(EngineSync, ConflictAwareHostKeyStore)> enrolled() async {
+      await server.seedServer(
+        fakeServer(
+          'srv-a',
+          'alpha',
+        ).copyWith(secretRef: 'secret-a', syncSecret: true),
+      );
+      await server.seedSecret(secret);
+      await server.seedKlabautermann(
+        KlabautermannRecordType.pref.idOf('srv-a'),
+        encodeServerPrefs('srv-a', const ServerPrefs(readOnly: true)),
+      );
+      await server.seedKlabautermann(
+        KlabautermannRecordType.rule.idOf('rule-1'),
+        encodeSyncedRule(
+          const SyncedRule(
+            id: 'rule-1',
+            rule: ThresholdRule(
+              metric: 'cpu.busy',
+              op: ThresholdOp.greaterThan,
+              raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
+              clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
+            ),
+          ),
+        ),
+      );
+      await server.seedSnippet(
+        'snippet:s1',
+        const Snippet(
+          id: 's1',
+          title: 'Uptime',
+          body: 'uptime',
+          createdAt: 1,
+          updatedAt: 1,
+        ).toJson(),
+      );
+      final hostKeys = InMemoryConflictAwareHostKeyStore();
+      await hostKeys.put(pinned);
+      final sync = await open(hostKeys: hostKeys);
+      await sync.setSyncSecrets(enabled: true);
+      final status = await sync.enroll(_enroll);
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+      expect((await vault.read('secret-a'))?.value, 'from-seance');
+      expect(await sync.serverPrefs(), isNotEmpty);
+      expect(await sync.rules(), isNotEmpty);
+      expect(sync.snippets(), isNotEmpty);
+      return (sync, hostKeys);
+    }
+
+    test("forgets the token, the enrollment, the account's servers, their "
+        'credentials and synced records, and keeps the pins', () async {
+      final (sync, hostKeys) = await enrolled();
+      final masterKey = keystore.masterKey;
+
+      final status = await sync.signOut();
+
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+      expect(status.operation, SyncOperation.signOut);
+      expect(status.account, isNull);
+      expect(status.pinConflicts, isEmpty);
+      expect(sync.account, isNull);
+      expect(keystore.apiKeys, isEmpty);
+      expect(await sync.servers(), isEmpty);
+      expect(await sync.serverPrefs(), isEmpty);
+      expect(await sync.rules(), isEmpty);
+      expect(sync.snippets(), isEmpty);
+      expect(await vault.read('secret-a'), isNull);
+      expect(file('sync_records.json').existsSync(), isFalse);
+      expect(file('servers.json').existsSync(), isFalse);
+      final enrollment =
+          jsonDecode(file('sync_enrollment.json').readAsStringSync())
+              as Map<String, Object?>;
+      expect(enrollment.containsKey('account'), isFalse);
+      expect(await hostKeys.get('alpha.example.com', 22), isNotNull);
+      // The vault master key stays; nothing of the account's is under it.
+      expect(keystore.masterKey, masterKey);
+      // Nothing reached the sync server.
+      expect(server.pushes, 0);
+      expect(server.record('srv-a'), isNotNull);
+    });
+
+    test('a restarted engine reads as signed out', () async {
+      final (sync, _) = await enrolled();
+      await sync.signOut();
+
+      final restarted = await open();
+
+      expect(restarted.account, isNull);
+      expect(await restarted.servers(), isEmpty);
+      expect(await restarted.rules(), isEmpty);
+      expect(restarted.snippets(), isEmpty);
+    });
+
+    test('signing in again pulls the account afresh and pushes nothing '
+        'the previous enrollment left', () async {
+      final (sync, _) = await enrolled();
+      await sync.saveServer(
+        const SaveServer(
+          requestId: 'r1',
+          draft: ServerDraft(
+            id: 'srv-new',
+            label: 'unpushed',
+            host: 'web-3.example.com',
+            port: 22,
+            username: 'deploy',
+            auth: ServerDraftAuth.agent,
+          ),
+        ),
+      );
+      await sync.signOut();
+
+      final status = await sync.enroll(_enroll);
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+      expect([for (final s in await sync.servers()) s.id], ['srv-a']);
+      final round = await sync.runRound();
+      expect(round.phase, SyncPhase.succeeded, reason: round.detail);
+      expect(server.pushes, 0);
+    });
+
+    test('is refused while not enrolled or without exclusive access', () async {
+      final sync = await open();
+      expect((await sync.signOut()).failure, SyncFailure.notEnrolled);
+
+      final shared = await open(access: SupportDirectoryAccess.unguarded);
+      expect((await shared.signOut()).failure, SyncFailure.directoryShared);
+    });
+
+    test('finishes while the keystore refuses writes', () async {
+      final (sync, _) = await enrolled();
+      keystore.refuseWrites = true;
+
+      final status = await sync.signOut();
+
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+      expect(keystore.apiKeys, isEmpty);
     });
   });
 

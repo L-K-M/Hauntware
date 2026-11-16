@@ -6465,6 +6465,54 @@ abstract class AppLocalizations {
   /// **'The host key setting could not be changed.'**
   String get settingsPinPublicationNotChanged;
 
+  /// Heading of the Sync tab's section showing the enrolled sync account and its sign-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsSyncAccountTitle;
+
+  /// The enrolled sync account in Settings > Sync.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in as {username} on {server}'**
+  String settingsSyncAccount(String username, String server);
+
+  /// Button in Settings > Sync, and the confirming button of its dialog, that signs this device out of the sync account.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get settingsSyncSignOut;
+
+  /// Title of the dialog confirming the sync sign-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out of sync?'**
+  String get settingsSyncSignOutTitle;
+
+  /// Body of the dialog confirming the sync sign-out: what it removes and what it keeps.
+  ///
+  /// In en, this message translates to:
+  /// **'This device forgets its sign-in and removes the servers that came from your sync account, with their saved credentials, cached profiles and history. Servers imported from ~/.ssh/config and your host key pins stay. Your account and its data stay on the server.'**
+  String get settingsSyncSignOutBody;
+
+  /// Warning in the sign-out dialog when servers it removes are connected.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 server it removes has an open connection, which closes.} other{{count} servers it removes have open connections, which close.}}'**
+  String settingsSyncSignOutOpenConnections(int count);
+
+  /// Button that closes the sign-out dialog without signing out.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsSyncSignOutCancel;
+
+  /// Toast when the engine did not sign out.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-out did not finish. This device is still signed in.'**
+  String get settingsSyncSignOutFailed;
+
   /// Settings, Sync: warning over one quarantined host key, naming the host:port whose synced key differs from the trusted pin (03 §4.9).
   ///
   /// In en, this message translates to:

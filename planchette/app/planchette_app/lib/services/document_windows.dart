@@ -217,10 +217,10 @@ final class DocumentWindows extends ChangeNotifier
   }
 
   /// New Window: shows the hidden main window again, fresh, or asks the
-  /// runner for another one. The new window becomes the active one.
-  Future<void> openWindow() => _serialized(() async {
-    await _openWindow();
-  });
+  /// runner for another one. The new window becomes the active one, and
+  /// is the answer; null when none could open.
+  Future<DocumentWindow?> openWindow() =>
+      _serialized<DocumentWindow?>(_openWindow);
 
   /// Creates or reuses a window and answers it; null when the runner
   /// cannot or the app is going away.
@@ -385,7 +385,9 @@ final class DocumentWindows extends ChangeNotifier
       return;
     }
 
-    if (!await window.workspace.confirmQuit()) return;
+    // Only quitting keeps unsaved documents for the next launch: a window
+    // closed on its own asks about its documents as before.
+    if (!await window.workspace.confirmQuit(scope: QuitScope.window)) return;
     if (_disposed || _quitting || !_windows.contains(window)) return;
 
     _windows.remove(window);
@@ -600,12 +602,18 @@ final class DocumentWindows extends ChangeNotifier
     );
   }
 
-  Future<void> _serialized(Future<void> Function() operation) {
+  /// Runs [operation] after the ones before it; a failure is reported and
+  /// answers null.
+  Future<T?> _serialized<T>(Future<T> Function() operation) {
     final run = _tail.then((_) => operation());
     _tail = run.then<void>((_) {}, onError: (Object _, StackTrace _) {});
-    return run.catchError((Object error, StackTrace stack) {
-      _report(error, stack);
-    });
+    return run.then<T?>(
+      (value) => value,
+      onError: (Object error, StackTrace stack) {
+        _report(error, stack);
+        return null;
+      },
+    );
   }
 }
 

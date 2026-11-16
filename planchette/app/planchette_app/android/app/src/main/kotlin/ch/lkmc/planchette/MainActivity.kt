@@ -12,6 +12,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONObject
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -30,6 +31,9 @@ class MainActivity : FlutterActivity() {
         const val CREATE_DOCUMENT = 2
         const val ERROR_DOCUMENT = "document_error"
         const val ERROR_RECOVERY = "document_recovery"
+        // Content documents whose identities outlive the process, so a
+        // session kept for hot exit reopens them after Android ends it.
+        const val MAXIMUM_KEPT_IDENTITIES = 200
     }
 
     private val documents = mutableMapOf<String, Uri>()
@@ -38,9 +42,11 @@ class MainActivity : FlutterActivity() {
     private val main = Handler(Looper.getMainLooper())
     private var picker: MethodChannel.Result? = null
     private val recoveryDirectory get() = File(filesDir, "recovery")
+    private val identitiesFile get() = File(filesDir, "document-identities.json")
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        loadIdentities()
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -117,7 +123,42 @@ class MainActivity : FlutterActivity() {
         val key = DocumentIo.digest(uri.toString().toByteArray(Charsets.UTF_8))
         val path = File(filesDir, "documents/$key/$name").path
         documents[path] = uri
+        saveIdentities()
         return path
+    }
+
+    // The identity map in app-private storage (never backed up: the
+    // manifest disables backup). Read access to a picked document lasts
+    // until the device restarts, so after a process death the same
+    // identity reaches the same document again.
+    private fun loadIdentities() {
+        val stored = try {
+            JSONObject(identitiesFile.readText())
+        } catch (_: Exception) {
+            return
+        }
+        for (path in stored.keys()) {
+            val uri = Uri.parse(stored.optString(path))
+            if (uri.scheme == "content" && path.startsWith(File(filesDir, "documents").path + "/")) {
+                documents[path] = uri
+            }
+        }
+    }
+
+    private fun saveIdentities() {
+        val kept = documents.entries.filter { it.value.scheme == "content" }
+            .takeLast(MAXIMUM_KEPT_IDENTITIES)
+        val json = JSONObject()
+        for ((path, uri) in kept) json.put(path, uri.toString())
+        val temporary = File(filesDir, "document-identities.json.tmp")
+        try {
+            temporary.writeText(json.toString())
+            if (!temporary.renameTo(identitiesFile)) temporary.delete()
+        } catch (_: IOException) {
+            // Only a session restored after a process death needs these;
+            // a document that cannot be found then is chosen again.
+            temporary.delete()
+        }
     }
 
     private fun stat(uri: Uri): Map<String, Any?>? {

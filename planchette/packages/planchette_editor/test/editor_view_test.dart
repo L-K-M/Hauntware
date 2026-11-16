@@ -203,9 +203,10 @@ void main() {
   ) async {
     final c = EditorController(
       displayPath: 'notes.txt',
-      initialText: 'Die \u0149 Stra\u00dfe ist breit',
-      // ŉ expands to "ʼn", a length change the search cannot map back.
-      caseFolder: (value) => value.replaceAll('\u0149', '\u02bcn'),
+      initialText: 'Die x Stra\u00dfe ist breit',
+      // A host fold that lengthens a run: a change the search cannot map
+      // back. Unicode's own expansions, ŉ included, the search maps itself.
+      caseFolder: (value) => value.replaceAll('x', 'xx'),
     );
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));

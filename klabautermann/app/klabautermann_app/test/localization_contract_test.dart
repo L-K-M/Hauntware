@@ -606,11 +606,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'No app lock settings'",
     "'No admin memory settings'",
     "'No recovery settings'",
+    "'No sync sign-out'",
     "'levels'",
     "'not valid bands'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
+    // A refused sign-out's diagnostic, never shown.
+    r"'$error'",
     // The device name until the first snapshot, which comes with hello.
     "''",
   },
@@ -1181,6 +1184,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/fleet_board.dart': {r"'$error'"},
   'lib/ui/settings_page.dart': {r"'$error'"},
+  // A sign-out's failure diagnostics; the toast is ARB text.
+  'lib/ui/settings/sync_sign_out_section.dart': {r"'$error'"},
+  // The separator in a refused sign-out's diagnostic, never shown.
+  'lib/controllers/sync_sign_out.dart': {"': '"},
   // The keys tests find a pin conflict card's two resolutions by, and a
   // resolution failure's diagnostic.
   'lib/ui/pin_conflict_card.dart': {

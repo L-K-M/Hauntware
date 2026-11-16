@@ -54,6 +54,7 @@ import 'controllers/tls_endpoints.dart';
 import 'controllers/window_panes.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'controllers/sync_sign_out.dart' show SyncSignOut;
 import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/app_version.dart';
@@ -638,6 +639,7 @@ Future<void> main(List<String> args) async {
     pinPublication: pinPublication,
     pinConflicts: sync,
     accountSize: sync.accountSize,
+    signOut: SyncSignOut(sync, fleet),
     cadence: cadence,
     cadenceCaps: cadenceCaps,
     adminMemory: adminMemory,

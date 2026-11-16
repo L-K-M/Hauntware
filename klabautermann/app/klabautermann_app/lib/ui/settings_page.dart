@@ -24,6 +24,7 @@ import '../controllers/safety_controller.dart';
 import '../controllers/recovery_controller.dart';
 import '../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../controllers/sync_secrets_controller.dart';
+import '../controllers/sync_sign_out.dart' show SyncSignOutSettings;
 import '../controllers/threshold_controller.dart';
 import '../controllers/time_display.dart';
 import '../l10n/app_localizations.dart';
@@ -35,6 +36,7 @@ import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
 import 'settings/recovery_settings.dart';
 import 'settings/setting_write.dart';
+import 'settings/sync_sign_out_section.dart';
 import 'pin_conflict_card.dart';
 import 'server_editing.dart';
 import 'thresholds_tab.dart';
@@ -71,6 +73,7 @@ class SettingsPage extends StatefulWidget {
     this.pinConflicts,
     this.accountSize,
     this.recovery,
+    this.signOut,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
@@ -138,6 +141,10 @@ class SettingsPage extends StatefulWidget {
   /// CRED-05's recovery code section in the Sync tab; null in tests that
   /// leave it out, where the tab shows no recovery.
   final RecoverySettings? recovery;
+
+  /// The sync account and its sign-out (03 §4.3) in the Sync tab; null in
+  /// tests that leave it out, where the tab shows no account.
+  final SyncSignOutSettings? signOut;
 
   /// The running build's version for the about row; null when the
   /// platform could not tell (`readAppVersion`).
@@ -233,6 +240,7 @@ class _SettingsPageState extends State<SettingsPage>
                 pinConflicts: widget.pinConflicts,
                 accountSize: widget.accountSize,
                 recovery: widget.recovery,
+                signOut: widget.signOut,
               ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
                 safety: widget.safety!,
@@ -695,6 +703,7 @@ class SyncTab extends StatelessWidget {
     this.pinConflicts,
     this.accountSize,
     this.recovery,
+    this.signOut,
   });
 
   final SyncSecretsSettings syncSecrets;
@@ -710,6 +719,9 @@ class SyncTab extends StatelessWidget {
   /// CRED-05's Recovery section, shown whether or not a sync account is
   /// enrolled; null in tests that leave it out.
   final RecoverySettings? recovery;
+
+  /// As [SettingsPage.signOut].
+  final SyncSignOutSettings? signOut;
 
   /// As [_set], for the host key sharing switch.
   Future<void> _assert(BuildContext context, bool asserted) async {
@@ -748,6 +760,7 @@ class SyncTab extends StatelessWidget {
         ?conflicts,
         ?accountSize,
         ?recovery,
+        ?signOut,
       ]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
@@ -755,6 +768,10 @@ class SyncTab extends StatelessWidget {
           if (conflicts != null && conflicts.conflicts.isNotEmpty) ...[
             for (final conflict in conflicts.conflicts)
               PinConflictCard(conflict: conflict, settings: conflicts),
+            const SizedBox(height: 24),
+          ],
+          if (signOut case final signOut? when signOut.account != null) ...[
+            SyncSignOutSection(model: signOut),
             const SizedBox(height: 24),
           ],
           Semantics(
