@@ -10,10 +10,11 @@ Merged to main:
   come back at the next launch, on the desktop and Android, also after a
   crash or a background kill. Saving or Don't Save removes the text;
   closing one window of several still asks. Settings > Keep unsaved
-  changes when quitting (on by default) brings back the prompt and
-  deletes the journal. A second instance or a failed journal write falls
-  back to the prompt. A restore never writes; a missing file's text goes
-  to an untitled tab and the file is offered its save siblings (B10).
+  changes when quitting is on by default; turning it off brings the
+  prompt back and deletes the journal. A second instance or a failed
+  journal write falls back to the prompt. A restore never writes; a
+  missing file's text goes to an untitled tab and the file is offered
+  its save siblings (B10).
 - Unicode 17.0.0 full case folding for plain-text find (B37), with the
   Unicode License v3 notice on every app's licenses page; regex find
   keeps simple folding. Hard-linked files save in place behind an

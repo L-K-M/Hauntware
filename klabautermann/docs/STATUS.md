@@ -2118,8 +2118,9 @@ is on main:
   syslog line is written before it. After a reboot the section waits,
   counting the time, until a `core` reading reports a later boot. Since
   #774 the wait is app-wide, shared with the Overview's quick actions
-  card, and gives up after 15 minutes. A reboot and shutdown on a real
-  host stay a manual check.
+  card, and after 15 minutes reports the server as not back, though a
+  later boot still ends the wait. A reboot and shutdown on a real host
+  stay a manual check.
 - Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
   section asks the server's package manager (apt, dnf, zypper, pacman or
   apk) for its pending updates as the login user and from cached
