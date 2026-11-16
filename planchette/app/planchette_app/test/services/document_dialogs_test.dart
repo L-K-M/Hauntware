@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,13 +63,22 @@ void main() {
     });
 
     test('Save As starts beside the file, named after it', () async {
-      final current = paths.absolute('docs', 'notes.txt');
-      final chosen = paths.absolute('docs', 'renamed.txt');
+      final folder = Directory.systemTemp.createTempSync('planchette-docs-');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final current = paths.join(folder.path, 'notes.txt');
+      final chosen = paths.join(folder.path, 'renamed.txt');
       platform.saveAt = chosen;
       expect(await dialogs.pickSavePath(current), chosen);
       expect(platform.saveOptions?.suggestedName, 'notes.txt');
-      expect(platform.saveOptions?.initialDirectory, paths.absolute('docs'));
+      expect(platform.saveOptions?.initialDirectory, folder.path);
       expect(platform.saveOptions?.confirmButtonText, 'Save');
+    });
+
+    test('a folder that is gone is left to the system default', () async {
+      final gone = paths.absolute('no-such-folder-$pid', 'notes.txt');
+      expect(await dialogs.pickSavePath(gone), isNull);
+      expect(platform.saveOptions?.suggestedName, 'notes.txt');
+      expect(platform.saveOptions?.initialDirectory, isNull);
     });
 
     test('an untitled document suggests its name only', () async {

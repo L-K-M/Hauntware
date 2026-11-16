@@ -6,6 +6,9 @@ import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'json_file.dart';
+import 'save_as_folders.dart';
+
+export 'save_as_folders.dart' show SaveAsFolders;
 
 /// What quitting does with documents that have unsaved changes (A2).
 enum UnsavedOnQuit {
@@ -36,6 +39,7 @@ final class AppSettings {
     this.sidebarVisible = true,
     this.sidebarWidth = defaultSidebarWidth,
     this.unsavedOnQuit = UnsavedOnQuit.keep,
+    this.saveAsFolders = const SaveAsFolders(),
   });
 
   /// Bounds a stored size so a bad file cannot make the editor unreadable.
@@ -113,6 +117,9 @@ final class AppSettings {
 
   /// Whether quitting keeps unsaved changes for the next launch or asks.
   final UnsavedOnQuit unsavedOnQuit;
+  /// Where Save As opens for a document without a folder of its own. Kept
+  /// on this device with Open Recent, and cleared with it.
+  final SaveAsFolders saveAsFolders;
 
   AppSettings copyWith({
     ThemeMode? themeMode,
@@ -126,6 +133,7 @@ final class AppSettings {
     bool? sidebarVisible,
     double? sidebarWidth,
     UnsavedOnQuit? unsavedOnQuit,
+    SaveAsFolders? saveAsFolders,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontSize: fontSize ?? this.fontSize,
@@ -138,6 +146,7 @@ final class AppSettings {
     sidebarVisible: sidebarVisible ?? this.sidebarVisible,
     sidebarWidth: sidebarWidth ?? this.sidebarWidth,
     unsavedOnQuit: unsavedOnQuit ?? this.unsavedOnQuit,
+    saveAsFolders: saveAsFolders ?? this.saveAsFolders,
   );
 
   Map<String, Object?> toJson() => {
@@ -159,6 +168,7 @@ final class AppSettings {
     if (sidebarWidth != defaultSidebarWidth) 'sidebarWidth': sidebarWidth,
     if (unsavedOnQuit != UnsavedOnQuit.keep)
       'unsavedOnQuit': unsavedOnQuit.name,
+    if (!saveAsFolders.isEmpty) 'saveAsFolders': saveAsFolders.toJson(),
   };
 
   /// Read a stored document, falling back field by field. One bad value costs
@@ -188,6 +198,7 @@ final class AppSettings {
       unsavedOnQuit: json['unsavedOnQuit'] == UnsavedOnQuit.ask.name
           ? UnsavedOnQuit.ask
           : fallback.unsavedOnQuit,
+      saveAsFolders: SaveAsFolders.fromJson(json['saveAsFolders']),
     );
   }
 
@@ -264,6 +275,7 @@ final class AppSettings {
       other.sidebarVisible == sidebarVisible &&
       other.sidebarWidth == sidebarWidth &&
       other.unsavedOnQuit == unsavedOnQuit &&
+      other.saveAsFolders == saveAsFolders &&
       _listsEqual(other.recentTextTools, recentTextTools) &&
       _listsEqual(other.recentDocuments, recentDocuments);
 
@@ -285,6 +297,7 @@ final class AppSettings {
     sidebarVisible,
     sidebarWidth,
     unsavedOnQuit,
+    saveAsFolders,
     jsonEncode(recentTextTools),
     Object.hashAll(recentDocuments),
   );

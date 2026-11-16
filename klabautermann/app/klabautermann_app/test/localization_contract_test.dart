@@ -214,6 +214,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A migration the engine refused, printed; it is tried again.
     r"'Safety preferences of $serverId stay on this device: $error'",
   },
+  // A refused badge update's diagnostic context, reported.
+  'lib/controllers/app_badge.dart': {"'while setting the app icon badge'"},
   // A refused post's and a failed permission check's diagnostics, printed.
   'lib/controllers/alert_notifications.dart': {
     "'while posting an alert notification'",

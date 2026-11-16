@@ -15,14 +15,16 @@
 # the CC BY-SA credit for the Debian logo glyph in its 3270 font,
 # Séance's vendored xterm and flutter_pty, the NuGet libraries the Séance
 # and Klabautermann Windows builds compile in, Poltergeist's PDFium and the
-# Unicode data tables. Exits 1 on any miss.
+# Unicode data tables (planchette_core's search folding, in every app, and
+# poltergeist_core's). Exits 1 on any miss.
 set -euo pipefail
 
 [[ $# -ge 2 ]] || { echo "usage: $0 PRODUCT FILE..." >&2; exit 2; }
 product="$1"
 shift
 
-required=('Iosevka Term' 'SIL Open Font License' 'Software in the Public Interest')
+required=('Iosevka Term' 'SIL Open Font License' 'Software in the Public Interest'
+  'UNICODE LICENSE V3')
 case "$product" in
   planchette) ;;
   seance)
@@ -30,7 +32,7 @@ case "$product" in
     ;;
   klabautermann) required+=('Windows Implementation Libraries' 'C++/WinRT') ;;
   poltergeist)
-    required+=('PDFium' 'PDFium: FreeType' 'UNICODE LICENSE V3')
+    required+=('PDFium' 'PDFium: FreeType')
     ;;
   *) echo "unknown product: $product" >&2; exit 2 ;;
 esac

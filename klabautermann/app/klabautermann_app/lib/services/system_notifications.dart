@@ -20,6 +20,10 @@ abstract interface class SystemNotifications {
 
   /// Withdraws the notification [id], if it still shows.
   Future<void> cancel(int id);
+
+  /// Shows [count] on the app icon, or no badge for 0, where the system
+  /// has an icon badge the app can set; elsewhere it does nothing.
+  Future<void> setBadge(int count);
 }
 
 /// The words a notification and its channel carry, which the composition
@@ -136,6 +140,24 @@ final class LocalSystemNotifications implements SystemNotifications {
   /// The Android channel raised alerts post on.
   static const _channelId = 'alerts';
 
+  /// The id of the badge-only notification [setBadge] posts, outside the
+  /// alert ids, which are non-negative.
+  static const _badgeNotificationId = -1;
+
+  /// What a badge-only notification carries: the plugin sets the icon
+  /// badge only from a notification's content, so this one has no title
+  /// or body, presents nothing and is withdrawn at once, and the badge it
+  /// set stays.
+  static DarwinNotificationDetails _badgeOnly(int count) =>
+      DarwinNotificationDetails(
+        presentAlert: false,
+        presentBanner: false,
+        presentList: false,
+        presentSound: false,
+        presentBadge: true,
+        badgeNumber: count,
+      );
+
   final FlutterLocalNotificationsPlugin _plugin;
   final NotificationChannelWords _words;
 
@@ -155,7 +177,7 @@ final class LocalSystemNotifications implements SystemNotifications {
               .resolvePlatformSpecificImplementation<
                 IOSFlutterLocalNotificationsPlugin
               >()
-              ?.requestPermissions(alert: true) ??
+              ?.requestPermissions(alert: true, badge: true) ??
           false;
     }
     if (Platform.isMacOS) {
@@ -163,7 +185,7 @@ final class LocalSystemNotifications implements SystemNotifications {
               .resolvePlatformSpecificImplementation<
                 MacOSFlutterLocalNotificationsPlugin
               >()
-              ?.requestPermissions(alert: true) ??
+              ?.requestPermissions(alert: true, badge: true) ??
           false;
     }
     // Linux and Windows ask nothing of the app.
@@ -232,4 +254,17 @@ final class LocalSystemNotifications implements SystemNotifications {
 
   @override
   Future<void> cancel(int id) => _plugin.cancel(id: id);
+
+  /// iOS and macOS only (decision Q3): Android launchers, Windows and
+  /// Linux would need another plugin.
+  @override
+  Future<void> setBadge(int count) async {
+    if (kIsWeb || !(Platform.isIOS || Platform.isMacOS)) return;
+    final details = _badgeOnly(count);
+    await _plugin.show(
+      id: _badgeNotificationId,
+      notificationDetails: NotificationDetails(iOS: details, macOS: details),
+    );
+    await _plugin.cancel(id: _badgeNotificationId);
+  }
 }

@@ -8,6 +8,7 @@ import 'package:seance_core/seance_core.dart' show DownloadProvenance;
 import 'document_store.dart';
 import 'document_publication.dart';
 import 'folder_workspace.dart';
+import 'save_as_folders.dart';
 import 'save_siblings.dart';
 import 'session_state.dart';
 
@@ -228,7 +229,13 @@ typedef _ShellState = ({
 /// Where one save writes: the resolved path, the digest the write expects to
 /// replace (null for a new file), and whether the user agreed, for this
 /// write, to replace a protected file.
-typedef _SaveTarget = ({String path, String? digest, bool acceptedReadOnly});
+/// [chosen] is whether the user picked the destination in the save dialog.
+typedef _SaveTarget = ({
+  String path,
+  String? digest,
+  bool acceptedReadOnly,
+  bool chosen,
+});
 
 final class DocumentWorkspace extends ChangeNotifier {
   DocumentWorkspace({
@@ -310,6 +317,28 @@ final class DocumentWorkspace extends ChangeNotifier {
     for (final tab in _documents) {
       tab.editor.saveOptions = value;
     }
+  }
+
+  /// Where Save As opens for a document with no folder of its own, from the
+  /// user's settings (A3).
+  SaveAsFolders saveAsFolders = const SaveAsFolders();
+
+  /// Told the path of every save to a destination the user just chose:
+  /// Save As, a new document's first save, an HTML export. The settings
+  /// remember its folder for [saveAsFolders].
+  void Function(String path)? onSavedToChosenPath;
+
+  /// What the save dialog is given for [tab] saved as [name]: a local file
+  /// saved before suggests its own folder; anything else, an untitled
+  /// document or a server copy whose local file sits in a cache, suggests
+  /// the folder Save As last used for that kind of file, or none.
+  String _saveSuggestion(DocumentTab tab, String name) {
+    final path = tab.path;
+    if (path != null && tab._publication == null) {
+      return _paths.join(_paths.dirname(path), name);
+    }
+    final folder = saveAsFolders.initialFolderFor(name);
+    return folder == null ? name : _paths.join(folder, name);
   }
 
   /// The indentation for documents that neither use nor mandate one, from the
@@ -884,6 +913,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         // Only reached when tab._publication != null: the saved copy is
         // remote-sourced, so it carries the download mark.
         await _provenance.markDownloaded(target.path);
+        onSavedToChosenPath?.call(target.path);
         _clearScope(tab);
         return true;
       }
@@ -909,6 +939,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       // Consent to replace a protected file covers the write it was given
       // for, so it is remembered only once that write lands.
       if (target.acceptedReadOnly) tab._acceptedReadOnlyPath = target.path;
+      if (target.chosen) onSavedToChosenPath?.call(target.path);
       _clearScope(tab);
       return true;
     } catch (error) {
@@ -953,9 +984,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       final String target;
       if (chooseTarget) {
         final selected = await _dialog(
-          () => dialogs.pickSavePath(
-            tab._publication == null ? tab.path ?? tab.name : tab.name,
-          ),
+          () => dialogs.pickSavePath(_saveSuggestion(tab, tab.name)),
         );
         if (selected == null) {
           _declinedSaves.add(tab);
@@ -1018,7 +1047,12 @@ final class DocumentWorkspace extends ChangeNotifier {
         _declinedSaves.add(tab);
         return null;
       }
-      return (path: target, digest: digest, acceptedReadOnly: acceptedReadOnly);
+      return (
+        path: target,
+        digest: digest,
+        acceptedReadOnly: acceptedReadOnly,
+        chosen: chooseTarget,
+      );
     }
   }
 
@@ -1137,7 +1171,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       String? digest;
       while (true) {
         final selected = await _dialog(
-          () => dialogs.pickSavePath('${tab.path ?? tab.name}.html'),
+          () => dialogs.pickSavePath(_saveSuggestion(tab, '${tab.name}.html')),
         );
         if (selected == null) return false;
         target = await store.canonicalSavePath(selected);
@@ -1207,6 +1241,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         expectedSha256: digest,
         maximumBytes: htmlExportMaximumBytes,
       );
+      onSavedToChosenPath?.call(target);
       // A remote document's export is remote-sourced; a local document's
       // page is locally authored and stays unmarked.
       if (tab._publication != null) {
