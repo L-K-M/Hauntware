@@ -111,6 +111,10 @@ class FakeAppEngine implements AppEngine {
   /// Roots the panes requested at open time (the home anchor contract).
   final localChannelRoots = <String>[];
 
+  /// Holds every local open until completed, so a test can look at a
+  /// pane mid-rebind (still showing its old location).
+  Completer<void>? localOpenGate;
+
   /// Emitted (and awaited) in order inside [openBrowseChannel].
   List<EnginePromptEvent> promptScript = const [];
 
@@ -234,6 +238,7 @@ class FakeAppEngine implements AppEngine {
   @override
   Future<AppBrowseChannel> openLocalChannel({required String rootPath}) async {
     localChannelRoots.add(rootPath);
+    await localOpenGate?.future;
     if (_localChannelCursor >= localChannels.length) {
       throw StateError('no local browse channel scripted');
     }

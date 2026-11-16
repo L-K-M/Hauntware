@@ -30,18 +30,12 @@ Future<bool> showCompactCopyToSheet(
   return queued ?? false;
 }
 
-/// The destination host's name: the bookmark's label for a remote pane,
-/// "This device" for a local one. While the other pane rebinds to this
-/// device it still shows the remote folder but has dropped the
-/// bookmark; the label then falls back to the server id, as the delete
-/// dialog's location label does, never to "This device".
-String _hostLabel(AppLocalizations l10n, OtherPaneCopyPlan plan) {
-  final location = plan.target.location;
-  if (location is RemotePaneLocation) {
-    return plan.target.remoteBookmark?.label ?? location.serverId;
-  }
-  return l10n.sidebarThisDevice;
-}
+/// The destination host's name, from the plan rather than the live pane:
+/// a rebind of the other pane under the open sheet must not turn a
+/// server destination into "This device" while Copy still enqueues to
+/// the server.
+String _hostLabel(AppLocalizations l10n, OtherPaneCopyPlan plan) =>
+    plan.serverLabel ?? l10n.sidebarThisDevice;
 
 class _CopyToSheet extends StatefulWidget {
   const _CopyToSheet({required this.plan, required this.delegate});
@@ -96,7 +90,7 @@ class _CopyToSheetState extends State<_CopyToSheet> {
             const SizedBox(height: 12),
             _Field(
               key: const ValueKey(CompactKey.copyToHost),
-              icon: widget.plan.target.location is RemotePaneLocation
+              icon: widget.plan.serverLabel != null
                   ? Icons.dns_outlined
                   : Icons.smartphone_outlined,
               caption: l10n.compactCopyToHost,
