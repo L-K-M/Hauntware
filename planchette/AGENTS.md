@@ -178,9 +178,6 @@ versions in step. A release is a separate explicit task.
   path-depends on the workspace members instead.
 - **`pkill -f <name>` kills your own shell** when the pattern matches the
   bash command line running it. Kill by PID.
-- **file_picker ≥11 breaks APK builds** on AGP 9+ unless Kotlin is re-applied
-  to that subproject (see Séance's `android/build.gradle.kts` workaround and
-  flutter_file_picker#1973).
 - macOS: the restricted `keychain-access-groups` entitlement blocks ad-hoc
   signed builds from launching; use the legacy login keychain like Séance
   does.
