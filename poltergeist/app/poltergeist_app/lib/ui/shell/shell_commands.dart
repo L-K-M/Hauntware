@@ -10,6 +10,7 @@ import '../../services/pane_controller.dart';
 import '../../services/pane_location.dart';
 import '../../services/pane_drop.dart';
 import '../../services/pane_file_ops.dart';
+import '../../services/file_operations.dart';
 import '../../services/other_pane_transfer.dart';
 import '../../services/registered_command.dart';
 import '../../services/window_full_screen.dart';
@@ -63,18 +64,7 @@ List<ShortcutActivator> Function(TargetPlatform) _perPlatform({
 PaneController? _otherPaneTarget(WorkspaceController workspace) =>
     otherPaneTarget(workspace, workspace.activePane);
 
-/// The roots a selection verb acts on: the selected rows, else the
-/// cursor row (Finder's "the focused item is the selection" rule). A row
-/// inside a selected folder is not a root of its own (02 §2.5).
-List<String> _selectionRoots(PaneController pane) {
-  final selected = pane.selectedRoots;
-  if (selected.isNotEmpty) return [for (final e in selected) e.path];
-  final cursor = pane.cursorIndex;
-  if (cursor == null || cursor < 0 || cursor >= pane.entries.length) {
-    return const [];
-  }
-  return [pane.entries[cursor].path];
-}
+List<String> _selectionRoots(PaneController pane) => paneSelectionRoots(pane);
 
 /// Whether Copy/Move to Other Pane can run now: both panes bound, a
 /// non-empty selection, a queue to receive it, and a drop the 02 §5.1
@@ -187,6 +177,11 @@ List<RegisteredCommand> buildShellCommands({
   required List<RegisteredCommand> Function() allCommands,
   required Future<void> Function(Uri url) openUrl,
   required PaneFileOps? Function() fileOps,
+
+  /// P4-21's Undo recorder: a local Move to Trash becomes Put Back, a
+  /// remote or permanent delete an entry Undo declines. Null records
+  /// nothing.
+  FileOperations? fileOperations,
   required void Function(Object error) reportFailure,
   required String Function(PaneController pane) locationLabel,
   GhostFileRevealer revealer = const GhostFileRevealer(),
@@ -293,11 +288,12 @@ List<RegisteredCommand> buildShellCommands({
         if (confirmation == null) return;
         if (confirmation.effectiveDisposition == DeleteDisposition.trash &&
             !confirmation.trashUnavailable) {
-          await ops.deleteSelection(
+          final task = await ops.deleteSelection(
             confirmation,
             disposition: DeleteDisposition.trash,
             pane: pane,
           );
+          fileOperations?.recordTrash(task);
           return;
         }
       }
@@ -317,11 +313,18 @@ List<RegisteredCommand> buildShellCommands({
       );
       final confirmation = confirmed;
       if (decision is! DeleteConfirmed || confirmation == null) return;
-      await ops.deleteSelection(
+      final task = await ops.deleteSelection(
         confirmation,
         disposition: decision.disposition,
         pane: pane,
       );
+      // Only a local Move to Trash comes back (Put Back); a remote delete,
+      // into the server's trash or not, and a permanent one cannot.
+      if (local && decision.disposition == DeleteDisposition.trash) {
+        fileOperations?.recordTrash(task);
+      } else {
+        fileOperations?.recordIrreversibleDelete();
+      }
     } on Object catch (error) {
       reportFailure(error);
     }
