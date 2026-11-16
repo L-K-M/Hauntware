@@ -1,28 +1,60 @@
 # Status
 
-## Wave 5 (2026-11-15)
+## Wave 5 (2026-11-15/16)
 
-Three branches, each with its own PR:
+Merged to main:
 
-- `planchette/wave5`: hot exit (A2). Quitting keeps unsaved documents
-  and windows in an owner-only journal and restores them at the next
-  launch, desktop and Android; a setting brings back the prompt. A
-  missing file in a restored session is offered its save siblings
-  (B10).
-- `planchette/wave5-2`: Unicode 17.0.0 full case folding for literal
-  search (B37), in-place saves behind a backup for hard-linked files
-  (I3), and per-type Save As folders (A3).
-- `planchette/wave5-3`: the `EditorStrings` feed in the ARB catalog
-  (I7 phase 3).
+- Hot exit (A2, #782). Quitting no longer asks: every window's
+  documents, untitled buffers and unsaved edits go to an owner-only
+  journal (`session/`, 0700, one 0600 file per window, never synced) and
+  come back at the next launch, on the desktop and Android, also after a
+  crash or a background kill. Saving or Don't Save removes the text;
+  closing one window of several still asks. Settings > Keep unsaved
+  changes when quitting (on by default) brings back the prompt and
+  deletes the journal. A second instance or a failed journal write falls
+  back to the prompt. A restore never writes; a missing file's text goes
+  to an untitled tab and the file is offered its save siblings (B10).
+- Unicode 17.0.0 full case folding for plain-text find (B37), with the
+  Unicode License v3 notice on every app's licenses page; regex find
+  keeps simple folding. Hard-linked files save in place behind an
+  owner-only backup copy (I3). Save As opens in the file's folder, or
+  for an untitled document the last folder for that extension, then the
+  last Save As folder (A3). All three in #777.
+- I7 phase 3 (#784): the shared editor's copy (find and replace, Go to
+  Line, text tools, status row, problem messages), about 340 literals,
+  comes from the ARB catalog through `PlanchetteEditorStrings`. A parity
+  test keeps the English text unchanged.
+- `ghost_editors` (#778, #779), the external editor registry shared by
+  Séance and Poltergeist, lives in this tree; Planchette does not use it.
 
-Open: the shell's menus and the services' strings (I7, about 200
-literals), macOS native recents (A3), owner metadata on replaced files
-(I3), scroll position in a restored session (A2).
+Deferred:
 
-Local proof: the app suite on each branch, the core and editor suites
-for B37 and I3. Unverified here: the Android `MainActivity` identity
-persistence (no Android SDK), macOS and Windows runs of the hard-link
-and journal paths, and devices.
+- The shell's menus and banners and the services' messages (I7, about
+  200 literals): menu labels double as identities, and the workspace
+  needs a strings seam because its messages are built without a
+  `BuildContext`.
+- Hot exit: scroll position, forced-termination tests at each save
+  phase, and a preview before restoring. The workspace journal does not
+  retry a failed write until the next edit, so on Windows a scanner
+  holding a `window-*.json` file can leave it one pause stale; quit
+  still flushes. A delayed retry, or a sharing-violation retry in
+  `AtomicFileWriter`'s rename, is the follow-up.
+- macOS native recents (A3); owner, group, macOS ACLs and Windows
+  streams on replaced files (I3).
+- Pre-existing text tool copy in `planchette_editor`'s
+  `editor_strings.dart`, carried unchanged into the catalog by #784: the
+  "changed N units" fallback is not pluralized, Trim Trailing Whitespace
+  has no "will trim N lines" preview, and the Extract Matches unchanged
+  notice takes its count from the scope rather than the matches, which
+  needs checking.
+
+Proof: core, editor and app suites passed locally, and CI passed on
+each merged head, including the app tests on macOS and Windows (the
+journal and `mklink /H` hard-link paths) and the Android build with its
+JVM unit tests. Automated compilation is not a device smoke test: still
+manual are a process kill and restore on Android, quit and restore on
+macOS, Windows and Linux desktops, hard-link saves on macOS and Windows
+volumes, and the native Save As dialogs opening in the chosen folder.
 
 ## Deferred review items (2026-11-14)
 

@@ -3,6 +3,32 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Wave 5 (2026-11-15/16)
+
+- Per-extension default editors (F7, decision Q6, #779): Settings >
+  Files lists, adds and removes extension bindings, and a default open
+  checks the file's extension before the global default. Your current
+  default editor stays the default for every extension. The registry,
+  launcher and Settings section are the shared `ghost_editors` package
+  (#778); Séance keeps its `seance` scheme at version 2, the version-1
+  System default migration, the `remoteFileEditor: bbedit` migration,
+  the `seance/files` channel and the built-in editor routing. Stored
+  samples of every historical format decode in tests.
+- Changes that come with the shared code: rows have Edit and Remove
+  buttons, a failed settings write leaves the section showing what is
+  stored instead of the unsaved change, and a definition for another
+  platform now decodes (it still cannot launch there).
+
+Follow-up: the sync server's notices generator fetches the Dart
+runtime's third-party notice texts live from googlesource.com, so a 503
+there fails the Sync server binary job (it did on #761 and #779 and
+passed on a re-run). Caching or vendoring those texts would remove the
+dependency.
+
+Proof: analysis and the full app suite passed locally and CI passed on
+the merged head. Real launches and pickers on macOS, Linux and Windows
+and a visual check of the Files tab are still manual.
+
 ## Sync server bundle, quotas and terminal review (2026-11-15)
 
 - The sync server runs on package:sqlite3 3.x with a bundled,

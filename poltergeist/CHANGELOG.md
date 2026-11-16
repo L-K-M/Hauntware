@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Cut, Copy, Paste and Undo for files.** Edit › Cut, Copy and Paste
+  (⌘X, ⌘C, ⌘V on macOS, Ctrl elsewhere, and the context menus) move
+  and copy items between panes, tabs and servers with Poltergeist's own
+  clipboard, not the system's. Paste after Cut renames on the same
+  server and otherwise moves, deleting each source only after its copy
+  is complete. Edit › Undo takes back renames, moves, a local Move to
+  Trash where the system reports where the items went, and a copy,
+  which deletes the copied items after you confirm. Deletes on a server
+  and immediate deletes cannot be undone.
+- **Copy to… on phones asks first.** The selection bar's Copy to… opens
+  a sheet that names the destination host and folder, where you can
+  copy, pick another folder or cancel.
 - **Per-extension default editors in Settings.** Settings › Editing
   lists the extensions bound to their own editor, and you can add or
   remove one there, not only through Open With › Other…. The editor
