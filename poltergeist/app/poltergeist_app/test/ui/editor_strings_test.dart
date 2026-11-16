@@ -414,4 +414,45 @@ void main() {
         reason: '$group has no ARB label');
     }
   });
+  test('text tool notices and previews say what the shared editor says', () {
+    final strings = PoltergeistEditorStrings(AppLocalizationsEn());
+    const defaults = EditorStrings();
+    final host = TextTool(
+      id: 'hostTool',
+      group: TextToolGroup.values.first,
+      scope: TextToolScope.values.first,
+      run: (_) => const TextToolUnchanged(),
+    );
+    TextToolChanged changed(int changed, int scope, [String? detail]) =>
+        TextToolChanged(
+          const LineEdit('', 0, 0),
+          changed: changed,
+          scope: scope,
+          detail: detail,
+        );
+    final extract = textToolById('extractMatches')!;
+    final trim = textToolById('trimTrailingWhitespace')!;
+    final reports = [
+      for (final count in [1, 2]) ...[
+        (host, changed(count, count)),
+        (trim, changed(count, 9)),
+        (extract, changed(count, count, 'inPlace:lines')),
+        (extract, changed(count, count, 'inPlace:matches')),
+        (extract, TextToolUnchanged(scope: count, detail: 'clipboard:lines')),
+        (
+          extract,
+          TextToolUnchanged(scope: count, detail: 'newDocument:matches'),
+        ),
+      ],
+    ];
+    for (final (tool, outcome) in reports) {
+      final report = TextToolReport(
+        tool: tool,
+        outcome: outcome,
+        ranOn: TextToolRanOn.selection,
+      );
+      expect(strings.textToolNotice(report), defaults.textToolNotice(report));
+      expect(strings.textToolPreview(report), defaults.textToolPreview(report));
+    }
+  });
 }

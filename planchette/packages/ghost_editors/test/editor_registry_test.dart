@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_editors/ghost_editors.dart';
-import 'package:planchette_editor/planchette_editor.dart'
+import 'package:ghost_editors/src/editor_fields.dart'
     show normalizeEditorExtensions;
 
 /// Poltergeist's shape: System default, whole namespace reserved.

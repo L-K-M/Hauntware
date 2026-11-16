@@ -17,10 +17,6 @@ dependencies:
   file_picker: ^13.3.3
   flutter:
     sdk: flutter
-  # normalizeEditorExtensions and validateEditorDisplayName, which the
-  # registry and its edit dialog share with the hosts.
-  planchette_editor:
-    path: ../planchette_editor
 
 dev_dependencies:
   flutter_test:

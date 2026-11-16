@@ -3,10 +3,9 @@ import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
-import 'package:planchette_editor/planchette_editor.dart'
-    show validateEditorDisplayName;
 
 import 'editor_definition.dart';
+import 'editor_fields.dart';
 
 /// Starts a detached editor process. Injectable so tests never launch one.
 typedef EditorProcessStarter =
