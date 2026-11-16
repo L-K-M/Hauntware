@@ -58,6 +58,9 @@ final class SyncController extends ChangeNotifier
   SyncAccountInfo? _account;
   bool _passphraseUnverified = false;
   SyncFailure? _lastFailure;
+  bool _accountFull = false;
+  int _recordsAwaitingSpace = 0;
+  int _recordsTooLarge = 0;
   bool _engineStopped = false;
   bool _disposed = false;
 
@@ -97,6 +100,20 @@ final class SyncController extends ChangeNotifier
   /// enrolled.
   ValueListenable<AccountSize?> get accountSize => _accountSize;
   final _accountSize = ValueNotifier<AccountSize?>(null);
+
+  /// Whether the latest round found the sync account full, whether or not
+  /// the server said how many records wait ([recordsAwaitingSpace]), and
+  /// how many records it left on this device as too large for the server
+  /// (03 §4.4). They come from any round, including one the engine started
+  /// itself, and stay as they were through a round that failed for
+  /// another reason, which cannot tell.
+  bool get accountFull => _accountFull;
+  int get recordsAwaitingSpace => _recordsAwaitingSpace;
+  int get recordsTooLarge => _recordsTooLarge;
+
+  /// Whether records stay on this device that a round could not store:
+  /// the sync control shows it until a round stores them.
+  bool get holdsRecords => accountFull || _recordsTooLarge > 0;
 
   /// Whether a sign-in or round is under way, including one the engine
   /// started itself.
@@ -255,6 +272,16 @@ final class SyncController extends ChangeNotifier
       return;
     }
     _lastFailure = event.failure;
+    if (_account == null) {
+      _accountFull = false;
+      _recordsAwaitingSpace = _recordsTooLarge = 0;
+    } else if (event.operation == SyncOperation.round &&
+        (event.phase == SyncPhase.succeeded ||
+            event.failure == SyncFailure.accountFull)) {
+      _accountFull = event.failure == SyncFailure.accountFull;
+      _recordsAwaitingSpace = event.recordsAwaitingSpace;
+      _recordsTooLarge = event.recordsTooLarge;
+    }
     if (event.phase == SyncPhase.succeeded) {
       _passphraseUnverified = event.passphraseUnverified;
     }

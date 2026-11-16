@@ -183,6 +183,43 @@ void main() {
     );
   });
 
+  testWidgets('a round that leaves records on this device says so, and the '
+      'sync control keeps saying it', (tester) async {
+    final harness = await pumpApp(
+      tester,
+      size: const Size(400, 800),
+      syncAccount: testSyncAccount,
+    );
+
+    await tester.tap(
+      find.byTooltip('Synchronize with sync.example.com as ops'),
+    );
+    await tester.pump();
+    final round = harness.engine.sentOfType<RunSyncRound>().single;
+    harness.engine.emit(
+      SyncStatus(
+        SyncPhase.failed,
+        operation: SyncOperation.round,
+        requestId: (round as RunSyncRound).requestId,
+        account: testSyncAccount,
+        failure: SyncFailure.accountFull,
+        recordsAwaitingSpace: 3,
+        recordsTooLarge: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const held =
+        'The sync account is full, so 3 changes wait on this device. They '
+        'sync once the account has room. 1 change is too large for the '
+        'sync server. It stays on this device until it is smaller.';
+    expect(find.text(held), findsOneWidget);
+    expect(
+      find.byTooltip('Synchronize with sync.example.com as ops\n$held'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a damaged sync file is told at startup', (tester) async {
     await pumpApp(
       tester,

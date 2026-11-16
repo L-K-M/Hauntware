@@ -5486,6 +5486,46 @@ class AppLocalizationsEn extends AppLocalizations {
       'The sync server reported an error. Try again later.';
 
   @override
+  String get syncFailedAccountFull =>
+      'The sync account is full. Changes stay on this device and sync once the account has room.';
+
+  @override
+  String syncRecordsAwaitingSpace(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'The sync account is full, so $count changes wait on this device. They sync once the account has room.',
+      one:
+          'The sync account is full, so 1 change waits on this device. It syncs once the account has room.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncRecordsTooLarge(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count changes are too large for the sync server. They stay on this device until they are smaller.',
+      one:
+          '1 change is too large for the sync server. It stays on this device until it is smaller.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncHeldNotice(String waiting, String tooLarge) {
+    return '$waiting $tooLarge';
+  }
+
+  @override
+  String syncActionTooltipHeld(String action, String held) {
+    return '$action\n$held';
+  }
+
+  @override
   String get syncFailedKeystore =>
       'The system keychain could not store or hand over the sync keys. Unlock it and try again.';
 

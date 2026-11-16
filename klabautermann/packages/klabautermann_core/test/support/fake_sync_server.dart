@@ -53,6 +53,18 @@ final class FakeSyncServer {
   /// Thrown by every call, as a server nobody can reach.
   Object? unreachable;
 
+  /// Thrown by the next push, once: an older server's whole-push refusal.
+  Object? nextPushError;
+
+  /// Ids a push refuses one by one for the account quota, as a current
+  /// server answers an opted-in push when the account is full.
+  final Set<String> quotaRefusals = {};
+
+  /// Ids too large to store: a push carrying one is refused whole, with
+  /// the 413 code the coordinator reads as that record's own failure when
+  /// it was sent alone.
+  final Set<String> tooLarge = {};
+
   /// Push requests, and every record they carried, in order.
   var pushes = 0;
   final pushed = <EncryptedRecord>[];
@@ -63,6 +75,9 @@ final class FakeSyncServer {
 
   /// Forgets the seeded records, so each test starts from an empty account.
   void clearRecords() {
+    nextPushError = null;
+    quotaRefusals.clear();
+    tooLarge.clear();
     _records.clear();
     pushed.clear();
     pushes = 0;
@@ -255,8 +270,25 @@ final class _FakeTransport implements SyncTransport {
     }
     _server.pushes++;
     _server.pushed.addAll(records);
+    if (_server.nextPushError case final error?) {
+      _server.nextPushError = null;
+      throw error;
+    }
+    if (records.any((r) => _server.tooLarge.contains(r.id))) {
+      throw const ApiError(
+        code: 'payload_too_large',
+        message: 'Record too large',
+      );
+    }
     final results = <PushResult>[];
+    final refused = <PushRefusal>[];
     for (final incoming in records) {
+      if (_server.quotaRefusals.contains(incoming.id)) {
+        refused.add(
+          PushRefusal(id: incoming.id, reason: PushRefusalReason.accountQuota),
+        );
+        continue;
+      }
       final held = _server._records[incoming.id];
       if (held != null && !identical(Lww.resolve(held, incoming), incoming)) {
         results.add(
@@ -268,7 +300,11 @@ final class _FakeTransport implements SyncTransport {
       _server._records[incoming.id] = incoming.withSeq(seq);
       results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
     }
-    return PushResponse(results: results, latestSeq: _server._seq);
+    return PushResponse(
+      results: results,
+      latestSeq: _server._seq,
+      refused: refused,
+    );
   }
 
   @override

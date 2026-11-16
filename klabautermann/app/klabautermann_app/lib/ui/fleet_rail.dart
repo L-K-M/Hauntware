@@ -111,7 +111,8 @@ class FleetRail extends StatelessWidget {
 }
 
 /// The bottom bar's sync chip: muted until signed in, busy while a sign-in
-/// or round runs.
+/// or round runs, and in the error tone while a round left records on this
+/// device (a full account, a record too large), which its tooltip names.
 SidebarSyncChipData _syncChip(
   BuildContext context,
   AppLocalizations l10n,
@@ -128,6 +129,7 @@ SidebarSyncChipData _syncChip(
     tone: switch (sync) {
       SyncController(busy: true) => SidebarSyncTone.busy,
       SyncController(needsSignIn: true) => SidebarSyncTone.muted,
+      SyncController(holdsRecords: true) => SidebarSyncTone.error,
       _ => SidebarSyncTone.normal,
     },
     tooltip: syncActionTooltip(l10n, sync),

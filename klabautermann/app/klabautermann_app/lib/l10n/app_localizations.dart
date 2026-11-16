@@ -7011,6 +7011,36 @@ abstract class AppLocalizations {
   /// **'The sync server reported an error. Try again later.'**
   String get syncFailedServer;
 
+  /// Sync error: the sync server refused changes because the account is at its storage quota (an older server, which does not say how many).
+  ///
+  /// In en, this message translates to:
+  /// **'The sync account is full. Changes stay on this device and sync once the account has room.'**
+  String get syncFailedAccountFull;
+
+  /// Sync notice: the sync server stored everything else but refused this many changes because the account is at its storage quota; they stay on this device and are offered again each round.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The sync account is full, so 1 change waits on this device. It syncs once the account has room.} other{The sync account is full, so {count} changes wait on this device. They sync once the account has room.}}'**
+  String syncRecordsAwaitingSpace(int count);
+
+  /// Sync notice: the sync server refused this many changes as too large to store; they stay on this device and are offered again each round.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 change is too large for the sync server. It stays on this device until it is smaller.} other{{count} changes are too large for the sync server. They stay on this device until they are smaller.}}'**
+  String syncRecordsTooLarge(int count);
+
+  /// Sync notice when a round left records on this device for both reasons: the account-full sentence, then the too-large sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'{waiting} {tooLarge}'**
+  String syncHeldNotice(String waiting, String tooLarge);
+
+  /// Tooltip of the sync control while the latest round left records on this device: the control's own tooltip, then the notice on its own line.
+  ///
+  /// In en, this message translates to:
+  /// **'{action}\n{held}'**
+  String syncActionTooltipHeld(String action, String held);
+
   /// Sync error: the OS keystore refused to store or read the sync token or vault key.
   ///
   /// In en, this message translates to:

@@ -39,6 +39,7 @@ import 'package:seance_core/seance_core.dart'
         SecretVault,
         ServerConfig,
         Snippet,
+        SyncRecordsRefused,
         duplicateServerConfig,
         duplicateServerLabel,
         isReservedVaultId,
@@ -494,6 +495,18 @@ final class EngineSync {
         unverified: await _enrollment!.passphraseUnverified(),
         budget: prefixBudgetOf(await _records.allRecords()),
         pinConflicts: _syncPinConflicts(result.report.pinConflicts),
+        recordsTooLarge: result.refusedIds.length,
+      );
+    } on SyncRecordsRefused catch (error) {
+      // The rest of the round landed; the account is full (the coordinator
+      // throws this only when records wait for space).
+      return _status(
+        operation,
+        SyncPhase.failed,
+        failure: SyncFailure.accountFull,
+        detail: '$error',
+        recordsAwaitingSpace: error.awaitingSpace.length,
+        recordsTooLarge: error.records.length,
       );
     } on Object catch (error) {
       return _failedWith(operation, error);
@@ -991,6 +1004,8 @@ final class EngineSync {
     String? detail,
     SyncPrefixBudget? budget,
     List<SyncPinConflict>? pinConflicts,
+    int recordsAwaitingSpace = 0,
+    int recordsTooLarge = 0,
   }) => SyncStatus(
     phase,
     operation: operation,
@@ -1000,6 +1015,8 @@ final class EngineSync {
     detail: detail,
     prefixBudget: budget,
     pinConflicts: pinConflicts == null ? null : List.unmodifiable(pinConflicts),
+    recordsAwaitingSpace: recordsAwaitingSpace,
+    recordsTooLarge: recordsTooLarge,
   );
 
   SyncStatus _failed(
@@ -1015,6 +1032,8 @@ final class EngineSync {
     KdfDowngradeException() => SyncFailure.kdfDowngrade,
     ApiError(code: 'invalid_credentials') => SyncFailure.credentialsRejected,
     ApiError(code: 'unauthorized') => SyncFailure.sessionRejected,
+    // An older server refuses the whole push for the quota.
+    ApiError(code: 'account_quota_exceeded') => SyncFailure.accountFull,
     ApiError() => SyncFailure.serverError,
     IOException() || TimeoutException() => SyncFailure.unreachable,
     SyncKeystoreRefusedException() ||

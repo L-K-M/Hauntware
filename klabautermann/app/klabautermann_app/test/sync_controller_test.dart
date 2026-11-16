@@ -248,4 +248,115 @@ void main() {
     expect(status.operation, SyncOperation.enroll);
     expect(status.phase, SyncPhase.succeeded);
   });
+
+  test('records a round left on this device show until a round stores '
+      'them, from rounds the engine started too', () async {
+    const account = SyncAccountInfo(
+      baseUrl: 'https://sync.example.com',
+      username: 'ops',
+    );
+    final engine = FakeEngineClient();
+    final sync = SyncController(engine, account: account);
+    addTearDown(() async {
+      sync.dispose();
+      await engine.close();
+    });
+    expect(sync.holdsRecords, isFalse);
+
+    engine.emit(
+      const SyncStatus(
+        SyncPhase.failed,
+        operation: SyncOperation.round,
+        account: account,
+        failure: SyncFailure.accountFull,
+        recordsAwaitingSpace: 2,
+        recordsTooLarge: 1,
+      ),
+    );
+    await pumpEventQueue();
+    expect(sync.accountFull, isTrue);
+    expect(sync.recordsAwaitingSpace, 2);
+    expect(sync.recordsTooLarge, 1);
+    expect(sync.holdsRecords, isTrue);
+
+    // A round that cannot tell keeps what the last one said.
+    engine.emit(
+      const SyncStatus(
+        SyncPhase.failed,
+        operation: SyncOperation.round,
+        account: account,
+        failure: SyncFailure.unreachable,
+      ),
+    );
+    await pumpEventQueue();
+    expect(sync.recordsAwaitingSpace, 2);
+    expect(sync.holdsRecords, isTrue);
+
+    engine.emit(
+      const SyncStatus(
+        SyncPhase.succeeded,
+        operation: SyncOperation.round,
+        account: account,
+        recordsTooLarge: 1,
+      ),
+    );
+    await pumpEventQueue();
+    expect(sync.accountFull, isFalse);
+    expect(sync.recordsTooLarge, 1);
+    expect(sync.holdsRecords, isTrue);
+
+    engine.emit(
+      const SyncStatus(
+        SyncPhase.succeeded,
+        operation: SyncOperation.round,
+        account: account,
+      ),
+    );
+    await pumpEventQueue();
+    expect(sync.holdsRecords, isFalse);
+  });
+
+  test(
+    "an older server's full account holds records without a count",
+    () async {
+      final engine = FakeEngineClient();
+      final sync = SyncController(engine);
+      addTearDown(() async {
+        sync.dispose();
+        await engine.close();
+      });
+
+      engine.emit(
+        const SyncStatus(
+          SyncPhase.failed,
+          operation: SyncOperation.round,
+          account: SyncAccountInfo(
+            baseUrl: 'https://sync.example.com',
+            username: 'ops',
+          ),
+          failure: SyncFailure.accountFull,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(sync.accountFull, isTrue);
+      expect(sync.recordsAwaitingSpace, 0);
+      expect(sync.holdsRecords, isTrue);
+
+      // A round that cannot tell keeps it.
+      engine.emit(
+        const SyncStatus(
+          SyncPhase.failed,
+          operation: SyncOperation.round,
+          account: SyncAccountInfo(
+            baseUrl: 'https://sync.example.com',
+            username: 'ops',
+          ),
+          failure: SyncFailure.unreachable,
+        ),
+      );
+      await pumpEventQueue();
+      expect(sync.accountFull, isTrue);
+    },
+  );
 }
