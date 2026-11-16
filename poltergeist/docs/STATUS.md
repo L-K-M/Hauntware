@@ -4,6 +4,41 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Wave 5 (2026-11-15/16)
+
+- Phone Copy to (UI-06, decision Q4, #775): the selection bar's "Copy
+  to B" is now "Copy to…" and opens a sheet naming the destination host
+  and folder, with Copy, Change folder (a folder picker that starts at
+  the other pane's folder) and Cancel. Copy is disabled, with a reason,
+  for a folder inside the copied items.
+- File clipboard and Undo (P4-21, decision Q5, #781): Edit > Cut, Copy
+  and Paste use an app-internal clipboard, never the system one, with
+  ⌘ on macOS and Ctrl elsewhere, in the Edit menu and the row and
+  empty-area context menus; a focused text field keeps the chords. Cut
+  dims the rows. Paste after Cut renames on the same server and
+  otherwise queues a move that deletes each source only after its copy
+  committed. Edit > Undo reverses renames, moves, a local Move to Trash
+  where the OS reports the trashed path (Put Back), and a copy, by
+  deleting only the items the copy created after a confirmation. Remote
+  and immediate deletes cannot be undone; Undo says so and is disabled.
+- Per-extension default editors in Settings > Editing (F7, decision Q6,
+  #778): the registry, launcher and Settings section moved into the
+  shared `ghost_editors` package with Séance. The stored document and
+  the `poltergeist/files` channel are unchanged.
+
+Deferred: batch-rename undo; a root renamed by Keep Both keeps its
+"(2)" name when a move is undone; a regression test for #775's
+server-id host label during a rebind, which the fake lanes cannot hold;
+moving `normalizeEditorExtensions` and `validateEditorDisplayName` from
+planchette_editor into `ghost_editors`.
+
+Proof: analysis and the full app suite passed locally, `ghost_editors`
+has 46 tests, and CI passed on each merged head. Automated compilation
+is not a device smoke test: still manual are the Copy to sheet on a
+phone, Put Back against a real macOS trash, cross-host move and its
+undo against live servers, and real external editor launches and
+pickers on macOS, Linux and Windows.
+
 ## D12 runner-image baseline refresh (2026-11-15)
 
 `ubuntu-latest` rotated from `20261101.186.1` to `20261111.196.1`, and

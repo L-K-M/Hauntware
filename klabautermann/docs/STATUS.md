@@ -5,6 +5,40 @@ up next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [../docs/design/klabautermann/](../../docs/design/klabautermann/) for the
 normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 
+## Wave 5 (2026-11-15/16)
+
+- Reboot wait app-wide (decision Q1, #774): a reboot from the System
+  tab or the Overview's quick actions is followed by the `PowerWaits`
+  controller, so the wait survives leaving the tab or admin mode. The
+  quick actions card then shows only the reboot's progress until the
+  server answers with a later boot. After 15 minutes without one the
+  wait says the server is not back; a later boot still reports it.
+- Hidden live servers on headers (#776): a folded section or group
+  header, the Imported section's included, shows a dot and a label when
+  a server it hides is connected or connecting, and the search or
+  faults-only filter keeps such a header in view. The rule is
+  ghost_servers' generic `hiddenEntriesByHeader`; `hiddenByHeader`,
+  which Séance uses, now delegates to it.
+- Sync sign-out (decision Q2, #780): Settings > Sync > Sign out, always
+  confirmed, with the number of open connections it closes. The engine
+  (`SignOutSync`, protocol v3) forgets the synced records, prefs, rules
+  and snippets, the removed servers' vault secrets, the enrollment and
+  the token, in an order that leaves the device enrolled if it is
+  interrupted. Imports, host-key pins, endpoint confirmations and the
+  vault master key stay; nothing is sent to the server.
+- App icon badge (ALR-02, decision Q3, #783): on iOS and macOS, while
+  alert notifications are on, the icon shows the raised alerts not yet
+  seen. Opening the alert center clears every server's share, since it
+  is the only alert view. No new dependency; the permission request now
+  includes `badge`.
+
+Still manual (automated compilation is not a device smoke test): a
+reboot and its wait on a real host; the header dots by eye; sign-out in
+the desktop settings window, against a real Séance server and the OS
+keystore; badge delivery on iOS and macOS devices, whether the
+badge-only notification flashes on screen, and installs that granted
+notifications without `badge`, which iOS does not ask again.
+
 ## Where things stand
 
 M2's host reads, M3's Docker reads, M4's actions and admin mode (the
@@ -2082,8 +2116,11 @@ is on main:
   init's own `reboot` and `poweroff` without systemd. A link that drops
   while that step runs counts as the host having taken it, and the host
   syslog line is written before it. After a reboot the section waits,
-  counting the time, until a `core` reading reports a later boot. A
-  reboot and shutdown on a real host stay a manual check.
+  counting the time, until a `core` reading reports a later boot. Since
+  #774 the wait is app-wide, shared with the Overview's quick actions
+  card, and after 15 minutes reports the server as not back, though a
+  later boot still ends the wait. A reboot and shutdown on a real host
+  stay a manual check.
 - Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
   section asks the server's package manager (apt, dnf, zypper, pacman or
   apk) for its pending updates as the login user and from cached
