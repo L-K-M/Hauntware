@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:planchette_editor/planchette_editor.dart'
-    show normalizeEditorExtensions, validateEditorDisplayName;
 
 import 'editor_definition.dart';
+import 'editor_fields.dart';
 
 /// Rewrites a persisted registry document before it is decoded: the
 /// stored value as read (any JSON value, or null when nothing is stored)

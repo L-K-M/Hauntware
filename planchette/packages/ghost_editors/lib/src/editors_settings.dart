@@ -1,10 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:planchette_editor/planchette_editor.dart'
-    show normalizeEditorExtensions, validateEditorDisplayName;
 
 import 'editor_definition.dart';
+import 'editor_fields.dart';
 import 'editor_registry.dart';
 
 /// The registry the Settings section edits. Every mutation persists before

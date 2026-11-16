@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:planchette_editor/planchette_editor.dart'
-    show normalizeEditorExtensions, validateEditorDisplayName;
+
+import 'editor_fields.dart';
 
 /// The desktop platform an [ExternalEditorDefinition] launches on.
 enum EditorHostPlatform { macos, linux, windows }

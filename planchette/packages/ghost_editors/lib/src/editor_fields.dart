@@ -1,6 +1,6 @@
 /// Validation for the fields of a configured external editor, shared by the
-/// hosts' editor registries and their settings forms so a stored registry
-/// and a typed one obey the same rules.
+/// registry and its settings form so a stored registry and a typed one obey
+/// the same rules.
 library;
 
 const _maximumExtensionLength = 32;
