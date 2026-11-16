@@ -112,8 +112,11 @@ final class SyncController extends ChangeNotifier
   int get recordsTooLarge => _recordsTooLarge;
 
   /// Whether records stay on this device that a round could not store:
-  /// the sync control shows it until a round stores them.
-  bool get holdsRecords => accountFull || _recordsTooLarge > 0;
+  /// the sync control shows it until a round stores them. Counts waiting
+  /// records on their own, as the held notice does, though today's
+  /// engine reports them only with [accountFull].
+  bool get holdsRecords =>
+      accountFull || _recordsAwaitingSpace > 0 || _recordsTooLarge > 0;
 
   /// Whether a sign-in or round is under way, including one the engine
   /// started itself.
