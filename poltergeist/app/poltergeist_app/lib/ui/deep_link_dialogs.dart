@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import 'package:poltergeist_core/poltergeist_core.dart'
+    show LinkOperation, LinkReview, LinkReviewDecision, LinkReviewSnapshot;
+
 import '../services/deep_links.dart';
 
 const _dialogWidth = 520.0;
@@ -13,30 +16,31 @@ const _reviewActionArmDelay = Duration(milliseconds: 750);
 
 enum _BarrierDismissal { allowed, blocked }
 
-Future<DeepLinkReviewDecision> showDeepLinkReviewDialog(
+Future<LinkReviewDecision> showDeepLinkReviewDialog(
   BuildContext context,
-  DeepLinkReview review,
+  LinkReview<HostDeepLink> review,
 ) async {
-  final decision = await _showCancellableDialog<DeepLinkReviewDecision>(
+  final decision = await _showCancellableDialog<LinkReviewDecision>(
     context: context,
     operation: review,
     barrierDismissal: _BarrierDismissal.blocked,
     builder: (dialogContext) => PopScope(
       canPop: false,
-      child: ValueListenableBuilder<DeepLinkReviewSnapshot>(
-        valueListenable: review,
-        builder: (context, snapshot, _) =>
-            _DeepLinkReviewDialog(review: review, snapshot: snapshot),
+      child: StreamBuilder<LinkReviewSnapshot<HostDeepLink>>(
+        stream: review.snapshots,
+        initialData: review.snapshot,
+        builder: (context, snapshot) =>
+            _DeepLinkReviewDialog(review: review, snapshot: snapshot.data!),
       ),
     ),
   );
-  return decision ?? DeepLinkReviewDecision.cancel;
+  return decision ?? LinkReviewDecision.cancel;
 }
 
 Future<void> showDeepLinkFailureDialog(
   BuildContext context,
   DeepLinkFailure failure, {
-  DeepLinkOperation operation = const _NeverCancelledDeepLinkOperation(),
+  LinkOperation operation = const _NeverCancelledOperation(),
 }) => _showCancellableDialog<void>(
   context: context,
   operation: operation,
@@ -62,7 +66,7 @@ Future<void> showDeepLinkFailureDialog(
 Future<void> showDeepLinkIgnoredDialog(
   BuildContext context,
   int count, {
-  DeepLinkOperation operation = const _NeverCancelledDeepLinkOperation(),
+  LinkOperation operation = const _NeverCancelledOperation(),
 }) => _showCancellableDialog<void>(
   context: context,
   operation: operation,
@@ -85,7 +89,7 @@ Future<void> showDeepLinkIgnoredDialog(
 
 Future<T?> _showCancellableDialog<T>({
   required BuildContext context,
-  required DeepLinkOperation operation,
+  required LinkOperation operation,
   required WidgetBuilder builder,
   _BarrierDismissal barrierDismissal = _BarrierDismissal.allowed,
 }) {
@@ -107,8 +111,8 @@ Future<T?> _showCancellableDialog<T>({
   return result;
 }
 
-final class _NeverCancelledDeepLinkOperation implements DeepLinkOperation {
-  const _NeverCancelledDeepLinkOperation();
+final class _NeverCancelledOperation implements LinkOperation {
+  const _NeverCancelledOperation();
 
   @override
   // A fresh future lets each dialog and its callback be garbage-collected.
@@ -130,8 +134,8 @@ String _failureMessage(AppLocalizations l10n, DeepLinkFailureKind kind) =>
 final class _DeepLinkReviewDialog extends StatefulWidget {
   const _DeepLinkReviewDialog({required this.review, required this.snapshot});
 
-  final DeepLinkReview review;
-  final DeepLinkReviewSnapshot snapshot;
+  final LinkReview<HostDeepLink> review;
+  final LinkReviewSnapshot<HostDeepLink> snapshot;
 
   @override
   State<_DeepLinkReviewDialog> createState() => _DeepLinkReviewDialogState();
@@ -169,10 +173,10 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
     _overflowRevision++;
   }
 
-  void _decide(DeepLinkReviewDecision decision) {
+  void _decide(LinkReviewDecision decision) {
     // The snapshot on screen when the decision was made, not one a later
     // frame may still draw while the dialog animates out.
-    widget.review.markSnapshotShown(widget.snapshot);
+    widget.review.markShown(widget.snapshot);
     Navigator.pop(context, decision);
   }
 
@@ -255,9 +259,8 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
                         child: ListView.builder(
                           itemCount: overflowCount,
                           itemExtent: _overflowRowHeight,
-                          itemBuilder: (context, index) => _PendingEndpoint(
-                            link: snapshot.overflow.elementAt(index),
-                          ),
+                          itemBuilder: (context, index) =>
+                              _PendingEndpoint(link: snapshot.overflow[index]),
                         ),
                       ),
                     ],
@@ -275,7 +278,7 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
         TextButton(
           key: const ValueKey('deepLink.cancel'),
           onPressed: _actionsArmed
-              ? () => _decide(DeepLinkReviewDecision.cancel)
+              ? () => _decide(LinkReviewDecision.cancel)
               : null,
           child: Text(l10n.deepLinkCancel),
         ),
@@ -284,14 +287,14 @@ final class _DeepLinkReviewDialogState extends State<_DeepLinkReviewDialog> {
             key: const ValueKey('deepLink.discardAll'),
             onPressed:
                 _actionsArmed && (overflowCount == 0 || _overflowReviewed)
-                ? () => _decide(DeepLinkReviewDecision.discardAllRemaining)
+                ? () => _decide(LinkReviewDecision.discardAllRemaining)
                 : null,
             child: Text(l10n.deepLinkDiscardAll),
           ),
         FilledButton(
           key: const ValueKey('deepLink.connect'),
           onPressed: _actionsArmed
-              ? () => _decide(DeepLinkReviewDecision.connect)
+              ? () => _decide(LinkReviewDecision.connect)
               : null,
           child: Text(l10n.deepLinkConnect),
         ),

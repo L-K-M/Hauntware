@@ -61,6 +61,8 @@ export 'src/probe/probe_service.dart';
 // The suite's link grammar and the path component rule it shares with
 // Poltergeist's local file safety (docs/design/suite-links.md section 4).
 export 'src/links/suite_links.dart';
+// The review queue both apps' link intakes run on (section 6).
+export 'src/links/link_queue.dart';
 export 'src/links/link_display.dart'
     show
         SafeDeepLinkDisplay,

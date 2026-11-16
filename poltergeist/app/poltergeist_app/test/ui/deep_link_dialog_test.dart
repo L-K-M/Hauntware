@@ -10,6 +10,8 @@ import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/deep_links.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/deep_link_dialogs.dart';
+import 'package:poltergeist_core/poltergeist_core.dart'
+    show LinkReview, LinkReviewDecision, LinkReviewSnapshot;
 
 const _captureDirectory = '../../tasks/deep-links/captures';
 
@@ -45,7 +47,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final review = _TestDeepLinkReview(
-      DeepLinkReviewSnapshot(
+      LinkReviewSnapshot<HostDeepLink>(
         current: const HostDeepLink(
           host: 'paypa\u043b\u202E.example',
           port: 2200,
@@ -85,7 +87,7 @@ void main() {
       ),
     );
     addTearDown(review.dispose);
-    DeepLinkReviewDecision? decision;
+    LinkReviewDecision? decision;
 
     final baseTheme = buildPoltergeistTheme(Brightness.dark);
     final theme = baseTheme.copyWith(
@@ -176,12 +178,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('deepLink.connect')));
     await tester.pumpAndSettle();
-    expect(decision, DeepLinkReviewDecision.connect);
+    expect(decision, LinkReviewDecision.connect);
   });
 
   testWidgets('offers explicit discard when links remain', (tester) async {
     final review = _TestDeepLinkReview(
-      const DeepLinkReviewSnapshot(
+      const LinkReviewSnapshot<HostDeepLink>(
         current: HostDeepLink(
           host: 'one.example',
           port: 22,
@@ -201,7 +203,7 @@ void main() {
       ),
     );
     addTearDown(review.dispose);
-    DeepLinkReviewDecision? decision;
+    LinkReviewDecision? decision;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -223,7 +225,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('deepLink.discardAll')));
     await tester.pumpAndSettle();
 
-    expect(decision, DeepLinkReviewDecision.discardAllRemaining);
+    expect(decision, LinkReviewDecision.discardAllRemaining);
   });
 
   testWidgets('requires a deliberate pause before review actions', (
@@ -256,7 +258,7 @@ void main() {
   testWidgets('closes a review dialog when ownership moves', (tester) async {
     final review = _TestDeepLinkReview(_snapshot());
     addTearDown(review.dispose);
-    DeepLinkReviewDecision? decision;
+    LinkReviewDecision? decision;
 
     await tester.pumpWidget(
       _DialogHarness(review: review, onDecision: (value) => decision = value),
@@ -269,14 +271,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('deepLink.review')), findsNothing);
-    expect(decision, DeepLinkReviewDecision.cancel);
+    expect(decision, LinkReviewDecision.cancel);
   });
 
   testWidgets('requires another review when hidden overflow grows', (
     tester,
   ) async {
     final review = _TestDeepLinkReview(
-      DeepLinkReviewSnapshot(
+      LinkReviewSnapshot<HostDeepLink>(
         current: _snapshot().current,
         visibleWaiting: const [
           HostDeepLink(
@@ -318,19 +320,21 @@ void main() {
       isNotNull,
     );
 
-    review.value = DeepLinkReviewSnapshot(
-      current: review.value.current,
-      visibleWaiting: review.value.visibleWaiting,
-      overflow: [
-        ...review.value.overflow,
-        const HostDeepLink(
-          host: 'five.example',
-          port: 22,
-          username: 'ops',
-          remotePath: '/',
-        ),
-      ],
-      remainingCount: 4,
+    review.publish(
+      LinkReviewSnapshot(
+        current: review.snapshot.current,
+        visibleWaiting: review.snapshot.visibleWaiting,
+        overflow: [
+          ...review.snapshot.overflow,
+          const HostDeepLink(
+            host: 'five.example',
+            port: 22,
+            username: 'ops',
+            remotePath: '/',
+          ),
+        ],
+        remainingCount: 4,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -359,9 +363,9 @@ void main() {
   testWidgets('discard scope excludes an arrival before the next frame', (
     tester,
   ) async {
-    DeepLinkReviewDecision? decision;
+    LinkReviewDecision? decision;
     final review = _TestDeepLinkReview(
-      DeepLinkReviewSnapshot(
+      LinkReviewSnapshot<HostDeepLink>(
         current: _snapshot().current,
         visibleWaiting: const [
           HostDeepLink(
@@ -383,24 +387,26 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 800));
 
-    review.value = DeepLinkReviewSnapshot(
-      current: review.value.current,
-      visibleWaiting: [
-        ...review.value.visibleWaiting,
-        const HostDeepLink(
-          host: 'unseen.example',
-          port: 22,
-          username: 'ops',
-          remotePath: '/',
-        ),
-      ],
-      overflow: const [],
-      remainingCount: 2,
+    review.publish(
+      LinkReviewSnapshot(
+        current: review.snapshot.current,
+        visibleWaiting: [
+          ...review.snapshot.visibleWaiting,
+          const HostDeepLink(
+            host: 'unseen.example',
+            port: 22,
+            username: 'ops',
+            remotePath: '/',
+          ),
+        ],
+        overflow: const [],
+        remainingCount: 2,
+      ),
     );
     await tester.tap(find.byKey(const ValueKey('deepLink.discardAll')));
     await tester.pumpAndSettle();
 
-    expect(decision, DeepLinkReviewDecision.discardAllRemaining);
+    expect(decision, LinkReviewDecision.discardAllRemaining);
     expect(review.shownSnapshot!.visibleWaiting.map((link) => link.host), [
       'two.example',
     ]);
@@ -408,7 +414,7 @@ void main() {
 
   testWidgets('shows links ignored at the queue limit', (tester) async {
     final review = _TestDeepLinkReview(
-      DeepLinkReviewSnapshot(
+      LinkReviewSnapshot<HostDeepLink>(
         current: _snapshot().current,
         visibleWaiting: const [],
         overflow: const [],
@@ -455,24 +461,39 @@ void main() {
   });
 }
 
-DeepLinkReviewSnapshot _snapshot() => const DeepLinkReviewSnapshot(
-  current: HostDeepLink(
-    host: 'one.example',
-    port: 22,
-    username: 'ops',
-    remotePath: '/',
-  ),
-  visibleWaiting: [],
-  overflow: [],
-  remainingCount: 0,
-);
+LinkReviewSnapshot<HostDeepLink> _snapshot() =>
+    const LinkReviewSnapshot<HostDeepLink>(
+      current: HostDeepLink(
+        host: 'one.example',
+        port: 22,
+        username: 'ops',
+        remotePath: '/',
+      ),
+      visibleWaiting: [],
+      overflow: [],
+      remainingCount: 0,
+    );
 
-final class _TestDeepLinkReview extends ValueNotifier<DeepLinkReviewSnapshot>
-    implements DeepLinkReview {
-  _TestDeepLinkReview(super.value);
+final class _TestDeepLinkReview implements LinkReview<HostDeepLink> {
+  _TestDeepLinkReview(this._snapshot);
 
+  final _snapshots =
+      StreamController<LinkReviewSnapshot<HostDeepLink>>.broadcast();
   final _cancelled = Completer<void>();
-  DeepLinkReviewSnapshot? shownSnapshot;
+  LinkReviewSnapshot<HostDeepLink> _snapshot;
+  LinkReviewSnapshot<HostDeepLink>? shownSnapshot;
+
+  @override
+  LinkReviewSnapshot<HostDeepLink> get snapshot => _snapshot;
+
+  @override
+  Stream<LinkReviewSnapshot<HostDeepLink>> get snapshots => _snapshots.stream;
+
+  /// What the queue does as links arrive.
+  void publish(LinkReviewSnapshot<HostDeepLink> snapshot) {
+    _snapshot = snapshot;
+    _snapshots.add(snapshot);
+  }
 
   @override
   bool get isCancelled => _cancelled.isCompleted;
@@ -484,8 +505,10 @@ final class _TestDeepLinkReview extends ValueNotifier<DeepLinkReviewSnapshot>
     if (!isCancelled) _cancelled.complete();
   }
 
+  void dispose() => unawaited(_snapshots.close());
+
   @override
-  void markSnapshotShown(DeepLinkReviewSnapshot snapshot) {
+  void markShown(LinkReviewSnapshot<HostDeepLink> snapshot) {
     shownSnapshot = snapshot;
   }
 }
@@ -493,8 +516,8 @@ final class _TestDeepLinkReview extends ValueNotifier<DeepLinkReviewSnapshot>
 final class _DialogHarness extends StatelessWidget {
   const _DialogHarness({required this.review, this.onDecision});
 
-  final DeepLinkReview review;
-  final ValueChanged<DeepLinkReviewDecision>? onDecision;
+  final LinkReview<HostDeepLink> review;
+  final ValueChanged<LinkReviewDecision>? onDecision;
 
   @override
   Widget build(BuildContext context) => MaterialApp(

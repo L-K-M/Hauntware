@@ -18,6 +18,17 @@ Read [AGENTS.md](../AGENTS.md) first for how to build/test.
   buttons, a failed settings write leaves the section showing what is
   stored instead of the unsaved change, and a definition for another
   platform now decodes (it still cannot launch there).
+- `seance://connect` links run on the suite's shared link queue
+  (`seance_core`'s `LinkQueue`, also Poltergeist's) and take
+  Poltergeist's review rules: the buttons arm after 750 ms, only a
+  button closes the review, every waiting link is listed (the third and
+  later behind "And N more links", which must be opened before Discard),
+  Discard drops only the reviewed links it listed and keeps notices for
+  links that did not parse, a repeat of the link under review merges
+  into it, and a review the app abandons (the window closing) puts its
+  link back at the head of the queue. Parsing, resolution against saved
+  servers and the folder staging are unchanged. Strings stay English
+  literals, as elsewhere in Séance.
 
 The sync server's notices generator no longer depends on
 googlesource.com: the Dart runtime's third-party notice texts are

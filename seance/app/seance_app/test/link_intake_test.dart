@@ -12,32 +12,35 @@ const _webId = '123e4567-e89b-42d3-a456-426614174000';
 const _dbId = '223e4567-e89b-42d3-a456-426614174000';
 
 void main() {
-  group('SeanceLinkIntake', () {
+  // The queue's own rules (order, limit, coalescing, handoff, errors) are
+  // seance_core's link_queue_test.dart. These cases are Séance's intake on
+  // it: parsing, resolution, notices and the review's decisions.
+  group('Séance link intake', () {
     test('reviews a saved server by id and connects with its folder', () async {
-      final handler = _Handler([_web, _db]);
-      final intake = SeanceLinkIntake()..activate(handler);
+      final host = _Host([_web, _db]);
+      final intake = _intake(host);
 
       intake.add(_connect(_webId.toUpperCase(), cwd: '/srv/app'));
       await intake.idle;
 
-      final review = handler.reviews.single;
+      final review = host.reviews.single;
       expect(review.target.server, same(_web));
       expect(review.target.cwd, '/srv/app');
-      expect(handler.connects.single.server, same(_web));
-      expect(handler.connects.single.cwd, '/srv/app');
-      expect(handler.notices, isEmpty);
+      expect(host.connects.single.server, same(_web));
+      expect(host.connects.single.cwd, '/srv/app');
+      expect(host.notices, isEmpty);
     });
 
     test('refuses an unknown id without a review or a connect', () async {
-      final handler = _Handler([_db]);
-      final intake = SeanceLinkIntake()..activate(handler);
+      final host = _Host([_db]);
+      final intake = _intake(host);
 
       intake.add(_connect(_webId));
       await intake.idle;
 
-      expect(handler.reviews, isEmpty);
-      expect(handler.connects, isEmpty);
-      expect(handler.noticeKinds, [SeanceLinkNoticeKind.unknownServer]);
+      expect(host.reviews, isEmpty);
+      expect(host.connects, isEmpty);
+      expect(host.noticeKinds, [SeanceLinkNoticeKind.unknownServer]);
     });
 
     test('takes the identity form only for a single saved match', () async {
@@ -48,8 +51,8 @@ void main() {
         [_web, twin]: SeanceLinkNoticeKind.ambiguousServer,
       };
       for (final MapEntry(key: servers, value: miss) in cases.entries) {
-        final handler = _Handler(servers);
-        final intake = SeanceLinkIntake()..activate(handler);
+        final host = _Host(servers);
+        final intake = _intake(host);
 
         intake.add(
           Uri.parse(
@@ -59,19 +62,19 @@ void main() {
         await intake.idle;
 
         if (miss == null) {
-          expect(handler.reviews.single.target.server, same(_web));
-          expect(handler.reviews.single.target.cwd, isNull);
-          expect(handler.notices, isEmpty);
+          expect(host.reviews.single.target.server, same(_web));
+          expect(host.reviews.single.target.cwd, isNull);
+          expect(host.notices, isEmpty);
         } else {
-          expect(handler.reviews, isEmpty);
-          expect(handler.noticeKinds, [miss]);
+          expect(host.reviews, isEmpty);
+          expect(host.noticeKinds, [miss]);
         }
       }
     });
 
     test('names what is wrong with a link that does not parse', () async {
-      final handler = _Handler([_web]);
-      final intake = SeanceLinkIntake()..activate(handler);
+      final host = _Host([_web]);
+      final intake = _intake(host);
 
       intake
         ..add(Uri.parse('poltergeist://browse?serverId=$_webId&path=/'))
@@ -81,9 +84,9 @@ void main() {
         ..add(Uri.parse('klabautermann://server?serverId=$_webId'));
       await intake.idle;
 
-      expect(handler.reviews, isEmpty);
-      expect(handler.connects, isEmpty);
-      expect(handler.noticeKinds, [
+      expect(host.reviews, isEmpty);
+      expect(host.connects, isEmpty);
+      expect(host.noticeKinds, [
         SeanceLinkNoticeKind.notSeanceLink,
         SeanceLinkNoticeKind.unacceptedParameters,
         SeanceLinkNoticeKind.invalidFolder,
@@ -92,53 +95,59 @@ void main() {
       ]);
     });
 
-    test('Cancel connects nothing', () async {
-      final handler = _Handler([_web])
-        ..decide = (_) => SeanceLinkDecision.cancel;
-      final intake = SeanceLinkIntake()..activate(handler);
+    test('Cancel connects nothing and leaves the waiting links', () async {
+      final host = _Host([_web, _db])..holdReviews = true;
+      final intake = _intake(host);
 
-      intake.add(_connect(_webId, cwd: '/srv'));
+      intake
+        ..add(_connect(_webId, cwd: '/srv'))
+        ..add(_connect(_dbId));
+      await pumpEventQueue();
+      host.answer(LinkReviewDecision.cancel);
+      await pumpEventQueue();
+
+      expect(host.reviews, hasLength(2));
+      expect(host.reviews[1].target.server, same(_db));
+      host.answer(LinkReviewDecision.connect);
       await intake.idle;
-
-      expect(handler.reviews, hasLength(1));
-      expect(handler.connects, isEmpty);
+      expect(host.connects.single.server, same(_db));
     });
 
     test('queues links until a handler binds', () async {
-      final intake = SeanceLinkIntake();
+      final intake = createSeanceLinkIntake();
       intake.add(_connect(_webId));
       await intake.idle;
 
-      final handler = _Handler([_web]);
-      intake.activate(handler);
+      final host = _Host([_web]);
+      intake.activate(SeanceLinkHandler(host));
       await intake.idle;
 
-      expect(handler.connects.single.server, same(_web));
+      expect(host.connects.single.server, same(_web));
     });
 
     test('reviews one link at a time, in arrival order', () async {
-      final handler = _Handler([_web, _db])..holdReviews = true;
-      final intake = SeanceLinkIntake()..activate(handler);
+      final host = _Host([_web, _db])..holdReviews = true;
+      final intake = _intake(host);
 
       intake
         ..add(_connect(_webId))
         ..add(_connect(_dbId));
       await pumpEventQueue();
-      expect(handler.reviews, hasLength(1));
+      expect(host.reviews, hasLength(1));
 
-      handler.answer(SeanceLinkDecision.connect);
+      host.answer(LinkReviewDecision.connect);
       await pumpEventQueue();
-      expect(handler.reviews, hasLength(2));
-      expect(handler.reviews[1].target.server, same(_db));
+      expect(host.reviews, hasLength(2));
+      expect(host.reviews[1].target.server, same(_db));
 
-      handler.answer(SeanceLinkDecision.connect);
+      host.answer(LinkReviewDecision.connect);
       await intake.idle;
-      expect(handler.connects.map((target) => target.server), [_web, _db]);
+      expect(host.connects.map((target) => target.server), [_web, _db]);
     });
 
-    test('coalesces a link identical to one in hand or waiting', () async {
-      final handler = _Handler([_web, _db])..holdReviews = true;
-      final intake = SeanceLinkIntake()..activate(handler);
+    test('coalesces a link identical to one in review or waiting', () async {
+      final host = _Host([_web, _db])..holdReviews = true;
+      final intake = _intake(host);
 
       intake.add(_connect(_webId, cwd: '/srv'));
       await pumpEventQueue();
@@ -147,152 +156,212 @@ void main() {
         ..add(_connect(_dbId))
         ..add(_connect(_dbId))
         ..add(_connect(_webId, cwd: '/var'));
+      expect(host.reviews.single.link.snapshot.remainingCount, 2);
 
-      handler.answer(SeanceLinkDecision.connect);
+      host.answer(LinkReviewDecision.connect);
       await pumpEventQueue();
-      final second = handler.reviews[1];
+      final second = host.reviews[1];
       expect(second.target.server, same(_db));
-      expect(second.queue.value.waitingCount, 1);
-      expect(second.queue.value.ignoredCount, 0);
-      handler.answer(SeanceLinkDecision.connect);
+      expect(second.link.snapshot.remainingCount, 1);
+      expect(second.link.snapshot.ignoredCount, 0);
+      host.answer(LinkReviewDecision.connect);
       await pumpEventQueue();
-      handler.answer(SeanceLinkDecision.connect);
+      host.answer(LinkReviewDecision.connect);
       await intake.idle;
 
-      expect(handler.connects.map((target) => target.cwd), [
-        '/srv',
-        null,
-        '/var',
-      ]);
+      expect(host.connects.map((target) => target.cwd), ['/srv', null, '/var']);
+    });
+
+    test('a repeat after the decision is a new link', () async {
+      final host = _Host([_web])..holdConnects = true;
+      final intake = _intake(host);
+
+      intake.add(_connect(_webId, cwd: '/srv'));
+      await pumpEventQueue();
+      expect(host.connects, hasLength(1));
+      intake.add(_connect(_webId, cwd: '/srv'));
+      host.releaseConnect();
+      await intake.idle;
+
+      expect(host.reviews, hasLength(2));
+      expect(host.connects, hasLength(2));
     });
 
     test('drops links beyond the limit and says how many', () async {
-      final handler = _Handler([_web])..holdReviews = true;
-      final intake = SeanceLinkIntake()..activate(handler);
+      final host = _Host([_web])..holdReviews = true;
+      final intake = _intake(host);
 
       intake.add(_connect(_webId));
       await pumpEventQueue();
-      for (var i = 0; i < seanceLinkQueueLimit + 3; i++) {
+      for (var i = 0; i < linkQueueLimit + 3; i++) {
         intake.add(_connect(_webId, cwd: '/srv/$i'));
       }
 
       // The open review follows the queue as links arrive.
-      final first = handler.reviews.single.queue.value;
-      expect(first.waitingCount, seanceLinkQueueLimit);
-      expect(first.waitingLabels, ['web', 'web']);
+      final review = host.reviews.single;
+      final first = review.link.snapshot;
+      expect(first.remainingCount, linkQueueLimit);
+      expect(
+        [for (final link in first.visibleWaiting) review.labelOf(link)],
+        ['web', 'web'],
+      );
+      expect(first.overflow, hasLength(linkQueueLimit - 2));
       expect(first.ignoredCount, 3);
 
-      handler.answer(SeanceLinkDecision.cancel);
+      host.answer(LinkReviewDecision.cancel);
       await pumpEventQueue();
-      final second = handler.reviews[1].queue.value;
-      expect(handler.reviews[1].target.cwd, '/srv/0');
-      expect(second.waitingCount, seanceLinkQueueLimit - 1);
+      final second = host.reviews[1].link.snapshot;
+      expect(host.reviews[1].target.cwd, '/srv/0');
+      expect(second.remainingCount, linkQueueLimit - 1);
       // Reported once, by the review that showed it.
       expect(second.ignoredCount, 0);
 
-      handler.answer(SeanceLinkDecision.discardWaiting);
+      host.answer(LinkReviewDecision.discardAllRemaining);
       await intake.idle;
-      expect(handler.reviews, hasLength(2));
-      expect(handler.notices, isEmpty);
+      expect(host.reviews, hasLength(2));
+      expect(host.notices, isEmpty);
     });
 
     test('drops after the review last drew reach the next one', () async {
-      final handler = _Handler([_web])..holdReviews = true;
-      final intake = SeanceLinkIntake()..activate(handler);
+      final host = _Host([_web])..holdReviews = true;
+      final intake = _intake(host);
 
       intake.add(_connect(_webId));
       await pumpEventQueue();
-      for (var i = 0; i < seanceLinkQueueLimit; i++) {
+      for (var i = 0; i < linkQueueLimit; i++) {
         intake.add(_connect(_webId, cwd: '/srv/$i'));
       }
-      final drawn = handler.reviews.single.queue.value;
+      final drawn = host.reviews.single.link.snapshot;
       expect(drawn.ignoredCount, 0);
       intake
         ..add(_connect(_webId, cwd: '/srv/late-1'))
         ..add(_connect(_webId, cwd: '/srv/late-2'));
-      expect(handler.reviews.single.queue.value.ignoredCount, 2);
+      expect(host.reviews.single.link.snapshot.ignoredCount, 2);
 
       // Decided before the dialog drew the drops.
-      handler.answer(SeanceLinkDecision.cancel, shown: drawn);
+      host.answer(LinkReviewDecision.cancel, shown: drawn);
       await pumpEventQueue();
-      expect(handler.reviews[1].queue.value.ignoredCount, 2);
+      expect(host.reviews[1].link.snapshot.ignoredCount, 2);
 
-      handler.answer(SeanceLinkDecision.discardWaiting);
+      host.answer(LinkReviewDecision.discardAllRemaining);
       await intake.idle;
-      expect(handler.notices, isEmpty);
+      expect(host.notices, isEmpty);
     });
 
     test('reports dropped links when no review is left to carry it', () async {
-      final intake = SeanceLinkIntake();
-      for (var i = 0; i < seanceLinkQueueLimit + 2; i++) {
+      final intake = createSeanceLinkIntake();
+      for (var i = 0; i < linkQueueLimit + 2; i++) {
         intake.add(Uri.parse('seance://connect?cmd=$i'));
       }
-      final handler = _Handler([_web]);
-      intake.activate(handler);
+      final host = _Host([_web]);
+      intake.activate(SeanceLinkHandler(host));
       await intake.idle;
 
-      expect(handler.reviews, isEmpty);
-      expect(handler.notices, hasLength(seanceLinkQueueLimit + 1));
-      expect(handler.notices.last.kind, SeanceLinkNoticeKind.ignoredLinks);
-      expect(handler.notices.last.count, 2);
+      expect(host.reviews, isEmpty);
+      expect(host.notices, hasLength(linkQueueLimit + 1));
+      expect(host.notices.last.kind, SeanceLinkNoticeKind.ignoredLinks);
+      expect(host.notices.last.count, 2);
     });
 
-    test('Discard waiting links drops only the links it counted', () async {
-      final handler = _Handler([_web, _db])..holdReviews = true;
-      final intake = SeanceLinkIntake()..activate(handler);
+    test('Discard drops the links it listed and keeps the rest', () async {
+      final host = _Host([_web, _db])..holdReviews = true;
+      final intake = _intake(host);
 
       intake
         ..add(_connect(_webId))
         ..add(_connect(_dbId))
-        ..add(Uri.parse('seance://connect?serverId=$_webId&cmd=x'));
+        ..add(Uri.parse('seance://connect?serverId=$_webId&cmd=x'))
+        ..add(_connect(_webId, cwd: '/listed'));
       await pumpEventQueue();
-      final first = handler.reviews.single;
-      final shown = first.queue.value;
-      expect(shown.waitingCount, 2);
-      expect(shown.waitingLabels, ['db', null]);
+      final first = host.reviews.single;
+      final shown = first.link.snapshot;
+      // A link that does not parse is a notice, never a waiting review.
+      expect(shown.remainingCount, 2);
+      expect(
+        [for (final link in shown.visibleWaiting) first.labelOf(link)],
+        ['db', 'web'],
+      );
 
       // Arrives after the review last drew, so it was never shown.
       intake.add(_connect(_webId, cwd: '/late'));
-      expect(first.queue.value.waitingCount, 3);
-      handler.answer(SeanceLinkDecision.discardWaiting, shown: shown);
+      expect(first.link.snapshot.remainingCount, 3);
+      host.answer(LinkReviewDecision.discardAllRemaining, shown: shown);
       await pumpEventQueue();
 
-      expect(handler.reviews, hasLength(2));
-      expect(handler.reviews[1].target.cwd, '/late');
-      handler.answer(SeanceLinkDecision.connect);
+      expect(host.noticeKinds, [SeanceLinkNoticeKind.unacceptedParameters]);
+      expect(host.reviews, hasLength(2));
+      expect(host.reviews[1].target.cwd, '/late');
+      host.answer(LinkReviewDecision.connect);
       await intake.idle;
-      expect(handler.connects.single.cwd, '/late');
-      expect(handler.notices, isEmpty);
+      expect(host.connects.single.cwd, '/late');
     });
 
-    test('keeps a link whose handler failed until the next link', () async {
+    test('a review cancelled by deactivation returns to the queue', () async {
+      final first = _Host([_web])..holdReviews = true;
+      final intake = createSeanceLinkIntake();
+      final firstHandler = SeanceLinkHandler(first);
+      intake
+        ..activate(firstHandler)
+        ..add(_connect(_webId, cwd: '/srv'));
+      await pumpEventQueue();
+      final cancelled = first.reviews.single.link;
+
+      intake.deactivate(firstHandler);
+      await intake.idle;
+      expect(cancelled.isCancelled, isTrue);
+      expect(first.connects, isEmpty);
+
+      final second = _Host([_web]);
+      intake.activate(SeanceLinkHandler(second));
+      await intake.idle;
+      expect(second.reviews.single.target.cwd, '/srv');
+      expect(second.connects.single.cwd, '/srv');
+    });
+
+    test('a server removed during the review is not opened', () async {
+      final host = _Host([_web])..holdReviews = true;
+      final intake = _intake(host);
+
+      intake.add(_connect(_webId));
+      await pumpEventQueue();
+      host.servers.clear();
+      host.answer(LinkReviewDecision.connect);
+      await intake.idle;
+
+      expect(host.connects, isEmpty);
+      expect(host.noticeKinds, [SeanceLinkNoticeKind.unknownServer]);
+    });
+
+    test('keeps a link whose review failed until the next link', () async {
       final errors = <Object>[];
-      final handler = _Handler([_web, _db])..failReviews = 1;
-      final intake = SeanceLinkIntake(onError: (error, _) => errors.add(error))
-        ..activate(handler);
+      final host = _Host([_web, _db])..failReviews = 1;
+      final intake = createSeanceLinkIntake(
+        onError: (error, _) => errors.add(error),
+      )..activate(SeanceLinkHandler(host));
 
       intake.add(_connect(_webId));
       await intake.idle;
       expect(errors, hasLength(1));
-      expect(handler.connects, isEmpty);
+      expect(host.connects, isEmpty);
 
       intake.add(_connect(_dbId));
       await intake.idle;
-      expect(handler.connects.map((target) => target.server), [_web, _db]);
+      expect(host.connects.map((target) => target.server), [_web, _db]);
     });
 
     test('stops at a deactivated handler and resumes at the next', () async {
-      final first = _Handler([_web]);
-      final intake = SeanceLinkIntake()
-        ..activate(first)
-        ..deactivate(first);
+      final first = _Host([_web]);
+      final firstHandler = SeanceLinkHandler(first);
+      final intake = createSeanceLinkIntake()
+        ..activate(firstHandler)
+        ..deactivate(firstHandler);
 
       intake.add(_connect(_webId));
       await intake.idle;
       expect(first.reviews, isEmpty);
 
-      final second = _Handler([_web]);
-      intake.activate(second);
+      final second = _Host([_web]);
+      intake.activate(SeanceLinkHandler(second));
       await intake.idle;
       expect(second.connects, hasLength(1));
     });
@@ -429,8 +498,11 @@ Uri _connect(String serverId, {String? cwd}) => Uri(
   queryParameters: {'serverId': serverId, 'cwd': ?cwd},
 );
 
-final class _Handler implements SeanceLinkHandler {
-  _Handler(this.servers);
+SeanceLinkIntake _intake(SeanceLinkHost host) =>
+    createSeanceLinkIntake()..activate(SeanceLinkHandler(host));
+
+final class _Host implements SeanceLinkHost {
+  _Host(List<ServerConfig> servers) : servers = [...servers];
 
   @override
   final List<ServerConfig> servers;
@@ -438,41 +510,58 @@ final class _Handler implements SeanceLinkHandler {
   final reviews = <SeanceLinkReview>[];
   final connects = <SeanceLinkTarget>[];
   final notices = <SeanceLinkNotice>[];
-  SeanceLinkDecision Function(SeanceLinkReview review) decide = _connectAll;
   bool holdReviews = false;
+  bool holdConnects = false;
   int failReviews = 0;
-  Completer<SeanceLinkDecision>? _open;
+  Completer<LinkReviewDecision>? _open;
+  final Completer<void> _connectGate = Completer<void>();
 
   List<SeanceLinkNoticeKind> get noticeKinds => [
     for (final notice in notices) notice.kind,
   ];
 
-  /// Answers the open review, which last showed [shown], or what it shows
-  /// now: the dialog marks every frame it draws.
-  void answer(SeanceLinkDecision decision, {SeanceLinkQueue? shown}) {
+  /// Answers the open review on the snapshot the decision covered, which
+  /// is what it shows now unless a test passes an older one.
+  void answer(
+    LinkReviewDecision decision, {
+    LinkReviewSnapshot<SeanceConnectRequest>? shown,
+  }) {
     final open = _open!;
     _open = null;
-    reviews.last.markShown(shown ?? reviews.last.queue.value);
+    final link = reviews.last.link;
+    link.markShown(shown ?? link.snapshot);
     open.complete(decision);
   }
 
+  void releaseConnect() => _connectGate.complete();
+
   @override
-  Future<SeanceLinkDecision> review(SeanceLinkReview review) {
+  Future<LinkReviewDecision> review(SeanceLinkReview review) {
     if (failReviews > 0) {
       failReviews--;
       throw StateError('no window');
     }
     reviews.add(review);
-    if (!holdReviews) return Future.value(decide(review));
-    return (_open = Completer<SeanceLinkDecision>()).future;
+    if (!holdReviews) return Future.value(LinkReviewDecision.connect);
+    final open = _open = Completer<LinkReviewDecision>();
+    // As the dialog does: a cancelled review closes unanswered.
+    unawaited(
+      review.link.cancelled.then((_) {
+        if (identical(_open, open)) {
+          _open = null;
+          open.complete(LinkReviewDecision.cancel);
+        }
+      }),
+    );
+    return open.future;
   }
 
   @override
-  Future<void> connect(SeanceLinkTarget target) async => connects.add(target);
+  Future<void> connect(SeanceLinkTarget target) async {
+    connects.add(target);
+    if (holdConnects) await _connectGate.future;
+  }
 
   @override
   Future<void> showNotice(SeanceLinkNotice notice) async => notices.add(notice);
-
-  static SeanceLinkDecision _connectAll(SeanceLinkReview _) =>
-      SeanceLinkDecision.connect;
 }

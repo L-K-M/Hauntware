@@ -397,6 +397,18 @@ and `SA/lib/ui/link_review_dialog.dart`. Modelled on Poltergeist's
 coordinator (1.4), with three differences: every link is reviewed, the
 queue has a hard limit, and there is no host coalescing.
 
+Update (2026-11-16): the two queues are now one. `LinkQueue` in
+`seance_core/lib/src/links/link_queue.dart` carries Poltergeist's
+coordinator rules (endpoint coalescing through an app key and merge,
+discard of the listed reviewed links only, cancellation and handoff
+between handlers, the 750 ms button delay in both dialogs) and the
+limit of 16 with its dropped-link count. Poltergeist's
+`DeepLinkCoordinator` is a typedef over it; Séance's intake is
+`SeanceLinkHandler` over a `SeanceLinkHost`. Where this section
+differs (the discard limited to a count, the dialog closing on the
+barrier, "the one in hand finishes" on deactivation), the shared queue
+wins. Each app keeps its parsing and its dialog.
+
 Delivery:
 
 - `main()` subscribes to `AppLinks().uriLinkStream` after the settings

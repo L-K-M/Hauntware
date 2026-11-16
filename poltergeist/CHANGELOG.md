@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Links share Séance's queue.** The queue behind `poltergeist://`
+  links now lives in the suite's shared core, which Séance's link
+  review also uses. Reviewing, discarding and cancelling links work as
+  before.
 - **Cut, Copy, Paste and Undo for files.** Edit › Cut, Copy and Paste
   (⌘X, ⌘C, ⌘V on macOS, Ctrl elsewhere, and the context menus) move
   and copy items between panes, tabs and servers with Poltergeist's own

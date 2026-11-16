@@ -10,8 +10,7 @@ import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
-import 'package:ghost_keepalive/ghost_keepalive.dart'
-    show BackgroundKeepAlive;
+import 'package:ghost_keepalive/ghost_keepalive.dart' show BackgroundKeepAlive;
 import 'package:ghost_keystore/app_lock.dart' show AppLockController;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
@@ -97,8 +96,9 @@ Future<void> main(List<String> args) async {
     return;
   }
   if (Platform.isMacOS) {
-    WidgetsBinding.instance.platformMenuDelegate =
-        CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks');
+    WidgetsBinding.instance.platformMenuDelegate = CheckedPlatformMenuDelegate(
+      channelName: 'poltergeist/menu_checks',
+    );
   }
 
   final errorReporter = ApplicationErrorReporter();
@@ -113,7 +113,7 @@ Future<void> main(List<String> args) async {
       FilePicker.skipEntitlementsChecks().catchError(errorReporter.report),
     );
   }
-  final deepLinks = DeepLinkCoordinator(onError: errorReporter.report);
+  final deepLinks = createDeepLinkCoordinator(onError: errorReporter.report);
   final workspaceWindowsReady = Completer<WorkspaceWindows?>();
   AppLinks().uriLinkStream.listen(
     (uri) => unawaited(
@@ -141,8 +141,7 @@ Future<void> main(List<String> args) async {
   // would race their serialized write tails. The syncDeviceId binding reads
   // the enrollment state's resolved id lazily — null until enrollment (or a
   // backup load) mints one, so non-sync installs keep §3.4's clean shape.
-  final syncEnrollmentState =
-      SettingsSyncEnrollmentState(store: settingsStore);
+  final syncEnrollmentState = SettingsSyncEnrollmentState(store: settingsStore);
   final bookmarks = FileBookmarkStore(
     path: '${supportDirectory.path}${Platform.pathSeparator}bookmarks.json',
     onError: errorReporter.report,
@@ -240,8 +239,7 @@ Future<void> main(List<String> args) async {
     initial: await preferences.loadDoubleClickAction(),
     save: preferences.saveDoubleClickAction,
   );
-  final reconnectRestoredTabs =
-      await preferences.loadReconnectRestoredTabs();
+  final reconnectRestoredTabs = await preferences.loadReconnectRestoredTabs();
   // The activity panel's persisted chrome state (02 §1/§6): height,
   // per-direction throttle limits, and the auto-remove setting — all
   // plain settings keys beside the pane ratio.
@@ -261,16 +259,15 @@ Future<void> main(List<String> args) async {
     persistOverride: preferences.setServerTransferConcurrency,
     onError: errorReporter.report,
   );
-  final autoClearCompleted =
-      await preferences.loadAutoClearCompletedTransfers();
+  final autoClearCompleted = await preferences
+      .loadAutoClearCompletedTransfers();
   // The sidebar's persisted chrome state (02 §1/§4, D33): visibility
   // intent, the device-local collapsed-group keys, the row density, and
   // the PINNED shortlist.
   // The stage-1 drawer never lands here — it is recomputed from the
   // window size per launch.
   final sidebarHidden = await preferences.loadSidebarHidden();
-  final sidebarCollapsedGroups =
-      await preferences.loadSidebarCollapsedGroups();
+  final sidebarCollapsedGroups = await preferences.loadSidebarCollapsedGroups();
   final sidebarDensity = await preferences.loadSidebarDensity();
   final sidebarPinnedServers = await preferences.loadSidebarPinnedServers();
   // 02 §4's reachability probes read and write device-local facts through
@@ -403,8 +400,7 @@ Future<void> main(List<String> args) async {
   // the sync endpoints. The config source answers what each lease dials;
   // the pulled catalog lookup binds once the backup service exists below.
   final serverConfigs = AppServerConfigSource(bookmarks: bookmarks);
-  final transferConnections =
-      engineSession?.transferConnections(serverConfigs);
+  final transferConnections = engineSession?.transferConnections(serverConfigs);
 
   // The transfer queue (03 §4, D16): one real queue over the
   // app-support journal (03 §4.6) restores the crashed session's
@@ -476,8 +472,8 @@ Future<void> main(List<String> args) async {
   // QueuePreviewProducer over the same composed queue every other
   // managed download rides (D14). A queue-less boot still previews
   // local files — only remote production needs the producer.
-  final previewCacheCapacity =
-      await preferences.loadPreviewCacheCapacityBytes();
+  final previewCacheCapacity = await preferences
+      .loadPreviewCacheCapacityBytes();
   final previewThreshold = await preferences.loadPreviewThresholdBytes();
   final previewCache = PreviewCache(
     directory: Directory(
@@ -811,8 +807,7 @@ Future<void> main(List<String> args) async {
           ? dragOutBackend
           : dragOutRouter!.forView(window.viewId),
       initialPreviewThresholdBytes: previewThreshold,
-      onPreviewCacheCapacityChanged:
-          preferences.savePreviewCacheCapacityBytes,
+      onPreviewCacheCapacityChanged: preferences.savePreviewCacheCapacityBytes,
       onPreviewThresholdChanged: preferences.savePreviewThresholdBytes,
       syncEnvironment: syncEnvironment,
       syncTasks: syncTasks,

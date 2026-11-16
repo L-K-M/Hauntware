@@ -59,6 +59,22 @@ export 'package:seance_core/seance_core.dart'
         seanceConnectUriForBookmark,
         seanceConnectUriForServer,
         seanceDeepLinkScheme,
+        // The suite's link review queue (section 6), which Séance's
+        // intake runs on too.
+        DirectLinkEntry,
+        FailedLinkEntry,
+        LinkEntry,
+        LinkErrorSink,
+        LinkOpenResult,
+        LinkOperation,
+        LinkQueue,
+        LinkQueueHandler,
+        LinkReview,
+        LinkReviewDecision,
+        LinkReviewSnapshot,
+        ReviewedLinkEntry,
+        linkQueueLimit,
+        linkReviewVisibleWaiting,
         AuthMethod,
         // The shared credential decision table (F2c): the server editor and
         // the prompt coordinator's vault-first branch resolve through it

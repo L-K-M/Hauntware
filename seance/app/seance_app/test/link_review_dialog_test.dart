@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 const _webId = '123e4567-e89b-42d3-a456-426614174000';
+const _dbId = '223e4567-e89b-42d3-a456-426614174000';
 
 void main() {
   // The handler group's plain tests use the binding's messenger too.
@@ -61,6 +63,56 @@ void main() {
       expect(find.text('Links cannot run commands.'), findsOneWidget);
     });
 
+    testWidgets('Connect and Cancel answer as labelled', (tester) async {
+      final review = _review(target: const SeanceLinkTarget(server: _web));
+      expect(
+        await _show(tester, review, tap: 'Connect'),
+        LinkReviewDecision.connect,
+      );
+      expect(review.fake.shown, same(review.fake.snapshot));
+      expect(
+        await _show(tester, review, tap: 'Cancel'),
+        LinkReviewDecision.cancel,
+      );
+    });
+
+    testWidgets('answers nothing until its buttons arm', (tester) async {
+      final review = _review(target: const SeanceLinkTarget(server: _web));
+      await _show(tester, review, settle: false);
+
+      await tester.tap(find.text('Connect'));
+      await tester.pump();
+      expect(find.byType(SeanceLinkReviewDialog), findsOneWidget);
+
+      await tester.pump(seanceLinkReviewArmDelay);
+      await tester.tap(find.text('Connect'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SeanceLinkReviewDialog), findsNothing);
+    });
+
+    testWidgets('the barrier and Escape do not answer it', (tester) async {
+      final review = _review(target: const SeanceLinkTarget(server: _web));
+      await _show(tester, review);
+
+      await tester.tapAt(const Offset(4, 4));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(SeanceLinkReviewDialog), findsOneWidget);
+    });
+
+    testWidgets('closes unanswered when its link is cancelled', (tester) async {
+      final review = _review(target: const SeanceLinkTarget(server: _web));
+      final decision = _show(tester, review);
+      await decision;
+      expect(find.byType(SeanceLinkReviewDialog), findsOneWidget);
+
+      review.fake.cancel();
+      await tester.pumpAndSettle();
+      expect(find.byType(SeanceLinkReviewDialog), findsNothing);
+      expect(_lastDecision, LinkReviewDecision.cancel);
+      expect(review.fake.shown, isNull);
+    });
+
     testWidgets('discards the queue it drew, which follows arrivals', (
       tester,
     ) async {
@@ -68,8 +120,12 @@ void main() {
       await _show(tester, review);
       expect(find.text('Discard waiting links'), findsNothing);
 
-      const arrived = SeanceLinkQueue(waitingLabels: ['db'], waitingCount: 1);
-      (review as _FixedReview).queue.value = arrived;
+      const arrived = LinkReviewSnapshot<SeanceConnectRequest>(
+        current: _webLink,
+        visibleWaiting: [_dbLink],
+        remainingCount: 1,
+      );
+      review.fake.publish(arrived);
       await tester.pumpAndSettle();
       expect(find.text('1 more link is waiting.'), findsOneWidget);
       expect(find.text('• db'), findsOneWidget);
@@ -77,36 +133,44 @@ void main() {
       await tester.tap(find.text('Discard waiting links'));
       await tester.pumpAndSettle();
       expect(find.byType(SeanceLinkReviewDialog), findsNothing);
-      expect(review.shown, same(arrived));
+      expect(_lastDecision, LinkReviewDecision.discardAllRemaining);
+      expect(review.fake.shown, same(arrived));
     });
 
-    testWidgets('Connect and Cancel answer as labelled', (tester) async {
-      final review = _review(target: const SeanceLinkTarget(server: _web));
-      expect(
-        await _show(tester, review, tap: 'Connect'),
-        SeanceLinkDecision.connect,
+    testWidgets('lists every waiting link before it discards them', (
+      tester,
+    ) async {
+      final review = _review(
+        target: const SeanceLinkTarget(server: _web),
+        visibleWaiting: [_dbLink, _unknownLink],
+        overflow: [_dbLink, _webLink],
+        ignoredCount: 2,
       );
-      expect(
-        await _show(tester, review, tap: 'Cancel'),
-        SeanceLinkDecision.cancel,
-      );
-    });
+      await _show(tester, review);
 
-    testWidgets('lists waiting links and those it cannot open', (tester) async {
-      await _show(
-        tester,
-        _review(
-          target: const SeanceLinkTarget(server: _web),
-          waitingLabels: ['db', null],
-          waitingCount: 5,
-          ignoredCount: 2,
-        ),
-      );
-
-      expect(find.text('5 more links are waiting.'), findsOneWidget);
+      expect(find.text('4 more links are waiting.'), findsOneWidget);
       expect(find.text('• db'), findsOneWidget);
       expect(find.text('• A link Séance cannot open'), findsOneWidget);
+      expect(find.text('And 2 more links'), findsOneWidget);
       expect(find.text('2 more links were ignored.'), findsOneWidget);
+      expect(_button('Discard waiting links').onPressed, isNull);
+
+      await tester.tap(find.text('And 2 more links'));
+      await tester.pumpAndSettle();
+      expect(find.text('• db'), findsNWidgets(2));
+      expect(_button('Discard waiting links').onPressed, isNotNull);
+
+      // A link that arrives hidden needs the list opened again.
+      review.fake.publish(
+        LinkReviewSnapshot(
+          current: _webLink,
+          visibleWaiting: review.fake.snapshot.visibleWaiting,
+          overflow: [...review.fake.snapshot.overflow, _dbLink],
+          remainingCount: 5,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_button('Discard waiting links').onPressed, isNull);
     });
   });
 
@@ -131,7 +195,7 @@ void main() {
     );
   });
 
-  group('SeanceAppLinkHandler', () {
+  group('SeanceAppLinkHost', () {
     late Directory directory;
     late AppServices services;
     late AppState state;
@@ -185,27 +249,25 @@ void main() {
       state.servers = [_web];
       await state.newTab(_web);
       state.servers = [];
-      final handler = SeanceAppLinkHandler(state, GlobalKey());
-      final intake = SeanceLinkIntake()..activate(handler);
+      final host = SeanceAppLinkHost(state, GlobalKey());
 
       expect(state.configFor(_webId), isNotNull);
-      expect(handler.servers, isEmpty);
+      expect(host.servers, isEmpty);
       expect(
         resolveSeanceLink(
           const SeanceServerConnect(serverId: _webId),
-          handler.servers,
+          host.servers,
         ).miss,
         SeanceLinkNoticeKind.unknownServer,
       );
-      intake.deactivate(handler);
     });
 
     test('a folder opens a fresh tab, even beside an existing one', () async {
       state.servers = [_web];
       await state.newTab(_web);
-      final handler = SeanceAppLinkHandler(state, GlobalKey());
+      final host = SeanceAppLinkHost(state, GlobalKey());
 
-      await handler.connect(const SeanceLinkTarget(server: _web, cwd: '/srv'));
+      await host.connect(const SeanceLinkTarget(server: _web, cwd: '/srv'));
 
       // The refused handshake ends the wait; there is no window to say so.
       expect(state.tabs, hasLength(2));
@@ -214,10 +276,10 @@ void main() {
 
     test('without a folder the server row focus-or-connect runs', () async {
       state.servers = [_web];
-      final handler = SeanceAppLinkHandler(state, GlobalKey());
+      final host = SeanceAppLinkHost(state, GlobalKey());
 
-      await handler.connect(const SeanceLinkTarget(server: _web));
-      await handler.connect(const SeanceLinkTarget(server: _web));
+      await host.connect(const SeanceLinkTarget(server: _web));
+      await host.connect(const SeanceLinkTarget(server: _web));
 
       // The second focuses the first tab and redials it, since it failed.
       expect(state.tabs, hasLength(1));
@@ -236,51 +298,104 @@ const _web = ServerConfig(
   updatedAt: 1,
 );
 
-SeanceLinkReview _review({
-  required SeanceLinkTarget target,
-  List<String?> waitingLabels = const [],
-  int waitingCount = 0,
-  int ignoredCount = 0,
-}) => _FixedReview(
-  target,
-  SeanceLinkQueue(
-    waitingLabels: waitingLabels,
-    waitingCount: waitingCount,
-    ignoredCount: ignoredCount,
-  ),
+const _db = ServerConfig(
+  id: _dbId,
+  label: 'db',
+  host: 'db.example',
+  port: 22,
+  username: 'deploy',
+  createdAt: 1,
+  updatedAt: 1,
 );
 
-final class _FixedReview implements SeanceLinkReview {
-  _FixedReview(this.target, SeanceLinkQueue queue)
-    : queue = ValueNotifier(queue);
+const _webLink = SeanceServerConnect(serverId: _webId);
+const _dbLink = SeanceServerConnect(serverId: _dbId);
+const _unknownLink = SeanceServerConnect(
+  serverId: '323e4567-e89b-42d3-a456-426614174000',
+);
 
-  @override
-  final SeanceLinkTarget target;
+SeanceLinkReview _review({
+  required SeanceLinkTarget target,
+  List<SeanceConnectRequest> visibleWaiting = const [],
+  List<SeanceConnectRequest> overflow = const [],
+  int ignoredCount = 0,
+}) => SeanceLinkReview(
+  target: target,
+  link: _FakeLinkReview(
+    LinkReviewSnapshot(
+      current: _webLink,
+      visibleWaiting: visibleWaiting,
+      overflow: overflow,
+      remainingCount: visibleWaiting.length + overflow.length,
+      ignoredCount: ignoredCount,
+    ),
+  ),
+  servers: const [_web, _db],
+);
 
-  @override
-  final ValueNotifier<SeanceLinkQueue> queue;
-
-  SeanceLinkQueue? shown;
-
-  @override
-  void markShown(SeanceLinkQueue shown) => this.shown = shown;
+extension on SeanceLinkReview {
+  _FakeLinkReview get fake => link as _FakeLinkReview;
 }
 
-Future<SeanceLinkDecision?> _show(
+final class _FakeLinkReview implements LinkReview<SeanceConnectRequest> {
+  _FakeLinkReview(this._snapshot);
+
+  final _snapshots =
+      StreamController<LinkReviewSnapshot<SeanceConnectRequest>>.broadcast();
+  final _cancellation = Completer<void>();
+  LinkReviewSnapshot<SeanceConnectRequest> _snapshot;
+  LinkReviewSnapshot<SeanceConnectRequest>? shown;
+
+  @override
+  LinkReviewSnapshot<SeanceConnectRequest> get snapshot => _snapshot;
+
+  @override
+  Stream<LinkReviewSnapshot<SeanceConnectRequest>> get snapshots =>
+      _snapshots.stream;
+
+  void publish(LinkReviewSnapshot<SeanceConnectRequest> snapshot) {
+    _snapshot = snapshot;
+    _snapshots.add(snapshot);
+  }
+
+  @override
+  void markShown(LinkReviewSnapshot<SeanceConnectRequest> shown) =>
+      this.shown = shown;
+
+  @override
+  bool get isCancelled => _cancellation.isCompleted;
+
+  @override
+  Future<void> get cancelled => _cancellation.future;
+
+  void cancel() => _cancellation.complete();
+}
+
+LinkReviewDecision? _lastDecision;
+
+TextButton _button(String label) =>
+    find
+            .ancestor(of: find.text(label), matching: find.byType(TextButton))
+            .evaluate()
+            .single
+            .widget
+        as TextButton;
+
+/// Opens [review] the way the app does and, when [tap] names a button,
+/// answers it; returns the decision, also kept in [_lastDecision].
+Future<LinkReviewDecision?> _show(
   WidgetTester tester,
   SeanceLinkReview review, {
   String? tap,
+  bool settle = true,
 }) async {
-  SeanceLinkDecision? decision;
+  _lastDecision = null;
   await tester.pumpWidget(
     MaterialApp(
       home: Builder(
         builder: (context) => TextButton(
           onPressed: () async {
-            decision = await showDialog<SeanceLinkDecision>(
-              context: context,
-              builder: (_) => SeanceLinkReviewDialog(review: review),
-            );
+            _lastDecision = await showSeanceLinkReviewDialog(context, review);
           },
           child: const Text('open'),
         ),
@@ -288,10 +403,15 @@ Future<SeanceLinkDecision?> _show(
     ),
   );
   await tester.tap(find.text('open'));
+  if (!settle) {
+    await tester.pump();
+    return null;
+  }
   await tester.pumpAndSettle();
+  await tester.pump(seanceLinkReviewArmDelay);
   if (tap != null) {
     await tester.tap(find.text(tap));
     await tester.pumpAndSettle();
   }
-  return decision;
+  return _lastDecision;
 }

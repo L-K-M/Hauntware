@@ -33,7 +33,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 /// `seance://connect` links (docs/design/suite-links.md section 6). Links
 /// queue here from launch and are reviewed once the app has loaded.
-final SeanceLinkIntake linkIntake = SeanceLinkIntake();
+final SeanceLinkIntake linkIntake = createSeanceLinkIntake();
 
 /// The platforms that register the `seance` scheme (section 7): every
 /// native one. On Linux and Windows the runner forwards a second launch to
@@ -236,7 +236,9 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       // Bound only once the app's own window can carry the review.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        final handler = SeanceAppLinkHandler(state, navigatorKey);
+        final handler = SeanceLinkHandler(
+          SeanceAppLinkHost(state, navigatorKey),
+        );
         _linkHandler = handler;
         linkIntake.activate(handler);
       });
@@ -323,7 +325,8 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       if (overlay == null) return;
       showTopToast(
         overlay,
-        message: 'The OS keyring is locked or unavailable '
+        message:
+            'The OS keyring is locked or unavailable '
             '(${masterKeys.lastKeystoreError ?? 'no details'}) — saved '
             'passwords, keys, and tokens are unreachable. Unlock the login '
             'keyring (or install gnome-keyring), then retry.',
