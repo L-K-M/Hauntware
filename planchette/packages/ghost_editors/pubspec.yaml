@@ -1,0 +1,28 @@
+name: ghost_editors
+description: >-
+  The external editor registry shared by Poltergeist and Seance: editor
+  definitions, the persisted registry codec parameterized by each app's id
+  namespace and migrations, per-extension defaults, the channel/process
+  launcher, and the Settings section that edits the registry.
+version: 1.9.4
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  # The executable picker behind Add editor on Linux and Windows. Each app
+  # pins the exact version in its own pubspec; this range admits both.
+  file_picker: ^13.3.3
+  flutter:
+    sdk: flutter
+  # normalizeEditorExtensions and validateEditorDisplayName, which the
+  # registry and its edit dialog share with the hosts.
+  planchette_editor:
+    path: ../planchette_editor
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

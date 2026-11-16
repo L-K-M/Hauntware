@@ -7252,6 +7252,66 @@ abstract class AppLocalizations {
   /// **'Save'**
   String get editorDialogSave;
 
+  /// Shown in place of Add Editor… on a device without desktop editors (Android, iOS), where remote files always open in the built-in editor.
+  ///
+  /// In en, this message translates to:
+  /// **'External editors open files on desktop. The built-in editor is used here.'**
+  String get editorDesktopOnly;
+
+  /// Section label above the per-extension default editors (06 §4.1's extensionDefaults), which win over the Default editor for their extension.
+  ///
+  /// In en, this message translates to:
+  /// **'Per-extension defaults'**
+  String get editorBindingsLabel;
+
+  /// Empty state of the per-extension defaults list.
+  ///
+  /// In en, this message translates to:
+  /// **'Every extension opens in the default editor.'**
+  String get editorBindingsEmpty;
+
+  /// Opens the dialog that binds one file extension to an editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Extension Default…'**
+  String get editorBindingAddLabel;
+
+  /// Title of the dialog that binds one file extension to an editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Default editor for an extension'**
+  String get editorBindingAddTitle;
+
+  /// Label of the per-extension dialog's extension field.
+  ///
+  /// In en, this message translates to:
+  /// **'File extension'**
+  String get editorBindingExtensionLabel;
+
+  /// Hint of the per-extension dialog's extension field: an example extension, without the dot.
+  ///
+  /// In en, this message translates to:
+  /// **'txt'**
+  String get editorBindingExtensionHint;
+
+  /// Label of the per-extension dialog's editor dropdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Open with'**
+  String get editorBindingEditorLabel;
+
+  /// Inline error when the per-extension dialog's field is blank or lists more than one extension.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter one file extension, such as txt.'**
+  String get editorBindingExtensionInvalid;
+
+  /// Inline error when the chosen editor's accepted extensions exclude the entered extension.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is not set up to open .{extension} files.'**
+  String editorBindingEditorRejects(String name, String extension);
+
   /// Command label on macOS, where Space opens the native Quick Look surface (file.preview, Space, 02 §8.3/§9, 06 §5).
   ///
   /// In en, this message translates to:

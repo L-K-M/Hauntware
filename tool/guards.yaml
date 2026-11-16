@@ -78,6 +78,7 @@ products:
     forbidden_dependencies:
       ghost_apk_update: [seance_core]
       ghost_desktop: [seance_core]
+      ghost_editors: [seance_core]
       ghost_fonts: [seance_core]
       ghost_keepalive: [seance_core]
       ghost_keystore: [seance_core]

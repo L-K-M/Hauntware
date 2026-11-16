@@ -6562,6 +6562,54 @@
   "@editorDialogSave": {
     "description": "Commits the editor add/edit dialog's fields (06 §8)."
   },
+  "editorDesktopOnly": "External editors open files on desktop. The built-in editor is used here.",
+  "@editorDesktopOnly": {
+    "description": "Shown in place of Add Editor… on a device without desktop editors (Android, iOS), where remote files always open in the built-in editor."
+  },
+  "editorBindingsLabel": "Per-extension defaults",
+  "@editorBindingsLabel": {
+    "description": "Section label above the per-extension default editors (06 §4.1's extensionDefaults), which win over the Default editor for their extension."
+  },
+  "editorBindingsEmpty": "Every extension opens in the default editor.",
+  "@editorBindingsEmpty": {
+    "description": "Empty state of the per-extension defaults list."
+  },
+  "editorBindingAddLabel": "Add Extension Default…",
+  "@editorBindingAddLabel": {
+    "description": "Opens the dialog that binds one file extension to an editor."
+  },
+  "editorBindingAddTitle": "Default editor for an extension",
+  "@editorBindingAddTitle": {
+    "description": "Title of the dialog that binds one file extension to an editor."
+  },
+  "editorBindingExtensionLabel": "File extension",
+  "@editorBindingExtensionLabel": {
+    "description": "Label of the per-extension dialog's extension field."
+  },
+  "editorBindingExtensionHint": "txt",
+  "@editorBindingExtensionHint": {
+    "description": "Hint of the per-extension dialog's extension field: an example extension, without the dot."
+  },
+  "editorBindingEditorLabel": "Open with",
+  "@editorBindingEditorLabel": {
+    "description": "Label of the per-extension dialog's editor dropdown."
+  },
+  "editorBindingExtensionInvalid": "Enter one file extension, such as txt.",
+  "@editorBindingExtensionInvalid": {
+    "description": "Inline error when the per-extension dialog's field is blank or lists more than one extension."
+  },
+  "editorBindingEditorRejects": "{name} is not set up to open .{extension} files.",
+  "@editorBindingEditorRejects": {
+    "description": "Inline error when the chosen editor's accepted extensions exclude the entered extension.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "extension": {
+        "type": "String"
+      }
+    }
+  },
   "filePreviewLabel": "Quick Look",
   "@filePreviewLabel": {
     "description": "Command label on macOS, where Space opens the native Quick Look surface (file.preview, Space, 02 §8.3/§9, 06 §5)."

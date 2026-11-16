@@ -57,6 +57,10 @@ enum SettingsLinkMethod {
   registerEditor,
   removeEditor,
   setDefaultEditor,
+
+  /// A per-extension default: `{extension, editorId}`, a null editorId
+  /// clearing it.
+  setExtensionDefault,
   pickEditor,
   setPreviewCapacity,
   setPreviewThreshold,

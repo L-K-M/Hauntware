@@ -10,6 +10,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   write through symbolic links.
 
 ### Added
+- `ghost_editors` package: the external editor registry, its persisted
+  codec, per-extension defaults, launcher and Settings section, shared by
+  Séance and Poltergeist instead of a copy in each app. Each app keeps its
+  stored format through its own id namespace and migrations.
 - Hot exit: quitting no longer asks about unsaved changes. The open
   windows, untitled documents and unsaved edits come back at the next
   launch, also after a crash or after Android ends the app in the

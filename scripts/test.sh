@@ -178,7 +178,7 @@ if [[ "$scope" != dart ]]; then
     # planchette_core is pure Dart; the rest resolve through Flutter.
     (cd packages/planchette_core && run dart pub get)
     for dir in packages/ghost_ui packages/ghost_fonts packages/planchette_editor \
-               packages/ghost_desktop packages/ghost_marks \
+               packages/ghost_desktop packages/ghost_editors packages/ghost_marks \
                packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update packages/ghost_keepalive \
@@ -187,7 +187,7 @@ if [[ "$scope" != dart ]]; then
     done
     (cd app/planchette_app && run flutter pub get --enforce-lockfile)
     for dir in packages/ghost_ui packages/ghost_fonts packages/planchette_editor \
-               packages/ghost_desktop packages/ghost_marks \
+               packages/ghost_desktop packages/ghost_editors packages/ghost_marks \
                packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update packages/ghost_keepalive \
@@ -198,7 +198,7 @@ if [[ "$scope" != dart ]]; then
     run dart format --set-exit-if-changed --output=none \
       packages/planchette_core packages/planchette_editor \
       packages/ghost_ui packages/ghost_fonts packages/ghost_desktop \
-      packages/ghost_marks packages/ghost_marks_picker packages/ghost_theme \
+      packages/ghost_editors packages/ghost_marks packages/ghost_marks_picker packages/ghost_theme \
       packages/ghost_servers \
       packages/ghost_keystore packages/ghost_apk_update \
       packages/ghost_keepalive packages/ghost_licenses \

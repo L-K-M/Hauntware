@@ -464,12 +464,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No Settings window method $name'",
+    // The per-extension default's link keys.
+    "'extension'",
+    "'editorId'",
     "'This section is not available.'",
     // A window could only have shown the switch if the app had it.
     "'No app lock settings'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
+    // The per-extension default's link keys.
+    "'extension'",
+    "'editorId'",
   },
   // 10 §8's platform-row command ids (D21 plumbing), never rendered.
   'lib/ui/menus/app_menu_commands.dart': {
@@ -2024,91 +2030,26 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The registered command id (D21 plumbing).
   'lib/ui/settings/backup_settings_command.dart': {"'open-settings-backup'"},
-  // The Editing sections' bounded mount (06 §8): widget keys, the
-  // `*.ext` chip prefix, and the comma separators of the extensions
-  // field — plumbing and machine data, never authored copy.
+  // The Editing sections' bounded mount (06 §8): its dialog's widget
+  // keys; the sections themselves are ghost_editors'.
   'lib/ui/settings/editor_settings.dart': {
     "'editors.settings.dialog'",
     "'editors.settings.close'",
-    "'editors.remove.dialog'",
-    "'editors.remove.confirm'",
-    "'editors.default'",
-    "'editors.default.builtin'",
-    "'editors.default.system'",
-    r"'editors.default.${editor.id}'",
-    "'editors.add'",
-    r"'editors.row.${editor.id}'",
-    r"'*.$extension'",
-    r"'editors.edit.${editor.id}'",
-    r"'editors.remove.${editor.id}'",
-    "', '",
-    "','",
-    "'editors.edit.save'",
   },
-  // The ported external-editor service (Séance D2): the
-  // `poltergeist/files` channel name and method keys, the reserved
-  // selector ids and prefix, the registry document's schema keys,
-  // extension/id validation regexes and FormatException diagnostics,
-  // and the launch-failure StateError messages — typed diagnostics
-  // surfaced verbatim via error.toString(), the same posture as
-  // RemoteFileException messages; never authored UI copy.
+  // The external-editor service's Poltergeist side: the registry scheme's
+  // id namespace and the `poltergeist/files` channel name — machine data,
+  // never authored UI copy (the registry and launcher are ghost_editors').
   'lib/services/external_file_opener.dart': {
+    "'poltergeist'",
     "'poltergeist/files'",
-    "'poltergeist.system'",
-    "'poltergeist.builtin'",
-    "'poltergeist.'",
-    "'platform'",
-    "'id'",
-    "'displayName'",
-    "'launchTarget'",
-    "'acceptedExtensions'",
-    "'editors'",
-    "'extensionDefaults'",
-    "'defaultEditorId'",
-    "'version'",
-    "'Unknown editor platform'",
-    r"'Unknown editor id: $editorId'",
-    "'Editor id is reserved'",
-    "'At most 64 external editors can be configured.'",
-    r"'.$extension'",
-    r"'file.$extension'",
-    r"'\\'",
-    "'/'",
-    "'openWithApplication'",
-    "'path'",
-    "'bundleIdentifier'",
-    "'pickApplication'",
-    "'title'",
-    r"'${editor.displayName} is configured for another platform.'",
-    r"'${editor.displayName} is no longer installed at '",
-    r"'${editor.launchTarget}.'",
-    r"'${editor.displayName} is not executable.'",
-    "'The selected application has no bundle identifier.'",
     // The launch refusal's diagnostic toString — the shell renders the
     // ARB refusal instead; this only reaches logs.
     r"'ExecutableLaunchRefused: $path'",
-    "'Choose a regular executable file.'",
-    "'.exe'",
-    "'Windows editors must be .exe applications.'",
-    "'Windows editors must be .exe applications'",
-    "'The selected file is not executable.'",
-    "'exe'",
-    r"r'^[A-Za-z0-9._-]{1,64}$'",
-    "'Invalid editor id'",
-    r"'\u0000'",
-    "'Invalid editor target'",
-    "'Editor executable paths must be absolute'",
-    // The platform-aware absoluteness check's Windows drive/UNC patterns
-    // — regex and path mechanics, never rendered copy.
-    r"r'^[A-Za-z]:[\\/]'",
-    r"'\\\\'",
   },
-  // The registry document's settings.json key and the refuse-at-write
-  // diagnostic — machine data and a typed-error message surfaced
-  // verbatim through the error-toast convention, never ARB copy.
+  // The registry document's settings.json key — machine data, never ARB
+  // copy.
   'lib/services/editor_registry_controller.dart': {
     "'editorRegistry'",
-    r"'Unknown editor id: $id'",
   },
   // The submenuItems/menuPlacement.submenu exclusivity assert — a
   // dev-facing invariant message, never rendered copy.
