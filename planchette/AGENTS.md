@@ -38,8 +38,12 @@ packages/
                           seance_protocol; outside the workspace; no
                           platform picker: each app passes the mark picker
                           its image reader
-  ghost_marks_picker/     that reader over file_picker 13, for Séance and
-                          Poltergeist; outside the workspace
+  ghost_marks_picker/     that reader over file_picker 13, and Séance's and
+                          Poltergeist's other picker glue: bounded picked-
+                          file reads and the save-as panels (file_selector
+                          on desktop, the document picker on iOS), plus
+                          scripted platforms in testing.dart; outside the
+                          workspace
   ghost_theme/            the editable theme palette, its stored/pasted JSON
                           form, the shipped presets, the theme builders and
                           chrome extension, the per-app style and codec

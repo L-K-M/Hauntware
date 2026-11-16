@@ -5,12 +5,11 @@ import 'package:file_picker/file_picker.dart' show FilePickerPlatform;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_marks_picker/testing.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/secrets_recovery.dart';
 import 'package:seance_app/services/secure_master_key.dart';
 import 'package:seance_core/seance_core.dart';
-
-import 'support/fake_file_picker.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 

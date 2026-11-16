@@ -1,9 +1,11 @@
-// A file_picker platform with scripted picks, and picked files with scripted
-// lengths and byte streams, for the app's own picker callers.
+// A file_picker platform with scripted picks and saves, picked files with
+// scripted lengths and byte streams, and a file_selector platform with a
+// scripted save location.
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
 
 /// A picked file whose reported length and contents the test sets.
 ///
@@ -63,9 +65,14 @@ final class FakePickedFile extends PlatformFile {
 }
 
 /// The platform pickers with a scripted answer: [picked] for a multiple
-/// selection, its first file for a single one.
+/// selection, its first file for a single one. A save records what it was
+/// given in [saves] and answers [savedTo] (null: the user cancelled).
 final class FakeFilePicker extends FilePickerPlatform {
   List<PlatformFile> picked = const [];
+
+  Uri? savedTo;
+
+  final List<({String fileName, Uint8List bytes, String mimeType})> saves = [];
 
   @override
   Future<List<PlatformFile>> pickFiles({
@@ -96,4 +103,52 @@ final class FakeFilePicker extends FilePickerPlatform {
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),
   }) async => picked.isEmpty ? null : picked.first;
+
+  @override
+  Future<Uri?> saveFile({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+    String? dialogTitle,
+    String? initialDirectory,
+    Function(FilePickerStatus)? onFileSaving,
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    saves.add((fileName: fileName, bytes: bytes, mimeType: mimeType));
+    return savedTo;
+  }
+}
+
+/// A file_selector platform whose save panel answers [location] (null: the
+/// user cancelled) and records each suggested name in [suggestedNames].
+/// Every other panel is the interface's unimplemented one, as on iOS, where
+/// file_selector has no save panel at all: [FakeFileSelector.withoutSavePanel]
+/// throws there as that platform does.
+final class FakeFileSelector extends FileSelectorPlatform {
+  FakeFileSelector({this.location}) : _hasSavePanel = true;
+
+  FakeFileSelector.withoutSavePanel() : location = null, _hasSavePanel = false;
+
+  String? location;
+  final bool _hasSavePanel;
+  final List<String?> suggestedNames = [];
+
+  @override
+  Future<FileSaveLocation?> getSaveLocation({
+    List<XTypeGroup>? acceptedTypeGroups,
+    SaveDialogOptions options = const SaveDialogOptions(),
+  }) async {
+    if (!_hasSavePanel) {
+      // What file_selector_ios inherits from the platform interface.
+      return super.getSaveLocation(
+        acceptedTypeGroups: acceptedTypeGroups,
+        options: options,
+      );
+    }
+    suggestedNames.add(options.suggestedName);
+    final path = location;
+    return path == null ? null : FileSaveLocation(path);
+  }
 }

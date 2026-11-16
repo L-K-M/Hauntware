@@ -2486,10 +2486,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Android returned no exported document URI.'",
     "'The staged export file no longer exists.'",
   },
-  // The picked file's no-data diagnostic, never rendered copy.
-  'lib/services/picked_file_bytes.dart': {
-    "'The picker provided no readable data'",
-  },
   // The keep-alive's notification channel id (stored user data, never
   // rendered) and its status-bar drawable's resource name.
   'lib/services/transfer_keep_alive.dart': {

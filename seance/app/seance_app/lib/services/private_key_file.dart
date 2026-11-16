@@ -3,8 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-
-import 'picked_file_bytes.dart';
+import 'package:ghost_marks_picker/picked_files.dart';
 
 /// The largest private key file read into a credential: far above any real
 /// key (an RSA-16384 PEM is about 12 KiB), and small enough that a wrong pick

@@ -16,6 +16,11 @@ Poltergeist's vault store and app-lock-guarded key resolve.
 | `seance_app/lib/services/secrets_recovery.dart`, file half | `poltergeist_app/lib/services/secrets_recovery.dart` |
 | `seance_app/android/.../MainActivity.kt`, SAF methods | `poltergeist_app/android/.../MainActivity.kt` |
 
+- 2026-11-16: `picked_file_bytes.dart` is no longer a port. Both apps
+  take `readPickedFileBytes` and the desktop/iOS save-as panel (`saveAs`)
+  from `ghost_marks_picker`'s `picked_files.dart`, and the scripted
+  picker fakes from its `testing.dart`.
+
 - The export wire format is unchanged: `SecretsExport.format` stays
   `seance-secrets`, so an export restores in Séance, Poltergeist and
   Klabautermann. Only the file name gains Poltergeist's prefix,
