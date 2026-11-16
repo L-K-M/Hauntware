@@ -117,6 +117,7 @@ final class AppSettings {
 
   /// Whether quitting keeps unsaved changes for the next launch or asks.
   final UnsavedOnQuit unsavedOnQuit;
+
   /// Where Save As opens for a document without a folder of its own. Kept
   /// on this device with Open Recent, and cleared with it.
   final SaveAsFolders saveAsFolders;
