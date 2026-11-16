@@ -251,10 +251,12 @@ def main():
         for name, rev, url, _, text in texts:
             cache_text(cache, name, rev, url, text)
         # Keep only the texts some recorded SDK uses; drop an SDK by deleting
-        # its entry from cache.json and refreshing any SDK.
+        # its entry from cache.json and refreshing any SDK. An SDK recorded
+        # before COMPONENTS gained a pin has no text for it to keep.
         used = {(name, recorded["pins"][variable] if variable else sdk_revision)
                 for sdk_revision, recorded in cache["sdks"].items()
-                for name, variable, *_ in COMPONENTS}
+                for name, variable, *_ in COMPONENTS
+                if variable is None or variable in recorded["pins"]}
         cache["texts"] = [item for item in cache["texts"]
                           if (item["component"], item["revision"]) in used]
         referenced = {item["file"] for item in cache["texts"]}

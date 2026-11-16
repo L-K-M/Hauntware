@@ -98,7 +98,8 @@ void main() {
     test('says what happened, and what to do about it', () async {
       final message = const MasterKeyUnavailableException().toString();
       expect(message, contains('vault'));
-      expect(message, contains('keychain backup'));
+      expect(message, contains('backup of your system credential store'));
+      expect(message, isNot(contains('macOS')));
     });
 
     test(
@@ -153,7 +154,8 @@ void main() {
       const error = MasterKeyDamagedException();
       expect(error, isA<MasterKeyUnavailableException>());
       expect(error.toString(), contains('damaged'));
-      expect(error.toString(), contains('keychain backup'));
+      expect(error.toString(), contains('backup of your system credential'));
+      expect(error.toString(), isNot(contains('macOS')));
     });
 
     // flutter_secure_storage defaults resetOnError to true, which deletes
