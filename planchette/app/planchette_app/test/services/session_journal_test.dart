@@ -45,6 +45,15 @@ Future<void> _deleteTemp(Directory temp) async {
   }
 }
 
+/// Stops [journal] and waits for a write already under way. [stop] only
+/// cancels what is pending: a write that started first and lands after
+/// the teardown deleted the blocking file would recreate the journal's
+/// folder inside the test's, and the folder's deletion would then fail.
+Future<void> _stopAndSettle(WorkspaceJournal journal) async {
+  journal.stop();
+  await journal.idle;
+}
+
 final class _Siblings implements SaveSiblings {
   final found = <String, List<SaveSibling>>{};
 
@@ -427,7 +436,7 @@ void main() {
         id: '1111111111111111',
         delay: _short,
       )..start();
-      addTearDown(journal.stop);
+      addTearDown(() => _stopAndSettle(journal));
       final tab = workspace.newDocument()!;
       final file = File(paths.join(temp.path, 'window-1111111111111111.json'));
 
@@ -463,7 +472,7 @@ void main() {
         id: '2222222222222222',
         delay: _short,
       )..start();
-      addTearDown(journal.stop);
+      addTearDown(() => _stopAndSettle(journal));
       await workspace.open(testPath('a.txt'));
       workspace.active!.editor.text.text = 'edited';
       expect(await journal.flush(), isTrue);
@@ -492,7 +501,7 @@ void main() {
         delay: _short,
         onError: errors.add,
       )..start();
-      addTearDown(journal.stop);
+      addTearDown(() => _stopAndSettle(journal));
       workspace.newDocument()!.editor.text.text = 'unsaved';
       expect(await workspace.confirmQuit(), isFalse);
       expect(dialogs.asked, hasLength(1));
@@ -514,7 +523,7 @@ void main() {
         delay: _short,
         onError: errors.add,
       )..start();
-      addTearDown(journal.stop);
+      addTearDown(() => _stopAndSettle(journal));
       workspace.newDocument()!.editor.text.text = 'unsaved';
       await _until(() async => errors.isNotEmpty);
       await journal.idle;
