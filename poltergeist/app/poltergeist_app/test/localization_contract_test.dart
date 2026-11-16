@@ -2461,8 +2461,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'.json'",
     "'application/json'",
     "'secrets-export-'",
-    // The URI scheme of an iOS save location, never rendered.
-    "'file'",
     r"'${directory.path}/$fileName'",
     "'That file could not be read.'",
     // A fixed protocol diagnostic; the settings UI renders ARB copy.
