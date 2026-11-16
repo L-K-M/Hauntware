@@ -5,6 +5,36 @@ up next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [../docs/design/klabautermann/](../../docs/design/klabautermann/) for the
 normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 
+## Wave 6 (2026-11-16)
+
+- Sync records held on this device (#792, #794): a round against a
+  full account maps `SyncRecordsRefused`, and an older server's
+  whole-push `account_quota_exceeded`, to the new
+  `SyncFailure.accountFull` instead of a generic server error.
+  `SyncStatus` carries `recordsAwaitingSpace` and `recordsTooLarge`. A
+  manual round's toast says how many changes wait for space or are too
+  large; `SyncController` keeps that state from every round, including
+  engine-started ones, until a round stores them or you sign out. While
+  records are held, the rail chip uses the error tone and the chip and
+  the phone's sync button add the sentence as a second tooltip line.
+  The noun "changes" and the chip as the only persistent surface are
+  conventional choices; the desktop settings window is unchanged.
+- Text tool notices and previews use the corrected shared English
+  (#793). `AppLockGateModel` and `FakeDeviceAuthenticator` now come
+  from ghost_keystore (#796). The `file_picker` Kotlin note is gone
+  from AGENTS.md (#791).
+
+Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a
+shared package once `docs/design/catalog-library.md` section 9 is
+revised; the `FLAG_SECURE` and locked window title product decision;
+the app directories are not format-checked in CI; Séance's link review
+shows no activation count.
+
+Proof: analysis and the core and app suites passed locally and CI
+passed on each PR's last head. Still manual: the chip tone and tooltip
+on a device or desktop, and a full account against a real Séance sync
+server.
+
 ## Wave 5 (2026-11-15/16)
 
 - Reboot wait app-wide (decision Q1, #774): a reboot from the System

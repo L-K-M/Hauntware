@@ -1,5 +1,71 @@
 # Status
 
+## Wave 6 (2026-11-16)
+
+Merged to main:
+
+- I7 phase 3 (#788, #789): the shell's menus, tab strip, banners and
+  dialogs and the workspace, folder and settings services' messages
+  come from the ARB catalog. Menus carry `_ShellMenuId` and every
+  command a stable id, so the palette and the Edit-chord rule no longer
+  match on English labels. The services read an injected
+  `AppLocalizations` builder each time they word a message, and fall
+  back to `templateStrings()` (English) without one. A failed reread
+  and a settings load issue are typed instead of spliced sentences.
+  English is unchanged: `shell_strings_test.dart` compares the macOS
+  menu outline with one captured before the move, and the existing
+  workspace tests pass unchanged.
+- Hot exit (#793): a failed journal write is retried after 250 ms,
+  500 ms, 1 s, 2 s and 4 s, at most five tries per failing run; a
+  success resets the count and `stop()` cancels a pending try.
+- Text tool copy (#793), in Planchette, Poltergeist and Klabautermann:
+  the Extract Matches notice reads the run's `target:unit` detail in
+  the right order and no longer says "matchs", the fallback says
+  "changed N of M units", and Trim Trailing Whitespace previews "will
+  trim N lines".
+- `normalizeEditorExtensions` and `validateEditorDisplayName` moved
+  from planchette_editor into ghost_editors, which no longer depends on
+  planchette_editor (#793).
+- A remote file error with no window open is reported through
+  `FlutterError.reportError` instead of going nowhere (#794).
+- `ghost_marks_picker` now also holds Séance's and Poltergeist's picker
+  and save-as glue and their picker fakes (#791). The Android Kotlin
+  note for file_picker is gone from the product AGENTS.md files.
+- Dependabot holds `screen_retriever` below 0.3 next to the existing
+  `window_manager` 0.7 hold; both wait for the Flutter upgrade, and
+  0.3's `nativeapi` core needs its own license and platform review
+  (#786).
+- The optional app lock (#796) is described in the next section.
+
+This closes Wave 5's deferred shell and service strings and the
+journal retry, and its pre-existing text tool copy items.
+
+Deferred:
+
+- English still held in `session_journal.dart`,
+  `workspace_catalog.dart`, `workspace_remote_files.dart`,
+  `document_store.dart`, `save_siblings.dart`,
+  `android_documents.dart` and `app_version.dart`, mostly exception
+  texts from the storage, sync and SSH layers that need typed errors.
+  The settings controller uses the template strings until a second
+  locale ships.
+- Hot exit scroll position: scrolling does not notify the editor, only
+  the active tab has an offset, and a pixel offset breaks after a zoom
+  or wrap change. Restore keeps the caret line in view.
+- Moving `LocalDeviceAuthenticator` into a shared package, once
+  `docs/design/catalog-library.md` section 9 is revised to allow it.
+- `FLAG_SECURE` for Android recents and document names in window
+  titles while locked: a product decision.
+- The app directories are not format-checked in CI, and several app
+  files have pre-existing formatter drift.
+
+Proof: analysis and the full app suite passed locally and CI passed on
+each merged head. Still manual: the moved menus and messages on macOS,
+Windows, Linux and Android (the native menu was checked only through
+the test delegate, and the Android entry point was only analyzed), the
+journal retry against a real Windows scanner (tested on Linux with an
+injected failure), and the app lock checks listed below.
+
 ## App lock (2026-11-16, branch `planchette/app-lock`)
 
 - Settings > App lock, off by default as in Séance and Poltergeist:

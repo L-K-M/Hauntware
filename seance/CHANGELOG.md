@@ -10,6 +10,19 @@
   opened again while its review is showing joins that review instead of
   waiting for a second one.
 
+- **Save as works on iOS.** Download / Save as… in the Files pane
+  saves a remote file through the iOS document picker instead of
+  failing. The picker needs the whole file in memory, so files over
+  100 MB are refused there; use Share… and choose Save to Files for
+  those.
+
+- **A damaged vault key stops Séance.** If the system credential store
+  holds a vault master key that is not a valid 32-byte key while you
+  have an encrypted vault, Séance stops at startup and leaves the entry
+  as it is, instead of using it or offering a Retry that cannot help.
+  Restore the matching key from a backup of your system credential
+  store.
+
 - **Per-extension default editors.** Settings › Files can open an
   extension in its own editor, such as `.md` files in an external
   Markdown app, ahead of the default editor. Your current default editor

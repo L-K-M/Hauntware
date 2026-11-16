@@ -6,6 +6,19 @@
   links now lives in the suite's shared core, which Séance's link
   review also uses. Reviewing, discarding and cancelling links work as
   before.
+- **Undo Rename Items.** Edit › Undo takes back a whole Rename Items
+  run, renaming every item back, and Redo repeats it.
+- **Undoing a move restores Keep Both names.** When Keep Both renamed
+  an item ("notes 2"), undoing the move gives it its original name back
+  if that name is free. If it is taken, or no tab on that server can
+  rename it, the item keeps its name and a notice says why.
+- **Records too large to sync are named.** When the sync server refuses
+  a bookmark as too large, Settings › Backup and the sidebar name it
+  and say it stays on this device until you make it smaller. Everything
+  else still syncs.
+- **Copy to… keeps naming the server.** The Copy to… sheet no longer
+  switches to "This device" while the destination pane changes to this
+  device; it copies to the server it names.
 - **Cut, Copy, Paste and Undo for files.** Edit › Cut, Copy and Paste
   (⌘X, ⌘C, ⌘V on macOS, Ctrl elsewhere, and the context menus) move
   and copy items between panes, tabs and servers with Poltergeist's own

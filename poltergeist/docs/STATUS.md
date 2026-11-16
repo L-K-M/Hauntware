@@ -4,6 +4,48 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Wave 6 (2026-11-16)
+
+- Rename Items records one Edit > Undo entry, "Undo Rename Items"
+  (#790). Undo renames back in reverse run order, so chained renames
+  free each name first; Redo replays in order. A run that renamed
+  nothing records nothing.
+- Undoing a queue move gives a root renamed by Keep Both its original
+  name back when that name is free on the source host (#790). If it is
+  taken, or no tab on that host can rename it, the item keeps its name
+  and a notice says why; several such items share one notice (#794).
+- Copy to… names the server it copies to even while the destination
+  pane rebinds to this device: the sheet snapshots the server label
+  when it opens (#790).
+- A bookmark backup round whose server refused a record as too large
+  no longer clears the status: Settings > Backup and the sidebar name
+  the record, in Séance's wording, until a round refuses nothing. A
+  refused record keeps its kind when the name lookup throws (#790,
+  #794).
+- The picked-file reader, the secrets export save-as split and the
+  picker fakes moved into `ghost_marks_picker`, shared with Séance; the
+  direct `file_selector` dependency is gone. The Android Gradle block
+  for `file_picker` is removed as dead code on 13.3.3 (#791).
+- Text tool notices and previews use the corrected shared English
+  (#793). `AppLockGateModel` and `FakeDeviceAuthenticator` now come
+  from ghost_keystore (#796). The shared link queue (#795) is described
+  in Wave 5 below.
+
+This closes Wave 5's three deferred items.
+
+Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a
+shared package once `docs/design/catalog-library.md` section 9 is
+revised; the `FLAG_SECURE` and locked window title product decision;
+the app directories are not format-checked in CI. Séance's link review
+still shows no activation count, which this app's review does.
+
+Proof: analysis and the full app suite passed locally, and CI passed on
+each PR's last head; #795's macOS pure-Dart job was cancelled there and
+passed on main's merge run. Still manual: the notices on screen (tested
+through the notify seam), refused records against a live server, the
+desktop save panels and iOS document picker after the move, and real
+`poltergeist://` delivery on each platform.
+
 ## Wave 5 (2026-11-15/16)
 
 - Phone Copy to (UI-06, decision Q4, #775): the selection bar's "Copy
