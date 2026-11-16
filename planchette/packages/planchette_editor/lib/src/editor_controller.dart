@@ -83,7 +83,7 @@ class EditorController extends ChangeNotifier {
     this._saveNormalizationForLineEnding,
     TextToolHistory? toolHistory,
   }) : _displayPath = displayPath,
-       _fold = caseFolder ?? _defaultCaseFolder,
+       _fold = caseFolder ?? unicodeCaseFold,
        _patternSearchBudget = patternSearchBudget ?? core.patternSearchBudget,
        _toolHistory = toolHistory ?? TextToolHistory(),
        _now = now ?? clock.now {
@@ -132,18 +132,17 @@ class EditorController extends ChangeNotifier {
   void Function(String text)? onNewDocument;
 
   /// How a case-insensitive find compares text. Defaults to
-  /// [String.toLowerCase]; a host can supply a fold that fixes case
+  /// [unicodeCaseFold], Unicode's own folding; a host can supply a fold that fixes case
   /// differences the default misses while keeping the document's length —
   /// Greek final sigma, a locale's dotted and dotless i, canonical Cherokee
   /// forms. A fold that changes the *document's* length cannot be applied,
   /// because matches are located in the folded text and their offsets would
   /// stop addressing the original; the search then compares exactly and says
-  /// so through [caseFoldingLimited]. The search itself expands the common
-  /// Latin full folds (`ß` to `ss`, `ﬁ` to `fi`) with a folded-offset map
-  /// before this fold runs, so a host fold need not and cannot add them.
+  /// so through [caseFoldingLimited]. The search itself expands every full
+  /// fold Unicode lengthens (`ß` to `ss`, `ﬁ` to `fi`, `ᾳ` to `αι`) with a
+  /// folded-offset map before this fold runs, so a host fold need not and
+  /// cannot add them.
   final CaseFolder _fold;
-
-  static String _defaultCaseFolder(String value) => value.toLowerCase();
 
   /// How long one regular-expression search may run in its worker before it
   /// is stopped and the find bar reports [PatternTimedOut]. Defaults to

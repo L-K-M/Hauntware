@@ -77,6 +77,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the page is too large and gives its size.
 - Find matches ß and ss, İ, and ligatures such as ﬁ and fi,
   case-insensitively.
+- Case-insensitive find uses Unicode 17.0.0 full case folding from
+  CaseFolding.txt, so every character Unicode folds matches: Greek with
+  iota subscript and αι, Armenian ligatures, ŉ, and σ, ς and Σ.
+  Regular-expression find keeps simple folding. The Unicode License v3
+  notice is on the licenses page of every app.
+- Saving a file that has other hard links writes it in place behind a
+  backup copy, so every name of the file shows the saved text.
+- Save As on an untitled document opens in the last folder used for a
+  file with the same extension, then in the last Save As folder. Clear
+  Menu in Open Recent forgets these folders too.
 - Saving keeps a file's extended attributes on Linux and macOS, such as
   Finder tags, quarantine and Linux ACLs, as a best effort.
 - The widgets, document dialogs, settings dialog and server dialogs take

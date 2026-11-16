@@ -1,25 +1,111 @@
 /// Case-insensitive search over expanding folds: `ß` matches `ss`.
 ///
-/// Internal to the search in `editor_syntax.dart`; not exported.
+/// Internal to the search in `editor_syntax.dart`; only [unicodeCaseFold]
+/// is exported.
 library;
 
-/// Characters whose Unicode full case fold is longer than they are, with that
-/// fold. Unicode's full table also expands Greek letters with a combining
-/// iota (`ᾳ` to `αι`), Armenian ligatures and a few precomposed letters such
-/// as `ŉ`; this covers the Latin ones a search is most often typed for.
-/// Every key is one UTF-16 unit, which the fast path's scan relies on.
-const Map<int, String> _expansions = {
-  0x00DF: 'ss', // ß
-  0x1E9E: 'ss', // ẞ, capital sharp s
-  0x0130: 'i̇', // İ, capital I with dot above
-  0xFB00: 'ff', // ﬀ
-  0xFB01: 'fi', // ﬁ
-  0xFB02: 'fl', // ﬂ
-  0xFB03: 'ffi', // ﬃ
-  0xFB04: 'ffl', // ﬄ
-  0xFB05: 'st', // ﬅ
-  0xFB06: 'st', // ﬆ
-};
+import 'dart:typed_data';
+
+part 'unicode_case_fold_data.dart';
+
+/// Unicode's common case folding, CaseFolding.txt status C, of [value]: the
+/// default [CaseFolder] of a case-insensitive plain-text search.
+///
+/// Status C maps every character to exactly one character on the same side
+/// of the BMP, so the result has [value]'s length and its unit *i* stands
+/// for unit *i* of [value]. That makes it a valid fold for a document, and
+/// together with the status F expansions the search applies first
+/// ([foldDocumentForSearch]) it is Unicode *full* case folding: `ß` and
+/// `ss`, `ﬁ` and `fi`, `ᾳ` and `αι`, and `σ`, `ς` and `Σ` all match. Turkic
+/// (T) mappings are not applied, as Unicode's default folding does not.
+/// Independent of the platform and of Dart's own case tables, so every host
+/// finds the same matches. Lone surrogates pass through unchanged.
+String unicodeCaseFold(String value) {
+  // For ASCII, status C is exactly A-Z to a-z, and the platform's own
+  // lowercasing does that several times faster than the loop below.
+  if (_isAscii(value)) return value.toLowerCase();
+  final table = _bmpFolds;
+  Uint16List? out;
+  for (var i = 0; i < value.length; i++) {
+    final unit = value.codeUnitAt(i);
+    if (unit & _surrogateMask == _highSurrogate &&
+        i + 1 < value.length &&
+        value.codeUnitAt(i + 1) & _surrogateMask == _lowSurrogate) {
+      final low = value.codeUnitAt(i + 1);
+      final point = 0x10000 + ((unit & 0x3ff) << 10) + (low & 0x3ff);
+      final folded = _foldSupplementary(point);
+      if (folded != point) {
+        out ??= _copyPrefix(value, i);
+        out[i] = _highSurrogate | ((folded - 0x10000) >> 10);
+        out[i + 1] = _lowSurrogate | ((folded - 0x10000) & 0x3ff);
+      } else if (out != null) {
+        out[i] = unit;
+        out[i + 1] = low;
+      }
+      i++;
+      continue;
+    }
+    final folded = table[unit];
+    if (folded != unit) out ??= _copyPrefix(value, i);
+    if (out != null) out[i] = folded;
+  }
+  return out == null ? value : String.fromCharCodes(out);
+}
+
+bool _isAscii(String value) {
+  for (var i = 0; i < value.length; i++) {
+    if (value.codeUnitAt(i) >= 0x80) return false;
+  }
+  return true;
+}
+
+const _surrogateMask = 0xfc00;
+const _highSurrogate = 0xd800;
+const _lowSurrogate = 0xdc00;
+
+Uint16List _copyPrefix(String value, int end) {
+  final out = Uint16List(value.length);
+  for (var i = 0; i < end; i++) {
+    out[i] = value.codeUnitAt(i);
+  }
+  return out;
+}
+
+/// Every BMP unit's status C fold, looked up by index: folding a 4 MiB
+/// document is one table read per unit instead of a search of the ranges.
+/// Built on first use, 128 KiB per isolate.
+final Uint16List _bmpFolds = () {
+  final table = Uint16List(0x10000);
+  for (var unit = 0; unit < table.length; unit++) {
+    table[unit] = unit;
+  }
+  for (final range in _commonFoldRanges) {
+    if (range.start >= 0x10000) break;
+    for (var point = range.start; point <= range.end; point += range.stride) {
+      table[point] = point + range.delta;
+    }
+  }
+  return table;
+}();
+
+int _foldSupplementary(int point) {
+  var low = 0;
+  var high = _commonFoldRanges.length - 1;
+  while (low <= high) {
+    final middle = (low + high) >> 1;
+    final range = _commonFoldRanges[middle];
+    if (point < range.start) {
+      high = middle - 1;
+    } else if (point > range.end) {
+      low = middle + 1;
+    } else {
+      return (point - range.start) % range.stride == 0
+          ? point + range.delta
+          : point;
+    }
+  }
+  return point;
+}
 
 /// [query] with every expanding character replaced by its fold, then
 /// folded with [fold], for the needle side of a search.
@@ -27,7 +113,7 @@ String foldQueryForSearch(String query, String Function(String) fold) {
   if (!_hasExpansion(query)) return fold(query);
   final expanded = StringBuffer();
   for (final unit in query.codeUnits) {
-    expanded.write(_expansions[unit] ?? String.fromCharCode(unit));
+    expanded.write(_fullFoldExpansions[unit] ?? String.fromCharCode(unit));
   }
   return fold(expanded.toString());
 }
@@ -154,7 +240,7 @@ FoldedSearchText? _foldDocument(String text, String Function(String) fold) {
   }
 
   for (var i = 0; i < text.length; i++) {
-    final expansion = _expansions[text.codeUnitAt(i)];
+    final expansion = _fullFoldExpansions[text.codeUnitAt(i)];
     if (expansion == null) continue;
     if (!foldRun(i)) return null;
     entries.add((folded: foldedLength, original: i, length: expansion.length));
@@ -169,8 +255,9 @@ FoldedSearchText? _foldDocument(String text, String Function(String) fold) {
 bool _hasExpansion(String value) {
   for (var i = 0; i < value.length; i++) {
     final unit = value.codeUnitAt(i);
-    // Every key is at or above U+00DF; most text never reaches the lookup.
-    if (unit >= 0xDF && _expansions.containsKey(unit)) return true;
+    // Every key is at or above U+00DF (ß); most text never reaches the
+    // lookup.
+    if (unit >= 0xDF && _fullFoldExpansions.containsKey(unit)) return true;
   }
   return false;
 }

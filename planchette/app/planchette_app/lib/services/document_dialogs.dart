@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart';
@@ -70,19 +72,28 @@ final class AppDocumentDialogs implements DocumentDialogs {
     if (window != null && window.available) {
       return window.pickSavePath(
         suggestedName: paths.basename(suggestedName),
-        initialDirectory: paths.isAbsolute(suggestedName)
-            ? paths.dirname(suggestedName)
-            : null,
+        initialDirectory: _initialDirectory(suggestedName),
       );
     }
     final location = await getSaveLocation(
       suggestedName: paths.basename(suggestedName),
-      initialDirectory: paths.isAbsolute(suggestedName)
-          ? paths.dirname(suggestedName)
-          : null,
+      initialDirectory: _initialDirectory(suggestedName),
       confirmButtonText: _l10n.actionSave,
     );
     return location?.path;
+  }
+
+  /// The folder of an absolute [suggestedName], if it is still there. A
+  /// remembered folder may be gone or on a disk that is not connected; the
+  /// system's own default is better than a dialog that cannot open there.
+  static String? _initialDirectory(String suggestedName) {
+    if (!paths.isAbsolute(suggestedName)) return null;
+    final folder = paths.dirname(suggestedName);
+    try {
+      return Directory(folder).existsSync() ? folder : null;
+    } on FileSystemException {
+      return null;
+    }
   }
 
   @override
