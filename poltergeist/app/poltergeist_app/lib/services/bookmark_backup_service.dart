@@ -653,29 +653,28 @@ final class BookmarkBackupService extends ChangeNotifier
   /// by its id rather than failing the round's status.
   Future<RefusedRecord> _refusedRecord(String id) async {
     const bookmarkPrefix = 'bookmark:';
+    // The id alone gives the kind, so a failed name lookup keeps it.
+    final kind = id.startsWith(bookmarkPrefix)
+        ? RecordKind.bookmark
+        : id.startsWith('hostkey:')
+        ? RecordKind.hostKey
+        : id.startsWith('secret:')
+        ? RecordKind.secret
+        : !id.contains(':')
+        ? RecordKind.serverConfig
+        : RecordKind.unknown;
     try {
-      if (id.startsWith(bookmarkPrefix)) {
-        final row = await _bookmarks.byId(id.substring(bookmarkPrefix.length));
-        return RefusedRecord(id, kind: RecordKind.bookmark, name: row?.label);
-      }
-      if (id.startsWith('hostkey:')) {
-        return RefusedRecord(id, kind: RecordKind.hostKey);
-      }
-      if (id.startsWith('secret:')) {
-        return RefusedRecord(id, kind: RecordKind.secret);
-      }
-      if (!id.contains(':')) {
-        final server = await _servers.byId(id);
-        return RefusedRecord(
-          id,
-          kind: RecordKind.serverConfig,
-          name: server?.label,
-        );
-      }
+      final name = switch (kind) {
+        RecordKind.bookmark => (await _bookmarks.byId(
+          id.substring(bookmarkPrefix.length),
+        ))?.label,
+        RecordKind.serverConfig => (await _servers.byId(id))?.label,
+        _ => null,
+      };
+      return RefusedRecord(id, kind: kind, name: name);
     } on Object {
-      return RefusedRecord(id);
+      return RefusedRecord(id, kind: kind);
     }
-    return RefusedRecord(id);
   }
 
   Future<void> _persistStatus() async {

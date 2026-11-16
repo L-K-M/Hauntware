@@ -337,6 +337,29 @@ void main() {
       );
     });
 
+    test('a refused record whose name lookup fails keeps its kind',
+        () async {
+      await h.enrollSeparateDirectly();
+      final crypto =
+          RecordCrypto(RecordCodec(h.credentials.vaultKey!));
+      await h.records.putLocal(await crypto.seal(DecryptedRecord(
+        id: 'bookmark:big',
+        kind: RecordKind.bookmark,
+        updatedAt: _fixedNow.millisecondsSinceEpoch,
+        deviceId: 'test-device',
+        data: _bookmark('big').toJson(),
+      )));
+      h.server.tooLarge.add('bookmark:big');
+      h.bookmarks.byIdError = StateError('store unreadable');
+
+      await h.service.backUpNow();
+
+      expect(
+        h.service.lastSyncError,
+        startsWith('Bookmark (bookmark:big) is too large'),
+      );
+    });
+
     test('a 401 round raises the durable dead-account notice', () async {
       await h.enrollSeparateDirectly();
       h.server.unauthorized = true;

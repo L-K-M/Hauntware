@@ -410,39 +410,47 @@ class FileOperations {
       for (final task in tasks) await _awaitCompleted(delegate.queue, task),
     ];
     final originals = {for (final root in moved) root.created: root.original};
+    // One notice for the whole Undo: the toast stack shows only a few at
+    // once, so a notice per root could push others out of view.
+    final keptNames = <String>[];
     for (final task in settled) {
       for (final item in task.items) {
         final original = originals[item.sourcePath];
         if (original == null) continue;
-        await _restoreName(paste.source, item.destinationPath, original);
+        final kept = await _restoreName(
+          paste.source,
+          item.destinationPath,
+          original,
+        );
+        if (kept != null) keptNames.add(kept);
       }
     }
+    if (keptNames.isNotEmpty) _notify(keptNames.join('\n'));
   }
 
   /// Renames [current] on [host] back to [original], its name before a
   /// Keep Both rename, unless that name is taken or no tab can rename.
-  /// Never fails the Undo: the item is back either way.
-  Future<void> _restoreName(
+  /// Never fails the Undo: the item is back either way. Returns why the
+  /// item kept its name, or null when it has its own name again.
+  Future<String?> _restoreName(
     FsLocation host,
     String current,
     String original,
   ) async {
-    if (current == original) return;
+    if (current == original) return null;
     final l10n = _strings();
     final currentName = paneLastSegment(current);
     final channel = _hostChannel(host);
     if (channel == null) {
-      _notify(
-        l10n.fileUndoNameKept(
-          currentName,
-          l10n.fileUndoNameNoTab(_hostLabel(host)),
-        ),
+      return l10n.fileUndoNameKept(
+        currentName,
+        l10n.fileUndoNameNoTab(_hostLabel(host)),
       );
-      return;
     }
     try {
       // The channel refuses a taken name rather than replacing it.
       await channel.rename(current, original);
+      return null;
     } on Object catch (error) {
       final taken =
           error is RemoteFileException &&
@@ -450,7 +458,7 @@ class FileOperations {
       final reason = taken
           ? l10n.fileUndoNameTaken(paneLastSegment(original))
           : '$error';
-      _notify(l10n.fileUndoNameKept(currentName, reason));
+      return l10n.fileUndoNameKept(currentName, reason);
     }
   }
 
