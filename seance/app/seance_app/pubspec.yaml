@@ -16,6 +16,10 @@ dependencies:
     path: ../../../planchette/packages/planchette_editor
   ghost_desktop:
     path: ../../../planchette/packages/ghost_desktop
+  # The external editor registry, launcher and Settings section, shared
+  # with Poltergeist.
+  ghost_editors:
+    path: ../../../planchette/packages/ghost_editors
   # The bundled monospace fonts: the terminal's Iosevka Term and the code
   # stack's JetBrains Mono.
   ghost_fonts:

@@ -543,9 +543,8 @@ void main() {
   test(
     'the editor registry is stored as a copy, not the caller\'s object',
     () async {
-      final mine = EditorRegistry.fromJson(
-        backend.settings.editorRegistry.toJson(),
-      )..defaultEditorId = EditorRegistry.builtInId;
+      final mine = backend.settings.editorRegistry.copy()
+        ..defaultEditorId = EditorRegistry.builtInId;
       await backend.setEditorRegistry(mine);
 
       mine.defaultEditorId = EditorRegistry.systemDefaultId;
@@ -556,7 +555,7 @@ void main() {
       );
       expect(
         (onDisk()['editorRegistry'] as Map)['defaultEditorId'],
-        EditorRegistry.builtInId,
+        'seance.builtin',
       );
     },
   );

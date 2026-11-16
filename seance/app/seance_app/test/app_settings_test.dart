@@ -131,6 +131,7 @@ void main() {
   test('remote editor and path bookmarks round-trip safely', () {
     final settings = AppSettings(
       editorRegistry: EditorRegistry(
+        scheme: seanceEditors,
         defaultEditorId: 'editor.code',
         editors: const [
           ExternalEditorDefinition(
@@ -266,7 +267,7 @@ void main() {
 
     expect(
       restored.editorRegistry.defaultEditorId,
-      EditorRegistry.migratedBbeditId,
+      seanceMigratedBbeditId,
     );
     expect(restored.editorRegistry.editors.single.displayName, 'BBEdit');
   });

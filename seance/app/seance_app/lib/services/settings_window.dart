@@ -207,7 +207,9 @@ class SettingsWindowHost implements QuitSettingsWindow {
           ThemeModePreference.values.byName(json['mode'] as String),
         );
       case SettingsLinkMethod.setEditorRegistry:
-        await _backend.setEditorRegistry(EditorRegistry.fromJson(argument));
+        await _backend.setEditorRegistry(
+          EditorRegistry.fromJson(argument, scheme: seanceEditors),
+        );
       case SettingsLinkMethod.pickEditor:
         return (await _backend.pickEditor())?.toJson();
       case SettingsLinkMethod.fetchModels:

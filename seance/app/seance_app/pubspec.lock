@@ -453,6 +453,13 @@ packages:
       relative: true
     source: path
     version: "1.9.4"
+  ghost_editors:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_editors"
+      relative: true
+    source: path
+    version: "1.9.4"
   ghost_fonts:
     dependency: "direct main"
     description:

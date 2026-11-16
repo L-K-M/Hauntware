@@ -196,7 +196,7 @@ class LocalSettingsBackend implements SettingsBackend {
   /// edits must reach the settings through here, not by aliasing.
   @override
   Future<void> setEditorRegistry(EditorRegistry registry) async {
-    _s.editorRegistry = EditorRegistry.fromJson(registry.toJson());
+    _s.editorRegistry = registry.copy();
     await _state.services.saveSettings();
   }
 
