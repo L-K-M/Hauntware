@@ -4255,8 +4255,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String editorTextToolChangedFallback(int scope, String where) {
-    return 'changed $scope units $where.';
+  String editorTextToolChangedFallback(int changed, int scope, String where) {
+    String _temp0 = intl.Intl.pluralLogic(
+      scope,
+      locale: localeName,
+      other: '$scope units',
+      one: '1 unit',
+    );
+    return 'changed $changed of $_temp0 $where.';
   }
 
   @override

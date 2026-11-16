@@ -2916,11 +2916,11 @@ abstract class AppLocalizations {
   /// **'extracted {count, plural, =1{1 match} other{{count} matches}} {where}.'**
   String editorTextToolChangedExtractedMatches(int count, String where);
 
-  /// Changed-run notice: Unknown tool.
+  /// Changed-run notice: Unknown tool. changed counts the units it changed out of the scope units it covered.
   ///
   /// In en, this message translates to:
-  /// **'changed {scope} units {where}.'**
-  String editorTextToolChangedFallback(int scope, String where);
+  /// **'changed {changed} of {scope, plural, =1{1 unit} other{{scope} units}} {where}.'**
+  String editorTextToolChangedFallback(int changed, int scope, String where);
 
   /// Unchanged-run notice: Extract Matches found nothing.
   ///
