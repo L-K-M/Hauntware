@@ -1892,6 +1892,8 @@ final class SyncStatus extends EngineEvent {
     this.detail,
     this.prefixBudget,
     this.pinConflicts,
+    this.recordsAwaitingSpace = 0,
+    this.recordsTooLarge = 0,
   });
 
   final SyncPhase phase;
@@ -1927,6 +1929,17 @@ final class SyncStatus extends EngineEvent {
   /// [PinConflictsChanged], not here.
   final List<SyncPinConflict>? pinConflicts;
 
+  /// After a round: how many records the server refused for the account's
+  /// storage quota ([SyncFailure.accountFull]). They stay on this device
+  /// and sync once the account has room.
+  final int recordsAwaitingSpace;
+
+  /// After a round: how many records the server refused as too large to
+  /// store. They stay on this device, offered again each round, until
+  /// they shrink or the server's limit grows. A round that refuses only
+  /// these still succeeds.
+  final int recordsTooLarge;
+
   /// This status as the answer to the request [requestId].
   SyncStatus answering(String? requestId) => SyncStatus(
     phase,
@@ -1938,6 +1951,8 @@ final class SyncStatus extends EngineEvent {
     detail: detail,
     prefixBudget: prefixBudget,
     pinConflicts: pinConflicts,
+    recordsAwaitingSpace: recordsAwaitingSpace,
+    recordsTooLarge: recordsTooLarge,
   );
 }
 
@@ -7269,6 +7284,13 @@ enum SyncFailure {
 
   /// The server answered with an error of its own.
   serverError,
+
+  /// The sync account is at its storage quota: the server refused records
+  /// that would grow it. Edits and deletions that fit were stored; the
+  /// refused records stay on this device and are offered again each round
+  /// ([SyncStatus.recordsAwaitingSpace], zero from a server that refuses a
+  /// whole push instead).
+  accountFull,
 
   /// The OS keystore could not store or hand over the session token or
   /// the vault key.

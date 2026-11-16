@@ -19,22 +19,62 @@ Future<void> runSyncAction(BuildContext context, SyncController sync) async {
   final l10n = AppLocalizations.of(context);
   final status = await sync.syncNow();
   if (!overlay.mounted) return;
-  if (status.failure case final failure?) {
+  if (syncHeldMessage(
+        l10n,
+        accountFull: status.failure == SyncFailure.accountFull,
+        awaitingSpace: status.recordsAwaitingSpace,
+        tooLarge: status.recordsTooLarge,
+      )
+      case final held?) {
+    showTopToast(overlay, message: held);
+  } else if (status.failure case final failure?) {
     showTopToast(overlay, message: syncFailureMessage(l10n, failure));
   } else if (status.passphraseUnverified) {
     showTopToast(overlay, message: l10n.syncPassphraseUnverified);
   }
 }
 
-/// The sync control's tooltip.
-String syncActionTooltip(AppLocalizations l10n, SyncController sync) =>
-    switch (sync.account) {
-      final account? when !sync.needsSignIn => l10n.syncNowTooltip(
-        account.username,
-        Uri.tryParse(account.baseUrl)?.host ?? account.baseUrl,
-      ),
-      _ => l10n.syncSignInTooltip,
-    };
+/// What a round left on this device, as the user reads it: the records
+/// waiting for space on a full account, then those too large for the
+/// server; null when it left nothing.
+String? syncHeldMessage(
+  AppLocalizations l10n, {
+  required bool accountFull,
+  required int awaitingSpace,
+  required int tooLarge,
+}) {
+  final waiting = awaitingSpace > 0
+      ? l10n.syncRecordsAwaitingSpace(awaitingSpace)
+      : accountFull
+      ? l10n.syncFailedAccountFull
+      : null;
+  final large = tooLarge > 0 ? l10n.syncRecordsTooLarge(tooLarge) : null;
+  return switch ((waiting, large)) {
+    (final waiting?, final large?) => l10n.syncHeldNotice(waiting, large),
+    (final waiting?, null) => waiting,
+    (null, final large?) => large,
+    (null, null) => null,
+  };
+}
+
+/// The sync control's tooltip, with what the latest round left on this
+/// device under it.
+String syncActionTooltip(AppLocalizations l10n, SyncController sync) {
+  final action = switch (sync.account) {
+    final account? when !sync.needsSignIn => l10n.syncNowTooltip(
+      account.username,
+      Uri.tryParse(account.baseUrl)?.host ?? account.baseUrl,
+    ),
+    _ => l10n.syncSignInTooltip,
+  };
+  final held = syncHeldMessage(
+    l10n,
+    accountFull: sync.accountFull,
+    awaitingSpace: sync.recordsAwaitingSpace,
+    tooLarge: sync.recordsTooLarge,
+  );
+  return held == null ? action : l10n.syncActionTooltipHeld(action, held);
+}
 
 /// Opens the sign-in of 03 §4.3 steps 1 and 2 over [context].
 Future<void> showSyncSignIn(BuildContext context, SyncController sync) =>
@@ -61,6 +101,7 @@ String syncFailureMessage(AppLocalizations l10n, SyncFailure failure) =>
       SyncFailure.sessionRejected => l10n.syncFailedSession,
       SyncFailure.unreachable => l10n.syncFailedUnreachable,
       SyncFailure.serverError => l10n.syncFailedServer,
+      SyncFailure.accountFull => l10n.syncFailedAccountFull,
       SyncFailure.keystoreUnavailable => l10n.syncFailedKeystore,
       SyncFailure.storeUnavailable => l10n.syncFailedStore,
       SyncFailure.other => l10n.syncFailed,

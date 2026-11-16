@@ -15,6 +15,7 @@ import 'package:seance_core/catalog.dart'
         RecordCrypto;
 import 'package:seance_core/seance_core.dart'
     show
+        ApiError,
         Argon2Params,
         DecryptedRecord,
         EncryptedRecord,
@@ -1151,6 +1152,75 @@ void main() {
         [(snippetMirrorFileName, SyncStoreIssueKind.recovered)],
       );
       expect(sync.snippets(), isEmpty);
+    });
+
+    group('refused records', () {
+      const draft = ServerDraft(
+        id: 'srv-new',
+        label: 'web-3',
+        host: 'web-3.example.com',
+        port: 22,
+        username: 'deploy',
+        auth: ServerDraftAuth.password,
+      );
+
+      // An enrolled device with one new server to push, behind a seeded
+      // record that proves the passphrase (04 §4.5 holds pushes until one
+      // does).
+      Future<EngineSync> withNewServer() async {
+        await server.seedServer(fakeServer('srv-seed', 'seed'));
+        final sync = await open();
+        await sync.enroll(_enroll);
+        await sync.saveServer(const SaveServer(requestId: 'r1', draft: draft));
+        return sync;
+      }
+
+      test('a full account fails the round and counts what waits', () async {
+        final sync = await withNewServer();
+        server.quotaRefusals.add('srv-new');
+
+        final status = await sync.runRound();
+
+        expect(status.phase, SyncPhase.failed);
+        expect(status.failure, SyncFailure.accountFull);
+        expect(status.recordsAwaitingSpace, 1);
+        expect(status.recordsTooLarge, 0);
+        expect(server.record('srv-new'), isNull);
+
+        // Once the account has room the record syncs.
+        server.quotaRefusals.clear();
+        final next = await sync.runRound();
+        expect(next.phase, SyncPhase.succeeded, reason: next.detail);
+        expect(next.recordsAwaitingSpace, 0);
+        expect(server.record('srv-new'), isNotNull);
+      });
+
+      test("an older server's whole-push quota refusal reads as a full "
+          'account', () async {
+        final sync = await withNewServer();
+        server.nextPushError = const ApiError(
+          code: 'account_quota_exceeded',
+          message: 'Account quota exceeded',
+        );
+
+        final status = await sync.runRound();
+
+        expect(status.failure, SyncFailure.accountFull);
+        expect(status.recordsAwaitingSpace, 0);
+      });
+
+      test('a record too large to store is counted by a round that '
+          'succeeds', () async {
+        final sync = await withNewServer();
+        server.tooLarge.add('srv-new');
+
+        final status = await sync.runRound();
+
+        expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+        expect(status.recordsTooLarge, 1);
+        expect(status.recordsAwaitingSpace, 0);
+        expect(server.record('srv-new'), isNull);
+      });
     });
 
     test('a session the server rejects fails the round', () async {

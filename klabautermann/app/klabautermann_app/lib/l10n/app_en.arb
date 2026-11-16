@@ -6655,6 +6655,56 @@
   "@syncFailedServer": {
     "description": "Sync error: the server answered with an error."
   },
+  "syncFailedAccountFull": "The sync account is full. Changes stay on this device and sync once the account has room.",
+  "@syncFailedAccountFull": {
+    "description": "Sync error: the sync server refused changes because the account is at its storage quota (an older server, which does not say how many)."
+  },
+  "syncRecordsAwaitingSpace": "{count, plural, =1{The sync account is full, so 1 change waits on this device. It syncs once the account has room.} other{The sync account is full, so {count} changes wait on this device. They sync once the account has room.}}",
+  "@syncRecordsAwaitingSpace": {
+    "description": "Sync notice: the sync server stored everything else but refused this many changes because the account is at its storage quota; they stay on this device and are offered again each round.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncRecordsTooLarge": "{count, plural, =1{1 change is too large for the sync server. It stays on this device until it is smaller.} other{{count} changes are too large for the sync server. They stay on this device until they are smaller.}}",
+  "@syncRecordsTooLarge": {
+    "description": "Sync notice: the sync server refused this many changes as too large to store; they stay on this device and are offered again each round.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncHeldNotice": "{waiting} {tooLarge}",
+  "@syncHeldNotice": {
+    "description": "Sync notice when a round left records on this device for both reasons: the account-full sentence, then the too-large sentence.",
+    "placeholders": {
+      "waiting": {
+        "type": "String",
+        "example": "The sync account is full, so 2 changes wait on this device. They sync once the account has room."
+      },
+      "tooLarge": {
+        "type": "String",
+        "example": "1 change is too large for the sync server. It stays on this device until it is smaller."
+      }
+    }
+  },
+  "syncActionTooltipHeld": "{action}\n{held}",
+  "@syncActionTooltipHeld": {
+    "description": "Tooltip of the sync control while the latest round left records on this device: the control's own tooltip, then the notice on its own line.",
+    "placeholders": {
+      "action": {
+        "type": "String",
+        "example": "Synchronize with sync.example.com as ops"
+      },
+      "held": {
+        "type": "String",
+        "example": "The sync account is full. Changes stay on this device and sync once the account has room."
+      }
+    }
+  },
   "syncFailedKeystore": "The system keychain could not store or hand over the sync keys. Unlock it and try again.",
   "@syncFailedKeystore": {
     "description": "Sync error: the OS keystore refused to store or read the sync token or vault key."
