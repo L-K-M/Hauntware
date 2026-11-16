@@ -37,8 +37,11 @@ updates:
   # flutter_secure_storage 11 drops data written with v10's deprecated
   # options (keychain entries are user data). archive 4.6 stops
   # reporting damaged data by default, which Poltergeist's extraction
-  # of untrusted archives must audit first. window_manager 0.7 requires
-  # Flutter 3.50 / Dart 3.14, newer than the suite's Flutter 3.47.2.
+  # of untrusted archives must audit first. window_manager 0.7 and
+  # screen_retriever 0.4 require Flutter 3.50 / Dart 3.14, newer than the
+  # suite's Flutter 3.47.2; screen_retriever 0.3 replaces the plugin with
+  # the nativeapi C++ core, which needs its own review. Revisit both with
+  # the Flutter upgrade.
   - package-ecosystem: pub
     directories:
       - /
@@ -66,6 +69,8 @@ updates:
         versions: ['>7.0.1']
       - dependency-name: window_manager
         versions: ['>=0.7.0']
+      - dependency-name: screen_retriever
+        versions: ['>=0.3.0']
     groups:
       pub:
         patterns: ['*']
