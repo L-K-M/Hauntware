@@ -30,6 +30,21 @@ Future<void> _until(Future<bool> Function() condition) async {
   }
 }
 
+/// Deletes the test's folder. On Windows a file another process (a virus
+/// scanner, the indexer) still has open is only marked for deletion, so its
+/// folder reads as not empty for a moment; try again before failing.
+Future<void> _deleteTemp(Directory temp) async {
+  for (var attempt = 1; ; attempt++) {
+    try {
+      await temp.delete(recursive: true);
+      return;
+    } on FileSystemException {
+      if (!Platform.isWindows || attempt == 10) rethrow;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+}
+
 final class _Siblings implements SaveSiblings {
   final found = <String, List<SaveSibling>>{};
 
@@ -70,7 +85,7 @@ void main() {
       workspace.dispose();
     }
     workspaces.clear();
-    await temp.delete(recursive: true);
+    await _deleteTemp(temp);
   });
 
   group('session state', () {
@@ -414,20 +429,29 @@ void main() {
       )..start();
       addTearDown(journal.stop);
       final tab = workspace.newDocument()!;
-      Future<String?> keptText() async =>
-          (await onDisk('1111111111111111'))?.tabs.singleOrNull?.text;
-      tab.editor.text.text = 'a';
-      await _until(() async => await keptText() == 'a');
+      final file = File(paths.join(temp.path, 'window-1111111111111111.json'));
 
-      tab.editor.text.text = 'ab';
-      await _until(() async => await keptText() == 'ab');
+      // Only the file's timestamp is polled until the paused write lands:
+      // a read still open during the atomic replace makes Windows refuse
+      // the rename, and the journal does not retry until the next edit.
+      Future<String?> keptTextAfterPause(String text) async {
+        await journal.idle;
+        final before = (await file.stat()).modified;
+        tab.editor.text.text = text;
+        await _until(() async => (await file.stat()).modified != before);
+        await journal.idle;
+        return (await onDisk('1111111111111111'))?.tabs.singleOrNull?.text;
+      }
 
-      // Don't Save: the discarded text leaves the disk with the tab.
+      expect(await keptTextAfterPause('a'), 'a');
+      expect(await keptTextAfterPause('ab'), 'ab');
+
+      // Don't Save: the discarded text leaves the disk with the tab. A
+      // closed tab changes the window's shape, which writes at once.
       dialogs.choices.add(CloseChoice.discard);
       expect(await workspace.closeTab(tab), isTrue);
-      await _until(
-        () async => (await onDisk('1111111111111111'))?.tabs.isEmpty ?? false,
-      );
+      await journal.idle;
+      expect((await onDisk('1111111111111111'))!.tabs, isEmpty);
     });
 
     test('a save drops the kept text', () async {
@@ -445,12 +469,14 @@ void main() {
       expect(await journal.flush(), isTrue);
       expect((await onDisk('2222222222222222'))!.tabs.single.text, 'edited');
 
+      // Polls the timestamp, not the file: see the test above.
+      final file = File(paths.join(temp.path, 'window-2222222222222222.json'));
+      final before = (await file.stat()).modified;
       expect(await workspace.save(workspace.active!), isTrue);
-      await _until(
-        () async =>
-            (await onDisk('2222222222222222'))?.tabs.single.text == null,
-      );
+      await _until(() async => (await file.stat()).modified != before);
+      await journal.idle;
       final kept = (await onDisk('2222222222222222'))!.tabs.single;
+      expect(kept.text, isNull);
       expect(kept.path, testPath('a.txt'));
     });
 
