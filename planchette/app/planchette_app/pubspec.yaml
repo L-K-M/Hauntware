@@ -29,8 +29,8 @@ dependencies:
   ghost_ui:
     path: ../../packages/ghost_ui
   intl: 0.20.3
-  # The app lock's device authentication (lib/services/
-  # device_authenticator.dart), at Poltergeist's and Klabautermann's pin.
+  # The app lock's device authentication (ghost_keystore's
+  # LocalDeviceAuthenticator), at Poltergeist's and Klabautermann's pin.
   local_auth: 3.0.2
   path: 1.9.1
   path_provider: 2.1.6

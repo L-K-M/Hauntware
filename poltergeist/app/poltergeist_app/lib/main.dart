@@ -12,6 +12,8 @@ import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
 import 'package:ghost_keepalive/ghost_keepalive.dart' show BackgroundKeepAlive;
 import 'package:ghost_keystore/app_lock.dart' show AppLockController;
+import 'package:ghost_keystore/device_authenticator.dart'
+    show LocalDeviceAuthenticator, appLockSupportedOn;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:ghost_update/ghost_update.dart';
@@ -27,7 +29,6 @@ import 'services/atomic_file.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
-import 'services/device_authenticator.dart';
 import 'services/directory_grouping_controller.dart';
 import 'services/double_click_action_controller.dart';
 import 'services/editor_font_controller.dart';

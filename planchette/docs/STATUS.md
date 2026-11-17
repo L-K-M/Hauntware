@@ -1,5 +1,18 @@
 # Status
 
+## Shared device authentication (2026-11-17, branch `suite/shared-device-auth`)
+
+- `LocalDeviceAuthenticator` and `appLockSupportedOn` moved from the
+  four apps into ghost_keystore as
+  `package:ghost_keystore/device_authenticator.dart`, with their tests
+  (`docs/design/catalog-library.md` section 9 revised). Planchette
+  keeps only its wiring and its prompt line; behavior is unchanged.
+- Decided: while the app lock is on, Android recents thumbnails stay
+  as they are (no `FLAG_SECURE`) and window titles keep naming the open
+  documents. This is a product choice, not pending work.
+
+Still manual: the lock prompt on Android, macOS and Windows devices.
+
 ## Wave 6 (2026-11-16)
 
 Merged to main:
@@ -52,10 +65,6 @@ Deferred:
 - Hot exit scroll position: scrolling does not notify the editor, only
   the active tab has an offset, and a pixel offset breaks after a zoom
   or wrap change. Restore keeps the caret line in view.
-- Moving `LocalDeviceAuthenticator` into a shared package, once
-  `docs/design/catalog-library.md` section 9 is revised to allow it.
-- `FLAG_SECURE` for Android recents and document names in window
-  titles while locked: a product decision.
 - The app directories are not format-checked in CI, and several app
   files have pre-existing formatter drift.
 
@@ -78,14 +87,15 @@ injected failure), and the app lock checks listed below.
 - Hot-exit documents are restored before the first frame but behind the
   gate: no pointer, focus or semantics reaches them until unlock, and
   while locked the macOS menu bar offers only Quit. Window titles still
-  name the open documents.
+  name the open documents and Android recents show the last frame, with
+  no `FLAG_SECURE`: a decided product choice (2026-11-17), not a gap.
 - The remote catalog's keystore reads go through the lock.
 - Android's activity is now a `FlutterFragmentActivity` with AppCompat
   themes and `USE_BIOMETRIC`, as local_auth 3.0.2 needs; the document
   channel and pickers are unchanged.
 - `AppLockGateModel` and the test `FakeDeviceAuthenticator` moved into
   ghost_keystore from Poltergeist and Klabautermann. The authentication
-  plugin stays app-side (`docs/design/catalog-library.md` section 9).
+  plugin followed on 2026-11-17 (section above).
 
 Still manual: the lock prompt on Android, macOS and Windows devices,
 Android activity behavior (open intents, pickers, recoveries) after the

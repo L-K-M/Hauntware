@@ -874,11 +874,25 @@ Platform notes to carry: macOS uses the legacy login keychain via
 The PR records a manual macOS keychain check: automated compilation is
 not device/keychain verification (root `AGENTS.md`, releases and
 review). Stays app-side: `AppLock` integration (the `AppLock` class
-itself moved here later, F5f: `package:ghost_keystore/app_lock.dart`,
-with the authentication plugin behind `DeviceAuthenticator` still
-app-side), product error copy,
+itself moved here later, F5f: `package:ghost_keystore/app_lock.dart`),
+the device-authentication prompt's wording, product error copy,
 `SyncCredentialStore` bindings (`sync_credentials.dart:151`,
 `poltergeist.sync.deviceId` mint-once).
+
+The authentication plugin behind `DeviceAuthenticator` moved here too
+(2026-11-17): `LocalDeviceAuthenticator` and `appLockSupportedOn` over
+`local_auth`, in their own library,
+`package:ghost_keystore/device_authenticator.dart`, which neither
+barrel exports. The four apps had near-identical copies at one pin.
+This is acceptable because the boundary this section draws is about
+the SSH stack (`seance_core`, `dartssh2`), not platform plugins: the
+package already carries `flutter_secure_storage`, and every consumer
+of `ghost_keystore` already ships `local_auth`, so no app gains a
+plugin, a native library or a license. Each app still pins the exact
+`local_auth` version in its own pubspec, keeps its Windows CMake
+workaround for `local_auth_windows`, and supplies the prompt's reason
+line, localized where the app is. The lock core in `app_lock.dart`
+still takes any `DeviceAuthenticator`, so tests use fakes.
 
 Switch order per 03 3.5 (F3c row) and 04 section 13 (F3): Poltergeist
 moves to `ghost_keystore` in the F3c PR; a Séance follow-up PR then moves

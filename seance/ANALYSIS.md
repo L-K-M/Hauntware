@@ -396,7 +396,8 @@ unlock; background time during a prompt cannot be erased by its lifecycle
 events. Stale auth and read completions fail explicitly and later attempts
 can retry. Both setting transitions require successful device auth.
 
-`AppLock` owns the policy; `NativeDeviceAuthenticator` adapts `local_auth`.
+`AppLock` owns the policy; ghost_keystore's `LocalDeviceAuthenticator` adapts
+`local_auth`.
 Vault plaintext/blob reads, stored API keys, referenced identity files,
 recovery exports/restores/code replacement and rekey admission use the same
 gate. Sync/inbox timers defer while locked; manual credential reads may

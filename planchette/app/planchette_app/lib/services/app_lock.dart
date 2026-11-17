@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:ghost_keystore/app_lock.dart' show AppLockController;
+import 'package:ghost_keystore/device_authenticator.dart'
+    show LocalDeviceAuthenticator, appLockSupportedOn;
 
 import 'app_settings.dart';
-import 'device_authenticator.dart';
 import 'template_strings.dart';
 
 /// The app lock both entry points share, over the stored setting: off
