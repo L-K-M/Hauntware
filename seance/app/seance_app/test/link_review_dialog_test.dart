@@ -63,6 +63,28 @@ void main() {
       expect(find.text('Links cannot run commands.'), findsOneWidget);
     });
 
+    testWidgets('says how many times the link was opened', (tester) async {
+      final review = _review(target: const SeanceLinkTarget(server: _web));
+      await _show(tester, review);
+      expect(find.textContaining('This link was opened'), findsNothing);
+
+      for (final (count, text) in [
+        (2, 'This link was opened twice.'),
+        (3, 'This link was opened 3 times.'),
+      ]) {
+        review.fake.publish(
+          LinkReviewSnapshot(
+            current: SeanceLinkRequest(
+              _webLink.request,
+              activationCount: count,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(text), findsOneWidget);
+      }
+    });
+
     testWidgets('Connect and Cancel answer as labelled', (tester) async {
       final review = _review(target: const SeanceLinkTarget(server: _web));
       expect(
@@ -120,7 +142,7 @@ void main() {
       await _show(tester, review);
       expect(find.text('Discard waiting links'), findsNothing);
 
-      const arrived = LinkReviewSnapshot<SeanceConnectRequest>(
+      const arrived = LinkReviewSnapshot<SeanceLinkRequest>(
         current: _webLink,
         visibleWaiting: [_dbLink],
         remainingCount: 1,
@@ -308,16 +330,16 @@ const _db = ServerConfig(
   updatedAt: 1,
 );
 
-const _webLink = SeanceServerConnect(serverId: _webId);
-const _dbLink = SeanceServerConnect(serverId: _dbId);
-const _unknownLink = SeanceServerConnect(
-  serverId: '323e4567-e89b-42d3-a456-426614174000',
+const _webLink = SeanceLinkRequest(SeanceServerConnect(serverId: _webId));
+const _dbLink = SeanceLinkRequest(SeanceServerConnect(serverId: _dbId));
+const _unknownLink = SeanceLinkRequest(
+  SeanceServerConnect(serverId: '323e4567-e89b-42d3-a456-426614174000'),
 );
 
 SeanceLinkReview _review({
   required SeanceLinkTarget target,
-  List<SeanceConnectRequest> visibleWaiting = const [],
-  List<SeanceConnectRequest> overflow = const [],
+  List<SeanceLinkRequest> visibleWaiting = const [],
+  List<SeanceLinkRequest> overflow = const [],
   int ignoredCount = 0,
 }) => SeanceLinkReview(
   target: target,
@@ -337,29 +359,29 @@ extension on SeanceLinkReview {
   _FakeLinkReview get fake => link as _FakeLinkReview;
 }
 
-final class _FakeLinkReview implements LinkReview<SeanceConnectRequest> {
+final class _FakeLinkReview implements LinkReview<SeanceLinkRequest> {
   _FakeLinkReview(this._snapshot);
 
   final _snapshots =
-      StreamController<LinkReviewSnapshot<SeanceConnectRequest>>.broadcast();
+      StreamController<LinkReviewSnapshot<SeanceLinkRequest>>.broadcast();
   final _cancellation = Completer<void>();
-  LinkReviewSnapshot<SeanceConnectRequest> _snapshot;
-  LinkReviewSnapshot<SeanceConnectRequest>? shown;
+  LinkReviewSnapshot<SeanceLinkRequest> _snapshot;
+  LinkReviewSnapshot<SeanceLinkRequest>? shown;
 
   @override
-  LinkReviewSnapshot<SeanceConnectRequest> get snapshot => _snapshot;
+  LinkReviewSnapshot<SeanceLinkRequest> get snapshot => _snapshot;
 
   @override
-  Stream<LinkReviewSnapshot<SeanceConnectRequest>> get snapshots =>
+  Stream<LinkReviewSnapshot<SeanceLinkRequest>> get snapshots =>
       _snapshots.stream;
 
-  void publish(LinkReviewSnapshot<SeanceConnectRequest> snapshot) {
+  void publish(LinkReviewSnapshot<SeanceLinkRequest> snapshot) {
     _snapshot = snapshot;
     _snapshots.add(snapshot);
   }
 
   @override
-  void markShown(LinkReviewSnapshot<SeanceConnectRequest> shown) =>
+  void markShown(LinkReviewSnapshot<SeanceLinkRequest> shown) =>
       this.shown = shown;
 
   @override

@@ -187,6 +187,55 @@ void main() {
       expect(host.connects, hasLength(2));
     });
 
+    test('counts repeats while waiting and while in review', () async {
+      final host = _Host([_web, _db])..holdReviews = true;
+      final intake = _intake(host);
+
+      intake.add(_connect(_webId, cwd: '/srv'));
+      await pumpEventQueue();
+      final first = host.reviews.single.link;
+      expect(first.snapshot.current.activationCount, 1);
+      intake
+        ..add(_connect(_dbId))
+        ..add(_connect(_dbId))
+        ..add(_connect(_dbId))
+        ..add(_connect(_webId, cwd: '/srv'));
+      expect(first.snapshot.current.activationCount, 2);
+      expect(first.snapshot.visibleWaiting.single.activationCount, 3);
+
+      host.answer(LinkReviewDecision.cancel);
+      await pumpEventQueue();
+      final second = host.reviews[1].link.snapshot.current;
+      expect(host.reviews[1].target.server, same(_db));
+      expect(second.activationCount, 3);
+      host.answer(LinkReviewDecision.cancel);
+      await intake.idle;
+    });
+
+    test('a repeat after the decision starts a fresh count', () async {
+      final host = _Host([_web])
+        ..holdReviews = true
+        ..holdConnects = true;
+      final intake = _intake(host);
+
+      intake
+        ..add(_connect(_webId))
+        ..add(_connect(_webId));
+      await pumpEventQueue();
+      expect(host.reviews.single.link.snapshot.current.activationCount, 2);
+      host.answer(LinkReviewDecision.connect);
+      await pumpEventQueue();
+      expect(host.connects, hasLength(1));
+
+      intake.add(_connect(_webId));
+      host.releaseConnect();
+      await pumpEventQueue();
+      expect(host.reviews, hasLength(2));
+      expect(host.reviews[1].link.snapshot.current.activationCount, 1);
+      host.answer(LinkReviewDecision.cancel);
+      await intake.idle;
+    });
+
     test('drops links beyond the limit and says how many', () async {
       final host = _Host([_web])..holdReviews = true;
       final intake = _intake(host);
@@ -524,7 +573,7 @@ final class _Host implements SeanceLinkHost {
   /// is what it shows now unless a test passes an older one.
   void answer(
     LinkReviewDecision decision, {
-    LinkReviewSnapshot<SeanceConnectRequest>? shown,
+    LinkReviewSnapshot<SeanceLinkRequest>? shown,
   }) {
     final open = _open!;
     _open = null;
