@@ -30,10 +30,14 @@ Read [AGENTS.md](../AGENTS.md) first for how to build/test.
   a component gains a pin (#794). The vendored notices themselves
   (#787) and the shared link queue (#795) are described in Wave 5
   below.
+- The link review counts repeats as Poltergeist's does. The intake
+  queues a `SeanceLinkRequest`, the parsed request with an activation
+  count; a repeat that coalesces into a waiting link or the one under
+  review adds to it, and the review says "This link was opened twice."
+  or "N times". A repeat after the decision queues fresh with a count
+  of 1. The shared queue is unchanged.
 
-Deferred: Séance's link review shows no activation count for a
-repeated link, which Poltergeist's review does. Suite follow-ups:
-moving `LocalDeviceAuthenticator` into a shared package once
+Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a shared package once
 `docs/design/catalog-library.md` section 9 is revised; the
 `FLAG_SECURE` and locked window title product decision; and the app
 directories are not format-checked in CI.

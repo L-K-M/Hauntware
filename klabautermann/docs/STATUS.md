@@ -27,8 +27,7 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a
 shared package once `docs/design/catalog-library.md` section 9 is
 revised; the `FLAG_SECURE` and locked window title product decision;
-the app directories are not format-checked in CI; Séance's link review
-shows no activation count.
+the app directories are not format-checked in CI.
 
 Proof: analysis and the core and app suites passed locally and CI
 passed on each PR's last head. Still manual: the chip tone and tooltip

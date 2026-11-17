@@ -36,8 +36,7 @@ This closes Wave 5's three deferred items.
 Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a
 shared package once `docs/design/catalog-library.md` section 9 is
 revised; the `FLAG_SECURE` and locked window title product decision;
-the app directories are not format-checked in CI. Séance's link review
-still shows no activation count, which this app's review does.
+the app directories are not format-checked in CI.
 
 Proof: analysis and the full app suite passed locally, and CI passed on
 each PR's last head; #795's macOS pure-Dart job was cancelled there and
