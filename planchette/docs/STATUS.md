@@ -65,8 +65,6 @@ Deferred:
 - Hot exit scroll position: scrolling does not notify the editor, only
   the active tab has an offset, and a pixel offset breaks after a zoom
   or wrap change. Restore keeps the caret line in view.
-- The app directories are not format-checked in CI, and several app
-  files have pre-existing formatter drift.
 
 Proof: analysis and the full app suite passed locally and CI passed on
 each merged head. Still manual: the moved menus and messages on macOS,

@@ -33,9 +33,6 @@ lock prompt on Android, iOS, macOS and Windows devices.
   from ghost_keystore (#796). The `file_picker` Kotlin note is gone
   from AGENTS.md (#791).
 
-Deferred, suite follow-up: the app directories are not format-checked
-in CI.
-
 Proof: analysis and the core and app suites passed locally and CI
 passed on each PR's last head. Still manual: the chip tone and tooltip
 on a device or desktop, and a full account against a real Séance sync
