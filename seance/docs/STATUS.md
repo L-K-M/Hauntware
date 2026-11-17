@@ -41,10 +41,15 @@ lock prompt on Android, iOS, macOS and Windows devices.
   a component gains a pin (#794). The vendored notices themselves
   (#787) and the shared link queue (#795) are described in Wave 5
   below.
+- The link review counts repeats as Poltergeist's does. The intake
+  queues a `SeanceLinkRequest`, the parsed request with an activation
+  count; a repeat that coalesces into a waiting link or the one under
+  review adds to it, and the review says "This link was opened twice."
+  or "N times". A repeat after the decision queues fresh with a count
+  of 1. The shared queue is unchanged.
 
-Deferred: Séance's link review shows no activation count for a
-repeated link, which Poltergeist's review does. Suite follow-up: the
-app directories are not format-checked in CI.
+Deferred, suite follow-up: the app directories are not format-checked
+in CI.
 
 Proof: analysis and the full app suite passed locally, and CI passed on
 each PR's last head; #795's macOS Poltergeist pure-Dart job was

@@ -8,7 +8,8 @@
   drops only the links it listed. The buttons wait a moment before they
   respond, and clicking outside the review no longer cancels it. A link
   opened again while its review is showing joins that review instead of
-  waiting for a second one.
+  waiting for a second one, and the review says how many times the link
+  was opened.
 
 - **Save as works on iOS.** Download / Save as… in the Files pane
   saves a remote file through the iOS document picker instead of

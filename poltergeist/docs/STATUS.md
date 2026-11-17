@@ -42,8 +42,8 @@ lock prompt on Android, iOS, macOS and Windows devices.
 
 This closes Wave 5's three deferred items.
 
-Deferred, suite follow-ups: the app directories are not format-checked in CI. Séance's link review
-still shows no activation count, which this app's review does.
+Deferred, suite follow-up: the app directories are not format-checked
+in CI.
 
 Proof: analysis and the full app suite passed locally, and CI passed on
 each PR's last head; #795's macOS pure-Dart job was cancelled there and

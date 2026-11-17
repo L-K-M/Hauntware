@@ -33,8 +33,8 @@ class SeanceLinkReviewDialog extends StatefulWidget {
 }
 
 class _SeanceLinkReviewDialogState extends State<SeanceLinkReviewDialog> {
-  late LinkReviewSnapshot<SeanceConnectRequest> _snapshot;
-  StreamSubscription<LinkReviewSnapshot<SeanceConnectRequest>>? _updates;
+  late LinkReviewSnapshot<SeanceLinkRequest> _snapshot;
+  StreamSubscription<LinkReviewSnapshot<SeanceLinkRequest>>? _updates;
   Timer? _armTimer;
   bool _armed = false;
 
@@ -60,7 +60,7 @@ class _SeanceLinkReviewDialogState extends State<SeanceLinkReviewDialog> {
     super.dispose();
   }
 
-  void _update(LinkReviewSnapshot<SeanceConnectRequest> snapshot) {
+  void _update(LinkReviewSnapshot<SeanceLinkRequest> snapshot) {
     setState(() {
       if (snapshot.overflow.length > _snapshot.overflow.length) {
         _overflowReviewed = false;
@@ -114,6 +114,12 @@ class _SeanceLinkReviewDialogState extends State<SeanceLinkReviewDialog> {
                   style: muted,
                 ),
               ],
+            ],
+            // Follows the snapshot: a repeat that arrives while the review
+            // is open merges into the link under review.
+            if (snapshot.current.activationCount > 1) ...[
+              const SizedBox(height: 12),
+              Text(_opened(snapshot.current.activationCount)),
             ],
             const SizedBox(height: 12),
             Text(
@@ -184,9 +190,13 @@ class _SeanceLinkReviewDialogState extends State<SeanceLinkReviewDialog> {
     );
   }
 
-  String _label(SeanceConnectRequest request) =>
-      widget.review.labelOf(request) ?? 'A link Séance cannot open';
+  String _label(SeanceLinkRequest link) =>
+      widget.review.labelOf(link) ?? 'A link Séance cannot open';
 }
+
+String _opened(int count) => count == 2
+    ? 'This link was opened twice.'
+    : 'This link was opened $count times.';
 
 String _waiting(int count) =>
     count == 1 ? '1 more link is waiting.' : '$count more links are waiting.';
