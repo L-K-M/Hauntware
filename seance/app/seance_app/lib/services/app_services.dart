@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_keystore/device_authenticator.dart'
+    show LocalDeviceAuthenticator;
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/catalog.dart'
     show
@@ -23,7 +25,6 @@ import 'app_lock_vault.dart';
 import 'app_settings.dart';
 import 'assistant_settings_sync.dart';
 import 'command_stats.dart';
-import 'device_authenticator.dart';
 import 'external_file_opener.dart';
 import 'file_stores.dart';
 import 'identity_bookmarks.dart';
@@ -110,6 +111,10 @@ class LockedSecretVault extends SecretVault {
   Future<void> putSecrets(Iterable<Secret> secrets) async =>
       throw const VaultLockedException();
 }
+
+/// The line the device-authentication prompt shows. Séance is English
+/// only, so it is a constant rather than a catalog lookup.
+const String _appLockReason = 'Authenticate to access Séance saved secrets.';
 
 /// Wires together the seance_core services with the app's file-backed stores
 /// and the OS keystore. Created once at startup.
@@ -287,7 +292,9 @@ class AppServices {
     final settingsStore = SettingsStore(File(p('settings.json')));
     final settings = await settingsStore.load();
     final appLock = AppLock(
-      authenticator: deviceAuthenticator ?? NativeDeviceAuthenticator(),
+      authenticator:
+          deviceAuthenticator ??
+          LocalDeviceAuthenticator(reason: () => _appLockReason),
       mode: settings.appLock,
       elapsed: appLockElapsed,
     );

@@ -64,28 +64,48 @@ final class SeanceLinkTarget {
   final String? cwd;
 }
 
+/// A `seance://connect` request on the queue, with how many times it was
+/// opened before its review was decided, as Poltergeist's review counts a
+/// host link's repeats.
+@immutable
+final class SeanceLinkRequest {
+  const SeanceLinkRequest(this.request, {this.activationCount = 1});
+
+  final SeanceConnectRequest request;
+
+  /// At least 1; repeats that coalesced into this one add theirs.
+  final int activationCount;
+
+  /// Keeps the newer request, which names the same server and folder, and
+  /// adds up the counts.
+  SeanceLinkRequest coalesce(SeanceLinkRequest newer) => SeanceLinkRequest(
+    newer.request,
+    activationCount: activationCount + newer.activationCount,
+  );
+}
+
 /// Séance's links on the shared queue: every `seance://connect` request is
 /// reviewed, and none skips the review (`Never`).
-typedef SeanceLinkIntake = LinkQueue<SeanceConnectRequest, Never>;
+typedef SeanceLinkIntake = LinkQueue<SeanceLinkRequest, Never>;
 
 /// The intake [main] feeds from launch. Identical requests (the same id
-/// and folder, or the same identity) coalesce; failures never do.
+/// and folder, or the same identity) coalesce and count the activations;
+/// failures never do.
 SeanceLinkIntake createSeanceLinkIntake({LinkErrorSink? onError}) => LinkQueue(
   classify: _classify,
   keyOf: _keyOf,
-  // A repeat is the same request, so the queued one stands.
-  coalesce: (queued, _) => queued,
+  coalesce: (queued, incoming) => queued.coalesce(incoming),
   onError: onError ?? _reportFlutterError,
 );
 
-LinkEntry<SeanceConnectRequest, Never> _classify(Uri uri) {
+LinkEntry<SeanceLinkRequest, Never> _classify(Uri uri) {
   final parsed = parseSeanceConnect(uri);
   final request = parsed.request;
   if (request == null) return FailedLinkEntry(parsed.failure!);
-  return ReviewedLinkEntry(request);
+  return ReviewedLinkEntry(SeanceLinkRequest(request));
 }
 
-Object _keyOf(SeanceConnectRequest request) => switch (request) {
+Object _keyOf(SeanceLinkRequest link) => switch (link.request) {
   SeanceServerConnect(:final serverId, :final cwd) => ('id', serverId, cwd),
   SeanceIdentityConnect(:final endpointKey) => ('identity', endpointKey),
 };
@@ -113,14 +133,14 @@ final class SeanceLinkReview {
 
   /// The shared review: the waiting requests, which follow arrivals, the
   /// cancellation and the record of what was shown.
-  final LinkReview<SeanceConnectRequest> link;
+  final LinkReview<SeanceLinkRequest> link;
 
   final List<ServerConfig> _servers;
 
   /// The saved label of a waiting request, null for one that names no
   /// single saved server.
-  String? labelOf(SeanceConnectRequest request) =>
-      resolveSeanceLink(request, _servers).server?.label;
+  String? labelOf(SeanceLinkRequest link) =>
+      resolveSeanceLink(link.request, _servers).server?.label;
 }
 
 /// The app's window on the intake: the saved servers, the review dialog,
@@ -142,16 +162,16 @@ abstract interface class SeanceLinkHost {
 /// it connects, so a server removed in between is not opened, and every
 /// failure or miss is a notice.
 final class SeanceLinkHandler
-    implements LinkQueueHandler<SeanceConnectRequest, Never> {
+    implements LinkQueueHandler<SeanceLinkRequest, Never> {
   SeanceLinkHandler(this._host);
 
   final SeanceLinkHost _host;
 
   @override
   Future<LinkReviewDecision> review(
-    LinkReview<SeanceConnectRequest> review,
+    LinkReview<SeanceLinkRequest> review,
   ) async {
-    final request = review.snapshot.current;
+    final request = review.snapshot.current.request;
     final resolved = _resolve(request);
     final server = resolved.server;
     if (server == null) {
@@ -169,16 +189,17 @@ final class SeanceLinkHandler
 
   @override
   Future<LinkOpenResult> open(
-    SeanceConnectRequest link,
+    SeanceLinkRequest link,
     LinkOperation operation,
   ) async {
-    final resolved = _resolve(link);
+    final request = link.request;
+    final resolved = _resolve(request);
     final server = resolved.server;
     if (server == null) {
       await _host.showNotice(SeanceLinkNotice(resolved.miss!));
       return LinkOpenResult.committed;
     }
-    await _host.connect(SeanceLinkTarget(server: server, cwd: _cwdOf(link)));
+    await _host.connect(SeanceLinkTarget(server: server, cwd: _cwdOf(request)));
     return LinkOpenResult.committed;
   }
 

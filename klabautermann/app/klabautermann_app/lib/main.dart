@@ -8,6 +8,8 @@ import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show installMacosTitlebar;
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_keystore/device_authenticator.dart'
+    show LocalDeviceAuthenticator, appLockSupportedOn;
 import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show CheckedPlatformMenuDelegate, GhostUndoHistory;
@@ -58,7 +60,6 @@ import 'controllers/sync_sign_out.dart' show SyncSignOut;
 import 'controllers/threshold_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/app_version.dart';
-import 'services/device_authenticator.dart';
 import 'services/engine_keystore.dart';
 import 'services/hand_off.dart';
 import 'services/instance_guard.dart';

@@ -5,6 +5,15 @@ up next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [../docs/design/klabautermann/](../../docs/design/klabautermann/) for the
 normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 
+## Shared device authentication (2026-11-17)
+
+`LocalDeviceAuthenticator` and `appLockSupportedOn` now come from
+`package:ghost_keystore/device_authenticator.dart`, with their tests;
+the app keeps its wiring and its localized prompt line, and behavior is
+unchanged. Decided for the suite: no `FLAG_SECURE` for Android recents
+while locked, and window titles stay as they are. Still manual: the
+lock prompt on Android, iOS, macOS and Windows devices.
+
 ## Wave 6 (2026-11-16)
 
 - Sync records held on this device (#792, #794): a round against a
@@ -24,11 +33,8 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
   from ghost_keystore (#796). The `file_picker` Kotlin note is gone
   from AGENTS.md (#791).
 
-Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a
-shared package once `docs/design/catalog-library.md` section 9 is
-revised; the `FLAG_SECURE` and locked window title product decision;
-the app directories are not format-checked in CI; Séance's link review
-shows no activation count.
+Deferred, suite follow-up: the app directories are not format-checked
+in CI.
 
 Proof: analysis and the core and app suites passed locally and CI
 passed on each PR's last head. Still manual: the chip tone and tooltip

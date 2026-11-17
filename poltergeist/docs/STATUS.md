@@ -4,6 +4,15 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Shared device authentication (2026-11-17)
+
+`LocalDeviceAuthenticator` and `appLockSupportedOn` now come from
+`package:ghost_keystore/device_authenticator.dart`, with their tests;
+the app keeps its wiring and its localized prompt line, and behavior is
+unchanged. Decided for the suite: no `FLAG_SECURE` for Android recents
+while locked, and window titles stay as they are. Still manual: the
+lock prompt on Android, iOS, macOS and Windows devices.
+
 ## Wave 6 (2026-11-16)
 
 - Rename Items records one Edit > Undo entry, "Undo Rename Items"
@@ -33,11 +42,8 @@ next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 
 This closes Wave 5's three deferred items.
 
-Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a
-shared package once `docs/design/catalog-library.md` section 9 is
-revised; the `FLAG_SECURE` and locked window title product decision;
-the app directories are not format-checked in CI. Séance's link review
-still shows no activation count, which this app's review does.
+Deferred, suite follow-up: the app directories are not format-checked
+in CI.
 
 Proof: analysis and the full app suite passed locally, and CI passed on
 each PR's last head; #795's macOS pure-Dart job was cancelled there and

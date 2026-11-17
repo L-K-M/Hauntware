@@ -1,17 +1,20 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_keystore/device_authenticator.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:seance_app/services/device_authenticator.dart';
 
+/// The plugin as the test decides it, recording what the adapter asked.
 class _Authentication extends LocalAuthentication {
   bool supported = true;
   bool accepted = true;
+  String? reason;
   bool? biometricOnly;
   bool? persists;
   Object? failure;
   Object? checkFailure;
   int checks = 0;
+  int prompts = 0;
 
   @override
   Future<bool> isDeviceSupported() async {
@@ -28,6 +31,8 @@ class _Authentication extends LocalAuthentication {
     bool sensitiveTransaction = true,
     bool persistAcrossBackgrounding = false,
   }) async {
+    prompts++;
+    reason = localizedReason;
     this.biometricOnly = biometricOnly;
     persists = persistAcrossBackgrounding;
     if (failure != null) throw failure!;
@@ -35,22 +40,32 @@ class _Authentication extends LocalAuthentication {
   }
 }
 
+const _supportedPlatforms = [
+  TargetPlatform.android,
+  TargetPlatform.iOS,
+  TargetPlatform.macOS,
+  TargetPlatform.windows,
+];
+
 void main() {
+  LocalDeviceAuthenticator device(
+    _Authentication plugin, {
+    TargetPlatform platform = TargetPlatform.android,
+    String Function()? reason,
+  }) => LocalDeviceAuthenticator(
+    reason: reason ?? () => 'unlock',
+    authentication: plugin,
+    platform: platform,
+  );
+
   for (final platform in TargetPlatform.values) {
     test(
       'availability on ${platform.name} requires a supported OS and device',
       () async {
         final plugin = _Authentication();
-        final adapter = NativeDeviceAuthenticator(
-          authentication: plugin,
-          platform: platform,
-        );
-        final supported = [
-          TargetPlatform.android,
-          TargetPlatform.iOS,
-          TargetPlatform.macOS,
-          TargetPlatform.windows,
-        ].contains(platform);
+        final adapter = device(plugin, platform: platform);
+        final supported = _supportedPlatforms.contains(platform);
+
         expect(appLockSupportedOn(platform), supported);
         expect(
           await adapter.availability(),
@@ -59,15 +74,45 @@ void main() {
               : AppLockAvailability.unavailable,
         );
         expect(plugin.checks, supported ? 1 : 0);
+
         plugin.supported = false;
         expect(await adapter.availability(), AppLockAvailability.unavailable);
       },
     );
   }
 
+  test('a platform without a system prompt is unavailable and refuses to '
+      'ask, as an AppLockException', () async {
+    for (final platform in [TargetPlatform.linux, TargetPlatform.fuchsia]) {
+      final plugin = _Authentication();
+      final adapter = device(plugin, platform: platform);
+
+      expect(await adapter.availability(), AppLockAvailability.unavailable);
+      await expectLater(
+        adapter.authenticate(),
+        throwsA(isA<AppLockException>()),
+      );
+      expect(plugin.prompts, 0, reason: platform.name);
+    }
+  });
+
+  test('the prompt shows the reason the app supplies, read when it '
+      'opens', () async {
+    final plugin = _Authentication();
+    var line = 'first';
+    final adapter = device(plugin, reason: () => line);
+
+    await adapter.authenticate();
+    expect(plugin.reason, 'first');
+
+    line = 'second';
+    await adapter.authenticate();
+    expect(plugin.reason, 'second');
+  });
+
   test('native auth allows passcode fallback without sticky retry', () async {
     final plugin = _Authentication();
-    await NativeDeviceAuthenticator(authentication: plugin).authenticate();
+    await device(plugin).authenticate();
     expect(plugin.biometricOnly, isFalse);
     expect(plugin.persists, isFalse);
   });
@@ -75,7 +120,7 @@ void main() {
   test('cancel/rejection is an app-lock error', () async {
     final plugin = _Authentication()..accepted = false;
     await expectLater(
-      NativeDeviceAuthenticator(authentication: plugin).authenticate(),
+      device(plugin).authenticate(),
       throwsA(isA<AppLockException>()),
     );
   });
@@ -86,22 +131,25 @@ void main() {
         code: LocalAuthExceptionCode.temporaryLockout,
       );
     await expectLater(
-      NativeDeviceAuthenticator(authentication: plugin).authenticate(),
-      throwsA(isA<AppLockException>()),
+      device(plugin).authenticate(),
+      throwsA(
+        isA<AppLockException>().having(
+          (error) => error.message,
+          'message',
+          contains('(temporaryLockout)'),
+        ),
+      ),
     );
   });
 
   test('a missing native plugin makes the option unavailable', () async {
     final plugin = _Authentication()..checkFailure = MissingPluginException();
-    final gate = AppLock(
-      authenticator: NativeDeviceAuthenticator(authentication: plugin),
-      mode: AppLockMode.on,
-    );
+    final gate = AppLock(authenticator: device(plugin), mode: AppLockMode.on);
     await expectLater(
       gate.read(() async => 'secret'),
       throwsA(isA<AppLockException>()),
     );
     expect(gate.availability, AppLockAvailability.unavailable);
-    expect(plugin.biometricOnly, isNull);
+    expect(plugin.prompts, 0);
   });
 }
