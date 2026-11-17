@@ -620,13 +620,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The app lock (SAF-20): the empty reason that picks the toast's
   // generic branch.
   'lib/ui/app_lock_settings.dart': {"''"},
-  // Diagnostics in AppLockException, never shown: the lock's screens word
-  // failures from its availability alone.
-  'lib/services/device_authenticator.dart': {
-    r"'device authentication failed: ${error.code}'",
-    "'device authentication was rejected'",
-    "'device authentication is unavailable'",
-  },
   // A keystore failure's text, which the answer carries to the engine as
   // a diagnostic; surfaces show ARB text (syncFailedKeystore).
   'lib/services/engine_keystore.dart': {r"'$error'"},

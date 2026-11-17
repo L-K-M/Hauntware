@@ -2441,14 +2441,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The drag image's ellipsis glyph: typography, not copy.
   'lib/ui/panes/drag_out_image.dart': {"'\u2026'"},
-  // The app lock's device-authentication diagnostics (cred-05): they
-  // reach no rendered surface, whose screens word failures from
-  // AppLockAvailability alone.
-  'lib/services/device_authenticator.dart': {
-    "'device authentication is unavailable'",
-    r"'device authentication failed: ${error.code}'",
-    "'device authentication was rejected'",
-  },
   // The app lock switch's empty reason, which picks the failed-change
   // toast's generic branch: formatting, not copy.
   'lib/ui/settings/app_lock_settings.dart': {"''"},

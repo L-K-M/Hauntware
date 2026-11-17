@@ -1,6 +1,6 @@
 /// The device-local app lock alone (03 §3.5 F5f): `AppLock`, its modes
-/// and the `DeviceAuthenticator` seam each app implements over its own
-/// OS authentication plugin, plus the `AppLockController` each app host
+/// and the `DeviceAuthenticator` seam (implemented over the OS plugin by
+/// `device_authenticator.dart`, and by fakes in tests), plus the `AppLockController` each app host
 /// drives from its settings and lifecycle and the Settings switch over it
 /// (`GhostAppLockSection`), and `AppLockGateModel`, the controller as
 /// ghost_ui's lock gate seam. The lock core is pure Dart; the controller,

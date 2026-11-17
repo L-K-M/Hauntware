@@ -3,6 +3,17 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Shared device authentication (2026-11-17)
+
+`NativeDeviceAuthenticator` is replaced by ghost_keystore's
+`LocalDeviceAuthenticator` (`package:ghost_keystore/device_authenticator.dart`),
+shared with the other three apps, and its tests moved there. The prompt
+line and the error messages Séance shows are unchanged; authenticating
+on a platform without a system prompt now refuses before calling the
+plugin. Decided for the suite: no `FLAG_SECURE` for Android recents
+while locked, and window titles stay as they are. Still manual: the
+lock prompt on Android, iOS, macOS and Windows devices.
+
 ## Wave 6 (2026-11-16)
 
 - Damaged vault master key (#787, #794): a keystore entry that is not
@@ -37,10 +48,8 @@ Read [AGENTS.md](../AGENTS.md) first for how to build/test.
   or "N times". A repeat after the decision queues fresh with a count
   of 1. The shared queue is unchanged.
 
-Deferred, suite follow-ups: moving `LocalDeviceAuthenticator` into a shared package once
-`docs/design/catalog-library.md` section 9 is revised; the
-`FLAG_SECURE` and locked window title product decision; and the app
-directories are not format-checked in CI.
+Deferred, suite follow-up: the app directories are not format-checked
+in CI.
 
 Proof: analysis and the full app suite passed locally, and CI passed on
 each PR's last head; #795's macOS Poltergeist pure-Dart job was

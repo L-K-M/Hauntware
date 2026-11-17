@@ -8,9 +8,10 @@
 /// `poltergeist_core` or `dartssh2`: Poltergeist consumes this package
 /// and must not inherit the SSH stack. The app lock itself lives here too
 /// (F5f, also importable alone as `app_lock.dart`), with its Settings
-/// switch worded by each app; its integration, the authentication
-/// plugin, product error copy and the sync credential bindings stay in
-/// each app
+/// switch worded by each app, and so does its device authentication
+/// over `local_auth` (`device_authenticator.dart`, outside this barrel);
+/// its integration, the prompt's wording, product error copy and the
+/// sync credential bindings stay in each app
 /// (docs/design/catalog-library.md section 9).
 library;
 

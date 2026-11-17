@@ -4,7 +4,8 @@ description: >-
   Klabautermann and Planchette: MasterKeyManager over
   flutter_secure_storage, parameterized by each product's entry names so
   every product keeps its own entries (Seance still keeps its own
-  manager); and the device-local app lock with its Settings switch.
+  manager); and the device-local app lock with its Settings switch and
+  its device authentication over local_auth.
 version: 1.9.4
 publish_to: none
 
@@ -19,6 +20,10 @@ dependencies:
   # Service, Windows Credential Manager). Each app pins the exact version
   # in its own pubspec; this range admits both apps' current locks.
   flutter_secure_storage: ^10.3.1
+  # The OS authentication prompt behind LocalDeviceAuthenticator
+  # (device_authenticator.dart). Each app pins the exact version in its
+  # own pubspec, as with flutter_secure_storage.
+  local_auth: ^3.0.2
   # The app lock section's toast (showTopToast).
   ghost_ui:
     path: ../ghost_ui

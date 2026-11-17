@@ -1,11 +1,15 @@
+/// The suite's one `DeviceAuthenticator` over the OS authentication
+/// plugin, `local_auth`: Séance, Poltergeist, Klabautermann and
+/// Planchette construct it with their own prompt line. A library of its
+/// own, outside the barrels, so only the code that wires the lock names
+/// the plugin; every app that uses this package already ships it
+/// (docs/design/catalog-library.md section 9).
+library;
+
 import 'package:flutter/foundation.dart';
-import 'package:ghost_keystore/ghost_keystore.dart'
-    show AppLockAvailability, AppLockException, DeviceAuthenticator;
 import 'package:local_auth/local_auth.dart';
 
-// The authentication plugin stays app-side by design
-// (docs/design/catalog-library.md section 9): ghost_keystore's lock core
-// takes any DeviceAuthenticator and carries no plugin of its own.
+import 'src/app_lock.dart';
 
 /// Whether [platform] has the device authentication the app lock asks
 /// for: `local_auth` answers on Android, iOS, macOS and Windows; Linux
@@ -19,11 +23,14 @@ bool appLockSupportedOn(TargetPlatform platform) => switch (platform) {
 };
 
 /// The system's own prompt, biometrics with the device passcode or PIN
-/// as its fallback, over `local_auth`. [reason] is the localized line the
-/// prompt shows, read when it opens so it follows the current locale.
+/// as its fallback, over `local_auth`. [reason] is the line the prompt
+/// shows, supplied by the app and read when the prompt opens, so a
+/// localized app follows the current locale.
 ///
-/// The [AppLockException]s it throws are never shown: the app lock's
-/// screens word failures from [AppLockAvailability] alone.
+/// Never biometrics alone, and never a prompt that survives the app going
+/// to the background: `AppLock` decides what a backgrounded prompt means.
+/// The [AppLockException] messages are product-neutral English; an app
+/// that shows them (Séance does) shows them as they are.
 final class LocalDeviceAuthenticator implements DeviceAuthenticator {
   LocalDeviceAuthenticator({
     required this._reason,
@@ -36,11 +43,12 @@ final class LocalDeviceAuthenticator implements DeviceAuthenticator {
   final LocalAuthentication _authentication;
   final TargetPlatform _platform;
 
+  bool get _supported => !kIsWeb && appLockSupportedOn(_platform);
+
   @override
   Future<AppLockAvailability> availability() async {
-    if (kIsWeb || !appLockSupportedOn(_platform)) {
-      return AppLockAvailability.unavailable;
-    }
+    if (!_supported) return AppLockAvailability.unavailable;
+
     return await _authentication.isDeviceSupported()
         ? AppLockAvailability.available
         : AppLockAvailability.unavailable;
@@ -48,9 +56,12 @@ final class LocalDeviceAuthenticator implements DeviceAuthenticator {
 
   @override
   Future<void> authenticate() async {
-    if (kIsWeb || !appLockSupportedOn(_platform)) {
-      throw const AppLockException('device authentication is unavailable');
+    if (!_supported) {
+      throw const AppLockException(
+        'App lock: device authentication is unavailable on this platform.',
+      );
     }
+
     final bool accepted;
     try {
       accepted = await _authentication.authenticate(
@@ -59,10 +70,16 @@ final class LocalDeviceAuthenticator implements DeviceAuthenticator {
         persistAcrossBackgrounding: false,
       );
     } on LocalAuthException catch (error) {
-      throw AppLockException('device authentication failed: ${error.code}');
+      throw AppLockException(
+        'App lock: device authentication failed (${error.code.name}). Retry '
+        'to access saved secrets.',
+      );
     }
     if (!accepted) {
-      throw const AppLockException('device authentication was rejected');
+      throw const AppLockException(
+        'App lock: authentication was cancelled or rejected. Retry to access '
+        'saved secrets.',
+      );
     }
   }
 }
