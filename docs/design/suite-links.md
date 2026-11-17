@@ -425,7 +425,9 @@ Delivery:
 Queue:
 
 - `seanceLinkQueueLimit = 16` pending requests. Identical requests (same
-  server id and `cwd`, or same identity key) coalesce. A link beyond the
+  server id and `cwd`, or same identity key) coalesce, and the review
+  shows how many times the link was opened, as Poltergeist's does. A
+  link beyond the
   limit is dropped and counted; the next review shows "N more links were
   ignored." 16 is an assumption: large enough for a burst of hand-offs,
   small enough that a link flood cannot grow memory or keep dialogs
