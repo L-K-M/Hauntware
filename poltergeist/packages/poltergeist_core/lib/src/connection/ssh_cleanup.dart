@@ -12,9 +12,8 @@ const _closeTimeout = Duration(seconds: 5);
 Future<void> closeSshResource(
   Future<void> Function() close, {
   Duration maxWait = _closeTimeout,
-}) =>
-    runSequentialCleanup(
-      [close],
-      actionTimeout: maxWait < _closeTimeout ? maxWait : _closeTimeout,
-      failureMode: CleanupFailureMode.ignore,
-    );
+}) => runSequentialCleanup(
+  [close],
+  actionTimeout: maxWait < _closeTimeout ? maxWait : _closeTimeout,
+  failureMode: CleanupFailureMode.ignore,
+);

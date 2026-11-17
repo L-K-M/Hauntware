@@ -12,10 +12,7 @@ void main() {
   group('bounded HTTP bodies', () {
     test('normal JSON survives arbitrary chunk boundaries', () async {
       final json = await readBoundedJsonObject(
-        Stream.fromIterable([
-          utf8.encode('{"answer"'),
-          utf8.encode(':"yes"}'),
-        ]),
+        Stream.fromIterable([utf8.encode('{"answer"'), utf8.encode(':"yes"}')]),
         maxBytes: 100,
         idleTimeout: const Duration(seconds: 1),
         totalTimeout: const Duration(seconds: 1),
@@ -234,11 +231,13 @@ void main() {
     test('rejects an endless sequence of small events', () async {
       await expectLater(
         parseSseJson(
-          Stream.value(utf8.encode(
-            'data: {"n":1}\n\n'
-            'data: {"n":2}\n\n'
-            'data: {"n":3}\n\n',
-          )),
+          Stream.value(
+            utf8.encode(
+              'data: {"n":1}\n\n'
+              'data: {"n":2}\n\n'
+              'data: {"n":3}\n\n',
+            ),
+          ),
           maxBytes: 1000,
           maxLineBytes: 100,
           maxEventBytes: 100,
@@ -259,16 +258,18 @@ void main() {
 
   group('search response bounds and ownership', () {
     test('SearXNG reads a normally chunked bounded response', () async {
-      final client = _StreamClient((_) async => http.StreamedResponse(
-            Stream.fromIterable([
-              utf8.encode('{"results":['),
-              utf8.encode(
-                '{"title":"Dart","url":"https://dart.dev",'
-                '"content":"Docs"}]}',
-              ),
-            ]),
-            200,
-          ));
+      final client = _StreamClient(
+        (_) async => http.StreamedResponse(
+          Stream.fromIterable([
+            utf8.encode('{"results":['),
+            utf8.encode(
+              '{"title":"Dart","url":"https://dart.dev",'
+              '"content":"Docs"}]}',
+            ),
+          ]),
+          200,
+        ),
+      );
       final provider = SearxngSearch(
         baseUrl: 'https://search.example',
         client: client,
@@ -278,24 +279,29 @@ void main() {
     });
 
     test('SearXNG enforces the configured response cap', () async {
-      final client = _StreamClient((_) async => http.StreamedResponse(
-            Stream.value(utf8.encode('{"results":[]}')),
-            200,
-          ));
+      final client = _StreamClient(
+        (_) async => http.StreamedResponse(
+          Stream.value(utf8.encode('{"results":[]}')),
+          200,
+        ),
+      );
       final provider = SearxngSearch(
         baseUrl: 'https://search.example',
         client: client,
         maxResponseBytes: 5,
       );
-      await expectLater(provider.search('dart'), throwsA(isA<http.ClientException>()));
+      await expectLater(
+        provider.search('dart'),
+        throwsA(isA<http.ClientException>()),
+      );
     });
 
     test('search error bodies are never echoed', () async {
       const secret = 'server-echoed-secret';
-      final client = _StreamClient((_) async => http.StreamedResponse(
-            Stream.value(utf8.encode(secret)),
-            500,
-          ));
+      final client = _StreamClient(
+        (_) async =>
+            http.StreamedResponse(Stream.value(utf8.encode(secret)), 500),
+      );
       final provider = BraveSearch(apiKey: 'k', client: client);
       await expectLater(
         provider.search('dart'),
@@ -310,38 +316,38 @@ void main() {
     });
 
     test('borrowed clients stay open and owned clients close once', () {
-      final borrowed = _StreamClient((_) async =>
-          http.StreamedResponse(const Stream.empty(), 200));
+      final borrowed = _StreamClient(
+        (_) async => http.StreamedResponse(const Stream.empty(), 200),
+      );
       SearxngSearch(
         baseUrl: 'https://search.example',
         client: borrowed,
       ).close();
       expect(borrowed.closeCalls, 0);
 
-      final owned = _StreamClient((_) async =>
-          http.StreamedResponse(const Stream.empty(), 200));
-      final provider = BraveSearch(
-        apiKey: 'k',
-        clientFactory: () => owned,
+      final owned = _StreamClient(
+        (_) async => http.StreamedResponse(const Stream.empty(), 200),
       );
+      final provider = BraveSearch(apiKey: 'k', clientFactory: () => owned);
       provider.close();
       provider.close();
       expect(owned.closeCalls, 1);
     });
 
-    test('Z.AI gains lifecycle ownership without changing its transport', () async {
-      final client = _StreamClient((_) async =>
-          http.StreamedResponse(const Stream.empty(), 200));
-      final provider = ZaiSearch(
-        apiKey: 'k',
-        clientFactory: () => client,
-      );
-      provider.close();
-      provider.close();
-      expect(client.closeCalls, 1);
-      await expectLater(provider.search('dart'), throwsStateError);
-      expect(client.sends, 0);
-    });
+    test(
+      'Z.AI gains lifecycle ownership without changing its transport',
+      () async {
+        final client = _StreamClient(
+          (_) async => http.StreamedResponse(const Stream.empty(), 200),
+        );
+        final provider = ZaiSearch(apiKey: 'k', clientFactory: () => client);
+        provider.close();
+        provider.close();
+        expect(client.closeCalls, 1);
+        await expectLater(provider.search('dart'), throwsStateError);
+        expect(client.sends, 0);
+      },
+    );
 
     test('CompositeSearch closes each child exactly once', () {
       final first = _ClosableSearch();

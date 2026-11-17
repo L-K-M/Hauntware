@@ -22,10 +22,7 @@ ServerConfig _server({
 );
 
 /// The catalog's filter: Séance's term rule over the server haystack.
-List<ServerConfig> _catalogFilter(
-  List<ServerConfig> servers,
-  String query,
-) => [
+List<ServerConfig> _catalogFilter(List<ServerConfig> servers, String query) => [
   for (final server in servers)
     if (sidebarQueryMatches(serverSearchHaystack(server), query)) server,
 ];

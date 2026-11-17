@@ -18,7 +18,10 @@ void main() {
     test('font-specific ligature features reach terminal text shaping', () {
       for (final mode in TerminalLigatures.values) {
         final style = resolveTerminalAppearance(
-          AppSettings(terminalFontFamily: 'Geist Mono', terminalLigatures: mode),
+          AppSettings(
+            terminalFontFamily: 'Geist Mono',
+            terminalLigatures: mode,
+          ),
           Brightness.dark,
         ).style;
         expect(
@@ -44,9 +47,10 @@ void main() {
 
     test('ligatures follow the setting, on by default', () {
       expect(
-        resolveTerminalAppearance(AppSettings(), Brightness.dark)
-            .style
-            .ligatures,
+        resolveTerminalAppearance(
+          AppSettings(),
+          Brightness.dark,
+        ).style.ligatures,
         TerminalLigatures.on,
       );
       expect(

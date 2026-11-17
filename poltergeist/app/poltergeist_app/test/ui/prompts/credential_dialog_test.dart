@@ -414,7 +414,10 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Key passphrase for example.com'), findsOneWidget);
+    expect(
+      find.textContaining('Key passphrase for example.com'),
+      findsOneWidget,
+    );
     expect(
       find.textContaining('That passphrase did not open the key.'),
       findsOneWidget,

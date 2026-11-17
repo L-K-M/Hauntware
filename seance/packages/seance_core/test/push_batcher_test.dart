@@ -6,25 +6,30 @@ import 'package:seance_protocol/seance_protocol.dart';
 import 'package:test/test.dart';
 
 EncryptedRecord rec(String id, {int blobBytes = 0}) => EncryptedRecord(
-      id: id,
-      updatedAt: 10,
-      deviceId: 'device-A',
-      deleted: false,
-      seq: null,
-      blob: Uint8List(blobBytes),
-    );
+  id: id,
+  updatedAt: 10,
+  deviceId: 'device-A',
+  deleted: false,
+  seq: null,
+  blob: Uint8List(blobBytes),
+);
 
 /// The body the server would measure for [batch], sent as [HttpSyncClient]
 /// sends it: opted in to per-record refusals.
 int bodyBytes(List<EncryptedRecord> batch) => utf8
-    .encode(jsonEncode(PushRequest(
-      records: batch,
-      refusalScope: PushRefusalScope.record,
-    ).toJson()))
+    .encode(
+      jsonEncode(
+        PushRequest(
+          records: batch,
+          refusalScope: PushRefusalScope.record,
+        ).toJson(),
+      ),
+    )
     .length;
 
-List<String> idsOf(List<List<EncryptedRecord>> batches) =>
-    [for (final batch in batches) ...batch.map((r) => r.id)];
+List<String> idsOf(List<List<EncryptedRecord>> batches) => [
+  for (final batch in batches) ...batch.map((r) => r.id),
+];
 
 void main() {
   group('batchForPush', () {
@@ -50,16 +55,20 @@ void main() {
         expect(batch, isNotEmpty);
         expect(bodyBytes(batch), lessThanOrEqualTo(limits.maxBodyBytes));
       }
-      expect(idsOf(batches), records.map((r) => r.id).toList(),
-          reason: 'order is preserved and nothing is dropped or duplicated');
+      expect(
+        idsOf(batches),
+        records.map((r) => r.id).toList(),
+        reason: 'order is preserved and nothing is dropped or duplicated',
+      );
     });
 
     test('a batch is filled up to the body limit, not merely under it', () {
       // Three records that fit together and a fourth that does not: the split
       // has to fall after the third, or batching would waste round trips.
       final records = [for (var i = 0; i < 4; i++) rec('r$i', blobBytes: 300)];
-      final limits =
-          PushLimits(maxBodyBytes: bodyBytes(records.take(3).toList()));
+      final limits = PushLimits(
+        maxBodyBytes: bodyBytes(records.take(3).toList()),
+      );
 
       final batches = batchForPush(records, limits);
 
@@ -75,7 +84,10 @@ void main() {
 
     test('whichever limit binds first splits the batch', () {
       // Ten records that would fit the body budget but not the count cap.
-      const limits = PushLimits(maxBodyBytes: 1024 * 1024, maxRecordsPerPush: 2);
+      const limits = PushLimits(
+        maxBodyBytes: 1024 * 1024,
+        maxRecordsPerPush: 2,
+      );
       final records = [for (var i = 0; i < 5; i++) rec('r$i', blobBytes: 8)];
 
       expect(batchForPush(records, limits).map((b) => b.length), [2, 2, 1]);
@@ -123,14 +135,23 @@ void main() {
       final record = rec('exact', blobBytes: 1024);
       const limits = PushLimits(maxBlobBytes: 1024);
 
-      expect(record.encodedJsonBytes(), greaterThan(1024),
-          reason: 'the encoded record is the larger number, so a batcher '
-              'comparing it would reject this record');
+      expect(
+        record.encodedJsonBytes(),
+        greaterThan(1024),
+        reason:
+            'the encoded record is the larger number, so a batcher '
+            'comparing it would reject this record',
+      );
       final batches = batchForPush([record, rec('after')], limits);
-      expect(batches.map((b) => b.map((r) => r.id).toList()),
-          [['exact', 'after']],
-          reason: 'a blob of exactly the cap is accepted, so it batches '
-              'normally rather than being isolated last');
+      expect(
+        batches.map((b) => b.map((r) => r.id).toList()),
+        [
+          ['exact', 'after'],
+        ],
+        reason:
+            'a blob of exactly the cap is accepted, so it batches '
+            'normally rather than being isolated last',
+      );
     });
 
     test('several records past a cap each travel alone, still last', () {
@@ -149,9 +170,13 @@ void main() {
       final batches = batchForPush(records, limits);
 
       expect(batches, hasLength(3));
-      expect(idsOf(batches), ['small', 'fat', 'huge'],
-          reason: 'the compliant record goes first, the doomed ones after it '
-              'in the order they were dirtied');
+      expect(
+        idsOf(batches),
+        ['small', 'fat', 'huge'],
+        reason:
+            'the compliant record goes first, the doomed ones after it '
+            'in the order they were dirtied',
+      );
       expect(batches[1].single.id, 'fat');
       expect(batches[2].single.id, 'huge');
     });

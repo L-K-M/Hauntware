@@ -184,8 +184,7 @@ class RegisteredCommand {
   /// their parameter inside `run`, never take a menuPlacement of their
   /// own, and are never themselves registered (the parent command owns
   /// the registry id).
-  final List<RegisteredCommand> Function(AppLocalizations l10n)?
-  submenuItems;
+  final List<RegisteredCommand> Function(AppLocalizations l10n)? submenuItems;
 
   /// Where the D32 header toolbar renders this command; null keeps it
   /// out of the toolbar (menus, chords, palette, and context menus only).

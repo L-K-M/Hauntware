@@ -2185,10 +2185,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       );
       final claimedPath = _durableDestinationClaim(runtime, directory.item.id);
       final registryPath = claimedPath ?? destinationPath;
-      registryKey = (
-        _endpointKey(task.destination),
-        _fold(registryPath),
-      );
+      registryKey = (_endpointKey(task.destination), _fold(registryPath));
       while (true) {
         await _waitForAdmission(runtime);
         if (directory.item.isTerminal) return;
@@ -2482,10 +2479,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           isDirectory: true,
         ),
       );
-      final key = (
-        _endpointKey(runtime.task.destination),
-        _fold(candidate),
-      );
+      final key = (_endpointKey(runtime.task.destination), _fold(candidate));
       final holder = _registry[key];
       if (holder != null && !holder.committed.isCompleted) continue;
 
@@ -3069,10 +3063,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     // The shared destination-key registry serializes commits onto one
     // (endpoint, folded path). A waiter holds no slot and no lease: it
     // re-queues behind the holder's commit instead.
-    final key = (
-      _endpointKey(task.destination),
-      _fold(destinationPath),
-    );
+    final key = (_endpointKey(task.destination), _fold(destinationPath));
     final holder = _registry[key];
     if (holder != null && !holder.committed.isCompleted) {
       unawaited(
@@ -3914,10 +3905,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
 
       // Another task may already hold this candidate. Take the next number
       // without waiting with a transfer slot and channel lease held.
-      final numberedKey = (
-        _endpointKey(task.destination),
-        _fold(numbered),
-      );
+      final numberedKey = (_endpointKey(task.destination), _fold(numbered));
       final claimed = _registry[numberedKey];
       if (claimed != null && !claimed.committed.isCompleted) continue;
       if (await _statOrNull(dstFs, numbered) != null) continue;
@@ -6400,14 +6388,10 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     _TaskRuntime runtime,
     String destinationPath,
     String sourcePath,
-  ) => _hasPotentialAlias(
-    destinationPath,
-    sourcePath,
-    <_DestinationClaim>[
-      ...runtime.rawOutputDestinationClaims,
-      ...runtime.rawPlannedDestinationClaims,
-    ],
-  );
+  ) => _hasPotentialAlias(destinationPath, sourcePath, <_DestinationClaim>[
+    ...runtime.rawOutputDestinationClaims,
+    ...runtime.rawPlannedDestinationClaims,
+  ]);
 
   bool _hasPotentialOutputAlias(
     _TaskRuntime runtime,
@@ -6541,11 +6525,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
 
     // A broad alias becomes ownership evidence only after stat sees an
     // occupant and another item has reserved output there.
-    return _hasPotentialOutputAlias(
-      runtime,
-      destinationPath,
-      sourcePath,
-    );
+    return _hasPotentialOutputAlias(runtime, destinationPath, sourcePath);
   }
 
   bool _reserveOutputDestination(

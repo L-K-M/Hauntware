@@ -108,24 +108,19 @@ class _PreviewDownloadsSectionState extends State<PreviewDownloadsSection> {
       ApplicationErrorReporter().report(error, stackTrace);
       // Immediate-persist revert: the field and the live value both
       // return to the pre-commit state.
-      _capacityField.text =
-          '${widget.settings.capacityBytes ~/ _mib}';
+      _capacityField.text = '${widget.settings.capacityBytes ~/ _mib}';
       if (mounted) showTopToastIn(context, message: error.toString());
     }
   }
 
   Future<void> _commitThreshold() async {
-    final bytes = _parseMib(
-      _thresholdField,
-      widget.settings.thresholdBytes,
-    );
+    final bytes = _parseMib(_thresholdField, widget.settings.thresholdBytes);
     if (bytes == null) return;
     try {
       await widget.settings.onThresholdChanged(bytes);
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
-      _thresholdField.text =
-          '${widget.settings.thresholdBytes ~/ _mib}';
+      _thresholdField.text = '${widget.settings.thresholdBytes ~/ _mib}';
       if (mounted) showTopToastIn(context, message: error.toString());
     }
   }

@@ -216,8 +216,7 @@ void main() {
       completeWithoutTimers(time, extraPane.close());
 
       final gate = extra.canonicalizeGate = Completer<void>();
-      final opening =
-          harness.manager.openBrowseChannel('s1', paneTabId: 'new');
+      final opening = harness.manager.openBrowseChannel('s1', paneTabId: 'new');
       opening.ignore();
       time.flushMicrotasks();
       time.elapse(_policy.idleExtraTransportTimeout * 2);

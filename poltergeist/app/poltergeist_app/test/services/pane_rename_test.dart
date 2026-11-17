@@ -26,11 +26,7 @@ void main() {
     test('blank and whitespace-only names are empty', () {
       for (final name in ['', '   ', '\t']) {
         expect(
-          renameNameError(
-            name,
-            remote: false,
-            platform: TargetPlatform.linux,
-          ),
+          renameNameError(name, remote: false, platform: TargetPlatform.linux),
           RenameNameError.empty,
           reason: '"$name" must reject as empty',
         );
@@ -117,11 +113,7 @@ void main() {
       // A remote pane stays permissive — the server may accept names
       // the client OS would not.
       expect(
-        renameNameError(
-          'CON',
-          remote: true,
-          platform: TargetPlatform.windows,
-        ),
+        renameNameError('CON', remote: true, platform: TargetPlatform.windows),
         isNull,
       );
       // Trailing dots/spaces are legal POSIX names on non-Windows
@@ -149,19 +141,11 @@ void main() {
       // local filesystem and on an SFTP server — only the client OS's
       // own filesystem may refuse them.
       expect(
-        renameNameError(
-          'a:b?c',
-          remote: false,
-          platform: TargetPlatform.linux,
-        ),
+        renameNameError('a:b?c', remote: false, platform: TargetPlatform.linux),
         isNull,
       );
       expect(
-        renameNameError(
-          'a:b?c',
-          remote: false,
-          platform: TargetPlatform.macOS,
-        ),
+        renameNameError('a:b?c', remote: false, platform: TargetPlatform.macOS),
         isNull,
       );
       // A remote pane stays POSIX-permissive even on a Windows client:
@@ -176,11 +160,7 @@ void main() {
       );
       // …but the separator still rejects remotely.
       expect(
-        renameNameError(
-          'a/b',
-          remote: true,
-          platform: TargetPlatform.windows,
-        ),
+        renameNameError('a/b', remote: true, platform: TargetPlatform.windows),
         RenameNameError.separator,
       );
     });

@@ -120,8 +120,10 @@ void main() {
 
     expect(find.text('Credential required on this device'), findsOneWidget);
     expect(find.text('Connection failed'), findsNothing);
-    expect(find.textContaining('"box" was saved on another device'),
-        findsOneWidget);
+    expect(
+      find.textContaining('"box" was saved on another device'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('connection.editServer')));
     await tester.pumpAndSettle();
@@ -479,69 +481,66 @@ void main() {
     },
   );
 
-  test(
-    'saving a file-key passphrase keeps the grant for that path',
-    () async {
-      await boot(
-        passphraseChecker: (pem, phrase) =>
-            pem == 'FILE PEM' && phrase == 'right',
-      );
-      final file = File('${directory!.path}/identity');
-      await file.writeAsString('FILE PEM');
-      const grant = 'Z3JhbnQ=';
-      final bookmark = IdentityFileBookmark(path: file.path, bookmark: grant);
-      // A fake resolver standing in for the native NSOpenPanel bookmark: the
-      // grant opens the picked file. It records the grants it was asked to
-      // open, so the test can tell the grant was consulted.
-      final resolved = <String>[];
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(_bookmarkChannel, (call) async {
-        if (call.method == 'resolveBookmark') {
-          resolved.add(call.arguments['bookmark'] as String);
-          return {'path': file.path, 'token': 'token'};
-        }
-        return null;
-      });
-      await state!.saveServer(
-        server.copyWith(
-          authMethod: AuthMethod.privateKey,
-          identityFilePath: file.path,
-        ),
-        secret: Secret(
-          id: 'saved-elsewhere',
-          kind: SecretKind.privateKey,
-          value: 'PASTED PEM',
-          keyPassphrase: 'pasted-phrase',
-          identityFilePath: file.path,
-          identityFilePassphrase: 'old-file-phrase',
-        ),
-        identityFileBookmark: bookmark,
-      );
-      final before = await services!.vault.getSecret('saved-elsewhere');
+  test('saving a file-key passphrase keeps the grant for that path', () async {
+    await boot(
+      passphraseChecker: (pem, phrase) =>
+          pem == 'FILE PEM' && phrase == 'right',
+    );
+    final file = File('${directory!.path}/identity');
+    await file.writeAsString('FILE PEM');
+    const grant = 'Z3JhbnQ=';
+    final bookmark = IdentityFileBookmark(path: file.path, bookmark: grant);
+    // A fake resolver standing in for the native NSOpenPanel bookmark: the
+    // grant opens the picked file. It records the grants it was asked to
+    // open, so the test can tell the grant was consulted.
+    final resolved = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_bookmarkChannel, (call) async {
+          if (call.method == 'resolveBookmark') {
+            resolved.add(call.arguments['bookmark'] as String);
+            return {'path': file.path, 'token': 'token'};
+          }
+          return null;
+        });
+    await state!.saveServer(
+      server.copyWith(
+        authMethod: AuthMethod.privateKey,
+        identityFilePath: file.path,
+      ),
+      secret: Secret(
+        id: 'saved-elsewhere',
+        kind: SecretKind.privateKey,
+        value: 'PASTED PEM',
+        keyPassphrase: 'pasted-phrase',
+        identityFilePath: file.path,
+        identityFilePassphrase: 'old-file-phrase',
+      ),
+      identityFileBookmark: bookmark,
+    );
+    final before = await services!.vault.getSecret('saved-elsewhere');
 
-      expect(
-        await state!.provideKeyPassphrase(
-          'box',
-          const KeyPassphraseAnswer('right', saveToVault: true),
-        ),
-        isTrue,
-      );
+    expect(
+      await state!.provideKeyPassphrase(
+        'box',
+        const KeyPassphraseAnswer('right', saveToVault: true),
+      ),
+      isTrue,
+    );
 
-      // The grant opened the key, and the save kept it for the next connect
-      // rather than clearing it. Only consulted where the platform has
-      // security-scoped bookmarks.
-      if (services!.identityBookmarks.isSupported) {
-        expect(resolved, [grant]);
-      }
-      expect(services!.settings.identityFileBookmarks['box'], bookmark);
-      final saved = (await services!.vault.getSecret('saved-elsewhere'))!;
-      expect(saved.value, 'PASTED PEM');
-      expect(saved.keyPassphrase, 'pasted-phrase');
-      expect(saved.identityFilePath, file.path);
-      expect(saved.identityFilePassphrase, 'right');
-      expect(saved.updatedAt, greaterThan(before!.updatedAt));
-    },
-  );
+    // The grant opened the key, and the save kept it for the next connect
+    // rather than clearing it. Only consulted where the platform has
+    // security-scoped bookmarks.
+    if (services!.identityBookmarks.isSupported) {
+      expect(resolved, [grant]);
+    }
+    expect(services!.settings.identityFileBookmarks['box'], bookmark);
+    final saved = (await services!.vault.getSecret('saved-elsewhere'))!;
+    expect(saved.value, 'PASTED PEM');
+    expect(saved.keyPassphrase, 'pasted-phrase');
+    expect(saved.identityFilePath, file.path);
+    expect(saved.identityFilePassphrase, 'right');
+    expect(saved.updatedAt, greaterThan(before!.updatedAt));
+  });
 
   test(
     'saving a file-key passphrase drops a grant for a different path',
@@ -743,23 +742,28 @@ void main() {
     expect(state!.servers.single.authMethod, AuthMethod.privateKey);
   });
 
-  test('a key given on the tab replaces a key-file path, as the editor does',
-      () async {
-    await boot();
-    // A peer's edit pointed the server at a key file this device lacks.
-    await state!.saveServer(
-      server.copyWith(
-        authMethod: AuthMethod.privateKey,
-        identityFilePath: '/home/elsewhere/.ssh/id_ed25519',
-        updatedAt: 2,
-      ),
-    );
+  test(
+    'a key given on the tab replaces a key-file path, as the editor does',
+    () async {
+      await boot();
+      // A peer's edit pointed the server at a key file this device lacks.
+      await state!.saveServer(
+        server.copyWith(
+          authMethod: AuthMethod.privateKey,
+          identityFilePath: '/home/elsewhere/.ssh/id_ed25519',
+          updatedAt: 2,
+        ),
+      );
 
-    await state!.provideMissingCredential('box', const MissingPrivateKey('PEM'));
+      await state!.provideMissingCredential(
+        'box',
+        const MissingPrivateKey('PEM'),
+      );
 
-    // Otherwise the path would be read and the stored key never used.
-    expect(state!.servers.single.identityFilePath, isNull);
-  });
+      // Otherwise the path would be read and the stored key never used.
+      expect(state!.servers.single.identityFilePath, isNull);
+    },
+  );
 
   test('the agent instead writes nothing and switches the server', () async {
     await boot();

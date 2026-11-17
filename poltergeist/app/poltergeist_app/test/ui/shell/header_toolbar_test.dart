@@ -97,10 +97,7 @@ void main() {
     command('trash', placement: at(ToolbarSlot.actions, 20)),
     command('copy', placement: at(ToolbarSlot.actions, 30)),
     command('sync', placement: at(ToolbarSlot.primary, 10, labelled: true)),
-    command(
-      'connect',
-      placement: at(ToolbarSlot.primary, 20, labelled: true),
-    ),
+    command('connect', placement: at(ToolbarSlot.primary, 20, labelled: true)),
     command('activity', placement: at(ToolbarSlot.status, 10, group: 1)),
     command('inspector', placement: at(ToolbarSlot.status, 20, group: 1)),
   ];

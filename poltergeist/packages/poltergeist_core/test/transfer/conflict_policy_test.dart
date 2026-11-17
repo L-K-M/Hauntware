@@ -11,12 +11,11 @@ library;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
-DestinationStat fileStat({int? size, DateTime? modifiedAt}) =>
-    DestinationStat(
-      type: RemoteFileType.file,
-      size: size,
-      modifiedAt: modifiedAt,
-    );
+DestinationStat fileStat({int? size, DateTime? modifiedAt}) => DestinationStat(
+  type: RemoteFileType.file,
+  size: size,
+  modifiedAt: modifiedAt,
+);
 
 DestinationStat dirStat({DateTime? modifiedAt}) =>
     DestinationStat(type: RemoteFileType.directory, modifiedAt: modifiedAt);
@@ -104,11 +103,7 @@ void main() {
     });
 
     test('replaceIfNewer: a missing mtime on either side is not newer', () {
-      for (final (src, dst) in [
-        (null, t0),
-        (tNewer, null),
-        (null, null),
-      ]) {
+      for (final (src, dst) in [(null, t0), (tNewer, null), (null, null)]) {
         expect(
           resolveTransferConflict(
             verb: ConflictResolution.replaceIfNewer,
@@ -185,17 +180,20 @@ void main() {
       expect((d as ConflictReplace).removesOccupant, isTrue);
     });
 
-    test('replaceIfNewer newer asks — a file mtime vs a dir mtime is meaningless', () {
-      expect(
-        resolveTransferConflict(
-          verb: ConflictResolution.replaceIfNewer,
-          sourceIsDirectory: false,
-          existing: existing(),
-          sourceModifiedAt: tNewer,
-        ),
-        isA<ConflictAsk>(),
-      );
-    });
+    test(
+      'replaceIfNewer newer asks — a file mtime vs a dir mtime is meaningless',
+      () {
+        expect(
+          resolveTransferConflict(
+            verb: ConflictResolution.replaceIfNewer,
+            sourceIsDirectory: false,
+            existing: existing(),
+            sourceModifiedAt: tNewer,
+          ),
+          isA<ConflictAsk>(),
+        );
+      },
+    );
 
     test('keepBoth numbers past the directory; skip and ask hold', () {
       expect(
@@ -369,10 +367,7 @@ void main() {
     });
 
     test('a leading-dot name counts as extensionless', () {
-      expect(
-        numberedConflictName('.env', 2, isDirectory: false),
-        '.env (2)',
-      );
+      expect(numberedConflictName('.env', 2, isDirectory: false), '.env (2)');
       expect(
         numberedConflictName('README', 4, isDirectory: false),
         'README (4)',
@@ -380,14 +375,8 @@ void main() {
     });
 
     test('directories never split a trailing dot name', () {
-      expect(
-        numberedConflictName('dir', 2, isDirectory: true),
-        'dir (2)',
-      );
-      expect(
-        numberedConflictName('dir (2)', 5, isDirectory: true),
-        'dir (5)',
-      );
+      expect(numberedConflictName('dir', 2, isDirectory: true), 'dir (2)');
+      expect(numberedConflictName('dir (2)', 5, isDirectory: true), 'dir (5)');
       expect(
         numberedConflictName('weird.name', 2, isDirectory: true),
         'weird.name (2)',
@@ -480,9 +469,7 @@ void main() {
       expect(policy.localFiles, ConflictResolution.ask);
       expect(policy.remoteToRemoteFiles, ConflictResolution.ask);
       // Folders keep merge.
-      final folders = ConflictPolicy(
-        uploadFolders: ConflictResolution.merge,
-      );
+      final folders = ConflictPolicy(uploadFolders: ConflictResolution.merge);
       expect(folders.uploadFolders, ConflictResolution.merge);
     });
 
@@ -511,8 +498,10 @@ void main() {
       expect(handEdited.downloadFiles, ConflictResolution.ask);
       expect(handEdited.localFolders, ConflictResolution.merge);
 
-      expect(ConflictPolicy.fromJson(const {}).uploadFiles,
-          ConflictResolution.ask);
+      expect(
+        ConflictPolicy.fromJson(const {}).uploadFiles,
+        ConflictResolution.ask,
+      );
     });
   });
 }

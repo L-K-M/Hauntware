@@ -1060,9 +1060,7 @@ ManagedCheckoutSpec _managedCheckoutFromJson(Map<String, Object?> json) {
     expectedSize: expectedSize as int?,
     expectedTarget: targetJson == null
         ? null
-        : remoteFileEntryFromJson(
-            (targetJson as Map).cast<String, Object?>(),
-          ),
+        : remoteFileEntryFromJson((targetJson as Map).cast<String, Object?>()),
     preserveMode: preserveMode as int?,
   );
 }

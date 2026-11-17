@@ -290,10 +290,7 @@ void main() {
       hasLength(1),
     );
     final helper = _read('linux/runner/window_title.cc');
-    expect(
-      RegExp(r'set_title\([^;]*title\)').allMatches(helper),
-      hasLength(2),
-    );
+    expect(RegExp(r'set_title\([^;]*title\)').allMatches(helper), hasLength(2));
   });
 
   test('guards late Windows font changes after teardown', () {

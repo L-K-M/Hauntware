@@ -90,12 +90,21 @@ void main() {
       await tester.pumpAndSettle();
       final reason = '$width px';
       expect(panes, findsNWidgets(2), reason: reason);
-      expect(sidebarRegion, sidebar ? findsOneWidget : findsNothing,
-          reason: reason);
-      expect(inspectorRegion, inspectorInline ? findsOneWidget : findsNothing,
-          reason: reason);
-      expect(inspectorOverlay, inspectorInline ? findsNothing : findsOneWidget,
-          reason: reason);
+      expect(
+        sidebarRegion,
+        sidebar ? findsOneWidget : findsNothing,
+        reason: reason,
+      );
+      expect(
+        inspectorRegion,
+        inspectorInline ? findsOneWidget : findsNothing,
+        reason: reason,
+      );
+      expect(
+        inspectorOverlay,
+        inspectorInline ? findsNothing : findsOneWidget,
+        reason: reason,
+      );
     }
   });
 

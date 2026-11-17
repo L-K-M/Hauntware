@@ -88,7 +88,9 @@ class DangerLinter {
       // requires an -r/-f flag; the target must start after whitespace so a
       // relative path like `a/b` isn't matched. (The old rule only fired on a
       // bare `/`, `~`, `*`, or `$HOME`, so `rm -rf /etc` slipped through.)
-      RegExp(r'\brm\b(?=[^\n]*\s-{1,2}[a-zA-Z]*[rf])[^\n]*\s(/\S*|~\S*|\$HOME\S*|\*)(\s|$)'),
+      RegExp(
+        r'\brm\b(?=[^\n]*\s-{1,2}[a-zA-Z]*[rf])[^\n]*\s(/\S*|~\S*|\$HOME\S*|\*)(\s|$)',
+      ),
       DangerSeverity.critical,
       'Recursive/forced delete of an absolute, home, or wildcard path.',
     ),
@@ -179,14 +181,20 @@ class DangerLinter {
       'deletes unused volumes and their data.',
     ),
     _Rule(
-      RegExp('$_docker' r'\s+volume\s+prune\b'),
+      RegExp(
+        '$_docker'
+        r'\s+volume\s+prune\b',
+      ),
       DangerSeverity.critical,
       'Removes unused volumes and their data (named ones too with --all or '
       'before Docker 23).',
     ),
     _Rule(
       // `docker volume remove` is an alias of rm.
-      RegExp('$_docker' r'\s+volume\s+(?:rm|remove)\b'),
+      RegExp(
+        '$_docker'
+        r'\s+volume\s+(?:rm|remove)\b',
+      ),
       DangerSeverity.warning,
       'Deletes a named volume and its data.',
     ),

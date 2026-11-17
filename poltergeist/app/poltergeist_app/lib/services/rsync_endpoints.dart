@@ -16,8 +16,7 @@ typedef ServerConfigLookup = ServerConfig? Function(String id);
 
 /// The resolver a [SyncPlanController] holds — null when a remote side
 /// cannot be resolved to a dialable identity.
-typedef RsyncEndpointResolver =
-    ResolvedSyncEndpoints? Function(SyncPair pair);
+typedef RsyncEndpointResolver = ResolvedSyncEndpoints? Function(SyncPair pair);
 
 /// Resolves [pair]'s endpoints for [buildRsyncCommand]. Null when a
 /// `serverConfigId` side has no [serverConfig] answer. Remote sides tag
@@ -94,8 +93,7 @@ ResolvedRemoteEndpoint? _remote(
       port: identity.port,
       path: path,
       connectionShape: {
-        if (identity.identityFilePath != null)
-          SyncConnectionFlag.identityFile,
+        if (identity.identityFilePath != null) SyncConnectionFlag.identityFile,
       },
     );
   }
@@ -109,8 +107,7 @@ ResolvedRemoteEndpoint? _remote(
     port: config.port,
     path: path,
     connectionShape: {
-      if (config.identityFilePath != null)
-        SyncConnectionFlag.identityFile,
+      if (config.identityFilePath != null) SyncConnectionFlag.identityFile,
       if (config.jumpHostId != null) SyncConnectionFlag.jumpHost,
     },
   );

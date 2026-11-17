@@ -59,28 +59,36 @@ void main() {
     test('message prefers the OS detail and names the path', () {
       const e = IdentityFileReadException(
         '/home/ada/.ssh/id_ed25519',
-        FileSystemException('Cannot open file', '/home/ada/.ssh/id_ed25519',
-            OSError('Operation not permitted', 1)),
+        FileSystemException(
+          'Cannot open file',
+          '/home/ada/.ssh/id_ed25519',
+          OSError('Operation not permitted', 1),
+        ),
       );
       expect(e.message, contains('Operation not permitted'));
       expect(e.message, contains('/home/ada/.ssh/id_ed25519'));
       expect(e.toString(), contains('Operation not permitted'));
     });
 
-    test('falls back to the exception message when the OS detail is absent',
-        () {
-      const withoutOsError = IdentityFileReadException(
-        '/home/ada/.ssh/id_ed25519',
-        FileSystemException('Cannot open file', '/home/ada/.ssh/id_ed25519'),
-      );
-      expect(withoutOsError.message, contains('Cannot open file'));
-      const emptyOsMessage = IdentityFileReadException(
-        '/home/ada/.ssh/id_ed25519',
-        FileSystemException('Cannot open file', '/home/ada/.ssh/id_ed25519',
-            OSError('', 2)),
-      );
-      expect(emptyOsMessage.message, contains('Cannot open file'));
-    });
+    test(
+      'falls back to the exception message when the OS detail is absent',
+      () {
+        const withoutOsError = IdentityFileReadException(
+          '/home/ada/.ssh/id_ed25519',
+          FileSystemException('Cannot open file', '/home/ada/.ssh/id_ed25519'),
+        );
+        expect(withoutOsError.message, contains('Cannot open file'));
+        const emptyOsMessage = IdentityFileReadException(
+          '/home/ada/.ssh/id_ed25519',
+          FileSystemException(
+            'Cannot open file',
+            '/home/ada/.ssh/id_ed25519',
+            OSError('', 2),
+          ),
+        );
+        expect(emptyOsMessage.message, contains('Cannot open file'));
+      },
+    );
   });
 
   group('IdentityFileReader', () {
@@ -104,37 +112,45 @@ void main() {
       );
 
       expect(pem, 'KEY PEM');
-      final entries = await IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically).readAll();
+      final entries = await IdentityAuditLog(
+        file,
+        rewriteOwnerOnly: writeOwnerOnlyAtomically,
+      ).readAll();
       expect(entries, hasLength(1));
       expect(entries.single.ok, isTrue);
       expect(entries.single.serverId, 's1');
       expect(entries.single.path, key.path);
     });
 
-    test('a failed read throws and audits the failure with its error',
-        () async {
-      final file = File('${dir.path}/reads.jsonl');
-      final reader = IdentityFileReader(
-        IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically),
-        environment: {'HOME': dir.path},
-      );
+    test(
+      'a failed read throws and audits the failure with its error',
+      () async {
+        final file = File('${dir.path}/reads.jsonl');
+        final reader = IdentityFileReader(
+          IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically),
+          environment: {'HOME': dir.path},
+        );
 
-      await expectLater(
-        reader.read(
-          serverId: 's1',
-          serverLabel: 'deploy@example.com',
-          identityFilePath: '~/.ssh/absent',
-        ),
-        throwsA(isA<IdentityFileReadException>()),
-      );
+        await expectLater(
+          reader.read(
+            serverId: 's1',
+            serverLabel: 'deploy@example.com',
+            identityFilePath: '~/.ssh/absent',
+          ),
+          throwsA(isA<IdentityFileReadException>()),
+        );
 
-      final entries = await IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically).readAll();
-      expect(entries, hasLength(1));
-      expect(entries.single.ok, isFalse);
-      // The OS error wording differs per platform; only its presence is
-      // the contract here.
-      expect(entries.single.error, isNotEmpty);
-    });
+        final entries = await IdentityAuditLog(
+          file,
+          rewriteOwnerOnly: writeOwnerOnlyAtomically,
+        ).readAll();
+        expect(entries, hasLength(1));
+        expect(entries.single.ok, isFalse);
+        // The OS error wording differs per platform; only its presence is
+        // the contract here.
+        expect(entries.single.error, isNotEmpty);
+      },
+    );
 
     test('a hanging audit write never blocks the read', () async {
       final key = File('${dir.path}/id.pem');
@@ -154,22 +170,24 @@ void main() {
       expect(pem, 'KEY PEM');
     });
 
-    test('an audit failure never blocks the read (D18: best-effort trail)',
-        () async {
-      final key = File('${dir.path}/id.pem');
-      await key.writeAsString('KEY PEM');
-      final reader = IdentityFileReader(
-        _FailingAudit(),
-        environment: {'HOME': dir.path},
-      );
+    test(
+      'an audit failure never blocks the read (D18: best-effort trail)',
+      () async {
+        final key = File('${dir.path}/id.pem');
+        await key.writeAsString('KEY PEM');
+        final reader = IdentityFileReader(
+          _FailingAudit(),
+          environment: {'HOME': dir.path},
+        );
 
-      final pem = await reader.read(
-        serverId: 's1',
-        serverLabel: 'deploy@example.com',
-        identityFilePath: '${dir.path}/id.pem',
-      );
+        final pem = await reader.read(
+          serverId: 's1',
+          serverLabel: 'deploy@example.com',
+          identityFilePath: '${dir.path}/id.pem',
+        );
 
-      expect(pem, 'KEY PEM');
-    });
+        expect(pem, 'KEY PEM');
+      },
+    );
   });
 }

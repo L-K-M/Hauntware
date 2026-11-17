@@ -179,7 +179,10 @@ void main() {
         home: Scaffold(
           body: Row(
             children: [
-              for (final (tabs, focus) in [(left, leftFocus), (right, rightFocus)])
+              for (final (tabs, focus) in [
+                (left, leftFocus),
+                (right, rightFocus),
+              ])
                 Expanded(
                   child: PaneTabsView(
                     tabs: tabs,
@@ -216,8 +219,10 @@ void main() {
 
       expect(paints, greaterThan(0));
       expect(oppositePaints, 0);
-      expect(find.byKey(const ValueKey('pane.left.tab2.path.summary')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('pane.left.tab2.path.summary')),
+        findsOneWidget,
+      );
     } finally {
       debugOnProfilePaint = previous;
     }
@@ -280,10 +285,7 @@ void main() {
     final rightStrip = testPaneStrip(
       PaneController(paneTabId: 'pane.right', lanes: lanes),
     );
-    final workspace = WorkspaceController(
-      left: leftStrip,
-      right: rightStrip,
-    );
+    final workspace = WorkspaceController(left: leftStrip, right: rightStrip);
     addTearDown(workspace.dispose);
     final focusNode = FocusNode(debugLabel: 'pane.left.listing');
     addTearDown(focusNode.dispose);
@@ -313,10 +315,7 @@ void main() {
     final rightStrip = testPaneStrip(
       PaneController(paneTabId: 'pane.right', lanes: lanes),
     );
-    final workspace = WorkspaceController(
-      left: leftStrip,
-      right: rightStrip,
-    );
+    final workspace = WorkspaceController(left: leftStrip, right: rightStrip);
     addTearDown(workspace.dispose);
     final leftFocus = FocusNode(debugLabel: 'pane.left.listing');
     final rightFocus = FocusNode(debugLabel: 'pane.right.listing');
@@ -457,9 +456,7 @@ void main() {
   testWidgets('activating an offscreen chip scrolls it into view', (
     tester,
   ) async {
-    final strip = PaneTabsController(
-      paneId: PaneTabsController.leftPaneId,
-    );
+    final strip = PaneTabsController(paneId: PaneTabsController.leftPaneId);
     addTearDown(strip.dispose);
     // Fifteen launcher tabs overflow the 800px test surface: each chip
     // is at least 72px wide.
@@ -488,17 +485,13 @@ void main() {
     final lastChip = chip('pane.left.tab15');
     expect(lastChip, findsOneWidget);
     final stripRect = tester.getRect(
-      find.ancestor(
-        of: lastChip,
-        matching: find.byType(SingleChildScrollView),
-      ),
+      find.ancestor(of: lastChip, matching: find.byType(SingleChildScrollView)),
     );
     // Full containment with the same 0.5px tolerance the widget's
     // visibility guard uses — a one-pixel overlap is not "in view".
     bool fullyVisible(Finder chipFinder) {
       final r = tester.getRect(chipFinder);
-      return r.left >= stripRect.left - 0.5 &&
-          r.right <= stripRect.right + 0.5;
+      return r.left >= stripRect.left - 0.5 && r.right <= stripRect.right + 0.5;
     }
 
     // The last tab activated on open — its chip is scrolled into view.
@@ -638,10 +631,7 @@ void main() {
       );
 
       // Along the TOP edge of the active strip, not under the chips.
-      void expectMarkerOn(
-        PaneTabsController active,
-        PaneTabsController other,
-      ) {
+      void expectMarkerOn(PaneTabsController active, PaneTabsController other) {
         final marker = rect('${active.paneId}.activeIndicator');
         expect(marker.height, 2);
         expect(marker.top, strip(active).top);
@@ -658,10 +648,7 @@ void main() {
           final separator = rect('${tabs.paneId}.stripSeparator');
           expect(separator.height, 1);
           expect(separator.bottom, strip(tabs).bottom);
-          expect(
-            line('${tabs.paneId}.stripSeparator').color,
-            chrome.separator,
-          );
+          expect(line('${tabs.paneId}.stripSeparator').color, chrome.separator);
         }
       }
 

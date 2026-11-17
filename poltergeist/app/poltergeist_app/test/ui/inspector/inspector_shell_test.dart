@@ -275,10 +275,7 @@ void main() {
     );
     Focus.of(
       tester.element(
-        find.descendant(
-          of: splitter,
-          matching: find.byType(MouseRegion),
-        ),
+        find.descendant(of: splitter, matching: find.byType(MouseRegion)),
       ),
     ).requestFocus();
     await tester.pump();
@@ -286,17 +283,11 @@ void main() {
     // The inspector sits right of its splitter: ← grows it.
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump();
-    expect(
-      tester.getSize(region).width,
-      inspectorDefaultWidth + 16.0,
-    );
+    expect(tester.getSize(region).width, inspectorDefaultWidth + 16.0);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(
-      tester.getSize(region).width,
-      inspectorDefaultWidth - 16.0,
-    );
+    expect(tester.getSize(region).width, inspectorDefaultWidth - 16.0);
     expect(saved, [
       inspectorDefaultWidth + 16.0,
       inspectorDefaultWidth,

@@ -34,14 +34,14 @@ Future<ByteData> _fontBytes(String path) async =>
 /// default family name for body text plus the mono fallback chain the
 /// row metrics style reaches for.
 Future<void> _loadRealFonts() async {
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       '${Platform.environment['HOME']}/.local/share/fonts';
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
   final mono = File('$dir/DejaVuSansMono.ttf');
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -116,8 +116,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme:
-          base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -162,8 +161,7 @@ void main() {
     final boundary = tester.renderObject<RenderRepaintBoundary>(
       find.byKey(const ValueKey('capture.pane')),
     );
-    final captureEnabled =
-        Platform.environment['POLTERGEIST_CAPTURE'] == '1';
+    final captureEnabled = Platform.environment['POLTERGEIST_CAPTURE'] == '1';
     final outDir = Directory(_captureDir);
     if (captureEnabled) outDir.createSync(recursive: true);
 
@@ -172,9 +170,7 @@ void main() {
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List();
         } finally {
           image.dispose();

@@ -594,30 +594,32 @@ void main() {
     expect(bridge.calls, isNot(contains('running')));
   });
 
-  test('a visible catalog server starts probing when its jump route clears',
-      () async {
-    ServerConfig pulled({String? jumpHostId}) => ServerConfig(
-      id: 'db',
-      label: 'db',
-      host: 'db.internal',
-      username: 'ops',
-      jumpHostId: jumpHostId,
-      createdAt: 0,
-      updatedAt: 0,
-    );
-    owner.forwardLifecycle(AppLifecycleState.resumed);
-    owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
-    owner.noteVisible('db');
-    await pump();
-    expect(bridge.targets, isEmpty);
+  test(
+    'a visible catalog server starts probing when its jump route clears',
+    () async {
+      ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: jumpHostId,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      owner.forwardLifecycle(AppLifecycleState.resumed);
+      owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+      owner.noteVisible('db');
+      await pump();
+      expect(bridge.targets, isEmpty);
 
-    // The row remains mounted while sync makes the route directly usable.
-    owner.syncCatalog([pulled()]);
-    await pump();
+      // The row remains mounted while sync makes the route directly usable.
+      owner.syncCatalog([pulled()]);
+      await pump();
 
-    expect(settings.calls, ['write:db']);
-    expect(bridge.targets.map((target) => target.id), ['db']);
-  });
+      expect(settings.calls, ['write:db']);
+      expect(bridge.targets.map((target) => target.id), ['db']);
+    },
+  );
 
   test(
     'a hidden catalog server waits for remount when its route clears',
@@ -715,27 +717,26 @@ void main() {
     expect(settings.servers['b1']!.connected, isTrue);
   });
 
-  test('noteRemoved clears the connected dedupe so a re-add re-persists',
-      () async {
-    owner.syncFavorites([_remoteFavorite('b1')]);
-    owner.noteConnected('b1', host: 'sftp.example', port: 22);
-    await pump();
+  test(
+    'noteRemoved clears the connected dedupe so a re-add re-persists',
+    () async {
+      owner.syncFavorites([_remoteFavorite('b1')]);
+      owner.noteConnected('b1', host: 'sftp.example', port: 22);
+      await pump();
 
-    owner.noteRemoved('b1');
-    await pump();
+      owner.noteRemoved('b1');
+      await pump();
 
-    // The same id/endpoint back on the list must write the connection
-    // fact again — the purge deleted the record the dedupe was guarding.
-    owner.syncFavorites([_remoteFavorite('b1')]);
-    owner.noteConnected('b1', host: 'sftp.example', port: 22);
-    await pump();
+      // The same id/endpoint back on the list must write the connection
+      // fact again — the purge deleted the record the dedupe was guarding.
+      owner.syncFavorites([_remoteFavorite('b1')]);
+      owner.noteConnected('b1', host: 'sftp.example', port: 22);
+      await pump();
 
-    expect(
-      settings.calls.where((call) => call == 'write:b1'),
-      hasLength(2),
-    );
-    expect(settings.servers['b1']!.connected, isTrue);
-  });
+      expect(settings.calls.where((call) => call == 'write:b1'), hasLength(2));
+      expect(settings.servers['b1']!.connected, isTrue);
+    },
+  );
 
   test('global opt-out clears targets and never runs probes', () async {
     settings.global = ProbePreference.disabled;
@@ -749,8 +750,7 @@ void main() {
     expect(owner.statuses['b1'], ProbeStatus.unknown);
   });
 
-  test('an unreadable store fails closed: no targets, no activity',
-      () async {
+  test('an unreadable store fails closed: no targets, no activity', () async {
     settings.failReads = true;
     owner.forwardLifecycle(AppLifecycleState.resumed);
     owner.syncFavorites([_remoteFavorite('b1')]);
@@ -782,9 +782,7 @@ void main() {
     owner.noteVisible('b1');
     await pump();
 
-    bridge.events.add(
-      ProbeStatusesEvent(statuses: {'b1': ProbeStatus.online}),
-    );
+    bridge.events.add(ProbeStatusesEvent(statuses: {'b1': ProbeStatus.online}));
     await pump();
 
     expect(owner.statuses['b1'], ProbeStatus.online);
@@ -807,9 +805,7 @@ void main() {
 
     // A snapshot landing after teardown must not throw into the
     // detached listener.
-    bridge.events.add(
-      ProbeStatusesEvent(statuses: {'b1': ProbeStatus.online}),
-    );
+    bridge.events.add(ProbeStatusesEvent(statuses: {'b1': ProbeStatus.online}));
     await pump();
     expect(bridge.calls, ['paused', 'targets:']);
   });

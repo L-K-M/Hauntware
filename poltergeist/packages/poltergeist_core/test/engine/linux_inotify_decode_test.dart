@@ -77,7 +77,9 @@ void main() {
     });
 
     test('a truncated header is a deterministic error', () {
-      final bytes = Uint8List.fromList(List.filled(inotifyEventHeaderBytes - 1, 0));
+      final bytes = Uint8List.fromList(
+        List.filled(inotifyEventHeaderBytes - 1, 0),
+      );
 
       expect(
         () => decodeInotifyEvents(bytes),
@@ -146,8 +148,11 @@ void main() {
 
         expect(
           event,
-          isA<FileSystemDeleteEvent>()
-              .having((event) => event.path, 'path', watched),
+          isA<FileSystemDeleteEvent>().having(
+            (event) => event.path,
+            'path',
+            watched,
+          ),
           reason: 'mask 0x${mask.toRadixString(16)}',
         );
       }
@@ -284,7 +289,11 @@ void main() {
 }
 
 FileSystemEvent? _map(int mask, String name, String watchedPath) =>
-    fileSystemEventFromInotify(mask: mask, name: name, watchedPath: watchedPath);
+    fileSystemEventFromInotify(
+      mask: mask,
+      name: name,
+      watchedPath: watchedPath,
+    );
 
 void _appendEvent(
   BytesBuilder bytes, {
@@ -294,10 +303,7 @@ void _appendEvent(
   String name = '',
   List<int>? rawName,
 }) {
-  final nameBytes = Uint8List.fromList([
-    ...(rawName ?? utf8.encode(name)),
-    0,
-  ]);
+  final nameBytes = Uint8List.fromList([...(rawName ?? utf8.encode(name)), 0]);
   // The kernel pads the name to a multiple of four bytes.
   final paddedLength = (nameBytes.length + 3) & ~3;
 

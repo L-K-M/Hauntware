@@ -33,9 +33,11 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('seance-history-');
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/command_stats.json');
-    await file.writeAsString(jsonEncode({
-      'counts': {_secretCommands.first: 8, 'git status': 4},
-    }));
+    await file.writeAsString(
+      jsonEncode({
+        'counts': {_secretCommands.first: 8, 'git status': 4},
+      }),
+    );
     final stats = await _ReadOnlyStore(file).load();
     expect(stats.counts, {'git status': 4});
     expect(await file.exists(), isTrue);
@@ -48,7 +50,10 @@ void main() {
       stats.dismiss(command);
       expect(stats.countFor(command), 0);
     }
-    expect(stats.toJson(), {'counts': <String, int>{}, 'dismissed': <String>[]});
+    expect(stats.toJson(), {
+      'counts': <String, int>{},
+      'dismissed': <String>[],
+    });
   });
 
   test('loaded secrets are removed without losing safe rankings', () {
@@ -65,21 +70,29 @@ void main() {
     expect(stats.suggestions(isExisting: (_) => false), ['git status']);
   });
 
-  test('serialization filters direct mutations of legacy public collections', () {
-    final stats = CommandStats();
-    stats.counts[_secretCommands.first] = 9;
-    stats.dismissed.add(_secretCommands.last);
-    expect(stats.toJson(), {'counts': <String, int>{}, 'dismissed': <String>[]});
-  });
+  test(
+    'serialization filters direct mutations of legacy public collections',
+    () {
+      final stats = CommandStats();
+      stats.counts[_secretCommands.first] = 9;
+      stats.dismissed.add(_secretCommands.last);
+      expect(stats.toJson(), {
+        'counts': <String, int>{},
+        'dismissed': <String>[],
+      });
+    },
+  );
 
   test('loading a legacy file removes recognized secrets from disk', () async {
     final dir = await Directory.systemTemp.createTemp('seance-history-');
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/command_stats.json');
-    await file.writeAsString(jsonEncode({
-      'counts': {_secretCommands.first: 8, 'git status': 4},
-      'dismissed': [_secretCommands.last],
-    }));
+    await file.writeAsString(
+      jsonEncode({
+        'counts': {_secretCommands.first: 8, 'git status': 4},
+        'dismissed': [_secretCommands.last],
+      }),
+    );
     final store = CommandStatsStore(file);
     final stats = await store.load();
     expect(stats.countFor('git status'), 4);

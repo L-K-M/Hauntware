@@ -16,10 +16,8 @@ export 'package:poltergeist_core/poltergeist_core.dart'
 
 typedef UriHandlerProbe = Future<bool> Function(Uri uri);
 typedef ExternalUriLauncher = Future<bool> Function(Uri uri);
-typedef SeanceLaunchErrorSink = void Function(
-  Object error,
-  StackTrace stackTrace,
-);
+typedef SeanceLaunchErrorSink =
+    void Function(Object error, StackTrace stackTrace);
 
 abstract interface class SeanceLauncher {
   bool get available;

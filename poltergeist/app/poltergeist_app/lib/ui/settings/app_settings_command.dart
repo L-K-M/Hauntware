@@ -52,12 +52,8 @@ RegisteredCommand buildAppSettingsCommand({
     scope: CommandScope.app,
     label: (l10n) => l10n.settingsCommand,
     activators: (platform) => platform == TargetPlatform.macOS
-        ? const [
-            SingleActivator(LogicalKeyboardKey.comma, meta: true),
-          ]
-        : const [
-            SingleActivator(LogicalKeyboardKey.comma, control: true),
-          ],
+        ? const [SingleActivator(LogicalKeyboardKey.comma, meta: true)]
+        : const [SingleActivator(LogicalKeyboardKey.comma, control: true)],
     enabled: enabled,
     disabledReason: (l10n) => l10n.commandDisabledBusy,
     run: (context) async {

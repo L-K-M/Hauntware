@@ -24,11 +24,12 @@ const previewPanelWidth = 320.0;
 /// metadata card with its `Open With ▸` affordance (06 §5.2's PDF row).
 /// [onOpenExternal] is the truncation bar's Open — routed onto the
 /// focused entry's real open, never the cache path.
-typedef PreviewPdfBuilder = Widget Function(
-  BuildContext context,
-  File file, {
-  VoidCallback? onOpenExternal,
-});
+typedef PreviewPdfBuilder =
+    Widget Function(
+      BuildContext context,
+      File file, {
+      VoidCallback? onOpenExternal,
+    });
 
 /// 06 §5.2's in-app preview panel: the window-level rightmost rail that
 /// tracks the focused pane's focused entry and renders the §5.2 kind
@@ -125,30 +126,30 @@ class PreviewPanel extends StatelessWidget {
               ),
             )
           : Semantics(
-        container: true,
-        label: l10n.previewPanelLabel,
-        child: Material(
-          color: colors.surfaceContainerHigh,
-          shape: BorderDirectional(
-            start: BorderSide(color: colors.outlineVariant),
-          ),
-          child: SizedBox(
-            width: previewPanelWidth,
-            height: double.infinity,
-            child: ListenableBuilder(
-              listenable: session,
-              builder: (context, _) => _PreviewBody(
-                session: session,
-                pdfRenderer: pdfRenderer,
-                onOpen: onOpen,
-                onOpenWith: onOpenWith,
-                onOpenInEditor: onOpenInEditor,
-                onClose: onClose,
+              container: true,
+              label: l10n.previewPanelLabel,
+              child: Material(
+                color: colors.surfaceContainerHigh,
+                shape: BorderDirectional(
+                  start: BorderSide(color: colors.outlineVariant),
+                ),
+                child: SizedBox(
+                  width: previewPanelWidth,
+                  height: double.infinity,
+                  child: ListenableBuilder(
+                    listenable: session,
+                    builder: (context, _) => _PreviewBody(
+                      session: session,
+                      pdfRenderer: pdfRenderer,
+                      onOpen: onOpen,
+                      onOpenWith: onOpenWith,
+                      onOpenInEditor: onOpenInEditor,
+                      onClose: onClose,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -312,11 +313,7 @@ class _PreviewBody extends StatelessWidget {
   Widget _card(BuildContext context, AppLocalizations l10n) {
     final entry = session.entry;
     return SingleChildScrollView(
-      padding: const EdgeInsetsDirectional.only(
-        start: 14,
-        end: 10,
-        bottom: 14,
-      ),
+      padding: const EdgeInsetsDirectional.only(start: 14, end: 10, bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -360,8 +357,9 @@ class _PreviewBody extends StatelessWidget {
           alignment: AlignmentDirectional.centerStart,
           child: FilledButton.icon(
             key: const ValueKey('preview.download'),
-            onPressed:
-                session.canProduce ? () => session.confirmDownload() : null,
+            onPressed: session.canProduce
+                ? () => session.confirmDownload()
+                : null,
             icon: const Icon(Icons.download_outlined, size: 18),
             label: Text(l10n.previewDownloadLabel),
           ),
@@ -542,9 +540,7 @@ class _PreviewBody extends StatelessWidget {
             label: l10n.previewTruncatedLabel,
             actionLabel: l10n.previewOpenInEditorLabel,
             actionKey: const ValueKey('preview.truncated.open'),
-            onAction: entry != null &&
-                    pane != null &&
-                    onOpenInEditor != null
+            onAction: entry != null && pane != null && onOpenInEditor != null
                 ? () => onOpenInEditor!(pane, entry)
                 : null,
           ),
@@ -583,11 +579,7 @@ class _PreviewBody extends StatelessWidget {
   /// The image row (§5.2): fit-to-panel decode with a dimensions
   /// caption; a corrupt or undecodable file falls back to the metadata
   /// card via the error builder.
-  Widget _imageContent(
-    BuildContext context,
-    AppLocalizations l10n,
-    File file,
-  ) {
+  Widget _imageContent(BuildContext context, AppLocalizations l10n, File file) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -623,11 +615,7 @@ class _PreviewBody extends StatelessWidget {
     final entry = session.entry;
     final pane = session.pane;
     return SingleChildScrollView(
-      padding: const EdgeInsetsDirectional.only(
-        start: 14,
-        end: 10,
-        bottom: 14,
-      ),
+      padding: const EdgeInsetsDirectional.only(start: 14, end: 10, bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -638,12 +626,10 @@ class _PreviewBody extends StatelessWidget {
                 switch (session.refusal) {
                   PreviewRefusal.overCacheCap =>
                     l10n.previewRefusalOverCacheCap,
-                  PreviewRefusal.overKindCap =>
-                    l10n.previewRefusalOverKindCap,
+                  PreviewRefusal.overKindCap => l10n.previewRefusalOverKindCap,
                   PreviewRefusal.notText => l10n.previewRefusalNotText,
                   PreviewRefusal.failed => l10n.previewDownloadFailed,
-                  PreviewRefusal.cancelled =>
-                    l10n.previewDownloadCancelled,
+                  PreviewRefusal.cancelled => l10n.previewDownloadCancelled,
                   PreviewRefusal.missing => l10n.previewRefusalMissing,
                   PreviewRefusal.none => '',
                 },
@@ -890,10 +876,7 @@ class PreviewQuickLookOverlay extends StatelessWidget {
                 QuickLookCardKind.confirm => _cardColumn(
                   context,
                   l10n.previewDownloadConfirm(
-                    formatPaneSize(
-                      session.confirmBytes,
-                      platform: platform,
-                    ),
+                    formatPaneSize(session.confirmBytes, platform: platform),
                     name,
                   ),
                   cancel: session.quickLookDeny,
@@ -904,10 +887,7 @@ class PreviewQuickLookOverlay extends StatelessWidget {
                 QuickLookCardKind.gateConfirm => _cardColumn(
                   context,
                   l10n.previewGatePrompt(
-                    formatPaneSize(
-                      session.transferred,
-                      platform: platform,
-                    ),
+                    formatPaneSize(session.transferred, platform: platform),
                   ),
                   cancel: session.quickLookDeny,
                   confirm: session.quickLookKeepDownloading,
@@ -951,8 +931,7 @@ class PreviewQuickLookOverlay extends StatelessWidget {
                       l10n.previewRefusalOverKindCap,
                     PreviewRefusal.notText => l10n.previewRefusalNotText,
                     PreviewRefusal.missing => l10n.previewRefusalMissing,
-                    PreviewRefusal.cancelled =>
-                      l10n.previewDownloadCancelled,
+                    PreviewRefusal.cancelled => l10n.previewDownloadCancelled,
                     _ => l10n.previewDownloadFailed,
                   },
                   cancel: session.quickLookDeny,

@@ -666,7 +666,8 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Name'), '');
     await tester.pump();
     expect(
-      tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
           .onPressed,
       isNull,
     );

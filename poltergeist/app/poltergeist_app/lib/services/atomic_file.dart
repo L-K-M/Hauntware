@@ -4,8 +4,7 @@ import 'dart:io';
 import 'package:poltergeist_core/poltergeist_core.dart'
     show AtomicFilePrivacy, AtomicFileWriter;
 
-export 'package:poltergeist_core/poltergeist_core.dart'
-    show AtomicFilePrivacy;
+export 'package:poltergeist_core/poltergeist_core.dart' show AtomicFilePrivacy;
 
 /// Replaces [target] without exposing partially written contents.
 Future<void> writeStringAtomically(

@@ -710,10 +710,7 @@ class _QuickOpenPaletteState extends State<_QuickOpenPalette> {
   /// favorite's accent when it has one, else its place's family hue
   /// (D34). A disabled row dims both.
   Widget _favoriteBadge(Bookmark bookmark, bool enabled, ThemeData theme) {
-    final accent = serverAccent(
-      context,
-      ServerTint(named: bookmark.color),
-    );
+    final accent = serverAccent(context, ServerTint(named: bookmark.color));
     final place = favoriteGlyph(bookmark, home: widget.localHome);
     if (enabled && accent == null) {
       return FamilyHueTile(

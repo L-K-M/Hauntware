@@ -24,10 +24,7 @@ final class _WindowsPathFs implements RemoteFileSystem {
   final String _realRoot;
 
   String _toReal(String path) {
-    final winLower = _winRoot.toLowerCase().replaceAll(
-      RegExp(r'[\\/]+$'),
-      '',
-    );
+    final winLower = _winRoot.toLowerCase().replaceAll(RegExp(r'[\\/]+$'), '');
     final lower = path.toLowerCase();
     if (lower == winLower || lower == '$winLower\\') return _realRoot;
     if (lower.startsWith('$winLower\\')) {
@@ -133,10 +130,7 @@ void main() {
   }
 
   void chmod(String path, int octalMode) {
-    final result = Process.runSync('chmod', [
-      octalMode.toRadixString(8),
-      path,
-    ]);
+    final result = Process.runSync('chmod', [octalMode.toRadixString(8), path]);
     if (result.exitCode != 0) {
       throw StateError('chmod failed: ${result.stderr}');
     }
@@ -169,17 +163,14 @@ void main() {
 
       final result = await scan();
 
-      expect(
-        result.entries.keys.toList(),
-        [
-          'a.txt',
-          'dir',
-          'dir/b.txt',
-          'dir/sub',
-          'dir/sub/c.txt',
-          'empty',
-        ],
-      );
+      expect(result.entries.keys.toList(), [
+        'a.txt',
+        'dir',
+        'dir/b.txt',
+        'dir/sub',
+        'dir/sub/c.txt',
+        'empty',
+      ]);
       expect(result.entries['a.txt']!.kind, EntryKind.file);
       expect(result.entries['a.txt']!.size, 3);
       expect(result.entries['dir']!.kind, EntryKind.directory);
@@ -242,21 +233,17 @@ void main() {
       skip: Platform.isWindows,
     );
 
-    test(
-      'a symlink pointing at its own directory does not recurse',
-      () async {
-        touch('dir/child.txt', 'c');
-        Link('${root.path}/dir/loop').createSync('.');
+    test('a symlink pointing at its own directory does not recurse', () async {
+      touch('dir/child.txt', 'c');
+      Link('${root.path}/dir/loop').createSync('.');
 
-        final result = await scan();
+      final result = await scan();
 
-        expect(result.entries['dir']!.kind, EntryKind.directory);
-        expect(result.entries['dir/loop']!.kind, EntryKind.symlink);
-        expect(result.entries['dir/child.txt']!.kind, EntryKind.file);
-        expect(result.entries.keys, hasLength(3));
-      },
-      skip: Platform.isWindows,
-    );
+      expect(result.entries['dir']!.kind, EntryKind.directory);
+      expect(result.entries['dir/loop']!.kind, EntryKind.symlink);
+      expect(result.entries['dir/child.txt']!.kind, EntryKind.file);
+      expect(result.entries.keys, hasLength(3));
+    }, skip: Platform.isWindows);
 
     test(
       'an unlistable directory warns and excludes only its subtree',
@@ -294,10 +281,7 @@ void main() {
       () async {
         chmod(root.path, 0);
         try {
-          await expectLater(
-            scan(),
-            throwsA(isA<RemoteFileException>()),
-          );
+          await expectLater(scan(), throwsA(isA<RemoteFileException>()));
         } finally {
           chmod(root.path, 0x1C0);
         }
@@ -345,9 +329,7 @@ void main() {
       touch('foo.poltergeist-9.tmp', 'x');
       touch('normal.txt', 'n');
 
-      final result = await scan(
-        rules: const SyncRuleSet(excludeGlobs: ['!*']),
-      );
+      final result = await scan(rules: const SyncRuleSet(excludeGlobs: ['!*']));
 
       expect(result.entries.keys, ['normal.txt']);
     });
@@ -356,35 +338,33 @@ void main() {
       touch('.hiddenfile', 'h');
       touch('visible.txt', 'v');
 
-      final shown = await scan(
-        rules: const SyncRuleSet(includeHidden: false),
-      );
+      final shown = await scan(rules: const SyncRuleSet(includeHidden: false));
       final defaultShown = await scan();
 
       expect(shown.entries.keys, ['visible.txt']);
       expect(defaultShown.entries.keys, contains('.hiddenfile'));
     });
 
-    test('a configured trash subtree is excluded regardless of rules',
-        () async {
-      touch('.trash/deleted.txt', 'd');
-      touch('normal.txt', 'n');
+    test(
+      'a configured trash subtree is excluded regardless of rules',
+      () async {
+        touch('.trash/deleted.txt', 'd');
+        touch('normal.txt', 'n');
 
-      final result = await scan(trashPath: '${root.path}/.trash');
+        final result = await scan(trashPath: '${root.path}/.trash');
 
-      expect(result.entries.keys, ['normal.txt']);
-    });
+        expect(result.entries.keys, ['normal.txt']);
+      },
+    );
 
     test('a missing in-root trash path stays excluded if it appears', () async {
       touch('normal.txt', 'n');
       final trashPath = '${root.path}/custom/trash';
       final racingFs = _CreateTrashAfterCanonicalMissFs(trashPath);
 
-      final result = await TreeScanner(racingFs).scan(
-        root.path,
-        side: SyncSide.left,
-        trashPath: trashPath,
-      );
+      final result = await TreeScanner(
+        racingFs,
+      ).scan(root.path, side: SyncSide.left, trashPath: trashPath);
 
       expect(result.entries.keys, containsAll(['custom', 'normal.txt']));
       expect(
@@ -395,173 +375,129 @@ void main() {
       );
     });
 
-    test(
-      'a missing trash path resolves through an aliased ancestor',
-      () async {
-        final realRoot = Directory('${root.path}/real')..createSync();
-        final alias = Link('${root.path}/alias')..createSync(realRoot.path);
-        File('${realRoot.path}/normal.txt').writeAsStringSync('normal');
-        final trashPath = '${alias.path}/custom/trash';
-        final racingFs = _CreateTrashAfterCanonicalMissFs(trashPath);
+    test('a missing trash path resolves through an aliased ancestor', () async {
+      final realRoot = Directory('${root.path}/real')..createSync();
+      final alias = Link('${root.path}/alias')..createSync(realRoot.path);
+      File('${realRoot.path}/normal.txt').writeAsStringSync('normal');
+      final trashPath = '${alias.path}/custom/trash';
+      final racingFs = _CreateTrashAfterCanonicalMissFs(trashPath);
 
-        final result = await TreeScanner(racingFs).scan(
-          realRoot.path,
-          side: SyncSide.left,
-          trashPath: trashPath,
-        );
+      final result = await TreeScanner(
+        racingFs,
+      ).scan(realRoot.path, side: SyncSide.left, trashPath: trashPath);
 
-        expect(result.entries.keys, containsAll(['custom', 'normal.txt']));
-        expect(
-          result.entries.keys.where(
-            (path) => path == 'custom/trash' || path.startsWith('custom/trash/'),
-          ),
-          isEmpty,
-        );
-      },
-      skip: Platform.isWindows,
-    );
+      expect(result.entries.keys, containsAll(['custom', 'normal.txt']));
+      expect(
+        result.entries.keys.where(
+          (path) => path == 'custom/trash' || path.startsWith('custom/trash/'),
+        ),
+        isEmpty,
+      );
+    }, skip: Platform.isWindows);
 
-    test(
-      'a case-mismatched Windows trash path is still excluded',
-      () async {
-        touch('trash/deleted.txt', 'd');
-        touch('normal.txt', 'n');
-        final win = _WindowsPathFs(fs, 'C:\\Sync', root.path);
+    test('a case-mismatched Windows trash path is still excluded', () async {
+      touch('trash/deleted.txt', 'd');
+      touch('normal.txt', 'n');
+      final win = _WindowsPathFs(fs, 'C:\\Sync', root.path);
 
-        final result = await TreeScanner(win).scan(
-          'C:\\Sync',
-          side: SyncSide.left,
-          trashPath: 'c:\\sync\\trash',
-        );
+      final result = await TreeScanner(
+        win,
+      ).scan('C:\\Sync', side: SyncSide.left, trashPath: 'c:\\sync\\trash');
 
-        expect(result.entries.keys, ['normal.txt']);
-      },
-      skip: Platform.isWindows,
-    );
+      expect(result.entries.keys, ['normal.txt']);
+    }, skip: Platform.isWindows);
 
-    test(
-      'a Windows drive-root pair excludes a nested trash subtree',
-      () async {
-        touch('trash/deep/deleted.txt', 'd');
-        touch('normal.txt', 'n');
-        final win = _WindowsPathFs(fs, 'C:\\', root.path);
+    test('a Windows drive-root pair excludes a nested trash subtree', () async {
+      touch('trash/deep/deleted.txt', 'd');
+      touch('normal.txt', 'n');
+      final win = _WindowsPathFs(fs, 'C:\\', root.path);
 
-        // The canonical root "C:\" loses its only backslash to trailing-
-        // separator stripping — the case-insensitive branch must still
-        // engage, and the relative must normalize to '/' separators.
-        // (trash/ itself stays: the configured subtree is trash/deep.)
-        final result = await TreeScanner(win).scan(
-          'C:\\',
-          side: SyncSide.left,
-          trashPath: 'c:\\trash\\deep',
-        );
+      // The canonical root "C:\" loses its only backslash to trailing-
+      // separator stripping — the case-insensitive branch must still
+      // engage, and the relative must normalize to '/' separators.
+      // (trash/ itself stays: the configured subtree is trash/deep.)
+      final result = await TreeScanner(
+        win,
+      ).scan('C:\\', side: SyncSide.left, trashPath: 'c:\\trash\\deep');
 
-        expect(result.entries.keys, ['normal.txt', 'trash']);
-      },
-      skip: Platform.isWindows,
-    );
+      expect(result.entries.keys, ['normal.txt', 'trash']);
+    }, skip: Platform.isWindows);
 
-    test(
-      'a literal-backslash POSIX component does not trigger Windows '
-      'handling',
-      () async {
-        // 'cache\dir' is ONE component on POSIX — the Windows branch
-        // must not rewrite it into 'cache/dir' (a key no scan entry
-        // has) or the trash subtree would silently never be excluded.
-        Directory('${root.path}/cache\\dir/.trash').createSync(
-          recursive: true,
-        );
-        File('${root.path}/cache\\dir/.trash/deleted.txt')
-            .writeAsStringSync('d');
-        File('${root.path}/cache\\dir/normal.txt').writeAsStringSync('n');
+    test('a literal-backslash POSIX component does not trigger Windows '
+        'handling', () async {
+      // 'cache\dir' is ONE component on POSIX — the Windows branch
+      // must not rewrite it into 'cache/dir' (a key no scan entry
+      // has) or the trash subtree would silently never be excluded.
+      Directory('${root.path}/cache\\dir/.trash').createSync(recursive: true);
+      File('${root.path}/cache\\dir/.trash/deleted.txt').writeAsStringSync('d');
+      File('${root.path}/cache\\dir/normal.txt').writeAsStringSync('n');
 
-        final result = await scan(
-          trashPath: '${root.path}/cache\\dir/.trash',
-        );
+      final result = await scan(trashPath: '${root.path}/cache\\dir/.trash');
 
-        expect(
-          result.entries.keys,
-          [r'cache\dir', r'cache\dir/normal.txt'],
-        );
-      },
-      skip: Platform.isWindows,
-    );
+      expect(result.entries.keys, [r'cache\dir', r'cache\dir/normal.txt']);
+    }, skip: Platform.isWindows);
 
-    test(
-      'a case-variant trash equal to the Windows root is refused',
-      () async {
-        final win = _WindowsPathFs(fs, 'C:\\Sync', root.path);
+    test('a case-variant trash equal to the Windows root is refused', () async {
+      final win = _WindowsPathFs(fs, 'C:\\Sync', root.path);
 
-        await expectLater(
-          TreeScanner(win).scan(
-            'C:\\Sync',
-            side: SyncSide.left,
-            trashPath: 'c:\\SYNC',
-          ),
-          throwsArgumentError,
-        );
-      },
-      skip: Platform.isWindows,
-    );
+      await expectLater(
+        TreeScanner(
+          win,
+        ).scan('C:\\Sync', side: SyncSide.left, trashPath: 'c:\\SYNC'),
+        throwsArgumentError,
+      );
+    }, skip: Platform.isWindows);
 
-    test(
-      'an out-of-range mtime keeps its original and warns',
-      () async {
-        final file = touch('old.txt');
-        await fs.setTimes(file.path, modifiedAt: DateTime(2200));
+    test('an out-of-range mtime keeps its original and warns', () async {
+      final file = touch('old.txt');
+      await fs.setTimes(file.path, modifiedAt: DateTime(2200));
 
-        final result = await scan();
+      final result = await scan();
 
-        final snapshot = result.entries['old.txt']!;
-        expect(snapshot.mtimeSecs, greaterThan(maxSftpMtimeSecs));
-        expect(
-          result.warnings.any(
-            (w) =>
-                w.relativePath == 'old.txt' &&
-                w.message.contains('outside the SFTP v3 range'),
-          ),
-          isTrue,
-        );
-      },
-    );
+      final snapshot = result.entries['old.txt']!;
+      expect(snapshot.mtimeSecs, greaterThan(maxSftpMtimeSecs));
+      expect(
+        result.warnings.any(
+          (w) =>
+              w.relativePath == 'old.txt' &&
+              w.message.contains('outside the SFTP v3 range'),
+        ),
+        isTrue,
+      );
+    });
 
-    test(
-      'a fractional pre-1970 mtime floors to the earlier second, as the '
-      'executor does, and warns',
-      () async {
-        touch('old.txt');
-        fs = _FixedMtimeFs(DateTime.fromMillisecondsSinceEpoch(-500));
+    test('a fractional pre-1970 mtime floors to the earlier second, as the '
+        'executor does, and warns', () async {
+      touch('old.txt');
+      fs = _FixedMtimeFs(DateTime.fromMillisecondsSinceEpoch(-500));
 
-        final result = await scan();
+      final result = await scan();
 
-        expect(result.entries['old.txt']!.mtimeSecs, -1);
-        expect(
-          result.warnings.any(
-            (w) =>
-                w.relativePath == 'old.txt' &&
-                w.kind == ScanWarningKind.mtimeClamped,
-          ),
-          isTrue,
-        );
-      },
-    );
+      expect(result.entries['old.txt']!.mtimeSecs, -1);
+      expect(
+        result.warnings.any(
+          (w) =>
+              w.relativePath == 'old.txt' &&
+              w.kind == ScanWarningKind.mtimeClamped,
+        ),
+        isTrue,
+      );
+    });
 
     test('write probe reports the root\'s real case sensitivity', () async {
       // Ground truth independent of the probe: a differently-cased lookup
       // resolves on insensitive filesystems (APFS/NTFS) but not ext4.
       touch('CaseProbe.Source');
-      final fsIsSensitive =
-          !File('${root.path}/caseprobe.source').existsSync();
+      final fsIsSensitive = !File('${root.path}/caseprobe.source').existsSync();
 
       final result = await scan(probeCaseSensitivity: true);
 
       expect(result.caseSensitive, fsIsSensitive);
       expect(result.caseSensitivityBasis, CaseSensitivityBasis.probe);
       expect(
-        root
-            .listSync()
-            .whereType<File>()
-            .any((f) => f.path.contains(TreeScanner.caseProbePrefix)),
+        root.listSync().whereType<File>().any(
+          (f) => f.path.contains(TreeScanner.caseProbePrefix),
+        ),
         isFalse,
         reason: 'the probe file is cleaned up',
       );
@@ -575,37 +511,28 @@ void main() {
       // reaches a plan).
       touch('${TreeScanner.caseProbePrefix}-stranded');
 
-      final result = await scan(
-        rules: const SyncRuleSet(excludeGlobs: ['!*']),
-      );
+      final result = await scan(rules: const SyncRuleSet(excludeGlobs: ['!*']));
 
-      expect(
-        result.entries.keys.any((k) => k.contains('caseprobe')),
-        isFalse,
-      );
+      expect(result.entries.keys.any((k) => k.contains('caseprobe')), isFalse);
     });
 
-    test(
-      'an unwritable root assumes case-sensitive and warns',
-      () async {
-        chmod(root.path, 0x16D); // 0555
-        try {
-          final result = await scan(probeCaseSensitivity: true);
+    test('an unwritable root assumes case-sensitive and warns', () async {
+      chmod(root.path, 0x16D); // 0555
+      try {
+        final result = await scan(probeCaseSensitivity: true);
 
-          expect(result.caseSensitive, isTrue);
-          expect(result.caseSensitivityBasis, CaseSensitivityBasis.assumption);
-          expect(
-            result.warnings.any(
-              (w) => w.message.contains('Could not probe case sensitivity'),
-            ),
-            isTrue,
-          );
-        } finally {
-          chmod(root.path, 0x1C0);
-        }
-      },
-      skip: Platform.isWindows || runningAsRoot(),
-    );
+        expect(result.caseSensitive, isTrue);
+        expect(result.caseSensitivityBasis, CaseSensitivityBasis.assumption);
+        expect(
+          result.warnings.any(
+            (w) => w.message.contains('Could not probe case sensitivity'),
+          ),
+          isTrue,
+        );
+      } finally {
+        chmod(root.path, 0x1C0);
+      }
+    }, skip: Platform.isWindows || runningAsRoot());
 
     test('an explicit override answers without probing', () async {
       final result = await scan(caseSensitivityOverride: false);
@@ -614,13 +541,15 @@ void main() {
       expect(result.caseSensitivityBasis, CaseSensitivityBasis.override);
     });
 
-    test('without a probe or override the sensitivity is an assumption',
-        () async {
-      final result = await scan();
+    test(
+      'without a probe or override the sensitivity is an assumption',
+      () async {
+        final result = await scan();
 
-      expect(result.caseSensitive, isTrue);
-      expect(result.caseSensitivityBasis, CaseSensitivityBasis.assumption);
-    });
+        expect(result.caseSensitive, isTrue);
+        expect(result.caseSensitivityBasis, CaseSensitivityBasis.assumption);
+      },
+    );
 
     test('a pre-cancelled token aborts the scan', () async {
       touch('a.txt');

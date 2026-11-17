@@ -108,22 +108,23 @@ class UpdateChecker {
       Uri.parse('https://api.github.com/repos/$repo/releases/latest');
 
   /// The public releases page (where the check sends the user).
-  Uri get releasesPage =>
-      Uri.parse('https://github.com/$repo/releases/latest');
+  Uri get releasesPage => Uri.parse('https://github.com/$repo/releases/latest');
 
   /// Returns [UpdateInfo] when GitHub's latest release is strictly newer than
   /// [currentVersion]; null when up to date, when the check can't be completed,
   /// or when either version is unparseable.
   Future<UpdateInfo?> check(String currentVersion) async {
     try {
-      final res = await _client.get(
-        _latestReleaseApi,
-        headers: {
-          'Accept': 'application/vnd.github+json',
-          // GitHub requires a User-Agent or it returns 403.
-          'User-Agent': userAgent,
-        },
-      ).timeout(timeout);
+      final res = await _client
+          .get(
+            _latestReleaseApi,
+            headers: {
+              'Accept': 'application/vnd.github+json',
+              // GitHub requires a User-Agent or it returns 403.
+              'User-Agent': userAgent,
+            },
+          )
+          .timeout(timeout);
 
       // GitHub answers 404 when a repo has no published (non-draft) release,
       // and 403 when rate-limited; both mean "nothing to report".

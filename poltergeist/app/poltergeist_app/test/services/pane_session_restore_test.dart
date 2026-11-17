@@ -98,8 +98,7 @@ void main() {
   });
 
   group('markRestored', () {
-    test('adopts location, bookmark, and cached rows — inert, no channel',
-        () {
+    test('adopts location, bookmark, and cached rows — inert, no channel', () {
       final controller = PaneController(
         paneTabId: 'pane.left.tab1',
         lanes: lanes,
@@ -110,8 +109,7 @@ void main() {
 
       expect(controller.phase, PanePhase.restored);
       expect(controller.restoredPending, isTrue);
-      expect(controller.location,
-          const RemotePaneLocation('b1', '/srv/www'));
+      expect(controller.location, const RemotePaneLocation('b1', '/srv/www'));
       expect(controller.remoteBookmark?.id, 'b1');
       expect(controller.hasLiveRemoteBinding, isFalse);
       // The persisted snapshot renders as stale presentation, never
@@ -135,8 +133,7 @@ void main() {
       );
 
       expect(controller.phase, PanePhase.restored);
-      expect(controller.location,
-          const LocalPaneLocation('/home/tester/docs'));
+      expect(controller.location, const LocalPaneLocation('/home/tester/docs'));
       expect(controller.remoteBookmark, isNull);
       expect(lanes.calls, isEmpty);
     });
@@ -203,8 +200,10 @@ void main() {
       await controller.resumeRestored();
       await Future<void>.delayed(Duration.zero);
 
-      expect(lanes.calls,
-          containsAllInOrder(['watch:b1', 'openBrowse:b1:pane.left.tab1']));
+      expect(
+        lanes.calls,
+        containsAllInOrder(['watch:b1', 'openBrowse:b1:pane.left.tab1']),
+      );
       expect(controller.phase, PanePhase.browsing);
       expect(controller.hasLiveRemoteBinding, isTrue);
       expect(controller.staleRows, isFalse);
@@ -284,8 +283,7 @@ void main() {
         lanes: lanes,
       );
       addTearDown(controller.dispose);
-      await controller.connectRemote(_bookmark('b1'),
-          initialPath: '/srv/www');
+      await controller.connectRemote(_bookmark('b1'), initialPath: '/srv/www');
       await Future<void>.delayed(Duration.zero);
 
       final captured = controller.captureSessionTab();
@@ -308,8 +306,7 @@ void main() {
     // A local open clears the retry handle synchronously — a bookmark
     // left over from a failed connect can never shadow the pane's live
     // local location in the session document.
-    test('a local open after a failed remote connect captures local',
-        () async {
+    test('a local open after a failed remote connect captures local', () async {
       lanes.remoteOpenFailure = StateError('no route');
       final controller = PaneController(
         paneTabId: 'pane.left.tab1',
@@ -356,12 +353,10 @@ void main() {
         ),
       );
 
-      expect(strip.tabs.map((t) => t.id),
-          ['pane.left.tab1', 'pane.left.tab2']);
+      expect(strip.tabs.map((t) => t.id), ['pane.left.tab1', 'pane.left.tab2']);
       expect(strip.activeTab?.id, 'pane.left.tab1');
       // A later mint cannot collide with the persisted ids.
-      expect(strip.newTab(target: NewTabTarget.launcher).id,
-          'pane.left.tab5');
+      expect(strip.newTab(target: NewTabTarget.launcher).id, 'pane.left.tab5');
       // Activation of the restored remote tab with auto-reconnect OFF
       // must not have connected anything — pump the loop so an issued
       // call could not still be in flight.
@@ -369,8 +364,7 @@ void main() {
       expect(lanes.calls, isEmpty);
     });
 
-    test('auto-reconnect ON resumes the active restored remote tab',
-        () async {
+    test('auto-reconnect ON resumes the active restored remote tab', () async {
       lanes.nextRemoteChannel = FakePaneChannel('/srv')
         ..listings['/srv/www'] = [_row('live.txt')];
       final strip = PaneTabsController(
@@ -388,44 +382,41 @@ void main() {
       );
     });
 
-    test(
-      'auto-reconnect OFF: activation alone never reconnects — '
-      'the bar button does',
-      () async {
-        lanes.nextRemoteChannel = FakePaneChannel('/srv')
-          ..listings['/srv/www'] = [_row('live.txt')];
-        final strip = PaneTabsController(
-          paneId: PaneTabsController.leftPaneId,
-          lanes: lanes,
-        )..reconnectRestoredTabs = false;
-        addTearDown(strip.dispose);
+    test('auto-reconnect OFF: activation alone never reconnects — '
+        'the bar button does', () async {
+      lanes.nextRemoteChannel = FakePaneChannel('/srv')
+        ..listings['/srv/www'] = [_row('live.txt')];
+      final strip = PaneTabsController(
+        paneId: PaneTabsController.leftPaneId,
+        lanes: lanes,
+      )..reconnectRestoredTabs = false;
+      addTearDown(strip.dispose);
 
-        strip.restoreSession(
-          _pane([
-            const SessionTabState.local(path: '/home/tester'),
-            _remoteTab('b1'),
-          ], activeTab: 0),
-        );
-        await Future<void>.delayed(Duration.zero);
-        // The LOCAL active tab rebinds regardless of the setting.
-        expect(lanes.calls, ['openLocal:~']);
-        lanes.calls.clear();
+      strip.restoreSession(
+        _pane([
+          const SessionTabState.local(path: '/home/tester'),
+          _remoteTab('b1'),
+        ], activeTab: 0),
+      );
+      await Future<void>.delayed(Duration.zero);
+      // The LOCAL active tab rebinds regardless of the setting.
+      expect(lanes.calls, ['openLocal:~']);
+      lanes.calls.clear();
 
-        // Activating the restored remote tab — still nothing.
-        strip.activateTab(strip.tabs[1]);
-        await Future<void>.delayed(Duration.zero);
-        expect(lanes.calls, isEmpty);
-        expect(strip.activeTab!.controller.restoredPending, isTrue);
+      // Activating the restored remote tab — still nothing.
+      strip.activateTab(strip.tabs[1]);
+      await Future<void>.delayed(Duration.zero);
+      expect(lanes.calls, isEmpty);
+      expect(strip.activeTab!.controller.restoredPending, isTrue);
 
-        // The explicit gesture is what reconnects.
-        await strip.activeTab!.controller.resumeRestored();
-        await Future<void>.delayed(Duration.zero);
-        expect(
-          lanes.calls,
-          containsAllInOrder(['watch:b1', 'openBrowse:b1:pane.left.tab2']),
-        );
-      },
-    );
+      // The explicit gesture is what reconnects.
+      await strip.activeTab!.controller.resumeRestored();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        lanes.calls,
+        containsAllInOrder(['watch:b1', 'openBrowse:b1:pane.left.tab2']),
+      );
+    });
 
     test('a restored empty pane stays on the launcher', () {
       final strip = PaneTabsController(
@@ -471,8 +462,7 @@ void main() {
   });
 
   group('restored-tab lifecycle', () {
-    test('closing a restored remote tab drops no pool reference',
-        () async {
+    test('closing a restored remote tab drops no pool reference', () async {
       final strip = PaneTabsController(
         paneId: PaneTabsController.leftPaneId,
         lanes: lanes,
@@ -519,10 +509,7 @@ void main() {
       // other as a live binding (no pool reference exists to protect),
       // so the workspace's last-binding check answers false.
       expect(
-        workspace.serverStillBound(
-          'b1',
-          workspace.left.tabs.single.controller,
-        ),
+        workspace.serverStillBound('b1', workspace.left.tabs.single.controller),
         isFalse,
       );
     });

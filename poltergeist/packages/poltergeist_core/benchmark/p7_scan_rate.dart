@@ -337,8 +337,7 @@ final class _ListingError extends _ListingOutcome {
 /// out past the deadline, and whole-run expiry is attributed as a
 /// run-budget overrun, never as a per-listing timeout.
 Future<P7RunOutcome> collectScanRateSamples({
-  required Future<List<RemoteFileEntry>> Function(String path)
-  listDirectory,
+  required Future<List<RemoteFileEntry>> Function(String path) listDirectory,
   required String rootPath,
   required int warmups,
   required int repetitions,

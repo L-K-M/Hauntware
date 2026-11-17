@@ -19,10 +19,12 @@ void main() {
     bool panoseMono = false,
     int platformId = 3,
     int sfntVersion = 0x00010000,
+
     /// Extra (nameID, languageID, value) records appended after the ones
     /// above, in table order — which is how a real font carries its localized
     /// spellings: English first, then the rest by ascending language id.
     List<(int, int, String)> extraNames = const [],
+
     /// Both are optional in the spec and absent from many subsetted and web
     /// fonts, so the reader has to cope with a face that carries neither.
     bool includePost = true,
@@ -108,8 +110,12 @@ void main() {
     ];
 
     final out = <int>[];
-    void u32(List<int> o, int v) =>
-        o.addAll([(v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF]);
+    void u32(List<int> o, int v) => o.addAll([
+      (v >> 24) & 0xFF,
+      (v >> 16) & 0xFF,
+      (v >> 8) & 0xFF,
+      v & 0xFF,
+    ]);
     u32(out, sfntVersion);
     u16(out, tables.length);
     u16(out, 0);
@@ -134,8 +140,12 @@ void main() {
   Uint8List ttc(List<Uint8List> faces) {
     final out = <int>[];
     void u16(int v) => out.addAll([v >> 8, v & 0xFF]);
-    void u32(int v) => out
-        .addAll([(v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF]);
+    void u32(int v) => out.addAll([
+      (v >> 24) & 0xFF,
+      (v >> 16) & 0xFF,
+      (v >> 8) & 0xFF,
+      v & 0xFF,
+    ]);
     out.addAll('ttcf'.codeUnits);
     u16(1);
     u16(0);
@@ -179,14 +189,11 @@ void main() {
 
   group('reading one face', () {
     test('reports the family name', () async {
-      expect(
-        await read('a.ttf', sfnt(family: 'Iosevka')),
-        [
-          isA<SystemFontFamily>()
-              .having((f) => f.name, 'name', 'Iosevka')
-              .having((f) => f.monospaced, 'monospaced', isFalse),
-        ],
-      );
+      expect(await read('a.ttf', sfnt(family: 'Iosevka')), [
+        isA<SystemFontFamily>()
+            .having((f) => f.name, 'name', 'Iosevka')
+            .having((f) => f.monospaced, 'monospaced', isFalse),
+      ]);
     });
 
     test('prefers the typographic family over the per-weight one', () async {
@@ -233,16 +240,18 @@ void main() {
       expect(families.single.name, 'IPAGothic');
     });
 
-    test('falls back to a localized name when there is no English one',
-        () async {
-      // A font with no en-US record must still produce something rather than
-      // being dropped from the list.
-      final families = await read(
-        'a.ttf',
-        sfnt(extraNames: const [(1, 0x0411, '\u30B4\u30B7\u30C3\u30AF')]),
-      );
-      expect(families.single.name, '\u30B4\u30B7\u30C3\u30AF');
-    });
+    test(
+      'falls back to a localized name when there is no English one',
+      () async {
+        // A font with no en-US record must still produce something rather than
+        // being dropped from the list.
+        final families = await read(
+          'a.ttf',
+          sfnt(extraNames: const [(1, 0x0411, '\u30B4\u30B7\u30C3\u30AF')]),
+        );
+        expect(families.single.name, '\u30B4\u30B7\u30C3\u30AF');
+      },
+    );
 
     test('ignores a Windows symbol-encoded record', () async {
       // Platform 3 / encoding 0 is not UTF-16BE text; decoded as such it is
@@ -262,8 +271,7 @@ void main() {
       expect(await read('a.ttf', bytes), isEmpty);
     });
 
-    test('a face carrying only the typographic name is still listed',
-        () async {
+    test('a face carrying only the typographic name is still listed', () async {
       // Wide-family and subsetted faces can ship nameID 16 without nameID 1;
       // preferring 16 must not mean requiring 1.
       final families = await read(
@@ -355,10 +363,7 @@ void main() {
       // Truncate the second face's table directory by pointing it past EOF.
       final view = ByteData.sublistView(collection);
       view.setUint32(16, collection.length + 4096);
-      expect(
-        (await read('a.ttc', collection)).map((f) => f.name),
-        ['Menlo'],
-      );
+      expect((await read('a.ttc', collection)).map((f) => f.name), ['Menlo']);
     });
 
     test('an absurd name table length is refused, not allocated', () async {
@@ -406,31 +411,33 @@ void main() {
   });
 
   group('scanning a directory', () {
-    test('collapses faces of one family and marks it mono if any face is',
-        () async {
-      await File('${directory.path}/regular.ttf').writeAsBytes(
-        sfnt(family: 'Hack'),
-      );
-      await File('${directory.path}/bold.ttf').writeAsBytes(
-        sfnt(family: 'Hack', fixedPitchFlag: true),
-      );
-      final nested = await Directory('${directory.path}/nested').create();
-      await File('${nested.path}/other.otf').writeAsBytes(
-        sfnt(family: 'Cantarell'),
-      );
-      // Deliberately a *readable font* under a non-font extension, so this
-      // proves the file is skipped for its name rather than for failing to
-      // parse — with plain text inside, both behaviours look identical.
-      await File('${directory.path}/notes.txt').writeAsBytes(
-        sfnt(family: 'Invisible'),
-      );
+    test(
+      'collapses faces of one family and marks it mono if any face is',
+      () async {
+        await File(
+          '${directory.path}/regular.ttf',
+        ).writeAsBytes(sfnt(family: 'Hack'));
+        await File(
+          '${directory.path}/bold.ttf',
+        ).writeAsBytes(sfnt(family: 'Hack', fixedPitchFlag: true));
+        final nested = await Directory('${directory.path}/nested').create();
+        await File(
+          '${nested.path}/other.otf',
+        ).writeAsBytes(sfnt(family: 'Cantarell'));
+        // Deliberately a *readable font* under a non-font extension, so this
+        // proves the file is skipped for its name rather than for failing to
+        // parse — with plain text inside, both behaviours look identical.
+        await File(
+          '${directory.path}/notes.txt',
+        ).writeAsBytes(sfnt(family: 'Invisible'));
 
-      final fonts = SfntSystemFonts(roots: [directory]);
-      expect(fonts.isSupported, isTrue);
-      final families = await fonts.families();
-      expect(families.map((f) => f.name), ['Cantarell', 'Hack']);
-      expect(families.last.monospaced, isTrue);
-    });
+        final fonts = SfntSystemFonts(roots: [directory]);
+        expect(fonts.isSupported, isTrue);
+        final families = await fonts.families();
+        expect(families.map((f) => f.name), ['Cantarell', 'Hack']);
+        expect(families.last.monospaced, isTrue);
+      },
+    );
 
     test('a font installed as a symlink is found', skip: _noSymlinks, () async {
       // Not exotic: a manual `ln -s` into ~/.fonts, a distro linking into a
@@ -445,62 +452,71 @@ void main() {
       expect((await fonts.families()).map((f) => f.name), ['Hack']);
     });
 
-    test('a link that points at an ancestor does not rescan the tree',
-        skip: _noSymlinks, () async {
-      // Following links means a cycle is reachable; without a visited set the
-      // scan never terminates. What the assertion pins is termination and the
-      // collapsed result — not how many times a given file was parsed, since
-      // a re-parse collapses to the same family.
-      await File('${directory.path}/a.ttf').writeAsBytes(sfnt(family: 'Hack'));
-      await File('${directory.path}/b.ttf').writeAsBytes(
-        sfnt(family: 'Cantarell'),
-      );
-      await Link('${directory.path}/loop').create(directory.path);
+    test(
+      'a link that points at an ancestor does not rescan the tree',
+      skip: _noSymlinks,
+      () async {
+        // Following links means a cycle is reachable; without a visited set the
+        // scan never terminates. What the assertion pins is termination and the
+        // collapsed result — not how many times a given file was parsed, since
+        // a re-parse collapses to the same family.
+        await File(
+          '${directory.path}/a.ttf',
+        ).writeAsBytes(sfnt(family: 'Hack'));
+        await File(
+          '${directory.path}/b.ttf',
+        ).writeAsBytes(sfnt(family: 'Cantarell'));
+        await Link('${directory.path}/loop').create(directory.path);
 
-      final fonts = SfntSystemFonts(roots: [directory]);
-      // Bounded like the FIFO test: this guards the same class of failure, and
-      // a regression should fail here rather than hang on the runner default.
-      final families =
-          await fonts.families().timeout(const Duration(seconds: 10));
-      expect(families.map((f) => f.name), ['Cantarell', 'Hack']);
-    });
+        final fonts = SfntSystemFonts(roots: [directory]);
+        // Bounded like the FIFO test: this guards the same class of failure, and
+        // a regression should fail here rather than hang on the runner default.
+        final families = await fonts.families().timeout(
+          const Duration(seconds: 10),
+        );
+        expect(families.map((f) => f.name), ['Cantarell', 'Hack']);
+      },
+    );
 
     test('the surviving spelling does not ride on creation order', () async {
       // The same collision as above with the files written the other way
       // round. Both passing is what proves the survivor comes from the
       // spelling rule rather than from whichever order Directory.list yields.
-      await File('${directory.path}/b.ttf').writeAsBytes(
-        sfnt(family: 'JETBRAINS MONO', fixedPitchFlag: true),
-      );
-      await File('${directory.path}/a.ttf').writeAsBytes(
-        sfnt(family: 'JetBrains Mono'),
-      );
+      await File(
+        '${directory.path}/b.ttf',
+      ).writeAsBytes(sfnt(family: 'JETBRAINS MONO', fixedPitchFlag: true));
+      await File(
+        '${directory.path}/a.ttf',
+      ).writeAsBytes(sfnt(family: 'JetBrains Mono'));
       final families = await SfntSystemFonts(roots: [directory]).families();
       expect(families.single.name, 'JetBrains Mono');
     });
 
-    test('a FIFO named like a font does not hang the scan',
-        skip: Platform.isWindows ? 'mkfifo is POSIX-only' : null, () async {
-      // Directory.list reports a FIFO as a File, and opening one read-only
-      // blocks until a writer appears — dart:io passes no O_NONBLOCK, so the
-      // scan never returns and `families()` memoizes the hang. Measured
-      // before the fix: killed at 15 s with no result.
-      final fifo = '${directory.path}/evil.ttf';
-      final made = await Process.run('mkfifo', [fifo]);
-      if (made.exitCode != 0) {
-        // A bare return would record this as a pass, so a whole CI fleet
-        // could look like it verified the guard without ever running it.
-        markTestSkipped('mkfifo unavailable: ${made.stderr}');
-        return;
-      }
-      await File('${directory.path}/real.ttf').writeAsBytes(
-        sfnt(family: 'Hack'),
-      );
-      final families = await SfntSystemFonts(roots: [directory])
-          .families()
-          .timeout(const Duration(seconds: 10));
-      expect(families.map((f) => f.name), ['Hack']);
-    });
+    test(
+      'a FIFO named like a font does not hang the scan',
+      skip: Platform.isWindows ? 'mkfifo is POSIX-only' : null,
+      () async {
+        // Directory.list reports a FIFO as a File, and opening one read-only
+        // blocks until a writer appears — dart:io passes no O_NONBLOCK, so the
+        // scan never returns and `families()` memoizes the hang. Measured
+        // before the fix: killed at 15 s with no result.
+        final fifo = '${directory.path}/evil.ttf';
+        final made = await Process.run('mkfifo', [fifo]);
+        if (made.exitCode != 0) {
+          // A bare return would record this as a pass, so a whole CI fleet
+          // could look like it verified the guard without ever running it.
+          markTestSkipped('mkfifo unavailable: ${made.stderr}');
+          return;
+        }
+        await File(
+          '${directory.path}/real.ttf',
+        ).writeAsBytes(sfnt(family: 'Hack'));
+        final families = await SfntSystemFonts(
+          roots: [directory],
+        ).families().timeout(const Duration(seconds: 10));
+        expect(families.map((f) => f.name), ['Hack']);
+      },
+    );
 
     test('the walk stops on non-font files, not just parsed fonts', () async {
       // maxFiles counts fonts, so a directory of non-fonts — what a symlink
@@ -514,9 +530,9 @@ void main() {
       // whatever order the directory lists them in. With one font the count
       // was 1 either way and the assertion could not fail.
       for (var i = 0; i < 10; i++) {
-        await File('${directory.path}/f$i.ttf').writeAsBytes(
-          sfnt(family: 'Family $i'),
-        );
+        await File(
+          '${directory.path}/f$i.ttf',
+        ).writeAsBytes(sfnt(family: 'Family $i'));
       }
       final fonts = SfntSystemFonts(roots: [directory], visitBudget: 5);
       expect(
@@ -536,12 +552,12 @@ void main() {
     test('one family spelled two ways collapses to one entry', () async {
       // The list sorts case-insensitively, so keying by exact spelling would
       // leave two rows that look identical sitting next to each other.
-      await File('${directory.path}/a.ttf').writeAsBytes(
-        sfnt(family: 'JetBrains Mono'),
-      );
-      await File('${directory.path}/b.ttf').writeAsBytes(
-        sfnt(family: 'JETBRAINS MONO', fixedPitchFlag: true),
-      );
+      await File(
+        '${directory.path}/a.ttf',
+      ).writeAsBytes(sfnt(family: 'JetBrains Mono'));
+      await File(
+        '${directory.path}/b.ttf',
+      ).writeAsBytes(sfnt(family: 'JETBRAINS MONO', fixedPitchFlag: true));
       final families = await SfntSystemFonts(roots: [directory]).families();
       expect(families.length, 1);
       expect(
@@ -559,12 +575,12 @@ void main() {
     test('one unreadable file does not cost the rest of the scan', () async {
       // The result is cached for the life of the process, so an error escaping
       // here would leave the picker empty until the app restarted.
-      await File('${directory.path}/good.ttf').writeAsBytes(
-        sfnt(family: 'Hack'),
-      );
-      await File('${directory.path}/bad.ttf').writeAsBytes(
-        List.filled(400, 0x41),
-      );
+      await File(
+        '${directory.path}/good.ttf',
+      ).writeAsBytes(sfnt(family: 'Hack'));
+      await File(
+        '${directory.path}/bad.ttf',
+      ).writeAsBytes(List.filled(400, 0x41));
       final fonts = SfntSystemFonts(roots: [directory]);
       expect((await fonts.families()).map((f) => f.name), ['Hack']);
       // And the cached future is a value, not a stored error.
@@ -584,9 +600,9 @@ void main() {
       expect((await fonts.families()).single.name, 'Hack');
       // A font installed afterwards is deliberately not picked up: the result
       // is read on every rebuild of the settings screen.
-      await File('${directory.path}/b.ttf').writeAsBytes(
-        sfnt(family: 'Cantarell'),
-      );
+      await File(
+        '${directory.path}/b.ttf',
+      ).writeAsBytes(sfnt(family: 'Cantarell'));
       expect((await fonts.families()).map((f) => f.name), ['Hack']);
     });
 
@@ -601,5 +617,6 @@ void main() {
 /// Why the symlink tests are skipped, or null when they can run. Creating a
 /// link on Windows needs elevation or Developer Mode, and an environment
 /// limitation should not read as a failure of the code under test.
-final Object? _noSymlinks =
-    Platform.isWindows ? 'creating a symlink needs privileges on Windows' : null;
+final Object? _noSymlinks = Platform.isWindows
+    ? 'creating a symlink needs privileges on Windows'
+    : null;

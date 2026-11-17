@@ -30,23 +30,14 @@ void main() {
     });
 
     test('uses only the basename for paths', () {
-      expect(
-        previewKindForName('/srv/site/index.html'),
-        PreviewKind.text,
-      );
-      expect(
-        previewKindForName('/srv/site/avatar.webp'),
-        PreviewKind.image,
-      );
+      expect(previewKindForName('/srv/site/index.html'), PreviewKind.text);
+      expect(previewKindForName('/srv/site/avatar.webp'), PreviewKind.image);
     });
   });
 
   group('previewKindCapBytes', () {
     test('images and PDFs carry the 64 MiB kind caps', () {
-      expect(
-        previewKindCapBytes(PreviewKind.image),
-        previewImageKindCapBytes,
-      );
+      expect(previewKindCapBytes(PreviewKind.image), previewImageKindCapBytes);
       expect(previewKindCapBytes(PreviewKind.pdf), previewPdfKindCapBytes);
       expect(previewImageKindCapBytes, 64 * 1024 * 1024);
     });

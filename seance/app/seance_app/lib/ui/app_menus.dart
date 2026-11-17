@@ -8,8 +8,7 @@ import 'package:ghost_ui/ghost_ui.dart'
         GhostUndoHistory,
         dispatchGhostChord,
         ghostForwardUndoToFocusedText;
-import 'package:seance_core/seance_core.dart'
-    show DangerLinter, DangerSeverity;
+import 'package:seance_core/seance_core.dart' show DangerLinter, DangerSeverity;
 import 'package:seance_terminal/seance_terminal.dart'
     show
         TerminalPasteChoice,
@@ -250,9 +249,7 @@ void installMacMenu(AppState state, {MethodChannel channel = macMenuChannel}) {
         final context = navigatorKey.currentContext;
         final overlay = navigatorKey.currentState?.overlay;
         if (context != null && overlay != null) {
-          unawaited(
-            runCheckForUpdates(context, state, overlay: overlay),
-          );
+          unawaited(runCheckForUpdates(context, state, overlay: overlay));
         }
     }
     return null;
@@ -708,7 +705,8 @@ KeyEventResult handleWindowShortcut(
   final apple =
       platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
   final fromTerminal = origin == ShortcutOrigin.terminal;
-  final historyStandsDown = _focusKeepsTextHistory() || (!apple && fromTerminal);
+  final historyStandsDown =
+      _focusKeepsTextHistory() || (!apple && fromTerminal);
   if (!apple && fromTerminal) {
     final keyboard = HardwareKeyboard.instance;
     final terminalChord = windowShortcuts(platform).any(

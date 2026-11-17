@@ -11,7 +11,8 @@ void main() {
     expect(
       productName.codeUnits.every((u) => u >= 0x20 && u < 0x7f),
       isTrue,
-      reason: 'bundle/package file names derive from productName; '
+      reason:
+          'bundle/package file names derive from productName; '
           'codesign rejects non-ASCII file names',
     );
     // Packaging derives lowercase identifiers (binary name, .deb package

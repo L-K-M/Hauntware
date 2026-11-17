@@ -133,8 +133,11 @@ class _HarnessState extends State<_Harness> {
   }
 }
 
-Future<void> _open(WidgetTester tester, SshConfigImportService service,
-    {List<Bookmark> existing = const []}) async {
+Future<void> _open(
+  WidgetTester tester,
+  SshConfigImportService service, {
+  List<Bookmark> existing = const [],
+}) async {
   await tester.pumpWidget(_Harness(service, _configPath, existing: existing));
   await tester.tap(find.text('open'));
   await tester.pump(); // dialog route opens
@@ -193,8 +196,9 @@ class _NeverSource implements SshConfigFileSource {
 }
 
 void main() {
-  testWidgets('renders rows with dedupe and limitation verdicts',
-      (tester) async {
+  testWidgets('renders rows with dedupe and limitation verdicts', (
+    tester,
+  ) async {
     await _open(
       tester,
       _service(_FakeSource({_configPath: _sampleConfig})),
@@ -312,9 +316,9 @@ Host web
     );
     expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
     expect(
-      tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Import'),
-      ).onPressed,
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Import'))
+          .onPressed,
       isNull,
     );
   });
@@ -336,12 +340,10 @@ Host web
     );
   });
 
-  testWidgets('toggling rows updates the count and the imported set',
-      (tester) async {
-    await _open(
-      tester,
-      _service(_FakeSource({_configPath: _sampleConfig})),
-    );
+  testWidgets('toggling rows updates the count and the imported set', (
+    tester,
+  ) async {
+    await _open(tester, _service(_FakeSource({_configPath: _sampleConfig})));
 
     // Without existing bookmarks, the second row shows the earlier-row
     // duplicate chip instead.
@@ -363,15 +365,14 @@ Host web
     // Only `dup` was imported; the reference-style key path travels with
     // key auth rows (none here), and keyless rows keep agent auth.
     expect(
-      find.text(
-        'result:dup:web.example.com:2222:deploy:agent:-',
-      ),
+      find.text('result:dup:web.example.com:2222:deploy:agent:-'),
       findsOneWidget,
     );
   });
 
-  testWidgets('import maps IdentityFile to reference-style key auth',
-      (tester) async {
+  testWidgets('import maps IdentityFile to reference-style key auth', (
+    tester,
+  ) async {
     await _open(tester, _service(_FakeSource({_configPath: _sampleConfig})));
 
     await tester.tap(find.text('Import 1'));
@@ -398,7 +399,10 @@ Host web
     // The only row duplicates an existing bookmark, so it starts
     // unselected and the import action is disabled at zero selection.
     final button = tester.widget<FilledButton>(
-      find.ancestor(of: find.text('Import'), matching: find.byType(FilledButton)),
+      find.ancestor(
+        of: find.text('Import'),
+        matching: find.byType(FilledButton),
+      ),
     );
     expect(button.onPressed, isNull);
 
@@ -406,7 +410,10 @@ Host web
     await tester.tap(find.byType(Checkbox).at(0));
     await tester.pump();
     final enabled = tester.widget<FilledButton>(
-      find.ancestor(of: find.text('Import 1'), matching: find.byType(FilledButton)),
+      find.ancestor(
+        of: find.text('Import 1'),
+        matching: find.byType(FilledButton),
+      ),
     );
     expect(enabled.onPressed, isNotNull);
   });
@@ -420,8 +427,9 @@ Host web
     expect(find.text('result:null'), findsOneWidget);
   });
 
-  testWidgets('a missing config shows the failure with a working retry',
-      (tester) async {
+  testWidgets('a missing config shows the failure with a working retry', (
+    tester,
+  ) async {
     final files = <String, String>{};
     final service = _service(_FakeSource(files));
 
@@ -438,10 +446,7 @@ Host web
   });
 
   testWidgets('a config with no host blocks says so', (tester) async {
-    await _open(
-      tester,
-      _service(_FakeSource({_configPath: 'Port 22\n'})),
-    );
+    await _open(tester, _service(_FakeSource({_configPath: 'Port 22\n'})));
 
     expect(
       find.text('No importable hosts were found in $_configPath.'),
@@ -449,8 +454,7 @@ Host web
     );
   });
 
-  testWidgets('an unexpected load failure shows the retry UI',
-      (tester) async {
+  testWidgets('an unexpected load failure shows the retry UI', (tester) async {
     final service = _ThrowingService();
 
     await tester.pumpWidget(_Harness(service, _configPath));
@@ -464,8 +468,7 @@ Host web
     expect(find.text('Try Again'), findsOneWidget);
   });
 
-  testWidgets('a double-tapped retry starts only one load',
-      (tester) async {
+  testWidgets('a double-tapped retry starts only one load', (tester) async {
     final service = _FailingThenGatedService();
 
     await tester.pumpWidget(_Harness(service, _configPath));
@@ -483,9 +486,7 @@ Host web
     expect(service.calls, 2);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    service.retry.complete(
-      const SshConfigImportPreview(rows: [], notices: []),
-    );
+    service.retry.complete(const SshConfigImportPreview(rows: [], notices: []));
     await tester.pumpAndSettle();
     expect(
       find.text('No importable hosts were found in $_configPath.'),
@@ -493,10 +494,11 @@ Host web
     );
   });
 
-  testWidgets('a late load result never paints after disposal',
-      (tester) async {
+  testWidgets('a late load result never paints after disposal', (tester) async {
     final gate = Completer<String?>();
-    final service = _service(_FakeSource({_configPath: _sampleConfig}, gate: gate));
+    final service = _service(
+      _FakeSource({_configPath: _sampleConfig}, gate: gate),
+    );
 
     await tester.pumpWidget(_Harness(service, _configPath));
     await tester.tap(find.text('open'));
@@ -504,11 +506,7 @@ Host web
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     // Dismiss (dispose) the dialog while the load is still in flight…
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: Container()),
-      ),
-    );
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Container())));
     // …then let the load finish: no setState may fire on the dead state.
     gate.complete(_sampleConfig);
     await tester.pump();

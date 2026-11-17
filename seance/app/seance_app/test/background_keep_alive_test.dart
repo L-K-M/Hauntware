@@ -14,8 +14,10 @@ void main() {
   test('the channel id and notification strings keep their wording', () {
     expect(strings.channelId, 'seance.keepalive');
     expect(strings.channelName, 'Session keep-alive');
-    expect(strings.channelDescription,
-        'Shown while connections are kept alive in the background.');
+    expect(
+      strings.channelDescription,
+      'Shown while connections are kept alive in the background.',
+    );
     expect(strings.notificationTitle, 'Séance');
     expect(strings.smallIconResourceName, 'ic_stat_keep_alive');
   });
@@ -23,14 +25,20 @@ void main() {
   test('release shrinking retains the dynamically named notification icon', () {
     final resources = File('android/app/src/main/res/raw/keep_keepalive.xml');
     expect(resources.existsSync(), isTrue);
-    expect(resources.readAsStringSync(),
-        contains('tools:keep="@drawable/${strings.smallIconResourceName}"'));
+    expect(
+      resources.readAsStringSync(),
+      contains('tools:keep="@drawable/${strings.smallIconResourceName}"'),
+    );
   });
 
   test('the notification text pluralizes sessions', () {
-    expect(strings.notificationText(1),
-        'Keeping 1 session alive in the background.');
-    expect(strings.notificationText(3),
-        'Keeping 3 sessions alive in the background.');
+    expect(
+      strings.notificationText(1),
+      'Keeping 1 session alive in the background.',
+    );
+    expect(
+      strings.notificationText(3),
+      'Keeping 3 sessions alive in the background.',
+    );
   });
 }

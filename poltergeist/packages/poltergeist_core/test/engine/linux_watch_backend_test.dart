@@ -25,15 +25,18 @@ void main() {
     return directory;
   }
 
-  test('create, modify, move, and delete surface as backend events',
-      () async {
+  test('create, modify, move, and delete surface as backend events', () async {
     final root = await tempFixture('pg-inotify-');
     final marker = Completer<void>();
     final events = <FileSystemEvent>[];
 
     final subscription = LocalWatchBackend.platform()
         .watch(root.path)
-        .listen(events.add, onDone: marker.complete, onError: marker.completeError);
+        .listen(
+          events.add,
+          onDone: marker.complete,
+          onError: marker.completeError,
+        );
     addTearDown(subscription.cancel);
 
     final file = File(p.join(root.path, 'entry.txt'));
@@ -99,15 +102,17 @@ void main() {
 
     // The backend reports the exact string passed to watch();
     // canonicalization is the engine channel's job, tested there.
-    final subscription = LocalWatchBackend.platform().watch(root.path).listen(
-      (event) {
-        if (!rootLoss.isCompleted && p.equals(event.path, root.path)) {
-          rootLoss.complete(event);
-        }
-      },
-      onDone: done.complete,
-      onError: done.completeError,
-    );
+    final subscription = LocalWatchBackend.platform()
+        .watch(root.path)
+        .listen(
+          (event) {
+            if (!rootLoss.isCompleted && p.equals(event.path, root.path)) {
+              rootLoss.complete(event);
+            }
+          },
+          onDone: done.complete,
+          onError: done.completeError,
+        );
     addTearDown(subscription.cancel);
 
     root.deleteSync();
@@ -117,22 +122,23 @@ void main() {
     await done.future.timeout(deadline);
   });
 
-  test('renaming the watched directory reports the root then closes',
-      () async {
+  test('renaming the watched directory reports the root then closes', () async {
     final parent = await tempFixture('pg-inotify-move');
     final root = Directory(p.join(parent.path, 'watched'))..createSync();
     final rootLoss = Completer<FileSystemEvent>();
     final done = Completer<void>();
 
-    final subscription = LocalWatchBackend.platform().watch(root.path).listen(
-      (event) {
-        if (!rootLoss.isCompleted && p.equals(event.path, root.path)) {
-          rootLoss.complete(event);
-        }
-      },
-      onDone: done.complete,
-      onError: done.completeError,
-    );
+    final subscription = LocalWatchBackend.platform()
+        .watch(root.path)
+        .listen(
+          (event) {
+            if (!rootLoss.isCompleted && p.equals(event.path, root.path)) {
+              rootLoss.complete(event);
+            }
+          },
+          onDone: done.complete,
+          onError: done.completeError,
+        );
     addTearDown(subscription.cancel);
 
     root.renameSync(p.join(parent.path, 'renamed'));
@@ -148,11 +154,11 @@ void main() {
 
     for (var cycle = 0; cycle < 25; cycle++) {
       final delivered = Completer<void>();
-      final subscription = LocalWatchBackend.platform()
-          .watch(root.path)
-          .listen((event) {
-            if (!delivered.isCompleted) delivered.complete();
-          });
+      final subscription = LocalWatchBackend.platform().watch(root.path).listen(
+        (event) {
+          if (!delivered.isCompleted) delivered.complete();
+        },
+      );
       File(p.join(root.path, 'cycle-$cycle')).writeAsStringSync('x');
       await delivered.future.timeout(deadline);
 
@@ -237,19 +243,19 @@ void main() {
     // reports empty and a drain-until-EAGAIN loop never revisits the stop
     // pipe. In-process Dart producers lose that race and cannot pin it.
     final root = await (Directory('/dev/shm').existsSync()
-            ? Directory('/dev/shm').createTemp('pg-busy-cancel-')
-            : Directory.systemTemp.createTemp('pg-busy-cancel-'));
+        ? Directory('/dev/shm').createTemp('pg-busy-cancel-')
+        : Directory.systemTemp.createTemp('pg-busy-cancel-'));
     addTearDown(() {
       if (root.existsSync()) root.deleteSync(recursive: true);
     });
 
     final delivered = Completer<void>();
     final errors = <Object>[];
-    final subscription = LocalWatchBackend.platform()
-        .watch(root.path)
-        .listen((event) {
-          if (!delivered.isCompleted) delivered.complete();
-        }, onError: errors.add);
+    final subscription = LocalWatchBackend.platform().watch(root.path).listen((
+      event,
+    ) {
+      if (!delivered.isCompleted) delivered.complete();
+    }, onError: errors.add);
 
     const producerCount = 4;
     final producers = <Process>[];
@@ -269,13 +275,11 @@ void main() {
           '$index',
         ]);
         producers.add(producer);
-        unawaited(
-          producer.exitCode.then((_) => terminated.add(producer.pid)),
-        );
+        unawaited(producer.exitCode.then((_) => terminated.add(producer.pid)));
         unawaited(producer.stdout.drain<void>());
-        producer.stderr.transform(systemEncoding.decoder).listen(
-          producerDiagnostics.add,
-        );
+        producer.stderr
+            .transform(systemEncoding.decoder)
+            .listen(producerDiagnostics.add);
       }
       // Any producer death invalidates the sustained-pressure premise, so
       // require all four, not merely one survivor.
@@ -352,46 +356,42 @@ void main() {
     // After the try/finally: a cleanup failure fails a green body, while an
     // original body failure propagates untouched instead of being
     // displaced by this assertion.
-    expect(
-      cancellationFailed,
-      isFalse,
-      reason: 'cancellation cleanup failed',
-    );
+    expect(cancellationFailed, isFalse, reason: 'cancellation cleanup failed');
   });
 
-  test('repeated retarget and stop cycles on one adapter release cleanly',
-      () async {
-    final parent = await tempFixture('pg-inotify-retarget');
-    final first = Directory(p.join(parent.path, 'first'))..createSync();
-    final second = Directory(p.join(parent.path, 'second'))..createSync();
+  test(
+    'repeated retarget and stop cycles on one adapter release cleanly',
+    () async {
+      final parent = await tempFixture('pg-inotify-retarget');
+      final first = Directory(p.join(parent.path, 'first'))..createSync();
+      final second = Directory(p.join(parent.path, 'second'))..createSync();
 
-    final baseline = await _descriptorFloor();
-    final watcher = LocalDirectoryWatcher();
-    addTearDown(watcher.dispose);
-    final losses = <LocalWatchSignal>[];
-    watcher.signals.listen(
-      (signal) {
+      final baseline = await _descriptorFloor();
+      final watcher = LocalDirectoryWatcher();
+      addTearDown(watcher.dispose);
+      final losses = <LocalWatchSignal>[];
+      watcher.signals.listen((signal) {
         if (signal.kind == DirectoryWatchSignal.lost) losses.add(signal);
-      },
-    );
+      });
 
-    for (var cycle = 0; cycle < 20; cycle++) {
-      final target = cycle.isEven ? first : second;
-      await watcher.retarget(target.path);
-      File(p.join(target.path, 'cycle-$cycle')).writeAsStringSync('x');
-    }
-    await watcher.stop();
+      for (var cycle = 0; cycle < 20; cycle++) {
+        final target = cycle.isEven ? first : second;
+        await watcher.retarget(target.path);
+        File(p.join(target.path, 'cycle-$cycle')).writeAsStringSync('x');
+      }
+      await watcher.stop();
 
-    await _pumpEventQueue();
-    // Same ambient-tolerance reasoning as the cancellation test: a leak
-    // here would add forty descriptors across the twenty cycles.
-    expect(
-      await _descriptorFloor(),
-      lessThanOrEqualTo(baseline + _ambientDescriptorSlack),
-      reason: 'retarget cycles leaked',
-    );
-    expect(losses, isEmpty, reason: 'no cycle may report loss');
-  });
+      await _pumpEventQueue();
+      // Same ambient-tolerance reasoning as the cancellation test: a leak
+      // here would add forty descriptors across the twenty cycles.
+      expect(
+        await _descriptorFloor(),
+        lessThanOrEqualTo(baseline + _ambientDescriptorSlack),
+        reason: 'retarget cycles leaked',
+      );
+      expect(losses, isEmpty, reason: 'no cycle may report loss');
+    },
+  );
 }
 
 /// Ambient descriptor churn from suites sharing this process. A per-cycle
@@ -454,7 +454,7 @@ Future<void> _pumpEventQueue() {
 /// suites: an entry can vanish between the listing and the read. Re-list
 /// instead of treating another suite's close as a counting failure.
 int _descriptorCount() {
-  for (var attempt = 0;; attempt++) {
+  for (var attempt = 0; ; attempt++) {
     try {
       return Directory('/proc/self/fd').listSync().length;
     } on PathNotFoundException {

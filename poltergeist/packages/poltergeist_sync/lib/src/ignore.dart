@@ -30,15 +30,15 @@ final class SyncIgnoreRules {
          for (final glob in appDefaults) _IgnorePattern.parse(glob),
        ],
        _excludedPrefixes = trashRelativePath == null
-          ? const []
-          : [trashRelativePath] {
+           ? const []
+           : [trashRelativePath] {
     if (trashRelativePath != null &&
         (trashRelativePath.isEmpty ||
             trashRelativePath.startsWith('/') ||
             trashRelativePath.endsWith('/') ||
-            trashRelativePath.split('/').any(
-              (s) => s.isEmpty || s == '.' || s == '..',
-            ))) {
+            trashRelativePath
+                .split('/')
+                .any((s) => s.isEmpty || s == '.' || s == '..'))) {
       throw ArgumentError.value(
         trashRelativePath,
         'trashRelativePath',
@@ -83,8 +83,7 @@ final class SyncIgnoreRules {
 
   bool _isExcludedHere(String relativePath, {required bool isDirectory}) {
     for (final prefix in _excludedPrefixes) {
-      if (relativePath == prefix ||
-          relativePath.startsWith('$prefix/')) {
+      if (relativePath == prefix || relativePath.startsWith('$prefix/')) {
         return true;
       }
     }
@@ -116,7 +115,12 @@ final class _IgnorePattern {
       pattern = pattern.substring(1);
     }
     if (!escaped && (pattern.startsWith('#') || pattern.isEmpty)) {
-      return _IgnorePattern._(false, false, true, RegExp('a^')); // never matches
+      return _IgnorePattern._(
+        false,
+        false,
+        true,
+        RegExp('a^'),
+      ); // never matches
     }
     var dirOnly = false;
     if (pattern.endsWith('/')) {
@@ -160,13 +164,11 @@ final class _IgnorePattern {
         i += 2;
       } else {
         final c = pattern.codeUnitAt(i);
-        buffer.write(
-          switch (c) {
-            0x2A /* * */ => '[^/]*',
-            0x3F /* ? */ => '[^/]',
-            _ => RegExp.escape(pattern[i]),
-          },
-        );
+        buffer.write(switch (c) {
+          0x2A /* * */ => '[^/]*',
+          0x3F /* ? */ => '[^/]',
+          _ => RegExp.escape(pattern[i]),
+        });
         i++;
       }
     }

@@ -27,10 +27,8 @@ void main() {
   });
 
   /// Drains a walk to a flat event list.
-  Future<List<WalkEvent>> collect(
-    RecursiveWalker walker,
-    List<String> roots,
-  ) => walker.walk(roots).toList();
+  Future<List<WalkEvent>> collect(RecursiveWalker walker, List<String> roots) =>
+      walker.walk(roots).toList();
 
   List<WalkEntryEvent> entriesOf(List<WalkEvent> events) =>
       events.whereType<WalkEntryEvent>().toList();
@@ -50,8 +48,7 @@ void main() {
   );
 
   group('transfer enumeration', () {
-    test('emits parents-first work entries with container linkage',
-        () async {
+    test('emits parents-first work entries with container linkage', () async {
       remote.addDirectory('/src/dir/sub');
       remote.addFile('/src/dir/a.txt', 'aaa'.codeUnits);
       remote.addFile('/src/dir/sub/b.txt', 'bb'.codeUnits);
@@ -119,8 +116,7 @@ void main() {
       expect(dispositionNames, ['a.txt']);
     });
 
-    test('file and symlink roots enumerate like listed children',
-        () async {
+    test('file and symlink roots enumerate like listed children', () async {
       remote.addFile('/solo.txt', 'x'.codeUnits);
       remote.addSymlink('/alias');
 
@@ -161,8 +157,7 @@ void main() {
       expect(entriesOf(events).single.entry.path, '/ok.txt');
     });
 
-    test('a failed listing reports and does not stop sibling roots',
-        () async {
+    test('a failed listing reports and does not stop sibling roots', () async {
       remote.addDirectory('/a/childless');
       remote.addFile('/b/file.txt', 'b'.codeUnits);
       remote.listFailure = (path) => path == '/a/childless'
@@ -186,9 +181,7 @@ void main() {
       // discovery row. The post-failure delete-target emission is
       // delete-mode only; transfer mode never double-reports.
       expect(
-        entriesOf(events)
-            .where((e) => e.entry.path == '/a/childless')
-            .length,
+        entriesOf(events).where((e) => e.entry.path == '/a/childless').length,
         1,
       );
     });
@@ -212,10 +205,7 @@ void main() {
       // demanded.
       expect(await iterator.moveNext(), isTrue); // /src/first.txt
       expect(remote.listCalls, 1);
-      expect(
-        remote.calls.where((c) => c.startsWith('list:')),
-        ['list:/src'],
-      );
+      expect(remote.calls.where((c) => c.startsWith('list:')), ['list:/src']);
 
       // Drain the rest: the sub listing runs only as entries are pulled.
       while (await iterator.moveNext()) {}
@@ -249,8 +239,7 @@ void main() {
       await subscription.cancel();
     });
 
-    test('mid-walk cancel stops enumeration — no further listings',
-        () async {
+    test('mid-walk cancel stops enumeration — no further listings', () async {
       remote.addDirectory('/src/a');
       remote.addDirectory('/src/b');
       remote.addFile('/src/a/one.txt', '1'.codeUnits);
@@ -263,17 +252,19 @@ void main() {
       final seen = <WalkEvent>[];
       Object? walkError;
       final finished = Completer<void>();
-      walker.walk(['/src']).listen(
-        seen.add,
-        // An async* stream delivers error-then-done on a throw.
-        onError: (Object e) {
-          walkError = e;
-          if (!finished.isCompleted) finished.complete();
-        },
-        onDone: () {
-          if (!finished.isCompleted) finished.complete();
-        },
-      );
+      walker
+          .walk(['/src'])
+          .listen(
+            seen.add,
+            // An async* stream delivers error-then-done on a throw.
+            onError: (Object e) {
+              walkError = e;
+              if (!finished.isCompleted) finished.complete();
+            },
+            onDone: () {
+              if (!finished.isCompleted) finished.complete();
+            },
+          );
       // /src listed; the BFS then pulled /src/a's listing, which is now
       // gated in flight.
       await pumpUntil(
@@ -300,22 +291,48 @@ void main() {
     });
   });
 
-  group('destination name safety (ported RemoteFilesController rules)',
-      () {
+  group('destination name safety (ported RemoteFilesController rules)', () {
     test('Windows-reserved and forbidden names reject to a local '
         'destination — exact rule table', () async {
       const rejected = [
-        'CON', 'con', 'PRN', 'AUX', 'NUL', 'CLOCK\$',
-        'COM1', 'COM9', 'LPT1', 'LPT9', 'com¹', 'lpt²',
-        'CONIN\$', 'CONOUT\$',
-        'nul.txt', 'Com1.tar.gz', 'aux .txt',
-        'name.', 'name ',
-        'a:b', 'a*b', 'a?b', 'a"b', 'a<b', 'a>b', 'a|b',
-        'a\x01b', 'a\x7fb',
+        'CON',
+        'con',
+        'PRN',
+        'AUX',
+        'NUL',
+        'CLOCK\$',
+        'COM1',
+        'COM9',
+        'LPT1',
+        'LPT9',
+        'com¹',
+        'lpt²',
+        'CONIN\$',
+        'CONOUT\$',
+        'nul.txt',
+        'Com1.tar.gz',
+        'aux .txt',
+        'name.',
+        'name ',
+        'a:b',
+        'a*b',
+        'a?b',
+        'a"b',
+        'a<b',
+        'a>b',
+        'a|b',
+        'a\x01b',
+        'a\x7fb',
       ];
       const accepted = [
-        'cone.txt', 'com0', 'com10', 'lpt', 'auxiliary', 'CONX',
-        'file .txt', 'normal.txt',
+        'cone.txt',
+        'com0',
+        'com10',
+        'lpt',
+        'auxiliary',
+        'CONX',
+        'file .txt',
+        'normal.txt',
       ];
       for (final name in [...rejected, ...accepted]) {
         remote.addFile('/src/$name', 'x'.codeUnits);
@@ -327,8 +344,7 @@ void main() {
       );
       final entries = entriesOf(events);
       for (final name in rejected) {
-        final entry =
-            entries.where((e) => e.entry.name == name).singleOrNull;
+        final entry = entries.where((e) => e.entry.name == name).singleOrNull;
         expect(
           entry?.kind,
           WalkItemKind.rejectedName,
@@ -337,8 +353,7 @@ void main() {
         expect(entry!.detail, isNotEmpty);
       }
       for (final name in accepted) {
-        final entry =
-            entries.where((e) => e.entry.name == name).singleOrNull;
+        final entry = entries.where((e) => e.entry.name == name).singleOrNull;
         expect(
           entry?.kind,
           WalkItemKind.file,
@@ -364,9 +379,7 @@ void main() {
       );
 
       final events = await collect(remoteWalker(), ['/src']);
-      final byName = {
-        for (final e in entriesOf(events)) e.entry.name: e.kind,
-      };
+      final byName = {for (final e in entriesOf(events)) e.entry.name: e.kind};
       expect(byName['CON'], WalkItemKind.file);
       expect(byName['nul.txt'], WalkItemKind.file);
       expect(byName['trailing.'], WalkItemKind.file);
@@ -377,10 +390,10 @@ void main() {
     test('overlong names reject (>255 UTF-8 bytes)', () async {
       remote.addFile('/src/${'x' * 256}', 'x'.codeUnits);
       final events = await collect(remoteWalker(), ['/src']);
-      expect(
-        entriesOf(events).map((e) => e.kind).toList(),
-        [WalkItemKind.directory, WalkItemKind.rejectedName],
-      );
+      expect(entriesOf(events).map((e) => e.kind).toList(), [
+        WalkItemKind.directory,
+        WalkItemKind.rejectedName,
+      ]);
     });
   });
 
@@ -409,22 +422,24 @@ void main() {
       );
     });
 
-    test('a ".." name or a separator-carrying name fails the walk loudly',
-        () async {
-      remote.addDirectory('/src/dir');
-      remote.directories['/src/dir']!.add(
-        const RemoteFileEntry(
-          path: '/src/dir/..',
-          name: '..',
-          type: RemoteFileType.directory,
-        ),
-      );
+    test(
+      'a ".." name or a separator-carrying name fails the walk loudly',
+      () async {
+        remote.addDirectory('/src/dir');
+        remote.directories['/src/dir']!.add(
+          const RemoteFileEntry(
+            path: '/src/dir/..',
+            name: '..',
+            type: RemoteFileType.directory,
+          ),
+        );
 
-      await expectLater(
-        collect(remoteWalker(), ['/src/dir']),
-        throwsA(isA<RemoteFileException>()),
-      );
-    });
+        await expectLater(
+          collect(remoteWalker(), ['/src/dir']),
+          throwsA(isA<RemoteFileException>()),
+        );
+      },
+    );
 
     test('a symlink loop is reported, never followed', () async {
       // /src/dir/loop links back to /src/dir — the entry is a link, so
@@ -434,8 +449,9 @@ void main() {
       remote.addSymlink('/src/dir/loop');
 
       final events = await collect(remoteWalker(), ['/src/dir']);
-      final link =
-          entriesOf(events).singleWhere((e) => e.entry.path.endsWith('loop'));
+      final link = entriesOf(
+        events,
+      ).singleWhere((e) => e.entry.path.endsWith('loop'));
       expect(link.kind, WalkItemKind.symbolicLink);
       // Exactly one listing ran — no recursion through the link.
       expect(remote.listCalls, 1);
@@ -535,7 +551,8 @@ void main() {
       expect(
         entries.any((e) => e.entry.name == 'innocent.txt'),
         isFalse,
-        reason: 'descending into a flagged directory would enumerate '
+        reason:
+            'descending into a flagged directory would enumerate '
             'outside the requested root and re-open the escape',
       );
       expect(walker.flaggedEntries, 1);
@@ -585,7 +602,8 @@ void main() {
       expect(
         entries.any((e) => e.entry.name == 'innocent.txt'),
         isFalse,
-        reason: 'descending into a flagged directory would enumerate '
+        reason:
+            'descending into a flagged directory would enumerate '
             'outside the requested root and re-open the escape',
       );
       expect(walker.flaggedEntries, 1);
@@ -606,13 +624,16 @@ void main() {
 
       // Post-order: every descendant lands before /tree itself.
       expect(paths.last, '/tree');
-      expect(paths, containsAllInOrder([
-        '/tree/a.txt',
-        '/tree/sub/b.txt',
-        '/tree/sub/link',
-        '/tree/sub',
-        '/tree',
-      ]));
+      expect(
+        paths,
+        containsAllInOrder([
+          '/tree/a.txt',
+          '/tree/sub/b.txt',
+          '/tree/sub/link',
+          '/tree/sub',
+          '/tree',
+        ]),
+      );
       expect(
         entries.singleWhere((e) => e.entry.path == '/tree/sub/link').kind,
         WalkItemKind.symbolicLink,
@@ -660,8 +681,7 @@ void main() {
         purpose: WalkPurpose.delete,
       );
       final events = await collect(walker, [root]);
-      final paths =
-          entriesOf(events).map((e) => e.entry.path).toList();
+      final paths = entriesOf(events).map((e) => e.entry.path).toList();
       expect(paths.last, root);
       expect(paths, contains(p.join(root, 'f.txt')));
       expect(paths, contains(p.join(root, 'sub', 'g.txt')));
@@ -672,51 +692,55 @@ void main() {
       expect(tempDir.existsSync(), isTrue); // nothing was deleted
     });
 
-    test('a POSIX-local name carrying a backslash is not an escape',
-        () async {
-      final root = p.join(tempDir.path, 'd');
-      Directory(root).createSync();
-      File('$root/a\\b.txt').writeAsBytesSync([1]);
+    test(
+      'a POSIX-local name carrying a backslash is not an escape',
+      () async {
+        final root = p.join(tempDir.path, 'd');
+        Directory(root).createSync();
+        File('$root/a\\b.txt').writeAsBytesSync([1]);
 
-      final walker = RecursiveWalker(
-        source: local,
-        location: const LocalFsLocation(),
-        purpose: WalkPurpose.delete,
-      );
-      final paths = entriesOf(await collect(walker, [root]))
-          .map((e) => e.entry.path)
-          .toList();
-      expect(paths, contains('$root/a\\b.txt'));
-    },
-        skip: p.style == p.Style.windows
-            ? r'\ is a separator on Windows local sources'
-            : null);
+        final walker = RecursiveWalker(
+          source: local,
+          location: const LocalFsLocation(),
+          purpose: WalkPurpose.delete,
+        );
+        final paths = entriesOf(
+          await collect(walker, [root]),
+        ).map((e) => e.entry.path).toList();
+        expect(paths, contains('$root/a\\b.txt'));
+      },
+      skip: p.style == p.Style.windows
+          ? r'\ is a separator on Windows local sources'
+          : null,
+    );
 
-    test('a failed listing reports the directory; the walk continues',
-        () async {
-      remote.addDirectory('/t/locked');
-      remote.addFile('/t/ok.txt', 'o'.codeUnits);
-      remote.listFailure = (path) => path == '/t/locked'
-          ? RemoteFileException(
-              kind: RemoteFileErrorKind.permissionDenied,
-              operation: 'list',
-              path: path,
-              message: 'denied',
-            )
-          : null;
+    test(
+      'a failed listing reports the directory; the walk continues',
+      () async {
+        remote.addDirectory('/t/locked');
+        remote.addFile('/t/ok.txt', 'o'.codeUnits);
+        remote.listFailure = (path) => path == '/t/locked'
+            ? RemoteFileException(
+                kind: RemoteFileErrorKind.permissionDenied,
+                operation: 'list',
+                path: path,
+                message: 'denied',
+              )
+            : null;
 
-      final events = await collect(deleteWalker(), ['/t']);
-      expect(
-        events.whereType<WalkListingFailedEvent>().single.directory.path,
-        '/t/locked',
-      );
-      final paths = entriesOf(events).map((e) => e.entry.path).toList();
-      // /t/locked itself is still reported as a delete target (its
-      // delete is the consumer's call — it may fail honestly), /t last.
-      expect(paths, contains('/t/locked'));
-      expect(paths.last, '/t');
-      expect(paths, contains('/t/ok.txt'));
-    });
+        final events = await collect(deleteWalker(), ['/t']);
+        expect(
+          events.whereType<WalkListingFailedEvent>().single.directory.path,
+          '/t/locked',
+        );
+        final paths = entriesOf(events).map((e) => e.entry.path).toList();
+        // /t/locked itself is still reported as a delete target (its
+        // delete is the consumer's call — it may fail honestly), /t last.
+        expect(paths, contains('/t/locked'));
+        expect(paths.last, '/t');
+        expect(paths, contains('/t/ok.txt'));
+      },
+    );
 
     test('mid-walk cancel stops a delete enumeration', () async {
       remote.addDirectory('/t/a');
@@ -730,16 +754,18 @@ void main() {
       final seen = <WalkEvent>[];
       Object? error;
       final finished = Completer<void>();
-      walker.walk(['/t']).listen(
-        seen.add,
-        onError: (Object e) {
-          error = e;
-          if (!finished.isCompleted) finished.complete();
-        },
-        onDone: () {
-          if (!finished.isCompleted) finished.complete();
-        },
-      );
+      walker
+          .walk(['/t'])
+          .listen(
+            seen.add,
+            onError: (Object e) {
+              error = e;
+              if (!finished.isCompleted) finished.complete();
+            },
+            onDone: () {
+              if (!finished.isCompleted) finished.complete();
+            },
+          );
       // The DFS has descended into /t/a, whose listing is now gated in
       // flight.
       await pumpUntil(() => remote.calls.contains('list:/t/a'));
@@ -753,10 +779,7 @@ void main() {
         entriesOf(seen).map((e) => e.entry.path),
         isNot(contains('/t/a/f.txt')),
       );
-      expect(
-        entriesOf(seen).map((e) => e.entry.path),
-        isNot(contains('/t')),
-      );
+      expect(entriesOf(seen).map((e) => e.entry.path), isNot(contains('/t')));
     });
   });
 }

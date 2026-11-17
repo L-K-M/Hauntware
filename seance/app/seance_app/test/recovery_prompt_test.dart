@@ -50,9 +50,9 @@ void main() {
           .setMockMethodCallHandler(_pathChannel, (_) async => directory!.path);
       FlutterSecureStorage.setMockInitialValues({});
       device = TestDeviceAuthenticator();
-      await SettingsStore(File('${directory!.path}/settings.json')).save(
-        AppSettings(appLock: mode),
-      );
+      await SettingsStore(
+        File('${directory!.path}/settings.json'),
+      ).save(AppSettings(appLock: mode));
       services = await AppServices.initialize(deviceAuthenticator: device);
       state = AppState(services!);
     });

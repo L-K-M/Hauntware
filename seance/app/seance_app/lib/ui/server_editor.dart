@@ -74,7 +74,10 @@ Future<bool> confirmSyncExclusion(BuildContext context) async {
 /// vault is followed by the offer of a recovery code (CRED-05), on a device
 /// that has none and was not told "Not now".
 Future<void> showServerEditor(
-    BuildContext context, AppState state, ServerConfig? existing) async {
+  BuildContext context,
+  AppState state,
+  ServerConfig? existing,
+) async {
   final wroteCredential = await showDialog<bool>(
     context: context,
     builder: (_) => Dialog(
@@ -188,8 +191,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       // Load the stored grant with the path it was actually minted for (which
       // a synced edit may have diverged from), so re-saving can't re-bless a
       // bookmark under a path it doesn't open.
-      final stored =
-          widget.state.services.settings.identityFileBookmarks[e.id];
+      final stored = widget.state.services.settings.identityFileBookmarks[e.id];
       _keyBookmark = stored?.bookmark;
       _keyBookmarkPath = stored?.path;
     }
@@ -279,7 +281,8 @@ class _ServerEditorState extends State<_ServerEditor> {
       }
       if (_referenceKeyFile) {
         final path = _keyPath.text.trim();
-        final sourceBound = stored.identityFilePath != null ||
+        final sourceBound =
+            stored.identityFilePath != null ||
             stored.identityFilePassphrase != null;
         final savedPath = sourceBound
             ? stored.identityFilePath
@@ -309,8 +312,9 @@ class _ServerEditorState extends State<_ServerEditor> {
     return [
       Text(
         status,
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: Theme.of(context).hintColor),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
       ),
       const SizedBox(height: 8),
       KeyedSubtree(
@@ -360,17 +364,17 @@ class _ServerEditorState extends State<_ServerEditor> {
 
   /// Every text field in the form, so [dispose] releases them all.
   List<TextEditingController> get _fields => [
-        _label,
-        _host,
-        _port,
-        _user,
-        _group,
-        _password,
-        _keyPem,
-        _keyPath,
-        _keyPassphrase,
-        _loginScript,
-      ];
+    _label,
+    _host,
+    _port,
+    _user,
+    _group,
+    _password,
+    _keyPem,
+    _keyPath,
+    _keyPassphrase,
+    _loginScript,
+  ];
 
   /// The fields a connection test's outcome actually depends on.
   ///
@@ -382,14 +386,14 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// discarding a result the user waited minutes for over a typo in the name
   /// is a cost with nothing bought for it.
   List<TextEditingController> get _connectionFields => [
-        _host,
-        _port,
-        _user,
-        _password,
-        _keyPem,
-        _keyPath,
-        _keyPassphrase,
-      ];
+    _host,
+    _port,
+    _user,
+    _password,
+    _keyPem,
+    _keyPath,
+    _keyPassphrase,
+  ];
 
   /// Forget the last test result, and abandon one still running, because the
   /// form no longer describes what is being tested.
@@ -471,10 +475,12 @@ class _ServerEditorState extends State<_ServerEditor> {
         // The chord editors use for "submit despite being multi-line", on
         // both modifier conventions, since the shortcut is unbound otherwise
         // and a macOS user's hands expect the one, a Linux user's the other.
-        SingleActivator(LogicalKeyboardKey.enter, control: true):
-            _SaveIntent(anywhere: true),
-        SingleActivator(LogicalKeyboardKey.enter, meta: true):
-            _SaveIntent(anywhere: true),
+        SingleActivator(LogicalKeyboardKey.enter, control: true): _SaveIntent(
+          anywhere: true,
+        ),
+        SingleActivator(LogicalKeyboardKey.enter, meta: true): _SaveIntent(
+          anywhere: true,
+        ),
         SingleActivator(LogicalKeyboardKey.numpadEnter, control: true):
             _SaveIntent(anywhere: true),
         SingleActivator(LogicalKeyboardKey.numpadEnter, meta: true):
@@ -496,8 +502,10 @@ class _ServerEditorState extends State<_ServerEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.existing == null ? 'Add server' : 'Edit server',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              widget.existing == null ? 'Add server' : 'Edit server',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _label,
@@ -536,11 +544,17 @@ class _ServerEditorState extends State<_ServerEditor> {
               decoration: const InputDecoration(labelText: 'Authentication'),
               items: const [
                 DropdownMenuItem(
-                    value: AuthMethod.agent, child: Text('ssh-agent')),
+                  value: AuthMethod.agent,
+                  child: Text('ssh-agent'),
+                ),
                 DropdownMenuItem(
-                    value: AuthMethod.password, child: Text('Password')),
+                  value: AuthMethod.password,
+                  child: Text('Password'),
+                ),
                 DropdownMenuItem(
-                    value: AuthMethod.privateKey, child: Text('Private key')),
+                  value: AuthMethod.privateKey,
+                  child: Text('Private key'),
+                ),
               ],
               // Through _dropTestResult, not a bare clear: the auth method is
               // baked into the config a test runs against, so one already in
@@ -612,19 +626,20 @@ class _ServerEditorState extends State<_ServerEditor> {
                 // minutes an authentication may take is worse than letting it
                 // finish unwatched.
                 TextButton(
-                    onPressed:
-                        _busy ? null : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel')),
+                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
                 const SizedBox(width: 8),
                 FilledButton(
-                    // Not disabled while a test runs: an attempt can take minutes,
-                    // and the only other way out was typing a character into
-                    // any field to drop the test. Saving mid-test is sound —
-                    // any edit that could make the two disagree already
-                    // supersedes the attempt, and the save pops the editor, so
-                    // the late result is discarded by the mounted check.
-                    onPressed: _busy ? null : _save,
-                    child: const Text('Save')),
+                  // Not disabled while a test runs: an attempt can take minutes,
+                  // and the only other way out was typing a character into
+                  // any field to drop the test. Saving mid-test is sound —
+                  // any edit that could make the two disagree already
+                  // supersedes the attempt, and the save pops the editor, so
+                  // the late result is discarded by the mounted check.
+                  onPressed: _busy ? null : _save,
+                  child: const Text('Save'),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -633,8 +648,8 @@ class _ServerEditorState extends State<_ServerEditor> {
               'login script. A host key you approve here is trusted for the '
               'test only — the first real connection asks again.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                  ),
+                color: Theme.of(context).hintColor,
+              ),
             ),
             if (_testResult != null) const SizedBox(height: 12),
             // The spinner announces that a test started; without this the one
@@ -678,9 +693,7 @@ class _ServerEditorState extends State<_ServerEditor> {
             const Text('The saved password will be kept.'),
             _syncSecretToggle(),
           ] else
-            const Text(
-              'The saved password will be removed from this device.',
-            ),
+            const Text('The saved password will be removed from this device.'),
         ];
       case AuthMethod.privateKey:
         return [
@@ -855,9 +868,9 @@ class _ServerEditorState extends State<_ServerEditor> {
       Text(
         'Runs as if typed at the prompt right after connecting. Its text and '
         'output land in scrollback — keep secrets out. Blank for none.',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).hintColor,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
       ),
     ];
   }
@@ -925,10 +938,7 @@ class _ServerEditorState extends State<_ServerEditor> {
             ),
           // Last, after the named ten: the picker is the way past them, not
           // the first thing to reach for.
-          _CustomColorSwatch(
-            color: _tint.custom,
-            onTap: _pickCustomColor,
-          ),
+          _CustomColorSwatch(color: _tint.custom, onTap: _pickCustomColor),
         ],
       ),
       const SizedBox(height: 16),
@@ -999,16 +1009,17 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// has to give them back the answer they picked, not silently opt their
   /// credential out on the way through.
   Widget _syncSecretToggle() => SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Allow this credential to sync'),
-        subtitle: Text(_excludeFromSync
-            ? 'Not used while this server is excluded from sync.'
-            : 'End-to-end encrypted. Also needs sync set up with '
-                '"Sync saved passwords & keys" enabled.'),
-        value: _syncSecret && !_excludeFromSync,
-        onChanged:
-            _excludeFromSync ? null : (v) => setState(() => _syncSecret = v),
-      );
+    contentPadding: EdgeInsets.zero,
+    title: const Text('Allow this credential to sync'),
+    subtitle: Text(
+      _excludeFromSync
+          ? 'Not used while this server is excluded from sync.'
+          : 'End-to-end encrypted. Also needs sync set up with '
+                '"Sync saved passwords & keys" enabled.',
+    ),
+    value: _syncSecret && !_excludeFromSync,
+    onChanged: _excludeFromSync ? null : (v) => setState(() => _syncSecret = v),
+  );
 
   /// Whether this server takes part in sync at all.
   ///
@@ -1017,21 +1028,23 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// tombstone, so the other devices lose their copy. Only this device keeps
   /// one, which is the point — but it is not something to find out afterwards.
   List<Widget> _syncFields() => [
-        const Divider(),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Exclude from sync'),
-          subtitle: Text(_excludeFromSync
-              ? 'Kept on this device only. A copy that synced earlier is '
+    const Divider(),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Exclude from sync'),
+      subtitle: Text(
+        _excludeFromSync
+            ? 'Kept on this device only. A copy that synced earlier is '
                   'removed from the sync server and from your other devices.'
-              : 'Keep this server on this device only — never upload it.'),
-          value: _excludeFromSync,
-          onChanged: (v) async {
-            if (v && !await _confirmExclusion()) return;
-            if (mounted) setState(() => _excludeFromSync = v);
-          },
-        ),
-      ];
+            : 'Keep this server on this device only — never upload it.',
+      ),
+      value: _excludeFromSync,
+      onChanged: (v) async {
+        if (v && !await _confirmExclusion()) return;
+        if (mounted) setState(() => _excludeFromSync = v);
+      },
+    ),
+  ];
 
   /// Ask before an exclusion that reaches other devices.
   ///
@@ -1045,12 +1058,13 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// has never been anywhere, and with no sync account configured there is no
   /// other device to lose it. Turning the switch back off is not destructive
   /// either way.
-  Future<bool> _confirmExclusion() => excludingNeedsConfirmation(
+  Future<bool> _confirmExclusion() =>
+      excludingNeedsConfirmation(
         existing: widget.existing,
         syncConfigured: widget.state.services.isSyncConfigured,
       )
-          ? confirmSyncExclusion(context)
-          : Future<bool>.value(true);
+      ? confirmSyncExclusion(context)
+      : Future<bool>.value(true);
 
   /// Pick an identity file. On macOS this also mints the security-scoped
   /// bookmark that keeps a key outside ~/.ssh readable across relaunches.
@@ -1094,7 +1108,8 @@ class _ServerEditorState extends State<_ServerEditor> {
       // Blank reads as "no file referenced", not as a path made of nothing:
       // the validator blocks an empty path, and a caller that ever reached
       // here without it would otherwise ask the SSH layer to read `''`.
-      identityFilePath: (_auth == AuthMethod.privateKey &&
+      identityFilePath:
+          (_auth == AuthMethod.privateKey &&
               _referenceKeyFile &&
               _keyPath.text.trim().isNotEmpty)
           ? _keyPath.text.trim()
@@ -1496,8 +1511,12 @@ class _CustomColorSwatch extends StatelessWidget {
                   : SweepGradient(
                       colors: [
                         for (var hue = 0; hue <= 360; hue += 60)
-                          HSVColor.fromAHSV(1, hue.toDouble(), 0.6, 0.95)
-                              .toColor(),
+                          HSVColor.fromAHSV(
+                            1,
+                            hue.toDouble(),
+                            0.6,
+                            0.95,
+                          ).toColor(),
                       ],
                     ),
               shape: BoxShape.circle,

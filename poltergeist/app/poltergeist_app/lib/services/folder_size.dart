@@ -168,8 +168,8 @@ String _dedupeKey(String path) {
   // guessed: under-stripping can double-list a misspelled directory,
   // but over-stripping silently merges distinct names and loses a
   // subtree — the wrong failure direction for accounting.
-  final windowsStyle = RegExp(r'^[A-Za-z]:[\\/]').hasMatch(key) ||
-      key.startsWith(r'\\');
+  final windowsStyle =
+      RegExp(r'^[A-Za-z]:[\\/]').hasMatch(key) || key.startsWith(r'\\');
   while (key.length > 1 &&
       (key.endsWith('/') || (windowsStyle && key.endsWith(r'\')))) {
     key = key.substring(0, key.length - 1);

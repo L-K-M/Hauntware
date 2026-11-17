@@ -361,8 +361,7 @@ class AppSettings {
     this.themeMode = ThemeModePreference.system,
     this.deviceId = '',
     this.snippetsSeeded = false,
-  }) : editorRegistry =
-           editorRegistry ?? EditorRegistry(scheme: seanceEditors),
+  }) : editorRegistry = editorRegistry ?? EditorRegistry(scheme: seanceEditors),
        themePalette = themePalette ?? ThemePresets.initial,
        remotePathBookmarks = remotePathBookmarks ?? {},
        remoteShowHidden = remoteShowHidden ?? {},
@@ -403,14 +402,14 @@ class AppSettings {
     'keepSessionsAliveInBackground': keepSessionsAliveInBackground,
     'editorRegistry': editorRegistry.toJson(),
     // Keep old versions on a safe supported default if settings are downgraded.
-    'remoteFileEditor':
-        editorRegistry.defaultEditorId == seanceMigratedBbeditId
+    'remoteFileEditor': editorRegistry.defaultEditorId == seanceMigratedBbeditId
         ? 'bbedit'
         : 'systemDefault',
     'remotePathBookmarks': remotePathBookmarks,
     'remoteShowHidden': remoteShowHidden,
-    'identityFileBookmarks': identityFileBookmarks
-        .map((id, entry) => MapEntry(id, entry.toJson())),
+    'identityFileBookmarks': identityFileBookmarks.map(
+      (id, entry) => MapEntry(id, entry.toJson()),
+    ),
     'pendingCredentialCleanup': pendingCredentialCleanup.toList()..sort(),
     // Sorted so an unchanged set writes byte-identical JSON — the settings
     // file is rewritten on every save, and a set's iteration order would
@@ -543,6 +542,7 @@ class AppSettings {
 AppSettings salvageSettings(String? raw) {
   final settings = AppSettings();
   if (raw == null) return settings;
+
   /// Best effort on a document that cannot be parsed. The key must sit where a
   /// key can sit — at the start, or after a `{` or `,` — which keeps the name
   /// from being picked up out of the middle of some other string's contents.

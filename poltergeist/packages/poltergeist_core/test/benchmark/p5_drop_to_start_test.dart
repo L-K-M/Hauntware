@@ -76,69 +76,61 @@ void main() {
   }
 
   group('collectDropToStartSamples', () {
-    test('warmup drops are discarded; measured drops time to first byte',
-        () async {
-      final vfs = FakeDropVfs(tree: dropTreeSpec());
-      final outcome = await collect(vfs, warmups: 2, repetitions: 5);
-
-      expect(outcome.failedRepetition, isNull);
-      expect(outcome.measuredDrops, hasLength(5));
-      // Each leg: one stat of the dropped root + one root listing +
-      // one download of the first file.
-      expect(vfs.statCalls, 7);
-      expect(vfs.listCalls, 7);
-      expect(vfs.downloadCalls, 7);
-      for (final sample in outcome.measuredDrops) {
-        expect(sample.dropToFirstByte, greaterThan(Duration.zero));
-        expect(sample.statCalls, 1);
-        expect(sample.listingCalls, 1);
-        expect(sample.firstFilePath, '/root/file-0');
-        expect(sample.firstChunkBytes, greaterThan(0));
-      }
-    });
-
     test(
-      'stat calls stay flat between 1k and 50k-entry drops',
+      'warmup drops are discarded; measured drops time to first byte',
       () async {
-        // 08 §6's structural assertion, in its falsifiable two-size form:
-        // the drop→start path must be O(first file), not O(tree). A path
-        // that stated the tree upfront would issue ~1k vs ~50k stats;
-        // the lazy scan must issue the same count at both sizes.
-        final small = FakeDropVfs(tree: flatTreeSpec(1000));
-        final smallOutcome = await collect(
-          small,
-          warmups: 1,
-          repetitions: 1,
-        );
-        final large = FakeDropVfs(tree: flatTreeSpec(50000));
-        final largeOutcome = await collect(
-          large,
-          warmups: 1,
-          repetitions: 1,
-        );
+        final vfs = FakeDropVfs(tree: dropTreeSpec());
+        final outcome = await collect(vfs, warmups: 2, repetitions: 5);
 
-        expect(smallOutcome.failedRepetition, isNull);
-        expect(largeOutcome.failedRepetition, isNull);
-        expect(small.statCalls, smallOutcome.measuredDrops.length + 1);
-        expect(large.statCalls, largeOutcome.measuredDrops.length + 1);
-        expect(
-          smallOutcome.measuredDrops.single.statCalls,
-          largeOutcome.measuredDrops.single.statCalls,
-          reason: 'the stat count must be identical at 1k and 50k '
-              'entries — a growing count means the drop→start path '
-              'walks the tree',
-        );
-        expect(
-          smallOutcome.measuredDrops.single.listingCalls,
-          largeOutcome.measuredDrops.single.listingCalls,
-        );
-        // The absolute shape of the accepted path: one classification
-        // stat of the dropped root, one listing, one first byte — never
-        // a per-entry stat.
-        expect(smallOutcome.measuredDrops.single.statCalls, 1);
-        expect(largeOutcome.measuredDrops.single.statCalls, 1);
+        expect(outcome.failedRepetition, isNull);
+        expect(outcome.measuredDrops, hasLength(5));
+        // Each leg: one stat of the dropped root + one root listing +
+        // one download of the first file.
+        expect(vfs.statCalls, 7);
+        expect(vfs.listCalls, 7);
+        expect(vfs.downloadCalls, 7);
+        for (final sample in outcome.measuredDrops) {
+          expect(sample.dropToFirstByte, greaterThan(Duration.zero));
+          expect(sample.statCalls, 1);
+          expect(sample.listingCalls, 1);
+          expect(sample.firstFilePath, '/root/file-0');
+          expect(sample.firstChunkBytes, greaterThan(0));
+        }
       },
     );
+
+    test('stat calls stay flat between 1k and 50k-entry drops', () async {
+      // 08 §6's structural assertion, in its falsifiable two-size form:
+      // the drop→start path must be O(first file), not O(tree). A path
+      // that stated the tree upfront would issue ~1k vs ~50k stats;
+      // the lazy scan must issue the same count at both sizes.
+      final small = FakeDropVfs(tree: flatTreeSpec(1000));
+      final smallOutcome = await collect(small, warmups: 1, repetitions: 1);
+      final large = FakeDropVfs(tree: flatTreeSpec(50000));
+      final largeOutcome = await collect(large, warmups: 1, repetitions: 1);
+
+      expect(smallOutcome.failedRepetition, isNull);
+      expect(largeOutcome.failedRepetition, isNull);
+      expect(small.statCalls, smallOutcome.measuredDrops.length + 1);
+      expect(large.statCalls, largeOutcome.measuredDrops.length + 1);
+      expect(
+        smallOutcome.measuredDrops.single.statCalls,
+        largeOutcome.measuredDrops.single.statCalls,
+        reason:
+            'the stat count must be identical at 1k and 50k '
+            'entries — a growing count means the drop→start path '
+            'walks the tree',
+      );
+      expect(
+        smallOutcome.measuredDrops.single.listingCalls,
+        largeOutcome.measuredDrops.single.listingCalls,
+      );
+      // The absolute shape of the accepted path: one classification
+      // stat of the dropped root, one listing, one first byte — never
+      // a per-entry stat.
+      expect(smallOutcome.measuredDrops.single.statCalls, 1);
+      expect(largeOutcome.measuredDrops.single.statCalls, 1);
+    });
 
     test('a file drop needs no listing at all', () async {
       final vfs = FakeDropVfs(
@@ -186,8 +178,9 @@ void main() {
       },
     );
 
-    test('a dropped symlink fails honestly instead of being followed',
-        () async {
+    test(
+      'a dropped symlink fails honestly instead of being followed',
+      () async {
         final vfs = FakeDropVfs(
           tree: dropTreeSpec(),
           extraStats: {
@@ -239,59 +232,54 @@ void main() {
       expect(outcome.failureMessage, contains('stat broke'));
     });
 
-    test('a wedged listing fails through the per-operation timeout',
-        () async {
-        final vfs = FakeDropVfs(tree: dropTreeSpec());
-        vfs.listingDelay = const Duration(seconds: 30);
-        final outcome = await collect(
-          vfs,
-          warmups: 1,
-          repetitions: 5,
-          operationTimeout: const Duration(milliseconds: 50),
-        );
+    test('a wedged listing fails through the per-operation timeout', () async {
+      final vfs = FakeDropVfs(tree: dropTreeSpec());
+      vfs.listingDelay = const Duration(seconds: 30);
+      final outcome = await collect(
+        vfs,
+        warmups: 1,
+        repetitions: 5,
+        operationTimeout: const Duration(milliseconds: 50),
+      );
 
-        expect(outcome.failedRepetition, 0);
-        expect(outcome.failureMessage, contains('timed out'));
-      },
-    );
+      expect(outcome.failedRepetition, 0);
+      expect(outcome.failureMessage, contains('timed out'));
+    });
 
-    test('the whole-run deadline caps an in-flight listing await',
-        () async {
-        // The verification probe shape: with a 50 ms whole-run budget and
-        // a 5 s per-operation timeout, a 2 s listing must not be waited
-        // out — the budget caps every await, and expiry is attributed as
-        // a run-budget overrun, never as a per-operation timeout.
-        final vfs = FakeDropVfs(tree: dropTreeSpec());
-        vfs.listingDelay = const Duration(seconds: 2);
-        final elapsed = Stopwatch()..start();
-        const operationTimeout = Duration(seconds: 5);
-        final outcome = await collect(
-          vfs,
-          warmups: 1,
-          repetitions: 5,
-          operationTimeout: operationTimeout,
-          deadline: const Duration(milliseconds: 50),
-        );
-        elapsed.stop();
+    test('the whole-run deadline caps an in-flight listing await', () async {
+      // The verification probe shape: with a 50 ms whole-run budget and
+      // a 5 s per-operation timeout, a 2 s listing must not be waited
+      // out — the budget caps every await, and expiry is attributed as
+      // a run-budget overrun, never as a per-operation timeout.
+      final vfs = FakeDropVfs(tree: dropTreeSpec());
+      vfs.listingDelay = const Duration(seconds: 2);
+      final elapsed = Stopwatch()..start();
+      const operationTimeout = Duration(seconds: 5);
+      final outcome = await collect(
+        vfs,
+        warmups: 1,
+        repetitions: 5,
+        operationTimeout: operationTimeout,
+        deadline: const Duration(milliseconds: 50),
+      );
+      elapsed.stop();
 
-        expect(
-          elapsed.elapsed,
-          lessThan(const Duration(milliseconds: 1500)),
-          reason: 'a 50 ms whole-run budget must bound the listing await, '
-              'not wait the 2 s listing out',
-        );
-        expect(outcome.failedRepetition, 0);
-        expect(outcome.failureMessage, contains('run deadline exceeded'));
-        expect(
-          outcome.failureMessage,
-          isNot(
-            contains(
-              'timed out after ${operationTimeout.inMilliseconds} ms',
-            ),
-          ),
-        );
-      },
-    );
+      expect(
+        elapsed.elapsed,
+        lessThan(const Duration(milliseconds: 1500)),
+        reason:
+            'a 50 ms whole-run budget must bound the listing await, '
+            'not wait the 2 s listing out',
+      );
+      expect(outcome.failedRepetition, 0);
+      expect(outcome.failureMessage, contains('run deadline exceeded'));
+      expect(
+        outcome.failureMessage,
+        isNot(
+          contains('timed out after ${operationTimeout.inMilliseconds} ms'),
+        ),
+      );
+    });
 
     test('the run deadline aborts before the next repetition', () async {
       final vfs = FakeDropVfs(tree: dropTreeSpec());
@@ -308,8 +296,9 @@ void main() {
       expect(outcome.failureMessage, contains('deadline'));
     });
 
-    test('a warmup failure reports repetition 0 with unknown identity',
-        () async {
+    test(
+      'a warmup failure reports repetition 0 with unknown identity',
+      () async {
         final vfs = FakeDropVfs(tree: dropTreeSpec());
         vfs.statFailure = StateError('warmup exploded');
         final outcome = await collect(vfs, warmups: 1, repetitions: 5);
@@ -429,26 +418,24 @@ void main() {
       },
     );
 
-    test('a cancellation before the first byte is an honest failure',
-        () async {
-        // A transfer cancelled by an outside actor before any byte must
-        // not masquerade as the collector's own first-byte cut.
-        final vfs = FakeDropVfs(tree: dropTreeSpec());
-        vfs.downloadHook = (path, sink, cancellation) async {
-          throw const RemoteFileException(
-            kind: RemoteFileErrorKind.cancelled,
-            operation: 'download',
-            path: '/root/file-0',
-            message: 'Transfer cancelled.',
-          );
-        };
-        final outcome = await collect(vfs, warmups: 1, repetitions: 5);
+    test('a cancellation before the first byte is an honest failure', () async {
+      // A transfer cancelled by an outside actor before any byte must
+      // not masquerade as the collector's own first-byte cut.
+      final vfs = FakeDropVfs(tree: dropTreeSpec());
+      vfs.downloadHook = (path, sink, cancellation) async {
+        throw const RemoteFileException(
+          kind: RemoteFileErrorKind.cancelled,
+          operation: 'download',
+          path: '/root/file-0',
+          message: 'Transfer cancelled.',
+        );
+      };
+      final outcome = await collect(vfs, warmups: 1, repetitions: 5);
 
-        expect(outcome.failedRepetition, 0);
-        expect(outcome.measuredDrops, isEmpty);
-        expect(outcome.failureMessage, contains('cancelled'));
-      },
-    );
+      expect(outcome.failedRepetition, 0);
+      expect(outcome.measuredDrops, isEmpty);
+      expect(outcome.failureMessage, contains('cancelled'));
+    });
 
     test(
       'an empty leading chunk does not stamp the first-byte signal',
@@ -466,37 +453,32 @@ void main() {
           expect(
             sample.firstChunkBytes,
             'payload of file-0'.length,
-            reason: 'the recorded chunk must be the payload, not the '
+            reason:
+                'the recorded chunk must be the payload, not the '
                 'empty leading chunk',
           );
         }
       },
     );
 
-    test(
-      'a writer-side sink error surfaces instead of the empty-file '
-      'diagnosis',
-      () async {
-        // A download that reports its failure through the sink protocol
-        // (addError) and then completes normally must surface that
-        // failure — without it, the leg would be misdiagnosed as an
-        // empty first file.
-        final vfs = FakeDropVfs(tree: dropTreeSpec())
-          ..downloadSinkError = StateError('writer reported via addError');
-        final outcome = await collect(vfs, warmups: 1, repetitions: 5);
+    test('a writer-side sink error surfaces instead of the empty-file '
+        'diagnosis', () async {
+      // A download that reports its failure through the sink protocol
+      // (addError) and then completes normally must surface that
+      // failure — without it, the leg would be misdiagnosed as an
+      // empty first file.
+      final vfs = FakeDropVfs(tree: dropTreeSpec())
+        ..downloadSinkError = StateError('writer reported via addError');
+      final outcome = await collect(vfs, warmups: 1, repetitions: 5);
 
-        expect(outcome.failedRepetition, 0);
-        expect(outcome.measuredDrops, isEmpty);
-        expect(
-          outcome.failureMessage,
-          contains('writer reported via addError'),
-        );
-        expect(
-          outcome.failureMessage,
-          isNot(contains('without delivering a byte')),
-        );
-      },
-    );
+      expect(outcome.failedRepetition, 0);
+      expect(outcome.measuredDrops, isEmpty);
+      expect(outcome.failureMessage, contains('writer reported via addError'));
+      expect(
+        outcome.failureMessage,
+        isNot(contains('without delivering a byte')),
+      );
+    });
 
     test(
       'a fast file completing before the cancel still reports first byte',
@@ -569,8 +551,9 @@ void main() {
           final opened = buildChannel(tree: tree)
             ..fs.listingDelay = listingDelay
             ..fs.listingFailure = listingFailure
-            ..fs.listingFailureCall =
-                listingFailure == null ? 1 : listingFailureCall
+            ..fs.listingFailureCall = listingFailure == null
+                ? 1
+                : listingFailureCall
             ..fs.canonicalFailure = canonicalFailure;
           opens.add(opened);
           return opened;
@@ -611,13 +594,18 @@ void main() {
         expect(
           opens,
           hasLength(1),
-          reason: 'the collector must retain one browse channel for '
+          reason:
+              'the collector must retain one browse channel for '
               'every drop leg',
         );
         for (final call in channel.fs.calls) {
-          expect(call, isNot(startsWith('download:')),
-              reason: 'the browse channel only scans; the transfer leg '
-                  'runs on the leased channel fs');
+          expect(
+            call,
+            isNot(startsWith('download:')),
+            reason:
+                'the browse channel only scans; the transfer leg '
+                'runs on the leased channel fs',
+          );
         }
         // 1 warmup + 5 measured drops lease a transfer channel each;
         // every lease is released.
@@ -644,8 +632,13 @@ void main() {
         final rows = document['rows']! as List<Object?>;
         // Warmup drop excluded from rows: exactly 5 measured repetitions.
         expect(rows, hasLength(5));
-        expect(rows.map((r) => (r! as Map<String, Object?>)['repetition']),
-            [0, 1, 2, 3, 4]);
+        expect(rows.map((r) => (r! as Map<String, Object?>)['repetition']), [
+          0,
+          1,
+          2,
+          3,
+          4,
+        ]);
         for (final row in rows.cast<Map<String, Object?>>()) {
           expect(row['scenario'], 'P5');
           expect(row['status'], 'ok');
@@ -659,17 +652,10 @@ void main() {
           final value = row['value']! as num;
           expect(value.isFinite, isTrue);
           expect(value, greaterThan(0));
-          final fingerprint =
-              row['fingerprint']! as Map<String, Object?>;
+          final fingerprint = row['fingerprint']! as Map<String, Object?>;
           expect(fingerprint['mode'], 'aot');
-          expect(
-            fingerprint['scenarioConfig'],
-            contains('drop=/remote/tree'),
-          );
-          expect(
-            fingerprint['scenarioConfig'],
-            contains('kind=directory'),
-          );
+          expect(fingerprint['scenarioConfig'], contains('drop=/remote/tree'));
+          expect(fingerprint['scenarioConfig'], contains('kind=directory'));
         }
         final provenance = document['provenance']! as Map<String, Object?>;
         expect(provenance['statCallsPerDrop'], 1);
@@ -679,73 +665,66 @@ void main() {
       },
     );
 
-    test('stdout median matches the checker definition of the rows',
-        () async {
-        final output = '${tempDir.path}/results.json';
-        final result = await run(outputPath: output);
-        expect(result.exitCode, 0, reason: result.stderr);
+    test('stdout median matches the checker definition of the rows', () async {
+      final output = '${tempDir.path}/results.json';
+      final result = await run(outputPath: output);
+      expect(result.exitCode, 0, reason: result.stderr);
 
-        final document =
-            jsonDecode(await File(output).readAsString())
-                as Map<String, Object?>;
-        final values = [
-          for (final row in document['rows']! as List<Object?>)
-            ((row! as Map<String, Object?>)['value']! as num).toDouble(),
-        ];
-        final median = medianOf(values);
-        final formatted = median == median.roundToDouble()
-            ? median.toInt().toString()
-            : median.toStringAsFixed(3);
-        expect(result.stdout, contains('median $formatted ms'));
-      },
-    );
+      final document =
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final values = [
+        for (final row in document['rows']! as List<Object?>)
+          ((row! as Map<String, Object?>)['value']! as num).toDouble(),
+      ];
+      final median = medianOf(values);
+      final formatted = median == median.roundToDouble()
+          ? median.toInt().toString()
+          : median.toStringAsFixed(3);
+      expect(result.stdout, contains('median $formatted ms'));
+    });
 
-    test('a wedged channel open writes a clean timeout error row',
-        () async {
-        final output = '${tempDir.path}/results.json';
-        final never = Completer<FakeDropChannel>();
-        addTearDown(() {
-          if (!never.isCompleted) never.complete(buildChannel());
-        });
-        final result = await runP5Collection(
-          config: P5CollectorConfig(
-            targetPath: '/remote/tree',
-            outputPath: output,
-            warmups: 1,
-            repetitions: 5,
-            operationTimeout: const Duration(seconds: 5),
-            deadline: const Duration(minutes: 1),
-            channelOpenTimeout: const Duration(milliseconds: 50),
-          ),
-          fingerprint: const P5FingerprintFields(
-            runnerImage: 'test-image',
-            arch: 'x64test',
-            dartVersion: 'test-dart',
-            flutterVersion: null,
-            mode: 'aot',
-            cpuModel: 'test-cpu',
-          ),
-          openChannel: () => never.future,
-          leaseChannel: () async => FakeTransferLease(fs: channel.fs),
-          releaseServer: () async {},
-        );
+    test('a wedged channel open writes a clean timeout error row', () async {
+      final output = '${tempDir.path}/results.json';
+      final never = Completer<FakeDropChannel>();
+      addTearDown(() {
+        if (!never.isCompleted) never.complete(buildChannel());
+      });
+      final result = await runP5Collection(
+        config: P5CollectorConfig(
+          targetPath: '/remote/tree',
+          outputPath: output,
+          warmups: 1,
+          repetitions: 5,
+          operationTimeout: const Duration(seconds: 5),
+          deadline: const Duration(minutes: 1),
+          channelOpenTimeout: const Duration(milliseconds: 50),
+        ),
+        fingerprint: const P5FingerprintFields(
+          runnerImage: 'test-image',
+          arch: 'x64test',
+          dartVersion: 'test-dart',
+          flutterVersion: null,
+          mode: 'aot',
+          cpuModel: 'test-cpu',
+        ),
+        openChannel: () => never.future,
+        leaseChannel: () async => FakeTransferLease(fs: channel.fs),
+        releaseServer: () async {},
+      );
 
-        expect(result.exitCode, 1);
-        final document =
-            jsonDecode(await File(output).readAsString())
-                as Map<String, Object?>;
-        final row =
-            (document['rows']! as List).single! as Map<String, Object?>;
-        expect(row['scenario'], 'P5');
-        expect(row['status'], 'error');
-        final error = row['error']! as String;
-        expect(error, contains('timed out'));
-        // The budget message reports the configured timeout in
-        // milliseconds, not a truncated seconds figure.
-        expect(error, contains('timed out after 50 ms'));
-        expect(result.released, isTrue);
-      },
-    );
+      expect(result.exitCode, 1);
+      final document =
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final row = (document['rows']! as List).single! as Map<String, Object?>;
+      expect(row['scenario'], 'P5');
+      expect(row['status'], 'error');
+      final error = row['error']! as String;
+      expect(error, contains('timed out'));
+      // The budget message reports the configured timeout in
+      // milliseconds, not a truncated seconds figure.
+      expect(error, contains('timed out after 50 ms'));
+      expect(result.released, isTrue);
+    });
 
     test('setup time is charged against the whole-run deadline', () async {
       // A channel open slower than the whole-run budget must fail the
@@ -779,10 +758,8 @@ void main() {
 
       expect(result.exitCode, 1);
       final document =
-          jsonDecode(await File(output).readAsString())
-              as Map<String, Object?>;
-      final row =
-          (document['rows']! as List).single! as Map<String, Object?>;
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final row = (document['rows']! as List).single! as Map<String, Object?>;
       expect(row['status'], 'error');
       expect(row['error'], contains('run deadline exceeded'));
       expect(result.released, isTrue);
@@ -826,73 +803,62 @@ void main() {
         expect(result.exitCode, 74);
         expect(result.stderr, contains('cannot write results'));
         expect(await foreign.readAsString(), 'foreign payload');
-        expect(
-          await File('${tempDir.path}/results.json').exists(),
-          isFalse,
-        );
+        expect(await File('${tempDir.path}/results.json').exists(), isFalse);
       },
     );
 
-    test('a canonicalize failure writes a single honest error row',
-        () async {
-        final output = '${tempDir.path}/results.json';
-        final result = await run(
-          outputPath: output,
-          canonicalFailure: StateError('canonicalize broke'),
-        );
+    test('a canonicalize failure writes a single honest error row', () async {
+      final output = '${tempDir.path}/results.json';
+      final result = await run(
+        outputPath: output,
+        canonicalFailure: StateError('canonicalize broke'),
+      );
 
-        expect(result.exitCode, 1);
-        final document =
-            jsonDecode(await File(output).readAsString())
-                as Map<String, Object?>;
-        final rows = document['rows']! as List<Object?>;
-        expect(rows, hasLength(1));
-        final row = rows.single! as Map<String, Object?>;
-        expect(row['status'], 'error');
-        expect(row['repetition'], 0);
-        expect(row['error'], contains('canonicalize broke'));
-        final fingerprint =
-            row['fingerprint']! as Map<String, Object?>;
-        expect(
-          fingerprint['scenarioConfig'],
-          contains('root-entries=unknown'),
-        );
-      },
-    );
+      expect(result.exitCode, 1);
+      final document =
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final rows = document['rows']! as List<Object?>;
+      expect(rows, hasLength(1));
+      final row = rows.single! as Map<String, Object?>;
+      expect(row['status'], 'error');
+      expect(row['repetition'], 0);
+      expect(row['error'], contains('canonicalize broke'));
+      final fingerprint = row['fingerprint']! as Map<String, Object?>;
+      expect(fingerprint['scenarioConfig'], contains('root-entries=unknown'));
+    });
 
     test('a lease failure inside a leg writes partial rows and an error '
         'row', () async {
-        final output = '${tempDir.path}/results.json';
-        final result = await run(
-          outputPath: output,
-          leaseFailure: StateError('no transfer channel free'),
-          // 1 warmup + 2 measured drops lease fine; the fourth lease
-          // (measured repetition 2) fails and ends the run.
-          leaseFailureCall: 4,
-        );
+      final output = '${tempDir.path}/results.json';
+      final result = await run(
+        outputPath: output,
+        leaseFailure: StateError('no transfer channel free'),
+        // 1 warmup + 2 measured drops lease fine; the fourth lease
+        // (measured repetition 2) fails and ends the run.
+        leaseFailureCall: 4,
+      );
 
-        expect(result.exitCode, 1);
-        final document =
-            jsonDecode(await File(output).readAsString())
-                as Map<String, Object?>;
-        final rows = document['rows']! as List<Object?>;
-        final okRows =
-            rows.where((r) => (r! as Map)['status'] == 'ok').toList();
-        final errorRows =
-            rows.where((r) => (r! as Map)['status'] == 'error').toList();
-        expect(okRows, hasLength(2));
-        expect(errorRows, hasLength(1));
-        final errorRow = errorRows.single! as Map<String, Object?>;
-        expect(errorRow['error'], contains('no transfer channel free'));
-        expect(errorRow.containsKey('value'), isFalse);
-        // Cleanup ran despite the failure.
-        expect(channel.closeCount, 1);
-        expect(result.released, isTrue);
-      },
-    );
+      expect(result.exitCode, 1);
+      final document =
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final rows = document['rows']! as List<Object?>;
+      final okRows = rows.where((r) => (r! as Map)['status'] == 'ok').toList();
+      final errorRows = rows
+          .where((r) => (r! as Map)['status'] == 'error')
+          .toList();
+      expect(okRows, hasLength(2));
+      expect(errorRows, hasLength(1));
+      final errorRow = errorRows.single! as Map<String, Object?>;
+      expect(errorRow['error'], contains('no transfer channel free'));
+      expect(errorRow.containsKey('value'), isFalse);
+      // Cleanup ran despite the failure.
+      expect(channel.closeCount, 1);
+      expect(result.released, isTrue);
+    });
 
-    test('a mid-run download failure writes partial rows and an error row',
-        () async {
+    test(
+      'a mid-run download failure writes partial rows and an error row',
+      () async {
         final output = '${tempDir.path}/results.json';
         final result = await run(
           outputPath: output,
@@ -912,10 +878,12 @@ void main() {
             jsonDecode(await File(output).readAsString())
                 as Map<String, Object?>;
         final rows = document['rows']! as List<Object?>;
-        final okRows =
-            rows.where((r) => (r! as Map)['status'] == 'ok').toList();
-        final errorRows =
-            rows.where((r) => (r! as Map)['status'] == 'error').toList();
+        final okRows = rows
+            .where((r) => (r! as Map)['status'] == 'ok')
+            .toList();
+        final errorRows = rows
+            .where((r) => (r! as Map)['status'] == 'error')
+            .toList();
         expect(okRows, hasLength(2));
         expect(errorRows, hasLength(1));
         final errorRow = errorRows.single! as Map<String, Object?>;
@@ -925,87 +893,77 @@ void main() {
       },
     );
 
-    test(
-      'partial rows keep the frozen scenarioConfig after a mid-run '
-      'change',
-      () async {
-        final output = '${tempDir.path}/results.json';
-        final tree = dropTreeSpec(rootPath: '/remote/tree');
-        final channel = FakeDropChannel(
-          tree: tree,
-          events: events = <String>[],
-        );
-        // After the warmup + first two measured drops, the tree shrinks:
-        // the fourth root listing (measured repetition 2) observes the
-        // changed size, and the run fails there.
-        var rootListings = 0;
-        channel.fs.afterListing = (path) {
-          if (path == '/remote/tree' && ++rootListings == 4) {
-            tree['/remote/tree']!.removeLast();
-          }
-        };
-        final result = await runP5Collection(
-          config: P5CollectorConfig(
-            targetPath: '/remote/tree',
-            outputPath: output,
-            warmups: 1,
-            repetitions: 5,
-            operationTimeout: const Duration(seconds: 5),
-            deadline: const Duration(minutes: 1),
-          ),
-          fingerprint: const P5FingerprintFields(
-            runnerImage: 'test-image',
-            arch: 'x64test',
-            dartVersion: 'test-dart',
-            flutterVersion: null,
-            mode: 'aot',
-            cpuModel: 'test-cpu',
-          ),
-          openChannel: () async => channel,
-          leaseChannel: () async => FakeTransferLease(fs: channel.fs),
-          releaseServer: () async {},
-        );
-
-        expect(result.exitCode, 1);
-        expect(result.stderr, contains('identity changed'));
-        final document =
-            jsonDecode(await File(output).readAsString())
-                as Map<String, Object?>;
-        final rows = document['rows']! as List<Object?>;
-        expect(rows, hasLength(3));
-        final frozenEntries = tree['/remote/tree']!.length + 1;
-        for (final row in rows.cast<Map<String, Object?>>()) {
-          final fingerprint =
-              row['fingerprint']! as Map<String, Object?>;
-          // Every row — ok and error — carries the frozen identity the
-          // successful drops were measured under; the changed count
-          // appears only in the error row's text.
-          expect(
-            fingerprint['scenarioConfig'],
-            contains(';root-entries=$frozenEntries;'),
-          );
-          expect(
-            fingerprint['scenarioConfig'],
-            isNot(contains(';root-entries=${frozenEntries - 1};')),
-          );
+    test('partial rows keep the frozen scenarioConfig after a mid-run '
+        'change', () async {
+      final output = '${tempDir.path}/results.json';
+      final tree = dropTreeSpec(rootPath: '/remote/tree');
+      final channel = FakeDropChannel(tree: tree, events: events = <String>[]);
+      // After the warmup + first two measured drops, the tree shrinks:
+      // the fourth root listing (measured repetition 2) observes the
+      // changed size, and the run fails there.
+      var rootListings = 0;
+      channel.fs.afterListing = (path) {
+        if (path == '/remote/tree' && ++rootListings == 4) {
+          tree['/remote/tree']!.removeLast();
         }
-        final errorRow = rows.last! as Map<String, Object?>;
-        expect(errorRow['status'], 'error');
+      };
+      final result = await runP5Collection(
+        config: P5CollectorConfig(
+          targetPath: '/remote/tree',
+          outputPath: output,
+          warmups: 1,
+          repetitions: 5,
+          operationTimeout: const Duration(seconds: 5),
+          deadline: const Duration(minutes: 1),
+        ),
+        fingerprint: const P5FingerprintFields(
+          runnerImage: 'test-image',
+          arch: 'x64test',
+          dartVersion: 'test-dart',
+          flutterVersion: null,
+          mode: 'aot',
+          cpuModel: 'test-cpu',
+        ),
+        openChannel: () async => channel,
+        leaseChannel: () async => FakeTransferLease(fs: channel.fs),
+        releaseServer: () async {},
+      );
+
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('identity changed'));
+      final document =
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final rows = document['rows']! as List<Object?>;
+      expect(rows, hasLength(3));
+      final frozenEntries = tree['/remote/tree']!.length + 1;
+      for (final row in rows.cast<Map<String, Object?>>()) {
+        final fingerprint = row['fingerprint']! as Map<String, Object?>;
+        // Every row — ok and error — carries the frozen identity the
+        // successful drops were measured under; the changed count
+        // appears only in the error row's text.
         expect(
-          errorRow['error'],
-          contains('$frozenEntries->${frozenEntries - 1}'),
+          fingerprint['scenarioConfig'],
+          contains(';root-entries=$frozenEntries;'),
         );
-      },
-    );
+        expect(
+          fingerprint['scenarioConfig'],
+          isNot(contains(';root-entries=${frozenEntries - 1};')),
+        );
+      }
+      final errorRow = rows.last! as Map<String, Object?>;
+      expect(errorRow['status'], 'error');
+      expect(
+        errorRow['error'],
+        contains('$frozenEntries->${frozenEntries - 1}'),
+      );
+    });
 
     test('a file drop reports kind=file and no root listing', () async {
       final output = '${tempDir.path}/results.json';
       final channel = FakeDropChannel(
         tree: dropTreeSpec(rootPath: '/remote/tree'),
         events: events = <String>[],
-        extraFiles: {
-          '/remote/one.bin': 'single file payload'.codeUnits,
-        },
+        extraFiles: {'/remote/one.bin': 'single file payload'.codeUnits},
       );
       final result = await runP5Collection(
         config: P5CollectorConfig(
@@ -1031,10 +989,8 @@ void main() {
 
       expect(result.exitCode, 0, reason: result.stderr);
       final document =
-          jsonDecode(await File(output).readAsString())
-              as Map<String, Object?>;
-      final row =
-          (document['rows']! as List).first! as Map<String, Object?>;
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final row = (document['rows']! as List).first! as Map<String, Object?>;
       expect(row['statCalls'], 1);
       expect(row['listingCalls'], 0);
       final fingerprint = row['fingerprint']! as Map<String, Object?>;
@@ -1354,15 +1310,12 @@ void main() {
         'POLTERGEIST_SSHD_USER',
         'POLTERGEIST_SSHD_KEY',
       };
-      final result = await runCollector(
-        [
-          '--output',
-          '${tempDir.path}/results.json',
-          '--target',
-          '/remote/tree',
-        ],
-        absentEnvironment: fixtureEnvNames,
-      );
+      final result = await runCollector([
+        '--output',
+        '${tempDir.path}/results.json',
+        '--target',
+        '/remote/tree',
+      ], absentEnvironment: fixtureEnvNames);
       expect(result.exitCode, 2);
       final stderrText = result.stderr as String;
       for (final variable in fixtureEnvNames) {
@@ -1654,8 +1607,7 @@ void main() {
         // Same job-wide controlled axes, each scenario's own per-scenario
         // config.
         final p3Fingerprint = {...p5Fingerprint}
-          ..['scenarioConfig'] =
-              'p3/v1;target=/remote/tree;control=/remote/c';
+          ..['scenarioConfig'] = 'p3/v1;target=/remote/tree;control=/remote/c';
         final p7Fingerprint = {...p5Fingerprint}
           ..['scenarioConfig'] =
               'p7/v1;root=/remote/tree;entries=8;directories=4';
@@ -1706,8 +1658,7 @@ void main() {
             {
               'id': 'P5',
               'tier': 'a',
-              'summary':
-                  'Drop to transfer start (no upfront tree stat)',
+              'summary': 'Drop to transfer start (no upfront tree stat)',
               'operator': 'lessThan',
               'value': 500,
               'unit': 'ms',
@@ -1910,7 +1861,8 @@ class FakeDropVfs implements RemoteFileSystem {
     String path,
     StreamSink<List<int>> destination,
     RemoteTransferCancellation? cancellation,
-  )? downloadHook;
+  )?
+  downloadHook;
 
   /// Delivers an empty leading chunk before the payload — a real
   /// transfer can flush a header or a zero-length read first, and the

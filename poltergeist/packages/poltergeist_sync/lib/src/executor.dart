@@ -1697,8 +1697,7 @@ final class _RunSession {
             : SyncTrashRootAccess.openExisting,
       );
     } on RemoteFileException catch (error) {
-      if (expectedScope == null ||
-          error.kind != RemoteFileErrorKind.notFound) {
+      if (expectedScope == null || error.kind != RemoteFileErrorKind.notFound) {
         rethrow;
       }
 

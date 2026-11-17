@@ -8,9 +8,11 @@ class _FakeProber implements Prober {
   final Map<String, ProbeStatus> byHost;
   _FakeProber(this.byHost);
   @override
-  Future<ProbeStatus> probe(String host, int port,
-          {Duration timeout = const Duration(seconds: 5)}) async =>
-      byHost[host] ?? ProbeStatus.unknown;
+  Future<ProbeStatus> probe(
+    String host,
+    int port, {
+    Duration timeout = const Duration(seconds: 5),
+  }) async => byHost[host] ?? ProbeStatus.unknown;
 }
 
 /// Counts how the vault was written and can refuse a batch, so a test can tell
@@ -48,13 +50,13 @@ class _CountingVaultStore implements VaultStore {
 }
 
 ServerConfig server(String id, String host) => ServerConfig(
-      id: id,
-      label: id,
-      host: host,
-      username: 'u',
-      createdAt: 0,
-      updatedAt: 0,
-    );
+  id: id,
+  label: id,
+  host: host,
+  username: 'u',
+  createdAt: 0,
+  updatedAt: 0,
+);
 
 void main() {
   group('SecretVault', () {
@@ -64,7 +66,10 @@ void main() {
       final vault = SecretVault(store, vaultKey);
 
       final secret = Secret(
-          id: 's1', kind: SecretKind.password, value: 'hunter2-very-secret');
+        id: 's1',
+        kind: SecretKind.password,
+        value: 'hunter2-very-secret',
+      );
       await vault.putSecret(secret);
 
       final blob = await store.getSecretBlob('s1');
@@ -101,8 +106,10 @@ void main() {
 
     test('cannot open a secret with the wrong vault key', () async {
       final store = InMemoryVaultStore();
-      await SecretVault(store, secureRandomBytes(32))
-          .putSecret(Secret(id: 's', kind: SecretKind.password, value: 'x'));
+      await SecretVault(
+        store,
+        secureRandomBytes(32),
+      ).putSecret(Secret(id: 's', kind: SecretKind.password, value: 'x'));
       final wrong = SecretVault(store, secureRandomBytes(32));
       expect(() => wrong.getSecret('s'), throwsA(anything));
     });
@@ -165,10 +172,12 @@ void main() {
       final store = InMemoryVaultStore();
       final vault = SecretVault(store, vaultKey);
       await vault.putSecret(
-          Secret(id: 'orphan', kind: SecretKind.password, value: 'kept'));
+        Secret(id: 'orphan', kind: SecretKind.password, value: 'kept'),
+      );
 
-      await vault.putSecrets(
-          [Secret(id: 'named', kind: SecretKind.password, value: 'fresh')]);
+      await vault.putSecrets([
+        Secret(id: 'named', kind: SecretKind.password, value: 'fresh'),
+      ]);
 
       // A vault can hold a credential no current config references; re-keying
       // is not the place to decide it is garbage.
@@ -190,11 +199,13 @@ void main() {
 
   group('ProbeService.probeAll', () {
     test('maps each server id to a tri-state status', () async {
-      final svc = ProbeService(prober: _FakeProber({
-        'up.example.com': ProbeStatus.online,
-        'down.example.com': ProbeStatus.offline,
-        // bastion.example.com omitted -> unknown
-      }));
+      final svc = ProbeService(
+        prober: _FakeProber({
+          'up.example.com': ProbeStatus.online,
+          'down.example.com': ProbeStatus.offline,
+          // bastion.example.com omitted -> unknown
+        }),
+      );
       final result = await svc.probeAll([
         server('1', 'up.example.com'),
         server('2', 'down.example.com'),
@@ -223,39 +234,58 @@ void main() {
       );
 
       final ok = await mgr.verifyHostKey(
-          host: 'h', port: 22, type: 'ssh-ed25519', fingerprintBytes: fp('AAA'));
+        host: 'h',
+        port: 22,
+        type: 'ssh-ed25519',
+        fingerprintBytes: fp('AAA'),
+      );
       expect(ok, isTrue);
       expect(prompts, 1);
 
       // Second connection with the same key: trusted, no prompt.
       final ok2 = await mgr.verifyHostKey(
-          host: 'h', port: 22, type: 'ssh-ed25519', fingerprintBytes: fp('AAA'));
+        host: 'h',
+        port: 22,
+        type: 'ssh-ed25519',
+        fingerprintBytes: fp('AAA'),
+      );
       expect(ok2, isTrue);
       expect(prompts, 1);
     });
 
-    test('a changed key surfaces as "changed" and is refused if not approved',
-        () async {
-      final store = InMemoryHostKeyStore();
-      HostKeyDecision? seen;
-      final mgr = SshSessionManager(
-        tofu: TofuVerifier(store),
-        onHostKey: (decision) async {
-          seen = decision;
-          return decision.verdict == HostKeyVerdict.firstUse; // reject changes
-        },
-      );
+    test(
+      'a changed key surfaces as "changed" and is refused if not approved',
+      () async {
+        final store = InMemoryHostKeyStore();
+        HostKeyDecision? seen;
+        final mgr = SshSessionManager(
+          tofu: TofuVerifier(store),
+          onHostKey: (decision) async {
+            seen = decision;
+            return decision.verdict ==
+                HostKeyVerdict.firstUse; // reject changes
+          },
+        );
 
-      await mgr.verifyHostKey(
-          host: 'h', port: 22, type: 'ssh-ed25519', fingerprintBytes: fp('AAA'));
-      final ok = await mgr.verifyHostKey(
-          host: 'h', port: 22, type: 'ssh-ed25519', fingerprintBytes: fp('EVIL'));
+        await mgr.verifyHostKey(
+          host: 'h',
+          port: 22,
+          type: 'ssh-ed25519',
+          fingerprintBytes: fp('AAA'),
+        );
+        final ok = await mgr.verifyHostKey(
+          host: 'h',
+          port: 22,
+          type: 'ssh-ed25519',
+          fingerprintBytes: fp('EVIL'),
+        );
 
-      expect(seen!.verdict, HostKeyVerdict.changed);
-      expect(ok, isFalse);
-      // The pinned key is unchanged despite the rejected attempt.
-      expect((await store.get('h', 22))!.fingerprintSha256, 'SHA256:AAA');
-    });
+        expect(seen!.verdict, HostKeyVerdict.changed);
+        expect(ok, isFalse);
+        // The pinned key is unchanged despite the rejected attempt.
+        expect((await store.get('h', 22))!.fingerprintSha256, 'SHA256:AAA');
+      },
+    );
   });
 
   group('HeadlessTerminalEngine', () {

@@ -19,18 +19,17 @@ void main() {
     int tail = 64,
     String chunk = 'IHDR',
     int chunkLength = 13,
-  }) =>
-      Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // signature
-        (chunkLength >> 24) & 0xFF, (chunkLength >> 16) & 0xFF,
-        (chunkLength >> 8) & 0xFF, chunkLength & 0xFF,
-        ...chunk.codeUnits,
-        (width >> 24) & 0xFF, (width >> 16) & 0xFF,
-        (width >> 8) & 0xFF, width & 0xFF,
-        (height >> 24) & 0xFF, (height >> 16) & 0xFF,
-        (height >> 8) & 0xFF, height & 0xFF,
-        ...List.filled(tail, 0),
-      ]);
+  }) => Uint8List.fromList([
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // signature
+    (chunkLength >> 24) & 0xFF, (chunkLength >> 16) & 0xFF,
+    (chunkLength >> 8) & 0xFF, chunkLength & 0xFF,
+    ...chunk.codeUnits,
+    (width >> 24) & 0xFF, (width >> 16) & 0xFF,
+    (width >> 8) & 0xFF, width & 0xFF,
+    (height >> 24) & 0xFF, (height >> 16) & 0xFF,
+    (height >> 8) & 0xFF, height & 0xFF,
+    ...List.filled(tail, 0),
+  ]);
   final png = pngHeader();
 
   ServerConfig config({
@@ -38,16 +37,16 @@ void main() {
     String? iconEmoji,
     String? iconImage,
   }) => ServerConfig(
-        id: 'a',
-        label: 'box',
-        host: 'h.example.com',
-        username: 'deploy',
-        icon: icon,
-        iconEmoji: iconEmoji,
-        iconImage: iconImage,
-        createdAt: 1,
-        updatedAt: 1,
-      );
+    id: 'a',
+    label: 'box',
+    host: 'h.example.com',
+    username: 'deploy',
+    icon: icon,
+    iconEmoji: iconEmoji,
+    iconImage: iconImage,
+    createdAt: 1,
+    updatedAt: 1,
+  );
 
   group('precedence', () {
     test('an image wins over an emoji, which wins over a glyph', () {
@@ -74,7 +73,10 @@ void main() {
       // The reason the three are separate fields: a build that has never heard
       // of iconEmoji ignores the key and draws the glyph, which approximates
       // the choice rather than losing it.
-      final json = config(icon: ServerIcon.cluster, iconEmoji: '\u{1F433}').toJson();
+      final json = config(
+        icon: ServerIcon.cluster,
+        iconEmoji: '\u{1F433}',
+      ).toJson();
       expect(json['icon'], 'cluster');
       expect(json['iconEmoji'], '\u{1F433}');
     });
@@ -82,7 +84,10 @@ void main() {
     test('an unusable image falls through to the emoji', () {
       // Not "shows nothing": a device that cannot carry the bytes still knows
       // what the server was marked with.
-      final broken = config(iconEmoji: '\u{1F525}', iconImage: 'not base64 at all');
+      final broken = config(
+        iconEmoji: '\u{1F525}',
+        iconImage: 'not base64 at all',
+      );
       expect(broken.mark, ServerEmojiMark('\u{1F525}'));
     });
   });
@@ -255,7 +260,8 @@ void main() {
     test('keeps a subdivision flag, whose tail is tag characters', () {
       // The same block, but after a visible base — so the rule has to look at
       // the cluster's first code point only.
-      const england = '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}'
+      const england =
+          '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}'
           '\u{E006E}\u{E0067}\u{E007F}';
       expect(england.characters.length, 1);
       expect(normalizeServerEmoji(england), england);
@@ -300,7 +306,10 @@ void main() {
       // this app, and the alternative to checking is handing arbitrary bytes
       // to an image decoder.
       expect(encodeServerIconImage(Uint8List.fromList([1, 2, 3, 4])), isNull);
-      expect(decodeServerIconImage(base64Encode(List.filled(64, 0x41))), isNull);
+      expect(
+        decodeServerIconImage(base64Encode(List.filled(64, 0x41))),
+        isNull,
+      );
       expect(decodeServerIconImage('%%not base64%%'), isNull);
       expect(decodeServerIconImage(''), isNull);
     });
@@ -309,19 +318,17 @@ void main() {
       // The byte ceiling does not bound what a decoder allocates: PNG
       // compresses a flat colour so well that this header is 24 bytes and
       // asks for a 65535x65535 RGBA buffer at paint time.
-      expect(decodeServerIconImage(base64Encode(pngHeader(
-        width: 65535,
-        height: 65535,
-        tail: 0,
-      ))), isNull);
+      expect(
+        decodeServerIconImage(
+          base64Encode(pngHeader(width: 65535, height: 65535, tail: 0)),
+        ),
+        isNull,
+      );
       // Zero is not a picture either.
       expect(decodeServerIconImage(base64Encode(pngHeader(width: 0))), isNull);
       expect(decodeServerIconImage(base64Encode(pngHeader(height: 0))), isNull);
       // Truncated before IHDR's dimensions are even readable.
-      expect(
-        decodeServerIconImage(base64Encode(png.sublist(0, 20))),
-        isNull,
-      );
+      expect(decodeServerIconImage(base64Encode(png.sublist(0, 20))), isNull);
       // A plausible size still passes, so the bound is not simply refusing.
       expect(
         decodeServerIconImage(base64Encode(pngHeader(width: 256, height: 256))),
@@ -406,9 +413,10 @@ void main() {
       // The editor shows its "use the default mark" button on
       // `_mark != _defaultMark`, so identity comparison there would show it
       // for a server that already has no mark.
-      expect(const ServerGlyphMark(null), ServerGlyphMark(serverIconFromName(
-        'nothing-by-this-name',
-      )));
+      expect(
+        const ServerGlyphMark(null),
+        ServerGlyphMark(serverIconFromName('nothing-by-this-name')),
+      );
       expect(ServerMark.resolve(), const ServerGlyphMark(null));
       expect(
         ServerEmojiMark('\u{1F433}', fallback: ServerIcon.cloud),

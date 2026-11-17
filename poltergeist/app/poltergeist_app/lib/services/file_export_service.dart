@@ -98,11 +98,9 @@ class FileExportService {
   final FileExportPlatform _platform;
   final bool _useAndroidSaf;
 
-  FileExportService({
-    FileExportPlatform? platform,
-    bool? useAndroidSaf,
-  }) : _platform = platform ?? MethodChannelFileExportPlatform(),
-       _useAndroidSaf = useAndroidSaf ?? Platform.isAndroid;
+  FileExportService({FileExportPlatform? platform, bool? useAndroidSaf})
+    : _platform = platform ?? MethodChannelFileExportPlatform(),
+      _useAndroidSaf = useAndroidSaf ?? Platform.isAndroid;
 
   Future<bool> pickExportDirectory() {
     if (!_useAndroidSaf) return Future<bool>.value(false);

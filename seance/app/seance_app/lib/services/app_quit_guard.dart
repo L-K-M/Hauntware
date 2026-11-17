@@ -99,7 +99,10 @@ class QuitRiskSnapshot {
 enum QuitChoice { cancel, saveAll, quit }
 
 typedef QuitDialogPresenter =
-    Future<QuitChoice?> Function(BuildContext context, QuitRiskSnapshot snapshot);
+    Future<QuitChoice?> Function(
+      BuildContext context,
+      QuitRiskSnapshot snapshot,
+    );
 
 /// Serializes every desktop exit route behind one review of at-risk work.
 final class AppQuitGuard {
@@ -258,7 +261,9 @@ final class AppQuitGuard {
     for (final editor in snapshot.dirtyEditors) {
       if (editor.editorKey?.currentState?.isReadyToClose != true) return false;
     }
-    return !(_state?.tabs.whereType<EditorTab>().any((tab) => tab.dirty.value) ??
+    return !(_state?.tabs.whereType<EditorTab>().any(
+          (tab) => tab.dirty.value,
+        ) ??
         false);
   }
 

@@ -89,9 +89,7 @@ final class _EngineLikeLocalLanes extends FakePaneLanes {
   final listings = <String, List<RemoteFileEntry>>{};
 
   @override
-  Future<AppBrowseChannel> openLocalChannel({
-    required String rootPath,
-  }) async {
+  Future<AppBrowseChannel> openLocalChannel({required String rootPath}) async {
     calls.add('openLocal:$rootPath');
     final channel = FakePaneChannel(rootPath == '~' ? '/home/tester' : rootPath)
       ..listings.addAll(listings);
@@ -106,8 +104,7 @@ void main() {
     NewTabTarget newTabTarget = NewTabTarget.duplicate,
     DoubleClickAction doubleClickAction = DoubleClickAction.open,
     Future<bool> Function(PaneTab, List<TabCloseTrigger>)? confirmClose,
-    bool Function(String serverId, PaneController excluding)?
-        serverStillShared,
+    bool Function(String serverId, PaneController excluding)? serverStillShared,
     PaneServerConfigLookup? serverConfigLookup,
     void Function(Object error, StackTrace stackTrace)? onError,
   }) {
@@ -174,7 +171,8 @@ void main() {
       expect(
         duplicate.controller.location,
         const LocalPaneLocation('/home/tester'),
-        reason: 'a duplicated tab expands ~ to the user home, '
+        reason:
+            'a duplicated tab expands ~ to the user home, '
             'not its opening directory',
       );
       duplicate.controller.editPath();
@@ -240,24 +238,29 @@ void main() {
       expect(lanes.calls, contains('openLocal:~'));
     });
 
-    test('duplicate on a remote tab reconnects the same server and path', () async {
-      lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
-        ..listings['/srv/home/deep'] = [_entry('r.txt', parent: '/srv/home/deep')];
-      final controller = tabs();
-      final first = controller.newTab(target: NewTabTarget.launcher);
-      await first.controller.connectRemote(
-        _bookmark('srv-1'),
-        initialPath: '/srv/home/deep',
-      );
-      await settle();
-      expect(first.controller.location?.path, '/srv/home/deep');
+    test(
+      'duplicate on a remote tab reconnects the same server and path',
+      () async {
+        lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+          ..listings['/srv/home/deep'] = [
+            _entry('r.txt', parent: '/srv/home/deep'),
+          ];
+        final controller = tabs();
+        final first = controller.newTab(target: NewTabTarget.launcher);
+        await first.controller.connectRemote(
+          _bookmark('srv-1'),
+          initialPath: '/srv/home/deep',
+        );
+        await settle();
+        expect(first.controller.location?.path, '/srv/home/deep');
 
-      final second = controller.newTab();
-      await settle();
+        final second = controller.newTab();
+        await settle();
 
-      expect(second.controller.remoteBookmark?.id, 'srv-1');
-      expect(second.controller.location?.path, '/srv/home/deep');
-    });
+        expect(second.controller.remoteBookmark?.id, 'srv-1');
+        expect(second.controller.location?.path, '/srv/home/deep');
+      },
+    );
 
     test('home lands a local tab at the engine home anchor', () async {
       final controller = tabs(newTabTarget: NewTabTarget.home);
@@ -291,8 +294,7 @@ void main() {
     test('duplicate re-resolves a catalog-only route', () async {
       var catalogRoute = _catalogRoute;
       final controller = tabs(
-        serverConfigLookup: (id) =>
-            id == 'catalog-db' ? catalogRoute : null,
+        serverConfigLookup: (id) => id == 'catalog-db' ? catalogRoute : null,
       );
       lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
         ..listings['/srv/home'] = [_entry('source.txt', parent: '/srv/home')];
@@ -318,8 +320,7 @@ void main() {
       var catalogRoute = _catalogRoute;
       final controller = tabs(
         newTabTarget: NewTabTarget.home,
-        serverConfigLookup: (id) =>
-            id == 'catalog-db' ? catalogRoute : null,
+        serverConfigLookup: (id) => id == 'catalog-db' ? catalogRoute : null,
       );
       lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
         ..listings['/srv/home'] = [_entry('source.txt', parent: '/srv/home')];
@@ -363,16 +364,19 @@ void main() {
       expect(lanes.calls.where((c) => c.startsWith('open')), isEmpty);
     });
 
-    test('newTabTarget is read live — the setting applies per invocation', () async {
-      final controller = tabs(newTabTarget: NewTabTarget.launcher);
-      final launcher = controller.newTab();
-      expect(launcher.controller.phase, PanePhase.unbound);
+    test(
+      'newTabTarget is read live — the setting applies per invocation',
+      () async {
+        final controller = tabs(newTabTarget: NewTabTarget.launcher);
+        final launcher = controller.newTab();
+        expect(launcher.controller.phase, PanePhase.unbound);
 
-      controller.newTabTarget = NewTabTarget.home;
-      final home = controller.newTab();
-      await settle();
-      expect(home.controller.location, isNotNull);
-    });
+        controller.newTabTarget = NewTabTarget.home;
+        final home = controller.newTab();
+        await settle();
+        expect(home.controller.location, isNotNull);
+      },
+    );
   });
 
   group('double-click action propagation (02 §2.6)', () {
@@ -420,10 +424,7 @@ void main() {
       // current value, not the value at its construction.
       final second = controller.newTab(target: NewTabTarget.launcher);
       await settle();
-      expect(
-        second.controller.doubleClickAction,
-        DoubleClickAction.transfer,
-      );
+      expect(second.controller.doubleClickAction, DoubleClickAction.transfer);
     });
   });
 
@@ -577,58 +578,64 @@ void main() {
       expect(await controller.requestCloseTab(tab), TabCloseOutcome.closed);
     });
 
-    test('an in-flight rename commit holds the trigger after the field closes', () async {
-      final channel = lanes.nextLocalChannel as FakePaneChannel;
-      List<TabCloseTrigger>? seen;
-      final controller = tabs(
-        confirmClose: (_, triggers) async {
-          seen = triggers;
-          return false;
-        },
-      );
-      final tab = controller.newTab(target: NewTabTarget.home);
-      await settle();
-      tab.controller.setCursorIndex(0);
-      tab.controller.startRename();
+    test(
+      'an in-flight rename commit holds the trigger after the field closes',
+      () async {
+        final channel = lanes.nextLocalChannel as FakePaneChannel;
+        List<TabCloseTrigger>? seen;
+        final controller = tabs(
+          confirmClose: (_, triggers) async {
+            seen = triggers;
+            return false;
+          },
+        );
+        final tab = controller.newTab(target: NewTabTarget.home);
+        await settle();
+        tab.controller.setCursorIndex(0);
+        tab.controller.startRename();
 
-      // The submit parks the channel call: the field is already closed,
-      // but the in-flight rename is still work the guard must quantify.
-      final held = Completer<void>();
-      channel.heldRename = held;
-      unawaited(tab.controller.submitRename('renamed.txt'));
-      await settle();
-      expect(tab.controller.renameTarget, isNull);
+        // The submit parks the channel call: the field is already closed,
+        // but the in-flight rename is still work the guard must quantify.
+        final held = Completer<void>();
+        channel.heldRename = held;
+        unawaited(tab.controller.submitRename('renamed.txt'));
+        await settle();
+        expect(tab.controller.renameTarget, isNull);
 
-      final outcome = await controller.requestCloseTab(tab);
-      expect(outcome, TabCloseOutcome.declined);
-      expect(seen, [TabCloseTrigger.inlineRename]);
+        final outcome = await controller.requestCloseTab(tab);
+        expect(outcome, TabCloseOutcome.declined);
+        expect(seen, [TabCloseTrigger.inlineRename]);
 
-      held.complete();
-      await settle();
-      expect(await controller.requestCloseTab(tab), TabCloseOutcome.closed);
-    });
+        held.complete();
+        await settle();
+        expect(await controller.requestCloseTab(tab), TabCloseOutcome.closed);
+      },
+    );
 
-    test('only registered probes can fire — the future triggers stay inert', () async {
-      final controller = tabs(confirmClose: (_, _) async => false);
-      final tab = controller.newTab(target: NewTabTarget.home);
-      await settle();
+    test(
+      'only registered probes can fire — the future triggers stay inert',
+      () async {
+        final controller = tabs(confirmClose: (_, _) async => false);
+        final tab = controller.newTab(target: NewTabTarget.home);
+        await settle();
 
-      // The registry spells the full 02 §3 set, but folder-size,
-      // apply-to-enclosed and sync-anchor have no v1 producers: a quiet
-      // tab can only ever report navigation/inlineRename.
-      expect(
-        controller.closeTriggers(tab),
-        isNot(contains(TabCloseTrigger.folderSize)),
-      );
-      expect(
-        controller.closeTriggers(tab),
-        isNot(contains(TabCloseTrigger.applyToEnclosed)),
-      );
-      expect(
-        controller.closeTriggers(tab),
-        isNot(contains(TabCloseTrigger.syncAnchor)),
-      );
-    });
+        // The registry spells the full 02 §3 set, but folder-size,
+        // apply-to-enclosed and sync-anchor have no v1 producers: a quiet
+        // tab can only ever report navigation/inlineRename.
+        expect(
+          controller.closeTriggers(tab),
+          isNot(contains(TabCloseTrigger.folderSize)),
+        );
+        expect(
+          controller.closeTriggers(tab),
+          isNot(contains(TabCloseTrigger.applyToEnclosed)),
+        );
+        expect(
+          controller.closeTriggers(tab),
+          isNot(contains(TabCloseTrigger.syncAnchor)),
+        );
+      },
+    );
 
     test('a guard with no presenter wired is fail-closed', () async {
       final channel = FakePaneChannel('/home/tester');
@@ -644,29 +651,32 @@ void main() {
       expect(controller.tabs, contains(tab));
     });
 
-    test('a fail-closed decline stays retryable once the trigger clears', () async {
-      final channel = FakePaneChannel('/home/tester')
-        ..listings['/x'] = const [];
-      lanes.nextLocalChannel = channel;
-      // No presenter: the triggered guard fails closed — and must not
-      // pin the tab to that outcome (the settle-without-await path used
-      // to leave a stale in-flight entry that deduped every retry).
-      final controller = tabs();
-      final tab = controller.newTab(target: NewTabTarget.home);
-      await settle();
+    test(
+      'a fail-closed decline stays retryable once the trigger clears',
+      () async {
+        final channel = FakePaneChannel('/home/tester')
+          ..listings['/x'] = const [];
+        lanes.nextLocalChannel = channel;
+        // No presenter: the triggered guard fails closed — and must not
+        // pin the tab to that outcome (the settle-without-await path used
+        // to leave a stale in-flight entry that deduped every retry).
+        final controller = tabs();
+        final tab = controller.newTab(target: NewTabTarget.home);
+        await settle();
 
-      final hold = Completer<void>();
-      channel.holdNext = hold;
-      tab.controller.navigate('/x');
-      expect(await controller.requestCloseTab(tab), TabCloseOutcome.declined);
-      expect(controller.tabs, contains(tab));
+        final hold = Completer<void>();
+        channel.holdNext = hold;
+        tab.controller.navigate('/x');
+        expect(await controller.requestCloseTab(tab), TabCloseOutcome.declined);
+        expect(controller.tabs, contains(tab));
 
-      hold.complete();
-      await settle();
-      expect(tab.controller.loading, isFalse);
-      expect(await controller.requestCloseTab(tab), TabCloseOutcome.closed);
-      expect(controller.tabs, isEmpty);
-    });
+        hold.complete();
+        await settle();
+        expect(tab.controller.loading, isFalse);
+        expect(await controller.requestCloseTab(tab), TabCloseOutcome.closed);
+        expect(controller.tabs, isEmpty);
+      },
+    );
 
     test('a throwing presenter fails closed and reports the error', () async {
       final reported = <Object>[];
@@ -742,18 +752,21 @@ void main() {
       expect(controller.activeTab, isNull);
     });
 
-    test('a closed tab\'s controller is disposed and its channel released', () async {
-      final channel = FakePaneChannel('/home/tester');
-      lanes.nextLocalChannel = channel;
-      final controller = tabs();
-      final tab = controller.newTab(target: NewTabTarget.home);
-      await settle();
+    test(
+      'a closed tab\'s controller is disposed and its channel released',
+      () async {
+        final channel = FakePaneChannel('/home/tester');
+        lanes.nextLocalChannel = channel;
+        final controller = tabs();
+        final tab = controller.newTab(target: NewTabTarget.home);
+        await settle();
 
-      await controller.requestCloseTab(tab);
-      await settle();
+        await controller.requestCloseTab(tab);
+        await settle();
 
-      expect(channel.closeCalls, 1);
-    });
+        expect(channel.closeCalls, 1);
+      },
+    );
 
     test('the last binding of a remote server drops its reference', () async {
       lanes.nextRemoteChannel = FakePaneChannel('/srv/home');
@@ -768,33 +781,38 @@ void main() {
       expect(lanes.disconnects, ['srv-1']);
     });
 
-    test('a shared server keeps its reference while a sibling browses it', () async {
-      final other = tabs();
-      await other.newTab(target: NewTabTarget.launcher).controller
-          .connectRemote(_bookmark('srv-1'));
-      await settle();
+    test(
+      'a shared server keeps its reference while a sibling browses it',
+      () async {
+        final other = tabs();
+        await other
+            .newTab(target: NewTabTarget.launcher)
+            .controller
+            .connectRemote(_bookmark('srv-1'));
+        await settle();
 
-      lanes.nextRemoteChannel = FakePaneChannel('/srv/home');
-      final controller = tabs(
-        serverStillShared: (serverId, excluding) => other.tabs.any(
-          (t) =>
-              !identical(t.controller, excluding) &&
-              t.controller.remoteBookmark?.id == serverId,
-        ),
-      );
-      final tab = controller.newTab(target: NewTabTarget.launcher);
-      await tab.controller.connectRemote(_bookmark('srv-1'));
-      await settle();
+        lanes.nextRemoteChannel = FakePaneChannel('/srv/home');
+        final controller = tabs(
+          serverStillShared: (serverId, excluding) => other.tabs.any(
+            (t) =>
+                !identical(t.controller, excluding) &&
+                t.controller.remoteBookmark?.id == serverId,
+          ),
+        );
+        final tab = controller.newTab(target: NewTabTarget.launcher);
+        await tab.controller.connectRemote(_bookmark('srv-1'));
+        await settle();
 
-      await controller.requestCloseTab(tab);
-      await settle();
+        await controller.requestCloseTab(tab);
+        await settle();
 
-      expect(
-        lanes.disconnects,
-        isEmpty,
-        reason: 'the sibling tab still browses srv-1',
-      );
-    });
+        expect(
+          lanes.disconnects,
+          isEmpty,
+          reason: 'the sibling tab still browses srv-1',
+        );
+      },
+    );
   });
 
   group('ghost ring (⇧⌘T)', () {
@@ -818,7 +836,10 @@ void main() {
       await settle();
 
       expect(reopened, isNotNull);
-      expect(reopened!.controller.location, const LocalPaneLocation('/home/tester'));
+      expect(
+        reopened!.controller.location,
+        const LocalPaneLocation('/home/tester'),
+      );
       expect(reopened.controller.filterQuery, 'a');
       expect(reopened.controller.showHidden, isTrue);
       expect(reopened.controller.viewMode, PaneViewMode.list);
@@ -850,8 +871,7 @@ void main() {
     test('reopen re-resolves a catalog-only route', () async {
       var catalogRoute = _catalogRoute;
       final controller = tabs(
-        serverConfigLookup: (id) =>
-            id == 'catalog-db' ? catalogRoute : null,
+        serverConfigLookup: (id) => id == 'catalog-db' ? catalogRoute : null,
       );
       lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
         ..listings['/srv/home'] = [_entry('source.txt', parent: '/srv/home')];
@@ -865,9 +885,7 @@ void main() {
 
       catalogRoute = _updatedCatalogRoute;
       lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
-        ..listings['/srv/home'] = [
-          _entry('reopened.txt', parent: '/srv/home'),
-        ];
+        ..listings['/srv/home'] = [_entry('reopened.txt', parent: '/srv/home')];
       final reopened = await controller.reopenClosedTab();
       await settle();
 
@@ -975,7 +993,10 @@ void main() {
 
       // The parked bind has issued no listing, so no guard trigger is
       // active and the close settles quietly.
-      expect(await controller.requestCloseTab(reopened), TabCloseOutcome.closed);
+      expect(
+        await controller.requestCloseTab(reopened),
+        TabCloseOutcome.closed,
+      );
       expect(controller.tabs, isNot(contains(reopened)));
 
       hold.complete();

@@ -65,11 +65,8 @@ class FakePaneLanes implements PaneEngineLanes {
     return channel;
   }
 
-  StreamController<ServerStatus> _statesOf(String serverId) =>
-      statesControllers.putIfAbsent(
-        serverId,
-        () => StreamController<ServerStatus>.broadcast(),
-      );
+  StreamController<ServerStatus> _statesOf(String serverId) => statesControllers
+      .putIfAbsent(serverId, () => StreamController<ServerStatus>.broadcast());
 
   @override
   Stream<ServerStatus> watchServer(String serverId) {
@@ -83,9 +80,9 @@ class FakePaneLanes implements PaneEngineLanes {
   Future<void> disconnectServer(String serverId) async {
     disconnects.add(serverId);
     // Mirrors the engine's teardown fan-out: the watch reports the drop.
-    _statesOf(serverId).add(
-      const ServerStatus(ServerConnectionState.disconnected),
-    );
+    _statesOf(
+      serverId,
+    ).add(const ServerStatus(ServerConnectionState.disconnected));
   }
 
   void emitState(String serverId, ServerStatus status) {
@@ -188,10 +185,11 @@ void main() {
     expect(controller.phase, PanePhase.browsing);
     expect(controller.location, const LocalPaneLocation('/home/tester'));
     expect(controller.loading, isFalse);
-    expect(
-      controller.entries.map((e) => e.name).toList(),
-      ['alpha', 'Beta.txt', 'zebra.txt'],
-    );
+    expect(controller.entries.map((e) => e.name).toList(), [
+      'alpha',
+      'Beta.txt',
+      'zebra.txt',
+    ]);
     controller.dispose();
   });
 
@@ -216,11 +214,7 @@ void main() {
   test('digit runs order naturally on the accepted listing', () async {
     final lanes = FakePaneLanes();
     final channel = FakePaneChannel('/home/tester');
-    final listed = [
-      _entry('file10'),
-      _entry('file1'),
-      _entry('file2'),
-    ];
+    final listed = [_entry('file10'), _entry('file1'), _entry('file2')];
     channel.listings['/home/tester'] = listed;
     lanes.nextLocalChannel = channel;
     final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
@@ -230,55 +224,51 @@ void main() {
 
     // 02 §2.3: digit runs compare numerically, so file2 precedes file10
     // (lexical lowercase order would interleave file10 after file1).
-    expect(
-      controller.entries.map((e) => e.name).toList(),
-      ['file1', 'file2', 'file10'],
-    );
+    expect(controller.entries.map((e) => e.name).toList(), [
+      'file1',
+      'file2',
+      'file10',
+    ]);
     // The sorted pane listing is a new order: the VFS-returned list keeps
     // the server's order and its entries keep their identity.
-    expect(
-      listed.map((e) => e.name).toList(),
-      ['file10', 'file1', 'file2'],
-    );
-    expect(
-      controller.entries,
-      everyElement(isIn(listed)),
-    );
+    expect(listed.map((e) => e.name).toList(), ['file10', 'file1', 'file2']);
+    expect(controller.entries, everyElement(isIn(listed)));
     expect(controller.entries, isNot(same(listed)));
     // The §2.3 wiring must keep the old List.unmodifiable contract:
     // mutating the accepted listing has to throw.
-    expect(
-      () => controller.entries[0] = listed.first,
-      throwsUnsupportedError,
-    );
+    expect(() => controller.entries[0] = listed.first, throwsUnsupportedError);
     controller.dispose();
   });
 
-  test('Unicode simple fold orders names lowercase comparison would not',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/home/tester');
-    // ς (final sigma) folds to σ and ſ (long s) folds to s under 02 §2.3's
-    // simple fold, while toLowerCase leaves both untouched: lowercase
-    // lexical order would put sz before ſb and ςa before σz.
-    channel.listings['/home/tester'] = [
-      _entry('ςa'),
-      _entry('sz'),
-      _entry('ſb'),
-      _entry('σz'),
-    ];
-    lanes.nextLocalChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+  test(
+    'Unicode simple fold orders names lowercase comparison would not',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/home/tester');
+      // ς (final sigma) folds to σ and ſ (long s) folds to s under 02 §2.3's
+      // simple fold, while toLowerCase leaves both untouched: lowercase
+      // lexical order would put sz before ſb and ςa before σz.
+      channel.listings['/home/tester'] = [
+        _entry('ςa'),
+        _entry('sz'),
+        _entry('ſb'),
+        _entry('σz'),
+      ];
+      lanes.nextLocalChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
 
-    await controller.openLocalHome();
-    await settle();
+      await controller.openLocalHome();
+      await settle();
 
-    expect(
-      controller.entries.map((e) => e.name).toList(),
-      ['ſb', 'sz', 'ςa', 'σz'],
-    );
-    controller.dispose();
-  });
+      expect(controller.entries.map((e) => e.name).toList(), [
+        'ſb',
+        'sz',
+        'ςa',
+        'σz',
+      ]);
+      controller.dispose();
+    },
+  );
 
   test('directories group first with natural names below', () async {
     final lanes = FakePaneLanes();
@@ -298,10 +288,12 @@ void main() {
 
     // Dotfiles stay hidden; directories group ahead of files, and the
     // files below them still sort naturally (file2 before file10).
-    expect(
-      controller.entries.map((e) => e.name).toList(),
-      ['Dir 2', 'Dir 10', 'file2', 'file10'],
-    );
+    expect(controller.entries.map((e) => e.name).toList(), [
+      'Dir 2',
+      'Dir 10',
+      'file2',
+      'file10',
+    ]);
     controller.dispose();
   });
 
@@ -411,29 +403,31 @@ void main() {
     });
   });
 
-  test('navigation issues optimistically and accepts current listings',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [
-      _entry('sub', type: RemoteFileType.directory),
-    ];
-    channel.listings['/home/tester/sub'] = [_entry('inner.txt')];
-    lanes.nextLocalChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
-    await controller.openLocalHome();
-    await settle();
+  test(
+    'navigation issues optimistically and accepts current listings',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/home/tester');
+      channel.listings['/home/tester'] = [
+        _entry('sub', type: RemoteFileType.directory),
+      ];
+      channel.listings['/home/tester/sub'] = [_entry('inner.txt')];
+      lanes.nextLocalChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+      await controller.openLocalHome();
+      await settle();
 
-    controller.navigate('/home/tester/sub');
+      controller.navigate('/home/tester/sub');
 
-    expect(controller.loading, isTrue);
-    expect(controller.location, const LocalPaneLocation('/home/tester/sub'));
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.loading, isFalse);
-    expect(controller.entries.single.name, 'inner.txt');
-    expect(controller.verbsEnabled, isTrue);
-    controller.dispose();
-  });
+      expect(controller.loading, isTrue);
+      expect(controller.location, const LocalPaneLocation('/home/tester/sub'));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.loading, isFalse);
+      expect(controller.entries.single.name, 'inner.txt');
+      expect(controller.verbsEnabled, isTrue);
+      controller.dispose();
+    },
+  );
 
   test('stale listing responses are dropped on arrival', () async {
     final lanes = FakePaneLanes();
@@ -471,49 +465,51 @@ void main() {
     controller.dispose();
   });
 
-  test('error answers keep stale entries and disable verbs until retry',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [_entry('here.txt')];
-    lanes.nextLocalChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
-    await controller.openLocalHome();
-    // The cached listing is proven visible before the failing navigation
-    // snapshots it (02 §2.7's cached-data rule).
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.entries.single.name, 'here.txt');
-    final before = controller.entries;
+  test(
+    'error answers keep stale entries and disable verbs until retry',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/home/tester');
+      channel.listings['/home/tester'] = [_entry('here.txt')];
+      lanes.nextLocalChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+      await controller.openLocalHome();
+      // The cached listing is proven visible before the failing navigation
+      // snapshots it (02 §2.7's cached-data rule).
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.entries.single.name, 'here.txt');
+      final before = controller.entries;
 
-    controller.navigate('/home/tester/gone');
-    await Future<void>.delayed(Duration.zero);
+      controller.navigate('/home/tester/gone');
+      await Future<void>.delayed(Duration.zero);
 
-    expect(controller.error, isA<RemoteFileException>());
-    expect(
-      (controller.error as RemoteFileException).kind,
-      RemoteFileErrorKind.notFound,
-    );
-    expect(controller.loading, isFalse);
-    expect(controller.verbsEnabled, isFalse);
-    // Cached data stays visible (02 §2.7's cached-data rule) — but it is
-    // the OLD directory's listing, so the location stays where it was
-    // going and verbs stay disabled until a listing is accepted.
-    expect(controller.entries, same(before));
-    expect(
-      controller.location,
-      const LocalPaneLocation('/home/tester/gone'),
-      reason: 'the optimistic location stays after the error (02 §2.7)',
-    );
+      expect(controller.error, isA<RemoteFileException>());
+      expect(
+        (controller.error as RemoteFileException).kind,
+        RemoteFileErrorKind.notFound,
+      );
+      expect(controller.loading, isFalse);
+      expect(controller.verbsEnabled, isFalse);
+      // Cached data stays visible (02 §2.7's cached-data rule) — but it is
+      // the OLD directory's listing, so the location stays where it was
+      // going and verbs stay disabled until a listing is accepted.
+      expect(controller.entries, same(before));
+      expect(
+        controller.location,
+        const LocalPaneLocation('/home/tester/gone'),
+        reason: 'the optimistic location stays after the error (02 §2.7)',
+      );
 
-    // Retry clears the error and re-accepts a listing.
-    channel.listings['/home/tester/gone'] = [_entry('back.txt')];
-    controller.retry();
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.error, isNull);
-    expect(controller.verbsEnabled, isTrue);
-    expect(controller.entries.single.name, 'back.txt');
-    controller.dispose();
-  });
+      // Retry clears the error and re-accepts a listing.
+      channel.listings['/home/tester/gone'] = [_entry('back.txt')];
+      controller.retry();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.error, isNull);
+      expect(controller.verbsEnabled, isTrue);
+      expect(controller.entries.single.name, 'back.txt');
+      controller.dispose();
+    },
+  );
 
   test('a missing openLocalAt target errors on the home-bound channel; '
       'retry re-attempts the target', () async {
@@ -548,157 +544,159 @@ void main() {
     controller.retry();
     await Future<void>.delayed(Duration.zero);
     expect(controller.error, isNull);
-    expect(
-      controller.location,
-      const LocalPaneLocation('/home/tester/gone'),
-    );
+    expect(controller.location, const LocalPaneLocation('/home/tester/gone'));
     expect(controller.entries.single.name, 'back.txt');
     expect(channel.listCalls, ['/home/tester/gone', '/home/tester/gone']);
     controller.dispose();
   });
 
-  test('Esc cancel restores the last quiescent snapshot, including errors',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [_entry('root.txt')];
-    channel.listings['/home/tester/slow'] = [_entry('slow.txt')];
-    lanes.nextLocalChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
-    await controller.openLocalHome();
-    await Future<void>.delayed(Duration.zero);
+  test(
+    'Esc cancel restores the last quiescent snapshot, including errors',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/home/tester');
+      channel.listings['/home/tester'] = [_entry('root.txt')];
+      channel.listings['/home/tester/slow'] = [_entry('slow.txt')];
+      lanes.nextLocalChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+      await controller.openLocalHome();
+      await Future<void>.delayed(Duration.zero);
 
-    // A cancelled navigation returns to the quiescent listing.
-    final hold = Completer<void>();
-    channel.holdNext = hold;
-    controller.navigate('/home/tester/slow');
-    // Past the watch arm: the held listing is in flight.
-    await Future<void>.delayed(Duration.zero);
-    controller.cancelNavigation();
+      // A cancelled navigation returns to the quiescent listing.
+      final hold = Completer<void>();
+      channel.holdNext = hold;
+      controller.navigate('/home/tester/slow');
+      // Past the watch arm: the held listing is in flight.
+      await Future<void>.delayed(Duration.zero);
+      controller.cancelNavigation();
 
-    expect(controller.loading, isFalse);
-    expect(controller.location, const LocalPaneLocation('/home/tester'));
-    expect(controller.entries.single.name, 'root.txt');
-    expect(channel.listCalls, ['/home/tester', '/home/tester/slow']);
+      expect(controller.loading, isFalse);
+      expect(controller.location, const LocalPaneLocation('/home/tester'));
+      expect(controller.entries.single.name, 'root.txt');
+      expect(channel.listCalls, ['/home/tester', '/home/tester/slow']);
 
-    // The engine-side listing still completes; its answer must be stale.
-    hold.complete();
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.entries.single.name, 'root.txt');
-    expect(controller.loading, isFalse);
+      // The engine-side listing still completes; its answer must be stale.
+      hold.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.entries.single.name, 'root.txt');
+      expect(controller.loading, isFalse);
 
-    // Cancelling a navigation issued over an errored pane restores the
-    // error too (a cancelled Retry returns to its inline error, 02 §2.8).
-    channel.listings.remove('/home/tester'); // the next navigation fails
-    controller.navigate('/home/tester'); // fails: notFound
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.error, isNotNull);
+      // Cancelling a navigation issued over an errored pane restores the
+      // error too (a cancelled Retry returns to its inline error, 02 §2.8).
+      channel.listings.remove('/home/tester'); // the next navigation fails
+      controller.navigate('/home/tester'); // fails: notFound
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.error, isNotNull);
 
-    channel.listings['/home/tester'] = [_entry('fresh.txt')];
-    final hold2 = Completer<void>();
-    channel.holdNext = hold2;
-    controller.retry(); // in flight, will succeed when released
-    expect(controller.error, isNull);
-    controller.cancelNavigation();
-    expect(controller.error, isNotNull, reason: 'the snapshot error returns');
-    expect(controller.entries.single.name, 'root.txt');
+      channel.listings['/home/tester'] = [_entry('fresh.txt')];
+      final hold2 = Completer<void>();
+      channel.holdNext = hold2;
+      controller.retry(); // in flight, will succeed when released
+      expect(controller.error, isNull);
+      controller.cancelNavigation();
+      expect(controller.error, isNotNull, reason: 'the snapshot error returns');
+      expect(controller.entries.single.name, 'root.txt');
 
-    // Releasing the still-held retry must not overwrite the restored
-    // snapshot: its generation was cancelled.
-    hold2.complete();
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.entries.single.name, 'root.txt');
-    expect(controller.error, isNotNull);
-    controller.dispose();
-  });
+      // Releasing the still-held retry must not overwrite the restored
+      // snapshot: its generation was cancelled.
+      hold2.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.entries.single.name, 'root.txt');
+      expect(controller.error, isNotNull);
+      controller.dispose();
+    },
+  );
 
-  test('stale rows are inert while a location-changing navigation is held',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [
-      _entry('docs', type: RemoteFileType.directory),
-      _entry('report.txt'),
-    ];
-    channel.listings['/elsewhere'] = [_entry('there.txt')];
-    lanes.nextLocalChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
-    await controller.openLocalHome();
-    await settle();
-    controller.setCursorIndex(1);
-    expect(controller.cursorIndex, 1);
+  test(
+    'stale rows are inert while a location-changing navigation is held',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/home/tester');
+      channel.listings['/home/tester'] = [
+        _entry('docs', type: RemoteFileType.directory),
+        _entry('report.txt'),
+      ];
+      channel.listings['/elsewhere'] = [_entry('there.txt')];
+      lanes.nextLocalChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+      await controller.openLocalHome();
+      await settle();
+      controller.setCursorIndex(1);
+      expect(controller.cursorIndex, 1);
 
-    // The listing of a different directory is held: the old rows stay
-    // rendered for the anti-flash grace, but the navigation has already
-    // disowned them (02 §2.8's grace is presentation-only).
-    final hold = Completer<void>();
-    channel.holdNext = hold;
-    controller.navigate('/elsewhere');
-    expect(controller.loading, isTrue);
-    expect(controller.staleRows, isTrue);
-    expect(controller.entries, hasLength(2));
+      // The listing of a different directory is held: the old rows stay
+      // rendered for the anti-flash grace, but the navigation has already
+      // disowned them (02 §2.8's grace is presentation-only).
+      final hold = Completer<void>();
+      channel.holdNext = hold;
+      controller.navigate('/elsewhere');
+      expect(controller.loading, isTrue);
+      expect(controller.staleRows, isTrue);
+      expect(controller.entries, hasLength(2));
 
-    // Every row-interaction path is inert while the rows are disowned:
-    // no throw, no selection mutation, no activation — a caller that
-    // bypasses the widget cannot hit 'not a visible row'.
-    controller.setCursorIndex(0);
-    controller.moveCursorBy(1);
-    controller.selectAll();
-    controller.invertSelection();
-    controller.typeAhead('d');
-    await controller.openEntry(controller.entries.first);
-    await settle();
+      // Every row-interaction path is inert while the rows are disowned:
+      // no throw, no selection mutation, no activation — a caller that
+      // bypasses the widget cannot hit 'not a visible row'.
+      controller.setCursorIndex(0);
+      controller.moveCursorBy(1);
+      controller.selectAll();
+      controller.invertSelection();
+      controller.typeAhead('d');
+      await controller.openEntry(controller.entries.first);
+      await settle();
 
-    expect(controller.cursorIndex, isNull);
-    expect(controller.selectedCount, 0);
-    expect(controller.typeAheadActive, isFalse);
-    expect(
-      channel.listCalls,
-      ['/home/tester', '/elsewhere'],
-      reason: 'stale input must never issue another listing request',
-    );
-    expect(controller.location, const LocalPaneLocation('/elsewhere'));
+      expect(controller.cursorIndex, isNull);
+      expect(controller.selectedCount, 0);
+      expect(controller.typeAheadActive, isFalse);
+      expect(channel.listCalls, [
+        '/home/tester',
+        '/elsewhere',
+      ], reason: 'stale input must never issue another listing request');
+      expect(controller.location, const LocalPaneLocation('/elsewhere'));
 
-    // The accepted listing owns its rows again.
-    hold.complete();
-    await settle();
-    expect(controller.staleRows, isFalse);
-    controller.setCursorIndex(0);
-    expect(controller.cursorIndex, 0);
-    controller.dispose();
-  });
+      // The accepted listing owns its rows again.
+      hold.complete();
+      await settle();
+      expect(controller.staleRows, isFalse);
+      controller.setCursorIndex(0);
+      expect(controller.cursorIndex, 0);
+      controller.dispose();
+    },
+  );
 
-  test('a stale row activation cannot supersede the pending navigation',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [
-      _entry('docs', type: RemoteFileType.directory),
-      _entry('report.txt'),
-    ];
-    channel.listings['/elsewhere'] = [_entry('there.txt')];
-    lanes.nextLocalChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
-    await controller.openLocalHome();
-    await settle();
+  test(
+    'a stale row activation cannot supersede the pending navigation',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/home/tester');
+      channel.listings['/home/tester'] = [
+        _entry('docs', type: RemoteFileType.directory),
+        _entry('report.txt'),
+      ];
+      channel.listings['/elsewhere'] = [_entry('there.txt')];
+      lanes.nextLocalChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+      await controller.openLocalHome();
+      await settle();
 
-    final hold = Completer<void>();
-    channel.holdNext = hold;
-    controller.navigate('/elsewhere');
+      final hold = Completer<void>();
+      channel.holdNext = hold;
+      controller.navigate('/elsewhere');
 
-    // Double-clicking the cached 'docs' row while '/elsewhere' is in
-    // flight must do nothing — not navigate to the stale path.
-    await controller.openEntry(controller.entries.first);
-    await settle();
+      // Double-clicking the cached 'docs' row while '/elsewhere' is in
+      // flight must do nothing — not navigate to the stale path.
+      await controller.openEntry(controller.entries.first);
+      await settle();
 
-    expect(channel.listCalls, ['/home/tester', '/elsewhere']);
-    expect(controller.location, const LocalPaneLocation('/elsewhere'));
+      expect(channel.listCalls, ['/home/tester', '/elsewhere']);
+      expect(controller.location, const LocalPaneLocation('/elsewhere'));
 
-    hold.complete();
-    await settle();
-    expect(controller.entries.single.name, 'there.txt');
-    controller.dispose();
-  });
+      hold.complete();
+      await settle();
+      expect(controller.entries.single.name, 'there.txt');
+      controller.dispose();
+    },
+  );
 
   test('Esc inside the stale window restores live rows', () async {
     final lanes = FakePaneLanes();
@@ -732,79 +730,84 @@ void main() {
     controller.dispose();
   });
 
-  test('connectRemote subscribes to state before opening the channel',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/srv/home');
-    channel.listings['/srv/home'] = [_entry('srv-file.txt')];
-    lanes.nextRemoteChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+  test(
+    'connectRemote subscribes to state before opening the channel',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/srv/home');
+      channel.listings['/srv/home'] = [_entry('srv-file.txt')];
+      lanes.nextRemoteChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
 
-    await controller.connectRemote(_remoteBookmark());
-    await settle();
+      await controller.connectRemote(_remoteBookmark());
+      await settle();
 
-    // The watch (subscribe) precedes the channel open in the call log.
-    expect(lanes.calls, ['watch:srv-1', 'openBrowse:srv-1:pane.right']);
-    expect(controller.phase, PanePhase.browsing);
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/home'),
-    );
-    expect(channel.listCalls, ['/srv/home']);
-    controller.dispose();
-  });
+      // The watch (subscribe) precedes the channel open in the call log.
+      expect(lanes.calls, ['watch:srv-1', 'openBrowse:srv-1:pane.right']);
+      expect(controller.phase, PanePhase.browsing);
+      expect(
+        controller.location,
+        const RemotePaneLocation('srv-1', '/srv/home'),
+      );
+      expect(channel.listCalls, ['/srv/home']);
+      controller.dispose();
+    },
+  );
 
-  test('connectRemote navigates to the bookmark remotePath, not home',
-      () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/srv/home');
-    channel.listings['/srv/www'] = [_entry('index.html')];
-    lanes.nextRemoteChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+  test(
+    'connectRemote navigates to the bookmark remotePath, not home',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/srv/home');
+      channel.listings['/srv/www'] = [_entry('index.html')];
+      lanes.nextRemoteChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
 
-    await controller.connectRemote(_remoteBookmark(remotePath: '/srv/www'));
+      await controller.connectRemote(_remoteBookmark(remotePath: '/srv/www'));
 
-    expect(channel.listCalls, ['/srv/www']);
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/www'),
-    );
-    controller.dispose();
-  });
+      expect(channel.listCalls, ['/srv/www']);
+      expect(
+        controller.location,
+        const RemotePaneLocation('srv-1', '/srv/www'),
+      );
+      controller.dispose();
+    },
+  );
 
-  test('a connect failure surfaces the typed error and retry reopens',
-      () async {
-    final lanes = FakePaneLanes();
-    lanes.remoteOpenFailure = const RemoteFileException(
-      kind: RemoteFileErrorKind.disconnected,
-      operation: 'connect',
-      message: 'Authentication failed for tester@web.example.com:22',
-    );
-    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+  test(
+    'a connect failure surfaces the typed error and retry reopens',
+    () async {
+      final lanes = FakePaneLanes();
+      lanes.remoteOpenFailure = const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'connect',
+        message: 'Authentication failed for tester@web.example.com:22',
+      );
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
 
-    await controller.connectRemote(_remoteBookmark());
+      await controller.connectRemote(_remoteBookmark());
 
-    expect(controller.phase, PanePhase.connectingRemote);
-    expect(controller.verbsEnabled, isFalse);
-    final error = controller.error!;
-    expect(error.kind, RemoteFileErrorKind.disconnected);
-    expect(error.message, contains('Authentication failed'));
+      expect(controller.phase, PanePhase.connectingRemote);
+      expect(controller.verbsEnabled, isFalse);
+      final error = controller.error!;
+      expect(error.kind, RemoteFileErrorKind.disconnected);
+      expect(error.message, contains('Authentication failed'));
 
-    lanes.remoteOpenFailure = null;
-    final channel = FakePaneChannel('/srv/home');
-    channel.listings['/srv/home'] = [_entry('ok.txt')];
-    lanes.nextRemoteChannel = channel;
-    await controller.retry();
-    await Future<void>.delayed(Duration.zero);
+      lanes.remoteOpenFailure = null;
+      final channel = FakePaneChannel('/srv/home');
+      channel.listings['/srv/home'] = [_entry('ok.txt')];
+      lanes.nextRemoteChannel = channel;
+      await controller.retry();
+      await Future<void>.delayed(Duration.zero);
 
-    expect(controller.error, isNull);
-    expect(controller.phase, PanePhase.browsing);
-    expect(controller.entries.single.name, 'ok.txt');
-    controller.dispose();
-  });
+      expect(controller.error, isNull);
+      expect(controller.phase, PanePhase.browsing);
+      expect(controller.entries.single.name, 'ok.txt');
+      controller.dispose();
+    },
+  );
 
-  test('a blocked first connect stays reviewable after open failure',
-      () async {
+  test('a blocked first connect stays reviewable after open failure', () async {
     final lanes = FakePaneLanes();
     final heldOpen = Completer<void>();
     lanes.holdRemoteOpen = heldOpen;
@@ -816,10 +819,7 @@ void main() {
     expect(lanes.calls.last, 'openBrowse:srv-1:pane.right');
     expect(lanes.holdRemoteOpen, isNull, reason: 'the open consumed its hold');
 
-    lanes.emitState(
-      'srv-1',
-      const ServerStatus(ServerConnectionState.blocked),
-    );
+    lanes.emitState('srv-1', const ServerStatus(ServerConnectionState.blocked));
     await Future<void>.delayed(Duration.zero);
     expect(controller.connectionStatus?.state, ServerConnectionState.blocked);
 
@@ -878,46 +878,54 @@ void main() {
     controller.dispose();
   });
 
-  test('rebinding closes the previous channel and drops its server watch',
-      () async {
-    final lanes = FakePaneLanes();
-    final local = FakePaneChannel('/home/tester');
-    local.listings['/home/tester'] = [_entry('local.txt')];
-    lanes.nextLocalChannel = local;
-    final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
-    await controller.openLocalHome();
-    await settle();
+  test(
+    'rebinding closes the previous channel and drops its server watch',
+    () async {
+      final lanes = FakePaneLanes();
+      final local = FakePaneChannel('/home/tester');
+      local.listings['/home/tester'] = [_entry('local.txt')];
+      lanes.nextLocalChannel = local;
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+      await controller.openLocalHome();
+      await settle();
 
-    final remote = FakePaneChannel('/srv/home');
-    remote.listings['/srv/home'] = [_entry('remote.txt')];
-    lanes.nextRemoteChannel = remote;
-    await controller.connectRemote(_remoteBookmark());
-    await settle();
+      final remote = FakePaneChannel('/srv/home');
+      remote.listings['/srv/home'] = [_entry('remote.txt')];
+      lanes.nextRemoteChannel = remote;
+      await controller.connectRemote(_remoteBookmark());
+      await settle();
 
-    expect(local.closeCalls, 1);
-    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/home'));
-    expect(controller.entries.single.name, 'remote.txt');
+      expect(local.closeCalls, 1);
+      expect(
+        controller.location,
+        const RemotePaneLocation('srv-1', '/srv/home'),
+      );
+      expect(controller.entries.single.name, 'remote.txt');
 
-    // A second remote target closes the first remote channel too.
-    final second = FakePaneChannel('/other/home');
-    second.listings['/other/home'] = [_entry('other.txt')];
-    lanes.nextRemoteChannel = second;
-    await controller.connectRemote(_remoteBookmark(id: 'srv-2'));
-    await settle();
-    expect(remote.closeCalls, 1);
-    expect(
-      lanes.statesControllers['srv-1']?.hasListener,
-      isFalse,
-      reason: 'rebinding must drop the previous server watch',
-    );
-    expect(
-      lanes.statesControllers['srv-2']?.hasListener,
-      isTrue,
-      reason: 'rebinding must watch the new server',
-    );
-    expect(controller.location, const RemotePaneLocation('srv-2', '/other/home'));
-    controller.dispose();
-  });
+      // A second remote target closes the first remote channel too.
+      final second = FakePaneChannel('/other/home');
+      second.listings['/other/home'] = [_entry('other.txt')];
+      lanes.nextRemoteChannel = second;
+      await controller.connectRemote(_remoteBookmark(id: 'srv-2'));
+      await settle();
+      expect(remote.closeCalls, 1);
+      expect(
+        lanes.statesControllers['srv-1']?.hasListener,
+        isFalse,
+        reason: 'rebinding must drop the previous server watch',
+      );
+      expect(
+        lanes.statesControllers['srv-2']?.hasListener,
+        isTrue,
+        reason: 'rebinding must watch the new server',
+      );
+      expect(
+        controller.location,
+        const RemotePaneLocation('srv-2', '/other/home'),
+      );
+      controller.dispose();
+    },
+  );
 
   test('cancelling a rebind to local restores the remote binding', () async {
     final lanes = FakePaneLanes();
@@ -944,10 +952,7 @@ void main() {
     await settle();
 
     expect(controller.phase, PanePhase.browsing);
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/home'),
-    );
+    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/home'));
     expect(
       controller.committedLocation,
       const RemotePaneLocation('srv-1', '/srv/home'),
@@ -966,18 +971,12 @@ void main() {
     // candidate answer cannot alter the restored state.
     controller.navigate('/srv/www');
     await settle();
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/www'),
-    );
+    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/www'));
     expect(remote.listCalls, ['/srv/home', '/srv/www']);
     held.complete();
     await settle();
     expect(controller.entries.single.name, 'www.txt');
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/www'),
-    );
+    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/www'));
     controller.dispose();
   });
 
@@ -1041,10 +1040,7 @@ void main() {
     await settle();
 
     expect(controller.phase, PanePhase.browsing);
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/home'),
-    );
+    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/home'));
     expect(controller.entries.single.name, 'remote.txt');
     expect(remote.closeCalls, 0);
     expect(local2.closeCalls, 1);
@@ -1072,10 +1068,7 @@ void main() {
     controller.cancelNavigation();
     await settle();
 
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/home'),
-    );
+    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/home'));
     expect(
       controller.committedLocation,
       const RemotePaneLocation('srv-1', '/srv/home'),
@@ -1094,10 +1087,7 @@ void main() {
     held.complete();
     await settle();
     expect(controller.entries.single.name, 'remote.txt');
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/home'),
-    );
+    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/home'));
     controller.dispose();
   });
 
@@ -1133,10 +1123,7 @@ void main() {
     await settle();
 
     expect(controller.phase, PanePhase.browsing);
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/home'),
-    );
+    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/home'));
     expect(controller.entries.single.name, 'remote.txt');
     // The restored baseline must not carry the candidate's stale
     // loss/error state.
@@ -1147,65 +1134,67 @@ void main() {
     controller.dispose();
   });
 
-  test('a failed retainCache retry keeps the rollback parked for Esc',
-      () async {
-    final lanes = FakePaneLanes();
-    final remote = FakePaneChannel('/srv/home')
-      ..listings['/srv/home'] = [_entry('remote.txt')];
-    lanes.nextRemoteChannel = remote;
-    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
-    await controller.connectRemote(_remoteBookmark());
-    await settle();
+  test(
+    'a failed retainCache retry keeps the rollback parked for Esc',
+    () async {
+      final lanes = FakePaneLanes();
+      final remote = FakePaneChannel('/srv/home')
+        ..listings['/srv/home'] = [_entry('remote.txt')];
+      lanes.nextRemoteChannel = remote;
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+      await controller.connectRemote(_remoteBookmark());
+      await settle();
 
-    final candidate = FakePaneChannel('/other/home')
-      ..listings['/other/home'] = [_entry('other.txt')]
-      ..holdNext = Completer<void>();
-    lanes.nextRemoteChannel = candidate;
-    await controller.connectRemote(_remoteBookmark(id: 'srv-2'));
+      final candidate = FakePaneChannel('/other/home')
+        ..listings['/other/home'] = [_entry('other.txt')]
+        ..holdNext = Completer<void>();
+      lanes.nextRemoteChannel = candidate;
+      await controller.connectRemote(_remoteBookmark(id: 'srv-2'));
 
-    // Drive the candidate to recovery-failed: reconnecting parks the
-    // pane on the banner, disconnected ends it.
-    lanes.emitState(
-      'srv-2',
-      const ServerStatus(ServerConnectionState.reconnecting),
-    );
-    await settle();
-    lanes.emitState(
-      'srv-2',
-      const ServerStatus(ServerConnectionState.disconnected),
-    );
-    await settle();
-    expect(controller.canRetryRecovery, isTrue);
+      // Drive the candidate to recovery-failed: reconnecting parks the
+      // pane on the banner, disconnected ends it.
+      lanes.emitState(
+        'srv-2',
+        const ServerStatus(ServerConnectionState.reconnecting),
+      );
+      await settle();
+      lanes.emitState(
+        'srv-2',
+        const ServerStatus(ServerConnectionState.disconnected),
+      );
+      await settle();
+      expect(controller.canRetryRecovery, isTrue);
 
-    // The recovery retry re-binds the candidate (retainCache) and the
-    // open fails — a transient retry failure must NOT retire the
-    // parked prior binding before the replacement ever committed.
-    lanes.remoteOpenFailure = const RemoteFileException(
-      kind: RemoteFileErrorKind.disconnected,
-      operation: 'connect',
-      message: 'still down',
-    );
-    await controller.retry();
-    expect(candidate.closeCalls, 1);
-    expect(controller.error, isNotNull);
+      // The recovery retry re-binds the candidate (retainCache) and the
+      // open fails — a transient retry failure must NOT retire the
+      // parked prior binding before the replacement ever committed.
+      lanes.remoteOpenFailure = const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'connect',
+        message: 'still down',
+      );
+      await controller.retry();
+      expect(candidate.closeCalls, 1);
+      expect(controller.error, isNotNull);
 
-    controller.cancelNavigation();
-    await settle();
+      controller.cancelNavigation();
+      await settle();
 
-    expect(controller.phase, PanePhase.browsing);
-    expect(
-      controller.location,
-      const RemotePaneLocation('srv-1', '/srv/home'),
-    );
-    expect(controller.entries.single.name, 'remote.txt');
-    expect(controller.connectionLost, isFalse);
-    expect(controller.error, isNull);
-    expect(remote.closeCalls, 0);
-    // The failed retry already detached the candidate; Esc must not
-    // close it a second time.
-    expect(candidate.closeCalls, 1);
-    controller.dispose();
-  });
+      expect(controller.phase, PanePhase.browsing);
+      expect(
+        controller.location,
+        const RemotePaneLocation('srv-1', '/srv/home'),
+      );
+      expect(controller.entries.single.name, 'remote.txt');
+      expect(controller.connectionLost, isFalse);
+      expect(controller.error, isNull);
+      expect(remote.closeCalls, 0);
+      // The failed retry already detached the candidate; Esc must not
+      // close it a second time.
+      expect(candidate.closeCalls, 1);
+      controller.dispose();
+    },
+  );
 
   test('verbsEnabled requires a live browsing phase', () async {
     // No engine at all: never verbs.
@@ -1488,7 +1477,9 @@ void main() {
   test('goUp navigates to the parent and stops at the root', () async {
     final lanes = FakePaneLanes();
     final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [_entry('sub', type: RemoteFileType.directory)];
+    channel.listings['/home/tester'] = [
+      _entry('sub', type: RemoteFileType.directory),
+    ];
     channel.listings['/home'] = const [];
     channel.listings['/'] = const [];
     lanes.nextLocalChannel = channel;
@@ -1513,11 +1504,7 @@ void main() {
   test('cursor moves within the listing and resets on navigation', () async {
     final lanes = FakePaneLanes();
     final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [
-      _entry('a'),
-      _entry('b'),
-      _entry('c'),
-    ];
+    channel.listings['/home/tester'] = [_entry('a'), _entry('b'), _entry('c')];
     channel.listings['/other'] = [_entry('x')];
     lanes.nextLocalChannel = channel;
     final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
@@ -1558,28 +1545,34 @@ void main() {
     expect(lanes.disconnects, isEmpty);
   });
 
-  test('a cancelled first listing keeps the remote kind for navigation', () async {
-    final lanes = FakePaneLanes();
-    final channel = FakePaneChannel('/srv/home');
-    channel.listings['/srv/home'] = [_entry('root.txt')];
-    channel.listings['/srv/www'] = [_entry('www.txt')];
-    lanes.nextRemoteChannel = channel;
-    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
-    await controller.connectRemote(_remoteBookmark());
+  test(
+    'a cancelled first listing keeps the remote kind for navigation',
+    () async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/srv/home');
+      channel.listings['/srv/home'] = [_entry('root.txt')];
+      channel.listings['/srv/www'] = [_entry('www.txt')];
+      lanes.nextRemoteChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+      await controller.connectRemote(_remoteBookmark());
 
-    // Esc during the FIRST listing restores the null-location snapshot
-    // while the remote channel stays live.
-    controller.cancelNavigation();
-    expect(controller.location, isNull);
+      // Esc during the FIRST listing restores the null-location snapshot
+      // while the remote channel stays live.
+      controller.cancelNavigation();
+      expect(controller.location, isNull);
 
-    // A navigation after that must stay a REMOTE location — the binding,
-    // not the cancelled location, decides the kind.
-    controller.navigate('/srv/www');
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.location, const RemotePaneLocation('srv-1', '/srv/www'));
-    expect(controller.entries.single.name, 'www.txt');
-    controller.dispose();
-  });
+      // A navigation after that must stay a REMOTE location — the binding,
+      // not the cancelled location, decides the kind.
+      controller.navigate('/srv/www');
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        controller.location,
+        const RemotePaneLocation('srv-1', '/srv/www'),
+      );
+      expect(controller.entries.single.name, 'www.txt');
+      controller.dispose();
+    },
+  );
 
   test('detaching a shared server leaves the pool for the sibling', () async {
     final lanes = FakePaneLanes();
@@ -1629,11 +1622,7 @@ void main() {
   test('arrow up from no cursor selects the last row', () async {
     final lanes = FakePaneLanes();
     final channel = FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [
-      _entry('a'),
-      _entry('b'),
-      _entry('c'),
-    ];
+    channel.listings['/home/tester'] = [_entry('a'), _entry('b'), _entry('c')];
     lanes.nextLocalChannel = channel;
     final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
     await controller.openLocalHome();
@@ -1822,7 +1811,10 @@ void main() {
     await settle();
     expect(controller.connectionLost, isFalse);
 
-    lanes.emitState('srv-1', const ServerStatus(ServerConnectionState.connected));
+    lanes.emitState(
+      'srv-1',
+      const ServerStatus(ServerConnectionState.connected),
+    );
     await Future<void>.delayed(Duration.zero);
     expect(controller.connectionLost, isFalse);
 
@@ -1851,10 +1843,7 @@ void main() {
       final channel = FakePaneChannel('/home/tester');
       channel.listings['/home/tester'] = entries;
       lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.openLocalHome();
       await settle();
       return controller;
@@ -1980,68 +1969,78 @@ void main() {
       controller.dispose();
     });
 
-    test('glob characters other than * stay literal through the pane', () async {
-      final lanes = FakePaneLanes();
-      final controller = await browsing(lanes, [
-        _entry('a?b.txt'),
-        _entry('axb.txt'),
-        _entry('a[b.txt'),
-        _entry('zz.txt'),
-      ]);
-      int rowOf(String name) =>
-          controller.entries.indexWhere((e) => e.name == name);
+    test(
+      'glob characters other than * stay literal through the pane',
+      () async {
+        final lanes = FakePaneLanes();
+        final controller = await browsing(lanes, [
+          _entry('a?b.txt'),
+          _entry('axb.txt'),
+          _entry('a[b.txt'),
+          _entry('zz.txt'),
+        ]);
+        int rowOf(String name) =>
+            controller.entries.indexWhere((e) => e.name == name);
 
-      controller.openQuickSelect();
-      controller.changeQuickSelectQuery('a?b'); // ? is literal, not a wildcard
-      expect(controller.isRowSelected(rowOf('a?b.txt')), isTrue);
-      expect(controller.isRowSelected(rowOf('axb.txt')), isFalse);
-      expect(controller.isRowSelected(rowOf('a[b.txt')), isFalse);
+        controller.openQuickSelect();
+        controller.changeQuickSelectQuery(
+          'a?b',
+        ); // ? is literal, not a wildcard
+        expect(controller.isRowSelected(rowOf('a?b.txt')), isTrue);
+        expect(controller.isRowSelected(rowOf('axb.txt')), isFalse);
+        expect(controller.isRowSelected(rowOf('a[b.txt')), isFalse);
 
-      controller.changeQuickSelectQuery('a[b'); // brackets literal too
-      expect(controller.isRowSelected(rowOf('a?b.txt')), isFalse);
-      expect(controller.isRowSelected(rowOf('a[b.txt')), isTrue);
+        controller.changeQuickSelectQuery('a[b'); // brackets literal too
+        expect(controller.isRowSelected(rowOf('a?b.txt')), isFalse);
+        expect(controller.isRowSelected(rowOf('a[b.txt')), isTrue);
 
-      // Consecutive stars match identically to one (02 §2.5): a**b.txt
-      // selects every name starting 'a' and ending 'b.txt', like a*b.txt.
-      controller.changeQuickSelectQuery('a**b.txt');
-      expect(controller.isRowSelected(rowOf('a?b.txt')), isTrue);
-      expect(controller.isRowSelected(rowOf('axb.txt')), isTrue);
-      expect(controller.isRowSelected(rowOf('a[b.txt')), isTrue);
-      expect(controller.isRowSelected(rowOf('zz.txt')), isFalse);
-      controller.dispose();
-    });
+        // Consecutive stars match identically to one (02 §2.5): a**b.txt
+        // selects every name starting 'a' and ending 'b.txt', like a*b.txt.
+        controller.changeQuickSelectQuery('a**b.txt');
+        expect(controller.isRowSelected(rowOf('a?b.txt')), isTrue);
+        expect(controller.isRowSelected(rowOf('axb.txt')), isTrue);
+        expect(controller.isRowSelected(rowOf('a[b.txt')), isTrue);
+        expect(controller.isRowSelected(rowOf('zz.txt')), isFalse);
+        controller.dispose();
+      },
+    );
 
-    test('flagged (U+FFFD) rows never match but a preselected one survives',
-        () async {
-      final lanes = FakePaneLanes();
-      final controller = await browsing(lanes, [
-        _entry('good.txt'),
-        _entry('bad\uFFFDname.txt'),
-        _entry('other.txt'),
-      ]);
-      int rowOf(String name) =>
-          controller.entries.indexWhere((e) => e.name == name);
-      final flagged = rowOf('bad\uFFFDname.txt');
-      final good = rowOf('good.txt');
-      final other = rowOf('other.txt');
+    test(
+      'flagged (U+FFFD) rows never match but a preselected one survives',
+      () async {
+        final lanes = FakePaneLanes();
+        final controller = await browsing(lanes, [
+          _entry('good.txt'),
+          _entry('bad\uFFFDname.txt'),
+          _entry('other.txt'),
+        ]);
+        int rowOf(String name) =>
+            controller.entries.indexWhere((e) => e.name == name);
+        final flagged = rowOf('bad\uFFFDname.txt');
+        final good = rowOf('good.txt');
+        final other = rowOf('other.txt');
 
-      // The flagged row is manually selected BEFORE the field opens.
-      controller.setCursorIndex(flagged);
-      controller.openQuickSelect();
-      controller.changeQuickSelectQuery('*.txt');
+        // The flagged row is manually selected BEFORE the field opens.
+        controller.setCursorIndex(flagged);
+        controller.openQuickSelect();
+        controller.changeQuickSelectQuery('*.txt');
 
-      expect(controller.isRowSelected(good), isTrue);
-      expect(controller.isRowSelected(flagged), isTrue,
-          reason: 'baseline survives');
-      expect(controller.isRowSelected(other), isTrue);
+        expect(controller.isRowSelected(good), isTrue);
+        expect(
+          controller.isRowSelected(flagged),
+          isTrue,
+          reason: 'baseline survives',
+        );
+        expect(controller.isRowSelected(other), isTrue);
 
-      // Remove mode cannot touch the excluded row either.
-      controller.changeQuickSelectMode(QuickSelectMode.remove);
-      expect(controller.isRowSelected(good), isFalse);
-      expect(controller.isRowSelected(flagged), isTrue);
-      expect(controller.isRowSelected(other), isFalse);
-      controller.dispose();
-    });
+        // Remove mode cannot touch the excluded row either.
+        controller.changeQuickSelectMode(QuickSelectMode.remove);
+        expect(controller.isRowSelected(good), isFalse);
+        expect(controller.isRowSelected(flagged), isTrue);
+        expect(controller.isRowSelected(other), isFalse);
+        controller.dispose();
+      },
+    );
 
     test('hidden rows are filtered before matching', () async {
       final lanes = FakePaneLanes();
@@ -2060,106 +2059,105 @@ void main() {
       controller.dispose();
     });
 
-    test('navigation ends the session before the listing is replaced',
-        () async {
-      final lanes = FakePaneLanes();
-      final channel = FakePaneChannel('/home/tester');
-      channel.listings['/home/tester'] = [
-        _entry('alpha.txt'),
-        _entry('sub', type: RemoteFileType.directory),
-      ];
-      channel.listings['/parent/sub'] = [_entry('nested.txt')];
-      lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
-      await controller.openLocalHome();
-      await settle();
+    test(
+      'navigation ends the session before the listing is replaced',
+      () async {
+        final lanes = FakePaneLanes();
+        final channel = FakePaneChannel('/home/tester');
+        channel.listings['/home/tester'] = [
+          _entry('alpha.txt'),
+          _entry('sub', type: RemoteFileType.directory),
+        ];
+        channel.listings['/parent/sub'] = [_entry('nested.txt')];
+        lanes.nextLocalChannel = channel;
+        final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+        await controller.openLocalHome();
+        await settle();
 
-      controller.setCursorIndex(0);
-      controller.openQuickSelect();
-      controller.changeQuickSelectQuery('*');
-      expect(controller.selectedCount, 2);
+        controller.setCursorIndex(0);
+        controller.openQuickSelect();
+        controller.changeQuickSelectQuery('*');
+        expect(controller.selectedCount, 2);
 
-      controller.navigate('/parent/sub');
-      expect(controller.quickSelectActive, isFalse,
-          reason: 'the session ends at navigation issue, not on arrival');
+        controller.navigate('/parent/sub');
+        expect(
+          controller.quickSelectActive,
+          isFalse,
+          reason: 'the session ends at navigation issue, not on arrival',
+        );
 
-      await settle();
-      // The new listing pruned the restored baseline: no stale restore.
-      expect(controller.entries.single.name, 'nested.txt');
-      expect(controller.selectedCount, 0);
-      controller.dispose();
-    });
+        await settle();
+        // The new listing pruned the restored baseline: no stale restore.
+        expect(controller.entries.single.name, 'nested.txt');
+        expect(controller.selectedCount, 0);
+        controller.dispose();
+      },
+    );
 
-    test('a listing replacement restores the baseline before pruning',
-        () async {
-      final lanes = FakePaneLanes();
-      final channel = FakePaneChannel('/home/tester');
-      channel.listings['/home/tester'] = [
-        _entry('alpha.txt'),
-        _entry('beta.txt'),
-      ];
-      lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
-      await controller.openLocalHome();
-      await settle();
+    test(
+      'a listing replacement restores the baseline before pruning',
+      () async {
+        final lanes = FakePaneLanes();
+        final channel = FakePaneChannel('/home/tester');
+        channel.listings['/home/tester'] = [
+          _entry('alpha.txt'),
+          _entry('beta.txt'),
+        ];
+        lanes.nextLocalChannel = channel;
+        final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+        await controller.openLocalHome();
+        await settle();
 
-      controller.setCursorIndex(0); // baseline: alpha.txt only
-      controller.openQuickSelect();
-      controller.changeQuickSelectQuery('*');
-      expect(controller.selectedCount, 2);
+        controller.setCursorIndex(0); // baseline: alpha.txt only
+        controller.openQuickSelect();
+        controller.changeQuickSelectQuery('*');
+        expect(controller.selectedCount, 2);
 
-      // A refresh re-lists the same directory: the row identities are
-      // stable (same paths), so the restored baseline — not the preview
-      // — is what survives pruning.
-      controller.refresh();
-      expect(controller.quickSelectActive, isFalse);
-      await settle();
-      expect(controller.selectedCount, 1);
-      expect(controller.isRowSelected(0), isTrue);
-      expect(controller.isRowSelected(1), isFalse);
-      controller.dispose();
-    });
+        // A refresh re-lists the same directory: the row identities are
+        // stable (same paths), so the restored baseline — not the preview
+        // — is what survives pruning.
+        controller.refresh();
+        expect(controller.quickSelectActive, isFalse);
+        await settle();
+        expect(controller.selectedCount, 1);
+        expect(controller.isRowSelected(0), isTrue);
+        expect(controller.isRowSelected(1), isFalse);
+        controller.dispose();
+      },
+    );
 
-    test('a stale listing answer cannot resurrect or corrupt the session',
-        () async {
-      final lanes = FakePaneLanes();
-      final channel = FakePaneChannel('/home/tester');
-      channel.listings['/home/tester'] = [_entry('a.txt'), _entry('b.txt')];
-      channel.listings['/other'] = [_entry('x.txt')];
-      lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
-      await controller.openLocalHome();
-      await settle();
+    test(
+      'a stale listing answer cannot resurrect or corrupt the session',
+      () async {
+        final lanes = FakePaneLanes();
+        final channel = FakePaneChannel('/home/tester');
+        channel.listings['/home/tester'] = [_entry('a.txt'), _entry('b.txt')];
+        channel.listings['/other'] = [_entry('x.txt')];
+        lanes.nextLocalChannel = channel;
+        final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+        await controller.openLocalHome();
+        await settle();
 
-      controller.openQuickSelect();
-      controller.changeQuickSelectQuery('*');
-      expect(controller.selectedCount, 2);
+        controller.openQuickSelect();
+        controller.changeQuickSelectQuery('*');
+        expect(controller.selectedCount, 2);
 
-      // A held navigation ends the session synchronously; its late
-      // answer lands in a new listing with no session attached.
-      final hold = Completer<void>();
-      channel.holdNext = hold;
-      controller.navigate('/other');
-      expect(controller.quickSelectActive, isFalse);
-      hold.complete();
-      await settle();
-      expect(controller.quickSelectActive, isFalse);
-      expect(controller.entries.single.name, 'x.txt');
-      expect(controller.selectedCount, 0);
-      controller.dispose();
-    });
+        // A held navigation ends the session synchronously; its late
+        // answer lands in a new listing with no session attached.
+        final hold = Completer<void>();
+        channel.holdNext = hold;
+        controller.navigate('/other');
+        expect(controller.quickSelectActive, isFalse);
+        hold.complete();
+        await settle();
+        expect(controller.quickSelectActive, isFalse);
+        expect(controller.entries.single.name, 'x.txt');
+        expect(controller.selectedCount, 0);
+        controller.dispose();
+      },
+    );
 
-    test('open requires verbs, and a second open never re-baselines',
-        () async {
+    test('open requires verbs, and a second open never re-baselines', () async {
       // Verbs off (no binding at all): the open is a no-op.
       final unbound = PaneController(paneTabId: 'pane.left');
       unbound.openQuickSelect();
@@ -2195,17 +2193,13 @@ void main() {
       final channel = FakePaneChannel('/home/tester');
       channel.listings['/home/tester'] = entries;
       lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.openLocalHome();
       await settle();
       return (controller, channel);
     }
 
-    test('opens on the cursor row and Esc cancels without a request',
-        () async {
+    test('opens on the cursor row and Esc cancels without a request', () async {
       final lanes = FakePaneLanes();
       final (controller, channel) = await renaming(lanes, [
         _entry('alpha.txt'),
@@ -2231,83 +2225,93 @@ void main() {
       controller.dispose();
     });
 
-    test('is inert off the verb surface and while a commit is in flight',
-        () async {
-      // Unbound: no verbs, no session.
-      final unbound = PaneController(paneTabId: 'pane.left');
-      unbound.startRename();
-      expect(unbound.inlineRenameActive, isFalse);
-      unbound.dispose();
+    test(
+      'is inert off the verb surface and while a commit is in flight',
+      () async {
+        // Unbound: no verbs, no session.
+        final unbound = PaneController(paneTabId: 'pane.left');
+        unbound.startRename();
+        expect(unbound.inlineRenameActive, isFalse);
+        unbound.dispose();
 
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await renaming(lanes, [
-        _entry('alpha.txt'),
-      ]);
-      controller.setCursorIndex(0);
-      controller.startRename();
-      // A second start while a session is open is a no-op.
-      controller.startRename();
-      expect(controller.renameTarget!.name, 'alpha.txt');
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await renaming(lanes, [
+          _entry('alpha.txt'),
+        ]);
+        controller.setCursorIndex(0);
+        controller.startRename();
+        // A second start while a session is open is a no-op.
+        controller.startRename();
+        expect(controller.renameTarget!.name, 'alpha.txt');
 
-      // During the in-flight commit, another start is rejected.
-      channel.heldRename = Completer<void>();
-      unawaited(controller.submitRename('gamma.txt'));
-      expect(controller.renameTarget, isNull);
-      expect(controller.inlineRenameActive, isTrue,
-          reason: 'the in-flight commit still holds the close guard');
-      controller.startRename();
-      expect(controller.renameTarget, isNull);
-      channel.heldRename = null;
-      controller.dispose();
-    });
+        // During the in-flight commit, another start is rejected.
+        channel.heldRename = Completer<void>();
+        unawaited(controller.submitRename('gamma.txt'));
+        expect(controller.renameTarget, isNull);
+        expect(
+          controller.inlineRenameActive,
+          isTrue,
+          reason: 'the in-flight commit still holds the close guard',
+        );
+        controller.startRename();
+        expect(controller.renameTarget, isNull);
+        channel.heldRename = null;
+        controller.dispose();
+      },
+    );
 
-    test('the unchanged name closes silently — no request, no refresh',
-        () async {
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await renaming(lanes, [
-        _entry('alpha.txt'),
-      ]);
-      controller.setCursorIndex(0);
-      controller.startRename();
-      await controller.submitRename('alpha.txt');
+    test(
+      'the unchanged name closes silently — no request, no refresh',
+      () async {
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await renaming(lanes, [
+          _entry('alpha.txt'),
+        ]);
+        controller.setCursorIndex(0);
+        controller.startRename();
+        await controller.submitRename('alpha.txt');
 
-      expect(controller.inlineRenameActive, isFalse);
-      expect(channel.renameCalls, isEmpty);
-      expect(
-        channel.listCalls,
-        ['/home/tester'],
-        reason: 'a no-op rename must not refresh the listing',
-      );
-      controller.dispose();
-    });
+        expect(controller.inlineRenameActive, isFalse);
+        expect(channel.renameCalls, isEmpty);
+        expect(channel.listCalls, [
+          '/home/tester',
+        ], reason: 'a no-op rename must not refresh the listing');
+        controller.dispose();
+      },
+    );
 
-    test('blank, separator, and Windows-invalid names stay client-side',
-        () async {
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await renaming(lanes, [
-        _entry('alpha.txt'),
-      ]);
-      controller.setCursorIndex(0);
+    test(
+      'blank, separator, and Windows-invalid names stay client-side',
+      () async {
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await renaming(lanes, [
+          _entry('alpha.txt'),
+        ]);
+        controller.setCursorIndex(0);
 
-      controller.startRename();
-      await controller.submitRename('   ');
-      expect(
-        (controller.renameError! as PaneFaultException).fault,
-        PaneFault.renameNameEmpty,
-      );
-      expect(controller.inlineRenameActive, isTrue,
-          reason: 'a failed validation keeps the field open');
+        controller.startRename();
+        await controller.submitRename('   ');
+        expect(
+          (controller.renameError! as PaneFaultException).fault,
+          PaneFault.renameNameEmpty,
+        );
+        expect(
+          controller.inlineRenameActive,
+          isTrue,
+          reason: 'a failed validation keeps the field open',
+        );
 
-      await controller.submitRename('a/b');
-      expect(
-        (controller.renameError! as PaneFaultException).fault,
-        PaneFault.renameNameSeparator,
-      );
+        await controller.submitRename('a/b');
+        expect(
+          (controller.renameError! as PaneFaultException).fault,
+          PaneFault.renameNameSeparator,
+        );
 
-      expect(channel.renameCalls, isEmpty);
-      controller.cancelRename();
-      controller.dispose();
-    });
+        expect(channel.renameCalls, isEmpty);
+        controller.cancelRename();
+        controller.dispose();
+      },
+    );
 
     test('a local pane on Windows rejects the NTFS set but POSIX does '
         'not', () async {
@@ -2331,8 +2335,7 @@ void main() {
       }
     });
 
-    test('a valid commit renames, refreshes, and reselects the row',
-        () async {
+    test('a valid commit renames, refreshes, and reselects the row', () async {
       final lanes = FakePaneLanes();
       final (controller, channel) = await renaming(lanes, [
         _entry('alpha.txt'),
@@ -2353,11 +2356,10 @@ void main() {
       expect(channel.renameCalls, [
         ('/parent/beta.txt', '/parent/renamed.txt'),
       ]);
-      expect(
-        channel.listCalls,
-        ['/home/tester', '/home/tester'],
-        reason: 'a committed rename re-lists its directory',
-      );
+      expect(channel.listCalls, [
+        '/home/tester',
+        '/home/tester',
+      ], reason: 'a committed rename re-lists its directory');
       expect(controller.inlineRenameActive, isFalse);
       // The cursor re-anchors on the renamed row, not a pruned index.
       expect(controller.cursorIndex, 1);
@@ -2365,8 +2367,7 @@ void main() {
       controller.dispose();
     });
 
-    test('a typed refusal re-opens the field with the error inside',
-        () async {
+    test('a typed refusal re-opens the field with the error inside', () async {
       final lanes = FakePaneLanes();
       final (controller, channel) = await renaming(lanes, [
         _entry('alpha.txt'),
@@ -2381,8 +2382,11 @@ void main() {
       );
       await controller.submitRename('beta.txt');
 
-      expect(controller.renameTarget, isNotNull,
-          reason: 'the field re-opens on the failed session');
+      expect(
+        controller.renameTarget,
+        isNotNull,
+        reason: 'the field re-opens on the failed session',
+      );
       expect(
         controller.renameError!.kind,
         RemoteFileErrorKind.permissionDenied,
@@ -2394,7 +2398,10 @@ void main() {
       await controller.submitRename('beta.txt');
       await settle();
       expect(controller.inlineRenameActive, isFalse);
-      expect(channel.renameCalls.last, ('/parent/alpha.txt', '/parent/beta.txt'));
+      expect(channel.renameCalls.last, (
+        '/parent/alpha.txt',
+        '/parent/beta.txt',
+      ));
       controller.dispose();
     });
 
@@ -2423,7 +2430,8 @@ void main() {
       expect(
         reported.single,
         isA<StateError>(),
-        reason: 'a non-VFS failure is not a name refusal — it reports '
+        reason:
+            'a non-VFS failure is not a name refusal — it reports '
             'through the pane\'s onError sink like every other untyped '
             'failure',
       );
@@ -2455,9 +2463,13 @@ void main() {
       );
       held.complete();
       await settle();
-      expect(controller.renameTarget, isNull,
-          reason: 'a rename settling after its pane navigated away '
-              'never re-opens a field');
+      expect(
+        controller.renameTarget,
+        isNull,
+        reason:
+            'a rename settling after its pane navigated away '
+            'never re-opens a field',
+      );
       expect(controller.inlineRenameActive, isFalse);
       controller.dispose();
     });
@@ -2529,57 +2541,60 @@ void main() {
       controller.dispose();
     });
 
-    test('a POSIX name containing a backslash stays inside its parent',
-        () async {
-      // '\' is a legal POSIX filename character — the parent split must
-      // not land on a backslash inside the name itself.
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await renaming(lanes, [
-        const RemoteFileEntry(
-          path: r'/parent/weird\name',
-          name: r'weird\name',
-          type: RemoteFileType.file,
-        ),
-      ]);
-      controller.setCursorIndex(0);
-      controller.startRename();
-      channel.listings['/home/tester'] = [_entry('plain.txt')];
-      await controller.submitRename('plain.txt');
-      await settle();
+    test(
+      'a POSIX name containing a backslash stays inside its parent',
+      () async {
+        // '\' is a legal POSIX filename character — the parent split must
+        // not land on a backslash inside the name itself.
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await renaming(lanes, [
+          const RemoteFileEntry(
+            path: r'/parent/weird\name',
+            name: r'weird\name',
+            type: RemoteFileType.file,
+          ),
+        ]);
+        controller.setCursorIndex(0);
+        controller.startRename();
+        channel.listings['/home/tester'] = [_entry('plain.txt')];
+        await controller.submitRename('plain.txt');
+        await settle();
 
-      expect(channel.renameCalls, [
-        (r'/parent/weird\name', '/parent/plain.txt'),
-      ]);
-      controller.dispose();
-    });
+        expect(channel.renameCalls, [
+          (r'/parent/weird\name', '/parent/plain.txt'),
+        ]);
+        controller.dispose();
+      },
+    );
 
-    test('a separator-less path equal to its name joins the location',
-        () async {
-      // A path that is exactly its name carries no parent prefix —
-      // the backslash inside it must not split, and the destination
-      // joins the browsed location instead.
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await renaming(lanes, [
-        const RemoteFileEntry(
-          path: r'weird\name',
-          name: r'weird\name',
-          type: RemoteFileType.file,
-        ),
-      ]);
-      controller.setCursorIndex(0);
-      controller.startRename();
-      channel.listings['/home/tester'] = [_entry('plain.txt')];
-      await controller.submitRename('plain.txt');
-      await settle();
+    test(
+      'a separator-less path equal to its name joins the location',
+      () async {
+        // A path that is exactly its name carries no parent prefix —
+        // the backslash inside it must not split, and the destination
+        // joins the browsed location instead.
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await renaming(lanes, [
+          const RemoteFileEntry(
+            path: r'weird\name',
+            name: r'weird\name',
+            type: RemoteFileType.file,
+          ),
+        ]);
+        controller.setCursorIndex(0);
+        controller.startRename();
+        channel.listings['/home/tester'] = [_entry('plain.txt')];
+        await controller.submitRename('plain.txt');
+        await settle();
 
-      expect(channel.renameCalls, [
-        (r'weird\name', '/home/tester/plain.txt'),
-      ]);
-      controller.dispose();
-    });
+        expect(channel.renameCalls, [
+          (r'weird\name', '/home/tester/plain.txt'),
+        ]);
+        controller.dispose();
+      },
+    );
 
-    test('a POSIX basename ending in a backslash keeps its parent',
-        () async {
+    test('a POSIX basename ending in a backslash keeps its parent', () async {
       // Both an internal AND a terminal '\': the terminal byte is part
       // of the legal POSIX name, not a separator — trimming it first
       // would leave a path that no longer ends with its name, and the
@@ -2609,8 +2624,7 @@ void main() {
       controller.dispose();
     });
 
-    test('a remote pane keeps POSIX grammar for backslash names',
-        () async {
+    test('a remote pane keeps POSIX grammar for backslash names', () async {
       // A Windows client browsing a remote POSIX listing: the entry
       // path's grammar is '/', so a trailing '\' in the name is a
       // filename byte there too.
@@ -2624,10 +2638,7 @@ void main() {
         ),
       ];
       lanes.nextRemoteChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.connectRemote(_remoteBookmark());
       await settle();
 
@@ -2649,10 +2660,7 @@ void main() {
       final channelA = FakePaneChannel('/srv/a');
       channelA.listings['/srv/a'] = [_entry('alpha.txt')];
       lanes.nextRemoteChannel = channelA;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.connectRemote(_remoteBookmark());
       await settle();
 
@@ -2667,32 +2675,28 @@ void main() {
       // BEFORE server A's rename settles. B's listing even contains a
       // row at A's destination path spelling.
       final channelB = FakePaneChannel('/srv/b');
-      channelB.listings['/srv/b'] = [
-        _entry('beta.txt'),
-        _entry('other.txt'),
-      ];
+      channelB.listings['/srv/b'] = [_entry('beta.txt'), _entry('other.txt')];
       lanes.nextRemoteChannel = channelB;
       await controller.connectRemote(_remoteBookmark(id: 'srv-2'));
       await settle();
-      expect(
-        controller.location,
-        const RemotePaneLocation('srv-2', '/srv/b'),
-      );
+      expect(controller.location, const RemotePaneLocation('srv-2', '/srv/b'));
 
       held.complete();
       await settle();
 
-      expect(controller.inlineRenameActive, isFalse,
-          reason: 'the in-flight guard settles regardless of ownership');
       expect(
-        channelB.listCalls,
-        ['/srv/b'],
-        reason: "server A's retired rename must not re-list server B",
+        controller.inlineRenameActive,
+        isFalse,
+        reason: 'the in-flight guard settles regardless of ownership',
       );
+      expect(channelB.listCalls, [
+        '/srv/b',
+      ], reason: "server A's retired rename must not re-list server B");
       expect(
         controller.cursorIndex,
         isNull,
-        reason: "server A's destination must not install a pending "
+        reason:
+            "server A's destination must not install a pending "
             'selection on the new binding',
       );
       controller.dispose();
@@ -2737,14 +2741,19 @@ void main() {
       held.complete();
       await settle();
 
-      expect(controller.renameTarget, isNull,
-          reason: 'a stale operation never reopens its editor on the '
-              'replacement binding');
+      expect(
+        controller.renameTarget,
+        isNull,
+        reason:
+            'a stale operation never reopens its editor on the '
+            'replacement binding',
+      );
       expect(controller.inlineRenameActive, isFalse);
       expect(
         reported.single,
         isA<RemoteFileException>(),
-        reason: 'a retired operation\'s refusal reports through the '
+        reason:
+            'a retired operation\'s refusal reports through the '
             'error sink instead of dropping silently',
       );
       controller.dispose();
@@ -2792,16 +2801,19 @@ void main() {
       held.complete();
       await settle();
 
-      expect(controller.renameTarget, isNull,
-          reason: 'an away-and-back round trip retires the operation\'s '
-              'presentation ownership');
+      expect(
+        controller.renameTarget,
+        isNull,
+        reason:
+            'an away-and-back round trip retires the operation\'s '
+            'presentation ownership',
+      );
       expect(controller.inlineRenameActive, isFalse);
       expect(reported.single, isA<RemoteFileException>());
       controller.dispose();
     });
 
-    test('submitting a renameTargetGone session sends no request',
-        () async {
+    test('submitting a renameTargetGone session sends no request', () async {
       final lanes = FakePaneLanes();
       final (controller, channel) = await renaming(lanes, [
         _entry('alpha.txt'),
@@ -2823,11 +2835,18 @@ void main() {
       );
 
       await controller.submitRename('gamma.txt');
-      expect(channel.renameCalls, isEmpty,
-          reason: 'an invalidated session must never reach the channel');
-      expect(controller.inlineRenameActive, isFalse,
-          reason: 'submitting the diagnostic dismisses it — a new edit '
-              'needs a fresh row session');
+      expect(
+        channel.renameCalls,
+        isEmpty,
+        reason: 'an invalidated session must never reach the channel',
+      );
+      expect(
+        controller.inlineRenameActive,
+        isFalse,
+        reason:
+            'submitting the diagnostic dismisses it — a new edit '
+            'needs a fresh row session',
+      );
       controller.dispose();
     });
 
@@ -2861,9 +2880,13 @@ void main() {
       expect(controller.renameTarget, isNotNull);
 
       await controller.submitRename('gamma.txt');
-      expect(channel.renameCalls, isEmpty,
-          reason: 'the stale session must not act on the replacement '
-              'file now occupying the old path');
+      expect(
+        channel.renameCalls,
+        isEmpty,
+        reason:
+            'the stale session must not act on the replacement '
+            'file now occupying the old path',
+      );
       controller.dispose();
     });
 
@@ -2882,10 +2905,7 @@ void main() {
         ),
       ];
       lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.openLocalHome();
       await settle();
       expect(controller.location, const LocalPaneLocation('/'));
@@ -2895,9 +2915,7 @@ void main() {
       await controller.submitRename('renamed.txt');
       await settle();
 
-      expect(channel.renameCalls, [
-        ('plain.txt', '/renamed.txt'),
-      ]);
+      expect(channel.renameCalls, [('plain.txt', '/renamed.txt')]);
       controller.dispose();
     });
 
@@ -2913,25 +2931,17 @@ void main() {
         ),
       ];
       lanes.nextRemoteChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.connectRemote(_remoteBookmark(remotePath: '/'));
       await settle();
-      expect(
-        controller.location,
-        const RemotePaneLocation('srv-1', '/'),
-      );
+      expect(controller.location, const RemotePaneLocation('srv-1', '/'));
 
       controller.setCursorIndex(0);
       controller.startRename();
       await controller.submitRename('renamed.txt');
       await settle();
 
-      expect(channel.renameCalls, [
-        ('plain.txt', '/renamed.txt'),
-      ]);
+      expect(channel.renameCalls, [('plain.txt', '/renamed.txt')]);
       controller.dispose();
     });
 
@@ -2941,10 +2951,7 @@ void main() {
       final channelA = FakePaneChannel('/srv/a');
       channelA.listings['/srv/a'] = [_entry('alpha.txt')];
       lanes.nextRemoteChannel = channelA;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.connectRemote(_remoteBookmark());
       await settle();
 
@@ -2967,7 +2974,8 @@ void main() {
       expect(
         controller.inlineRenameActive,
         isFalse,
-        reason: 'a retired operation must not keep the new binding\'s '
+        reason:
+            'a retired operation must not keep the new binding\'s '
             'rename verb closed while its request stalls',
       );
       controller.setCursorIndex(0);
@@ -2985,7 +2993,8 @@ void main() {
       expect(
         controller.inlineRenameActive,
         isTrue,
-        reason: 'a retired operation settling late must not release a '
+        reason:
+            'a retired operation settling late must not release a '
             'newer commit\'s guard',
       );
       heldB.complete();
@@ -3014,7 +3023,8 @@ void main() {
       expect(
         controller.inlineRenameActive,
         isFalse,
-        reason: 'a retired operation must not keep the browsed '
+        reason:
+            'a retired operation must not keep the browsed '
             'location\'s rename verb closed while its request stalls',
       );
       controller.setCursorIndex(0);
@@ -3060,7 +3070,8 @@ void main() {
       expect(
         channel.listCalls.length,
         greaterThan(preSettleListCalls),
-        reason: 'a retired commit landing on the still-browsed '
+        reason:
+            'a retired commit landing on the still-browsed '
             'directory must re-list it',
       );
       expect(channel.listCalls.last, '/home/tester');
@@ -3102,13 +3113,15 @@ void main() {
       expect(
         notifications,
         greaterThan(before),
-        reason: 'the commit\'s settle must still notify listeners even '
+        reason:
+            'the commit\'s settle must still notify listeners even '
             'when its token is retired and the pane browses elsewhere',
       );
       expect(
         channel.listCalls.length,
         listCallsBefore,
-        reason: 'a retired settle must not re-list when the pane browses '
+        reason:
+            'a retired settle must not re-list when the pane browses '
             'a directory the commit did not touch',
       );
       controller.dispose();
@@ -3124,13 +3137,9 @@ void main() {
       List<RemoteFileEntry>? entries,
     }) async {
       final channel = FakePaneChannel('/home/tester');
-      channel.listings['/home/tester'] =
-          entries ?? [_entry('file.txt')];
+      channel.listings['/home/tester'] = entries ?? [_entry('file.txt')];
       lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.openLocalHome();
       await settle();
       return (controller, channel);
@@ -3170,40 +3179,44 @@ void main() {
       controller.dispose();
     });
 
-    test('Edit posts its deferred-milestone notice without launching',
-        () async {
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await localFilePane(lanes);
-      controller.doubleClickAction = DoubleClickAction.edit;
+    test(
+      'Edit posts its deferred-milestone notice without launching',
+      () async {
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await localFilePane(lanes);
+        controller.doubleClickAction = DoubleClickAction.edit;
 
-      await controller.openEntry(controller.entries.single);
+        await controller.openEntry(controller.entries.single);
 
-      expect(controller.notice, PaneNotice.editLater);
-      expect(channel.openCalls, isEmpty);
-      expect(controller.error, isNull);
-      controller.dispose();
-    });
+        expect(controller.notice, PaneNotice.editLater);
+        expect(channel.openCalls, isEmpty);
+        expect(controller.error, isNull);
+        controller.dispose();
+      },
+    );
 
-    test('Transfer hands the file to the other-pane seam without launching',
-        () async {
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await localFilePane(lanes);
-      controller.doubleClickAction = DoubleClickAction.transfer;
-      final handed = <(PaneController, String)>[];
-      controller.otherPaneTransfer = (pane, entry) {
-        handed.add((pane, entry.path));
-        return OtherPaneTransferOutcome.queued;
-      };
+    test(
+      'Transfer hands the file to the other-pane seam without launching',
+      () async {
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await localFilePane(lanes);
+        controller.doubleClickAction = DoubleClickAction.transfer;
+        final handed = <(PaneController, String)>[];
+        controller.otherPaneTransfer = (pane, entry) {
+          handed.add((pane, entry.path));
+          return OtherPaneTransferOutcome.queued;
+        };
 
-      await controller.openEntry(controller.entries.single);
+        await controller.openEntry(controller.entries.single);
 
-      expect(handed, [(controller, '/parent/file.txt')]);
-      // Queued: the transfer queue reports from here, so no notice.
-      expect(controller.notice, isNull);
-      expect(channel.openCalls, isEmpty);
-      expect(controller.error, isNull);
-      controller.dispose();
-    });
+        expect(handed, [(controller, '/parent/file.txt')]);
+        // Queued: the transfer queue reports from here, so no notice.
+        expect(controller.notice, isNull);
+        expect(channel.openCalls, isEmpty);
+        expect(controller.error, isNull);
+        controller.dispose();
+      },
+    );
 
     test('Transfer says why it could not send the file', () async {
       final lanes = FakePaneLanes();
@@ -3215,10 +3228,7 @@ void main() {
           OtherPaneTransferOutcome.needsOtherPane,
           PaneNotice.transferNeedsOtherPane,
         ),
-        (
-          OtherPaneTransferOutcome.unavailable,
-          PaneNotice.transferUnavailable,
-        ),
+        (OtherPaneTransferOutcome.unavailable, PaneNotice.transferUnavailable),
       ]) {
         controller.otherPaneTransfer = (_, _) => outcome;
         await controller.openEntry(controller.entries.single);
@@ -3228,40 +3238,44 @@ void main() {
       controller.dispose();
     });
 
-    test('Transfer with no seam wired posts its notice, never fails silent',
-        () async {
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await localFilePane(lanes);
-      controller.doubleClickAction = DoubleClickAction.transfer;
+    test(
+      'Transfer with no seam wired posts its notice, never fails silent',
+      () async {
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await localFilePane(lanes);
+        controller.doubleClickAction = DoubleClickAction.transfer;
 
-      await controller.openEntry(controller.entries.single);
+        await controller.openEntry(controller.entries.single);
 
-      expect(controller.notice, PaneNotice.transferUnavailable);
-      expect(channel.openCalls, isEmpty);
-      controller.dispose();
-    });
+        expect(controller.notice, PaneNotice.transferUnavailable);
+        expect(channel.openCalls, isEmpty);
+        controller.dispose();
+      },
+    );
 
-    test('an explicit Open opens whatever the Double-click action says',
-        () async {
-      // The preview's Open (06 §5.2) is a verb, not a double-click.
-      final lanes = FakePaneLanes();
-      final (controller, channel) = await localFilePane(lanes);
-      controller.otherPaneTransfer = (_, _) => fail('Transfer ran');
+    test(
+      'an explicit Open opens whatever the Double-click action says',
+      () async {
+        // The preview's Open (06 §5.2) is a verb, not a double-click.
+        final lanes = FakePaneLanes();
+        final (controller, channel) = await localFilePane(lanes);
+        controller.otherPaneTransfer = (_, _) => fail('Transfer ran');
 
-      for (final preference in DoubleClickAction.values) {
-        controller.doubleClickAction = preference;
-        await controller.openEntry(
-          controller.entries.single,
-          action: DoubleClickAction.open,
-        );
-        expect(controller.notice, isNull, reason: preference.name);
-      }
+        for (final preference in DoubleClickAction.values) {
+          controller.doubleClickAction = preference;
+          await controller.openEntry(
+            controller.entries.single,
+            action: DoubleClickAction.open,
+          );
+          expect(controller.notice, isNull, reason: preference.name);
+        }
 
-      expect(channel.openCalls, [
-        for (final _ in DoubleClickAction.values) '/parent/file.txt',
-      ]);
-      controller.dispose();
-    });
+        expect(channel.openCalls, [
+          for (final _ in DoubleClickAction.values) '/parent/file.txt',
+        ]);
+        controller.dispose();
+      },
+    );
 
     test('Do nothing is exactly inert', () async {
       final lanes = FakePaneLanes();
@@ -3397,10 +3411,7 @@ void main() {
 
       final error = controller.error;
       expect(error, isA<PaneFaultException>());
-      expect(
-        (error! as PaneFaultException).fault,
-        PaneFault.openFile,
-      );
+      expect((error! as PaneFaultException).fault, PaneFault.openFile);
       expect(reported.single, isA<StateError>());
       controller.dispose();
     });

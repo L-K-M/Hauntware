@@ -72,7 +72,10 @@ void main() {
     test('the spec\'s ignoreRules replace any excludeGlobs in the map', () {
       // The writer never puts excludeGlobs in the map, but the decoder
       // tolerates one; the first-class field still wins, even when empty.
-      for (final ignoreRules in [<String>[], ['build/']]) {
+      for (final ignoreRules in [
+        <String>[],
+        ['build/'],
+      ]) {
         final spec = SavedSyncSpec(
           source: const BookmarkLocation(path: '/l'),
           destination: const BookmarkLocation(path: '/r'),
@@ -139,10 +142,7 @@ void main() {
       final spec = SavedSyncSpec(
         source: const BookmarkLocation(path: '/l'),
         destination: const BookmarkLocation(path: '/r'),
-        rules: const {
-          'direction': 'bidirectional',
-          'deletions': 'trash',
-        },
+        rules: const {'direction': 'bidirectional', 'deletions': 'trash'},
       );
       expect(
         () => syncPairFromSavedSync(spec, id: 'x', name: 'n'),

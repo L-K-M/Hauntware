@@ -44,10 +44,7 @@ void main() {
     await pumpShell(tester);
     // D32: the inspector is up by default, on Info — no transfer rows.
     expect(find.byKey(const ValueKey('inspector')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('activity.panel')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('activity.panel')), findsNothing);
     // 10 §4: the header's activity button exists only while work runs.
     expect(
       find.byKey(const ValueKey('command.view.toggleActivityPanel')),
@@ -65,10 +62,7 @@ void main() {
       find.byKey(const ValueKey('menu.item.view.toggleActivityPanel')),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('activity.panel')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('activity.panel')), findsOneWidget);
 
     // While work runs the header button carries the same toggle: on the
     // Transfers tab it hides the inspector.
@@ -79,10 +73,7 @@ void main() {
       find.byKey(const ValueKey('command.view.toggleActivityPanel')),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('activity.panel')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('activity.panel')), findsNothing);
     expect(find.byKey(const ValueKey('inspector')), findsNothing);
   });
 
@@ -94,9 +85,7 @@ void main() {
     await tester.pump();
 
     await openShellMenu(tester, AppMenuId.server);
-    final item = find.byKey(
-      const ValueKey('menu.item.queue.togglePause'),
-    );
+    final item = find.byKey(const ValueKey('menu.item.queue.togglePause'));
     expect(item, findsOneWidget);
     await tester.tap(item);
     await tester.pumpAndSettle();
@@ -131,14 +120,8 @@ void main() {
   testWidgets('new work switches the inspector to Transfers and rings '
       'the activity button while it runs', (tester) async {
     await pumpShell(tester);
-    expect(
-      find.byKey(const ValueKey('activity.panel')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('header.activityRing')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('activity.panel')), findsNothing);
+    expect(find.byKey(const ValueKey('header.activityRing')), findsNothing);
 
     // D16's empty→live edge re-opens the queue's only window: the
     // Info tab yields to Transfers (10 §2's honest-state rule).
@@ -149,14 +132,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('activity.panel')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('header.activityRing')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('activity.panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('header.activityRing')), findsOneWidget);
 
     // The ring is the live-work signal only: it leaves with the work,
     // after a short linger (10 §4: hidden while idle).
@@ -170,10 +147,7 @@ void main() {
     );
     await tester.pump(headerActivityHideDelay);
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('header.activityRing')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('header.activityRing')), findsNothing);
     expect(
       find.byKey(const ValueKey('command.view.toggleActivityPanel')),
       findsNothing,
@@ -208,10 +182,7 @@ void main() {
     await tester.pump(headerActivityHideDelay * 2);
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(newFolder).dx, busyX);
-    expect(
-      find.byKey(const ValueKey('header.activityRing')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('header.activityRing')), findsOneWidget);
   });
 
   testWidgets('new work re-opens a user-hidden inspector on Transfers', (
@@ -228,10 +199,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.byKey(const ValueKey('inspector')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('activity.panel')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('activity.panel')), findsOneWidget);
   });
 
   testWidgets('the inspector splitter drags the width and persists on '
@@ -267,5 +235,4 @@ void main() {
     expect(after.width, greaterThan(before.width));
     expect(saved, closeTo(after.width, 0.01));
   });
-
 }

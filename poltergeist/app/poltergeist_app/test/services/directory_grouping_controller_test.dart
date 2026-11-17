@@ -71,9 +71,7 @@ void main() {
     });
 
     test('saves into the defaults, keeping their other options', () async {
-      await store.saveDefaults(
-        ViewPreferences(hiddenFiles: HiddenFiles.shown),
-      );
+      await store.saveDefaults(ViewPreferences(hiddenFiles: HiddenFiles.shown));
 
       await DirectoryGroupingController.saveTo(store)(DirectoryGrouping.mixed);
 
@@ -86,18 +84,20 @@ void main() {
       );
     });
 
-    test('an unreadable schema opens with folders on top and says why',
-        () async {
-      await settings.set('view.preferences', {'version': 99});
-      final errors = <Object>[];
+    test(
+      'an unreadable schema opens with folders on top and says why',
+      () async {
+        await settings.set('view.preferences', {'version': 99});
+        final errors = <Object>[];
 
-      final loaded = await DirectoryGroupingController.load(
-        store,
-        onError: (error, _) => errors.add(error),
-      );
+        final loaded = await DirectoryGroupingController.load(
+          store,
+          onError: (error, _) => errors.add(error),
+        );
 
-      expect(loaded, DirectoryGrouping.first);
-      expect(errors.single, isA<FormatException>());
-    });
+        expect(loaded, DirectoryGrouping.first);
+        expect(errors.single, isA<FormatException>());
+      },
+    );
   });
 }

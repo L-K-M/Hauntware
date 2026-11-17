@@ -162,9 +162,7 @@ class _CommandSheetBody extends StatelessWidget {
   List<Widget> _rowTiles(BuildContext context, GhostMenuRow row) {
     switch (row) {
       case GhostCommandRow(:final command):
-        return [
-          _CommandTile(command: ghostRowCommand(command), onRun: onRun),
-        ];
+        return [_CommandTile(command: ghostRowCommand(command), onRun: onRun)];
       case GhostSubmenuRow(:final title, :final items):
         if (items.isEmpty) return const [];
         return [
@@ -173,7 +171,10 @@ class _CommandSheetBody extends StatelessWidget {
             child: Text(
               title,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
+                color: PoltergeistChrome.of(
+                  context,
+                  poltergeistThemeStyle,
+                ).secondaryText,
               ),
             ),
           ),

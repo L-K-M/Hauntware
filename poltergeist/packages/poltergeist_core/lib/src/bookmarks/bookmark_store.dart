@@ -96,7 +96,8 @@ abstract interface class SyncTrackingBookmarkStore implements BookmarkStore {
   /// dirty and re-push every round. Each row's winning envelope tuple is
   /// materialized with it.
   Future<void> applySyncedRecords(
-      Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows);
+    Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows,
+  );
 
   /// The tombstone half of [applySyncedRecords]: a quiet remove that
   /// materializes the winning tombstone's tuple.
@@ -213,8 +214,7 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
   }) : // Keep the filesystem path immutable and private.
        // ignore: prefer_initializing_formals
        _file = File(path),
-       _atomicWriter =
-           atomicWriter ?? const TransferJournalIo().atomicRewrite,
+       _atomicWriter = atomicWriter ?? const TransferJournalIo().atomicRewrite,
        _now = now ?? DateTime.now,
        // Keep the callback private while allowing test-only injection.
        // ignore: prefer_initializing_formals
@@ -465,8 +465,9 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
       // "after b" means between b and what follows it, not the group tail.
       if (before != null && after == null) {
         final index = members.indexOf(before);
-        afterKey =
-            index + 1 < members.length ? members[index + 1].sortKey : null;
+        afterKey = index + 1 < members.length
+            ? members[index + 1].sortKey
+            : null;
       } else if (after != null && before == null) {
         final index = members.indexOf(after);
         beforeKey = index > 0 ? members[index - 1].sortKey : null;
@@ -513,7 +514,8 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
 
   @override
   Future<void> applySyncedRecords(
-      Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows) async {
+    Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows,
+  ) async {
     final incoming = rows.toList(growable: false);
     if (incoming.isEmpty) return;
     for (final row in incoming) {
@@ -536,7 +538,9 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
 
   @override
   Future<void> removeSyncedRecord(
-      String id, BookmarkSyncTuple tombstone) async {
+    String id,
+    BookmarkSyncTuple tombstone,
+  ) async {
     await _ensureLoaded();
     await _writeTail;
     // Idempotency: a re-pulled tombstone that already matches the
@@ -713,10 +717,7 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
 
     if (decoded is! Map) {
       await _quarantine();
-      _report(
-        const FormatException('bookmark store root'),
-        StackTrace.current,
-      );
+      _report(const FormatException('bookmark store root'), StackTrace.current);
       return;
     }
 
@@ -734,10 +735,7 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
 
     if (decoded[_bookmarksKey] is! List) {
       await _quarantine();
-      _report(
-        const FormatException('bookmark store root'),
-        StackTrace.current,
-      );
+      _report(const FormatException('bookmark store root'), StackTrace.current);
       return;
     }
 

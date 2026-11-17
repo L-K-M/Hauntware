@@ -317,6 +317,7 @@ class PromptCoordinator {
     void check() {
       if (_wasDismissed(pending) || !lock.locked) _releaseUnlockWait();
     }
+
     lock.addListener(check);
     check();
     try {
@@ -365,7 +366,9 @@ class PromptCoordinator {
         }
       } on AppLockException {
         if (lock == null || !lock.locked) {
-          if (!_wasDismissed(pending)) _reply(pending, _cancelledCredentialReply);
+          if (!_wasDismissed(pending)) {
+            _reply(pending, _cancelledCredentialReply);
+          }
           _finishShowing();
           return;
         }

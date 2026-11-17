@@ -112,12 +112,10 @@ String transferEndpointLabel(
   FsLocation location, {
   required String localLabel,
   String? Function(String serverId)? serverLabel,
-}) =>
-    switch (location) {
-      LocalFsLocation() => localLabel,
-      ServerFsLocation(:final serverId) =>
-        serverLabel?.call(serverId) ?? serverId,
-    };
+}) => switch (location) {
+  LocalFsLocation() => localLabel,
+  ServerFsLocation(:final serverId) => serverLabel?.call(serverId) ?? serverId,
+};
 
 /// The task's one-line title: the single root's name, or a counted
 /// summary for multi-root and delete tasks.

@@ -93,9 +93,7 @@ class _InboxDialogState extends State<_InboxDialog> {
       listenable: widget.state,
       builder: (context, _) {
         final pending = widget.state.inboxPending;
-        final open = pending
-            .where((p) => p.cached.itemId == _open)
-            .firstOrNull;
+        final open = pending.where((p) => p.cached.itemId == _open).firstOrNull;
         return Dialog(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720, maxHeight: 640),
@@ -302,9 +300,7 @@ class _ProposalReviewState extends State<ProposalReview> {
     // Scanned whole, so a command continued over lines is checked as one;
     // each finding names the line on which its command starts.
     final findings = DangerLinter.scan(_proposal.script);
-    final critical = findings.any(
-      (f) => f.severity == DangerSeverity.critical,
-    );
+    final critical = findings.any((f) => f.severity == DangerSeverity.critical);
     final server = target.server;
 
     return Column(
@@ -354,7 +350,8 @@ class _ProposalReviewState extends State<ProposalReview> {
               if (revealed.hasHidden)
                 _Row(
                   icon: Icons.visibility_outlined,
-                  text: 'The script contains ${revealed.hiddenCount} '
+                  text:
+                      'The script contains ${revealed.hiddenCount} '
                       'invisible or control character'
                       '${revealed.hiddenCount == 1 ? '' : 's'}, shown as '
                       '<U+…>. Be suspicious of a script that needs them.',
@@ -478,7 +475,8 @@ class _ProposalRecoveryDialogState extends State<_ProposalRecoveryDialog> {
       if (!mounted) return;
       setState(() {
         _copyFailed = true;
-        _copyStatus = 'Could not copy the command. Select it above and copy '
+        _copyStatus =
+            'Could not copy the command. Select it above and copy '
             'it manually.';
       });
     } finally {

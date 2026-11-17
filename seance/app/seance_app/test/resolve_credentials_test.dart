@@ -33,14 +33,14 @@ void main() {
   });
 
   ServerConfig config(AuthMethod auth, {String id = 's1'}) => ServerConfig(
-        id: id,
-        label: 'prod',
-        host: 'prod.example.com',
-        username: 'deploy',
-        authMethod: auth,
-        createdAt: 1,
-        updatedAt: 1,
-      );
+    id: id,
+    label: 'prod',
+    host: 'prod.example.com',
+    username: 'deploy',
+    authMethod: auth,
+    createdAt: 1,
+    updatedAt: 1,
+  );
   const stray = IdentityFileBookmark(path: '/keys/id', bookmark: 'grant');
 
   test('a stray grant under key auth with no path is refused', () async {
@@ -55,8 +55,13 @@ void main() {
         config(AuthMethod.privateKey),
         draftIdentityBookmark: stray,
       ),
-      throwsA(isA<ArgumentError>()
-          .having((e) => e.name, 'name', 'draftIdentityBookmark')),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.name,
+          'name',
+          'draftIdentityBookmark',
+        ),
+      ),
     );
   });
 
@@ -89,8 +94,10 @@ void main() {
     await expectLater(
       services.resolveCredentials(
         config(AuthMethod.privateKey).copyWith(identityFilePath: absent),
-        draftIdentityBookmark:
-            IdentityFileBookmark(path: absent, bookmark: 'grant'),
+        draftIdentityBookmark: IdentityFileBookmark(
+          path: absent,
+          bookmark: 'grant',
+        ),
       ),
       // The concrete failure, not merely "not the guard": a regression that
       // failed earlier for an unrelated reason would satisfy a negative
@@ -123,7 +130,11 @@ void main() {
     final credentials = await services.resolveCredentials(agent);
 
     expect(credentials.method, AuthMethod.agent);
-    expect(services.vaultKey, isNull, reason: 'agent auth must not unlock vault');
+    expect(
+      services.vaultKey,
+      isNull,
+      reason: 'agent auth must not unlock vault',
+    );
   });
 
   group('a credential saved on another device only', () {
@@ -134,9 +145,11 @@ void main() {
 
       await expectLater(
         services.resolveCredentials(server),
-        throwsA(isA<CredentialMissingException>()
-            .having((e) => e.serverId, 'serverId', 's1')
-            .having((e) => '$e', 'message', contains('"prod"'))),
+        throwsA(
+          isA<CredentialMissingException>()
+              .having((e) => e.serverId, 'serverId', 's1')
+              .having((e) => '$e', 'message', contains('"prod"')),
+        ),
       );
     });
 
@@ -150,14 +163,21 @@ void main() {
     });
 
     test('a jump host missing its credential names itself', () async {
-      final jump = config(AuthMethod.password, id: 'jump')
-          .copyWith(label: 'bastion', secretRef: 'gone');
+      final jump = config(
+        AuthMethod.password,
+        id: 'jump',
+      ).copyWith(label: 'bastion', secretRef: 'gone');
       await services.configStore.putServer(jump);
 
       await expectLater(
         services.resolveJumpHost(jump.id),
-        throwsA(isA<CredentialMissingException>()
-            .having((e) => e.serverId, 'serverId', 'jump')),
+        throwsA(
+          isA<CredentialMissingException>().having(
+            (e) => e.serverId,
+            'serverId',
+            'jump',
+          ),
+        ),
       );
     });
 

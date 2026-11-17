@@ -8,11 +8,17 @@ class SearchResult {
   final String title;
   final String url;
   final String snippet;
-  const SearchResult(
-      {required this.title, required this.url, required this.snippet});
+  const SearchResult({
+    required this.title,
+    required this.url,
+    required this.snippet,
+  });
 
-  Map<String, dynamic> toJson() =>
-      {'title': title, 'url': url, 'snippet': snippet};
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'url': url,
+    'snippet': snippet,
+  };
 }
 
 /// A client-side web-search backend, used when the LLM provider has no
@@ -72,10 +78,9 @@ class SearxngSearch implements SearchProvider, ClosableSearchProvider {
   @override
   Future<List<SearchResult>> search(String query, {int limit = 5}) async {
     if (_closed) throw StateError('SearXNG search provider is closed.');
-    final uri = Uri.parse('$baseUrl/search').replace(queryParameters: {
-      'q': query,
-      'format': 'json',
-    });
+    final uri = Uri.parse(
+      '$baseUrl/search',
+    ).replace(queryParameters: {'q': query, 'format': 'json'});
     final body = await _sendSearchJson(
       _client,
       http.Request('GET', uri),
@@ -90,11 +95,13 @@ class SearxngSearch implements SearchProvider, ClosableSearchProvider {
     return results
         .cast<Map<String, dynamic>>()
         .take(limit)
-        .map((r) => SearchResult(
-              title: r['title'] as String? ?? '',
-              url: r['url'] as String? ?? '',
-              snippet: r['content'] as String? ?? '',
-            ))
+        .map(
+          (r) => SearchResult(
+            title: r['title'] as String? ?? '',
+            url: r['url'] as String? ?? '',
+            snippet: r['content'] as String? ?? '',
+          ),
+        )
         .toList();
   }
 }
@@ -139,12 +146,14 @@ class BraveSearch implements SearchProvider, ClosableSearchProvider {
   @override
   Future<List<SearchResult>> search(String query, {int limit = 5}) async {
     if (_closed) throw StateError('Brave search provider is closed.');
-    final uri = Uri.parse('$baseUrl/res/v1/web/search')
-        .replace(queryParameters: {'q': query, 'count': '$limit'});
-    final request = http.Request('GET', uri)..headers.addAll({
-      'accept': 'application/json',
-      'x-subscription-token': apiKey,
-    });
+    final uri = Uri.parse(
+      '$baseUrl/res/v1/web/search',
+    ).replace(queryParameters: {'q': query, 'count': '$limit'});
+    final request = http.Request('GET', uri)
+      ..headers.addAll({
+        'accept': 'application/json',
+        'x-subscription-token': apiKey,
+      });
     final body = await _sendSearchJson(
       _client,
       request,
@@ -159,11 +168,13 @@ class BraveSearch implements SearchProvider, ClosableSearchProvider {
     return ((web) ?? const [])
         .cast<Map<String, dynamic>>()
         .take(limit)
-        .map((r) => SearchResult(
-              title: r['title'] as String? ?? '',
-              url: r['url'] as String? ?? '',
-              snippet: r['description'] as String? ?? '',
-            ))
+        .map(
+          (r) => SearchResult(
+            title: r['title'] as String? ?? '',
+            url: r['url'] as String? ?? '',
+            snippet: r['description'] as String? ?? '',
+          ),
+        )
         .toList();
   }
 }
@@ -410,6 +421,7 @@ const int maxSearchUrlChars = 2048;
 /// dropped before the search starts. Public so the two cannot drift: they are
 /// halves of one signal, and a filter set at this level should see both.
 const int searchWarningLogLevel = 900;
+
 /// The channel both halves of the search signal write to. Public for the same
 /// reason the level is: the app records a backend dropped before the search
 /// starts, this file records one that fails during it, and a filter set on

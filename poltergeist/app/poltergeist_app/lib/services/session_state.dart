@@ -143,7 +143,9 @@ final class SessionTabState {
     if (json is! List) {
       throw const FormatException('Invalid session tab listing');
     }
-    return List.unmodifiable([for (final record in json) _entryFromJson(record)]);
+    return List.unmodifiable([
+      for (final record in json) _entryFromJson(record),
+    ]);
   }
 }
 
@@ -298,10 +300,7 @@ final class SessionState {
     final paneIds = decodedPanes.map((pane) => pane.paneId).toSet();
     if (decodedPanes.length != 2 ||
         paneIds.length != 2 ||
-        !paneIds.containsAll(const {
-          sessionLeftPaneId,
-          sessionRightPaneId,
-        }) ||
+        !paneIds.containsAll(const {sessionLeftPaneId, sessionRightPaneId}) ||
         !paneIds.contains(activePane)) {
       throw const FormatException('Invalid session panes');
     }

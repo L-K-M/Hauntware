@@ -145,9 +145,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     );
     _maxDelete = TextEditingController(text: '${rules.maxDelete}');
     _maxDeleteFocus = FocusNode(debugLabel: 'sync.maxDelete');
-    _fractionWarn = TextEditingController(
-      text: '${rules.deleteFractionWarn}',
-    );
+    _fractionWarn = TextEditingController(text: '${rules.deleteFractionWarn}');
     _concurrency = rules.transferConcurrency;
     _caseLeft = widget.initialCaseOverrides?.left;
     _caseRight = widget.initialCaseOverrides?.right;
@@ -262,8 +260,8 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
 
   SyncEndpoint _endpointFor(Bookmark? server, TextEditingController path) =>
       server == null
-          ? LocalEndpoint(path.text.trim())
-          : RemoteEndpoint(server: server.server!, path: path.text.trim());
+      ? LocalEndpoint(path.text.trim())
+      : RemoteEndpoint(server: server.server!, path: path.text.trim());
 
   TextEditingController _trashField(SyncSide side) =>
       side == SyncSide.left ? _trashLeft : _trashRight;
@@ -463,8 +461,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
               localLabel: l10n.syncPairLocalLabel,
               server: _leftServer,
               path: _leftPath,
-              onServerChanged: (server) =>
-                  setState(() => _leftServer = server),
+              onServerChanged: (server) => setState(() => _leftServer = server),
               onPathChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 8),
@@ -486,8 +483,14 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                     label: l10n.syncModeLabel,
                     value: _direction,
                     items: [
-                      (SyncDirection.leftToRight, l10n.syncDirectionLeftToRight),
-                      (SyncDirection.rightToLeft, l10n.syncDirectionRightToLeft),
+                      (
+                        SyncDirection.leftToRight,
+                        l10n.syncDirectionLeftToRight,
+                      ),
+                      (
+                        SyncDirection.rightToLeft,
+                        l10n.syncDirectionRightToLeft,
+                      ),
                       (SyncDirection.bidirectional, l10n.syncDirectionBothWays),
                     ],
                     onChanged: (value) => setState(() {
@@ -500,7 +503,8 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                       } else if (_deletions == DeletionPolicy.none &&
                           widget.initial?.rules.direction !=
                               SyncDirection.bidirectional) {
-                        _deletions = widget.initial?.rules.deletions ??
+                        _deletions =
+                            widget.initial?.rules.deletions ??
                             DeletionPolicy.trash;
                       }
                     }),
@@ -554,8 +558,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                           (BackupPolicy.trash, l10n.syncEditorBackupsTrash),
                           (BackupPolicy.none, l10n.syncEditorBackupsNone),
                         ],
-                        onChanged: (value) =>
-                            setState(() => _backups = value),
+                        onChanged: (value) => setState(() => _backups = value),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -593,10 +596,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                       ConflictDefault.newerWins,
                       l10n.syncEditorConflictNewerWins,
                     ),
-                    (
-                      ConflictDefault.keepLeft,
-                      l10n.syncEditorConflictKeepLeft,
-                    ),
+                    (ConflictDefault.keepLeft, l10n.syncEditorConflictKeepLeft),
                     (
                       ConflictDefault.keepRight,
                       l10n.syncEditorConflictKeepRight,
@@ -696,9 +696,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                           decimal: true,
                         ),
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9.]'),
-                          ),
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                         ],
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => _saveFromKeyboard(),
@@ -713,9 +711,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                 _Dropdown<int>(
                   label: l10n.syncEditorConcurrencyLabel,
                   value: _concurrency,
-                  items: [
-                    for (var i = 1; i <= 8; i++) (i, '$i'),
-                  ],
+                  items: [for (var i = 1; i <= 8; i++) (i, '$i')],
                   onChanged: (value) => setState(() => _concurrency = value),
                 ),
                 const SizedBox(height: 8),
@@ -726,8 +722,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                         label: l10n.syncEditorCaseLeftLabel,
                         value: _caseLeft,
                         l10n: l10n,
-                        onChanged: (value) =>
-                            setState(() => _caseLeft = value),
+                        onChanged: (value) => setState(() => _caseLeft = value),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -746,15 +741,13 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(l10n.syncEditorIncludeHidden),
                   value: _includeHidden,
-                  onChanged: (value) =>
-                      setState(() => _includeHidden = value),
+                  onChanged: (value) => setState(() => _includeHidden = value),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(l10n.syncEditorPreserveMtime),
                   value: _preserveMtime,
-                  onChanged: (value) =>
-                      setState(() => _preserveMtime = value),
+                  onChanged: (value) => setState(() => _preserveMtime = value),
                 ),
               ],
             ),
@@ -904,10 +897,7 @@ class _EndpointField extends StatelessWidget {
               for (final bookmark in servers)
                 DropdownMenuItem(
                   value: bookmark,
-                  child: Text(
-                    bookmark.label,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(bookmark.label, overflow: TextOverflow.ellipsis),
                 ),
             ],
             onChanged: onServerChanged,

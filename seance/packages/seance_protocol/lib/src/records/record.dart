@@ -68,15 +68,17 @@ class DecryptedRecord {
     this.data = const {},
   });
 
-  DecryptedRecord tombstone({required int updatedAt, required String deviceId}) =>
-      DecryptedRecord(
-        id: id,
-        kind: kind,
-        updatedAt: updatedAt,
-        deviceId: deviceId,
-        deleted: true,
-        data: const {},
-      );
+  DecryptedRecord tombstone({
+    required int updatedAt,
+    required String deviceId,
+  }) => DecryptedRecord(
+    id: id,
+    kind: kind,
+    updatedAt: updatedAt,
+    deviceId: deviceId,
+    deleted: true,
+    data: const {},
+  );
 }
 
 /// A record as it lives on the wire and in the server's database: an opaque,
@@ -115,33 +117,33 @@ class EncryptedRecord {
     required this.id,
     required this.updatedAt,
     required this.deviceId,
-  })  : envelopeVersion = 1,
-        deleted = true,
-        seq = null,
-        blob = Uint8List(0);
+  }) : envelopeVersion = 1,
+       deleted = true,
+       seq = null,
+       blob = Uint8List(0);
 
   EncryptedRecord withSeq(int newSeq) => EncryptedRecord(
-        envelopeVersion: envelopeVersion,
-        id: id,
-        updatedAt: updatedAt,
-        deviceId: deviceId,
-        deleted: deleted,
-        seq: newSeq,
-        blob: blob,
-      );
+    envelopeVersion: envelopeVersion,
+    id: id,
+    updatedAt: updatedAt,
+    deviceId: deviceId,
+    deleted: deleted,
+    seq: newSeq,
+    blob: blob,
+  );
 
   /// Keep [encodedJsonBytes] in step with this map: it counts exactly these
   /// entries, and a push batched against a stale count is a push the server
   /// rejects.
   Map<String, dynamic> toJson() => {
-        'envelopeVersion': envelopeVersion,
-        'id': id,
-        'updatedAt': updatedAt,
-        'deviceId': deviceId,
-        'deleted': deleted,
-        if (seq != null) 'seq': seq,
-        'blob': base64.encode(blob),
-      };
+    'envelopeVersion': envelopeVersion,
+    'id': id,
+    'updatedAt': updatedAt,
+    'deviceId': deviceId,
+    'deleted': deleted,
+    if (seq != null) 'seq': seq,
+    'blob': base64.encode(blob),
+  };
 
   /// Byte length of the JSON [toJson] encodes to, without building it.
   ///
@@ -162,17 +164,14 @@ class EncryptedRecord {
         jsonStringBytes(deviceId) +
         jsonKeyBytes('deleted') +
         jsonBoolBytes(deleted) +
-        (seqValue == null
-            ? 0
-            : jsonKeyBytes('seq') + jsonIntBytes(seqValue)) +
+        (seqValue == null ? 0 : jsonKeyBytes('seq') + jsonIntBytes(seqValue)) +
         jsonKeyBytes('blob') +
         jsonBase64StringBytes(blob.length);
   }
 
   factory EncryptedRecord.fromJson(Map<String, dynamic> json) =>
       EncryptedRecord(
-        envelopeVersion:
-            (json['envelopeVersion'] as num?)?.toInt() ?? 1,
+        envelopeVersion: (json['envelopeVersion'] as num?)?.toInt() ?? 1,
         id: json['id'] as String,
         updatedAt: (json['updatedAt'] as num).toInt(),
         deviceId: json['deviceId'] as String,

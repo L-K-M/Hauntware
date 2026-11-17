@@ -41,8 +41,7 @@ void main() {
       expect(tracker.bytesPerSecond('t'), closeTo(250, 0.001));
     });
 
-    test('expires the rate once the newest sample leaves the window',
-        () {
+    test('expires the rate once the newest sample leaves the window', () {
       tracker.record('t', 0);
       tick(const Duration(seconds: 4));
       tracker.record('t', 1000);
@@ -167,39 +166,40 @@ void main() {
       String taskId,
       String itemId,
       int taskBytes,
-    ) =>
-        TransferQueueProgressEvent(
-          taskId,
-          itemId: itemId,
-          transferred: taskBytes,
-          total: null,
-          taskTransferredBytes: taskBytes,
-          taskTotalBytes: 10000,
-          taskTotalFiles: 1,
-          taskTotalDirectories: 0,
-          taskCompletedFiles: 0,
-          taskCompletedDirectories: 0,
-          scanComplete: true,
-        );
+    ) => TransferQueueProgressEvent(
+      taskId,
+      itemId: itemId,
+      transferred: taskBytes,
+      total: null,
+      taskTransferredBytes: taskBytes,
+      taskTotalBytes: 10000,
+      taskTotalFiles: 1,
+      taskTotalDirectories: 0,
+      taskCompletedFiles: 0,
+      taskCompletedDirectories: 0,
+      scanComplete: true,
+    );
 
-    test('a null queue mounts empty — no fabricated rows, safe verbs',
-        () async {
-      final controller = ActivityPanelController();
-      addTearDown(controller.dispose);
+    test(
+      'a null queue mounts empty — no fabricated rows, safe verbs',
+      () async {
+        final controller = ActivityPanelController();
+        addTearDown(controller.dispose);
 
-      expect(controller.tasks, isEmpty);
-      expect(controller.pendingConflicts, isEmpty);
-      expect(controller.history, isEmpty);
-      expect(controller.queuePaused, isFalse);
-      // Verbs on a null seam are no-ops, not crashes.
-      controller.toggleQueuePause();
-      controller.cancelTask('x');
-      controller.removeTask('x');
-      controller.retryTask('x');
-      controller.clearCompleted();
-      await controller.clearHistory();
-      expect(queue.tasks, isEmpty);
-    });
+        expect(controller.tasks, isEmpty);
+        expect(controller.pendingConflicts, isEmpty);
+        expect(controller.history, isEmpty);
+        expect(controller.queuePaused, isFalse);
+        // Verbs on a null seam are no-ops, not crashes.
+        controller.toggleQueuePause();
+        controller.cancelTask('x');
+        controller.removeTask('x');
+        controller.retryTask('x');
+        controller.clearCompleted();
+        await controller.clearHistory();
+        expect(queue.tasks, isEmpty);
+      },
+    );
 
     test('mirrors tasks and events into notifyListeners', () async {
       final controller = bind();
@@ -211,8 +211,7 @@ void main() {
       expect(notifies, greaterThan(0));
     });
 
-    test('completed rows linger, then auto-remove via the queue',
-        () async {
+    test('completed rows linger, then auto-remove via the queue', () async {
       final controller = bind();
       final task = queue.addTask(state: TransferTaskState.running);
       await Future<void>.delayed(Duration.zero);
@@ -227,8 +226,7 @@ void main() {
       expect(queue.removeTaskCalls, [task.id]);
     });
 
-    test('failed and cancelled rows stay until removed explicitly',
-        () async {
+    test('failed and cancelled rows stay until removed explicitly', () async {
       final controller = bind();
       final failed = queue.addTask(state: TransferTaskState.failed);
       final cancelled = queue.addTask(state: TransferTaskState.cancelled);
@@ -244,8 +242,7 @@ void main() {
       expect(controller.tasks.map((t) => t.id), [cancelled.id]);
     });
 
-    test('autoClearCompleted off: completed rows never auto-remove',
-        () async {
+    test('autoClearCompleted off: completed rows never auto-remove', () async {
       bind(autoClearCompleted: false);
       final task = queue.addTask(state: TransferTaskState.running);
       await Future<void>.delayed(Duration.zero);
@@ -281,8 +278,7 @@ void main() {
       expect(controller.restoredTasks.single.id, restored.id);
     });
 
-    test('resumeRestoredQueue lifts paused tasks and the queue gate',
-        () {
+    test('resumeRestoredQueue lifts paused tasks and the queue gate', () {
       final controller = bind();
       final task = queue.addTask(
         state: TransferTaskState.paused,
@@ -389,15 +385,12 @@ void main() {
         controller.resolveConflict(conflict, ConflictResolution.replace),
         isTrue,
       );
-      expect(
-        queue.resolveConflictCalls.single,
-        (
-          task.id,
-          item.id,
-          ConflictResolution.replace,
-          ConflictResolutionScope.item,
-        ),
-      );
+      expect(queue.resolveConflictCalls.single, (
+        task.id,
+        item.id,
+        ConflictResolution.replace,
+        ConflictResolutionScope.item,
+      ));
       // A second answer on a resolved conflict is refused.
       expect(
         controller.resolveConflict(conflict, ConflictResolution.skip),
@@ -465,5 +458,4 @@ void main() {
 
 /// The controller's own task mirror without holding a reference —
 /// re-reads the fake (the mirror is pass-through by contract).
-List<TransferTask> controllerTasks(FakeAppTransferQueue queue) =>
-    queue.tasks;
+List<TransferTask> controllerTasks(FakeAppTransferQueue queue) => queue.tasks;

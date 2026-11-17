@@ -110,14 +110,26 @@ void main() {
 
   test('editor close is guarded and quit visits every open document', () async {
     await windows.start();
-    await windows.openEditor(key: 'local:/one', builder: (_) => const SizedBox());
+    await windows.openEditor(
+      key: 'local:/one',
+      builder: (_) => const SizedBox(),
+    );
     final first = windows.windows.last;
-    await windows.openEditor(key: 'local:/two', builder: (_) => const SizedBox());
+    await windows.openEditor(
+      key: 'local:/two',
+      builder: (_) => const SizedBox(),
+    );
     final second = windows.windows.last;
     var firstCalls = 0;
     var secondCalls = 0;
-    first.setEditorCloseGuard(() async { firstCalls++; return true; });
-    second.setEditorCloseGuard(() async { secondCalls++; return false; });
+    first.setEditorCloseGuard(() async {
+      firstCalls++;
+      return true;
+    });
+    second.setEditorCloseGuard(() async {
+      secondCalls++;
+      return false;
+    });
 
     await second.close();
     expect(windows.windows, hasLength(3));
@@ -133,22 +145,31 @@ void main() {
     expect(host.calls, contains('destroy 2'));
   });
 
-  test('a native view created across quit is destroyed before it can open', () async {
-    await windows.start();
-    host.createGate = Completer<void>();
-    final opening = windows.openEditor(key: 'local:/one', builder: (_) => const SizedBox());
-    await Future<void>.delayed(Duration.zero);
-    windows.setEditorQuitPending(true);
-    expect(await windows.confirmEditorsClose(), isTrue);
-    host.createGate!.complete();
-    await opening;
-    expect(windows.windows, hasLength(1));
-    expect(host.calls, ['create 1', 'destroy 1']);
-  });
+  test(
+    'a native view created across quit is destroyed before it can open',
+    () async {
+      await windows.start();
+      host.createGate = Completer<void>();
+      final opening = windows.openEditor(
+        key: 'local:/one',
+        builder: (_) => const SizedBox(),
+      );
+      await Future<void>.delayed(Duration.zero);
+      windows.setEditorQuitPending(true);
+      expect(await windows.confirmEditorsClose(), isTrue);
+      host.createGate!.complete();
+      await opening;
+      expect(windows.windows, hasLength(1));
+      expect(host.calls, ['create 1', 'destroy 1']);
+    },
+  );
 
   test('an editor cannot close before its dirty-buffer guard mounts', () async {
     await windows.start();
-    await windows.openEditor(key: 'local:/one', builder: (_) => const SizedBox());
+    await windows.openEditor(
+      key: 'local:/one',
+      builder: (_) => const SizedBox(),
+    );
     await windows.windows.last.close();
     expect(windows.windows, hasLength(2));
     expect(await windows.confirmEditorsClose(), isFalse);
@@ -158,7 +179,10 @@ void main() {
     await windows.start();
     await windows.openWindow();
     await windows.windows.first.close();
-    await windows.openEditor(key: 'local:/one', builder: (_) => const SizedBox());
+    await windows.openEditor(
+      key: 'local:/one',
+      builder: (_) => const SizedBox(),
+    );
     expect(windows.windows.last.isEditor, isTrue);
     expect(windows.windows.last.viewId, 2);
     await windows.openWindow();

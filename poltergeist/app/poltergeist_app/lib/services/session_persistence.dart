@@ -10,18 +10,14 @@ import 'workspace_controller.dart';
 /// The session document 02 §3 restores on launch: both panes' strips
 /// (ordered tabs and per-tab locations), the active tab per pane, the
 /// active pane, and the pane toggle's user intent.
-SessionState captureSessionState(WorkspaceController workspace) =>
-    SessionState(
-      activePaneId: workspace.activePane.paneId,
-      secondPaneHidden: workspace.secondPaneHidden,
-      activityPanelHidden: workspace.activityPanelHidden,
-      inspectorHidden: workspace.inspectorHidden,
-      inspectorTab: workspace.inspectorTab.name,
-      panes: [
-        workspace.left.captureSession(),
-        workspace.right.captureSession(),
-      ],
-    );
+SessionState captureSessionState(WorkspaceController workspace) => SessionState(
+  activePaneId: workspace.activePane.paneId,
+  secondPaneHidden: workspace.secondPaneHidden,
+  activityPanelHidden: workspace.activityPanelHidden,
+  inspectorHidden: workspace.inspectorHidden,
+  inspectorTab: workspace.inspectorTab.name,
+  panes: [workspace.left.captureSession(), workspace.right.captureSession()],
+);
 
 /// 02 §3's safe-point persistence: every state change a window's workspace
 /// reports — tab open/close/switch, navigation commit, pane toggle —
@@ -145,9 +141,7 @@ final class SessionPersistence {
       final states = [
         for (final workspace in _workspaces) captureSessionState(workspace),
       ];
-      final encoded = jsonEncode([
-        for (final state in states) state.toJson(),
-      ]);
+      final encoded = jsonEncode([for (final state in states) state.toJson()]);
       if (encoded == _lastEncoded) return;
       await _store.saveAll(states.first, states.sublist(1));
       _lastEncoded = encoded;

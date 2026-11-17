@@ -261,8 +261,7 @@ final class PreviewSession extends ChangeNotifier {
   /// overlay (§5.1: the native panel cannot host Flutter content, so
   /// progress/confirm render as a non-blocking card over the owning
   /// pane's edge of the window).
-  bool get quickLookCardVisible =>
-      _quickLookCard != QuickLookCardKind.none;
+  bool get quickLookCardVisible => _quickLookCard != QuickLookCardKind.none;
   QuickLookCardKind _quickLookCard = QuickLookCardKind.none;
   String? _quickLookCardKey;
   int _quickLookCardGeneration = -1;
@@ -512,8 +511,7 @@ final class PreviewSession extends ChangeNotifier {
       _hideQuickLook();
       return true;
     }
-    if (_quickLookRequested ||
-        _quickLookCard != QuickLookCardKind.none) {
+    if (_quickLookRequested || _quickLookCard != QuickLookCardKind.none) {
       return true;
     }
     unawaited(_quickLookOpen(pane));
@@ -782,29 +780,32 @@ final class PreviewSession extends ChangeNotifier {
     final key = _focusedKey!;
     if (_reattachInFlight(key, kind, size)) return;
     unawaited(
-      _cache.lookup(key).then((file) {
-        if (_disposed) return;
-        if (!identical(_focusedPane, pane) || _focusedKey != key) return;
-        if (file == null) {
-          // Work for this key may have started during the lookup.
-          if (_reattachInFlight(key, kind, size)) return;
-          _setPhase(PreviewPhase.prompt);
-          return;
-        }
-        if (kind == PreviewKind.text) {
-          unawaited(_loadText(file, _generation));
-        } else {
-          unawaited(_renderFile(file, kind, _generation));
-        }
-      }).catchError((Object error) {
-        // A cache read failure is not a production failure — fall back
-        // to the prompt so a retry still exists.
-        if (_disposed) return;
-        if (_focusedKey == key) {
-          _refusal = PreviewRefusal.failed;
-          _setPhase(PreviewPhase.prompt);
-        }
-      }),
+      _cache
+          .lookup(key)
+          .then((file) {
+            if (_disposed) return;
+            if (!identical(_focusedPane, pane) || _focusedKey != key) return;
+            if (file == null) {
+              // Work for this key may have started during the lookup.
+              if (_reattachInFlight(key, kind, size)) return;
+              _setPhase(PreviewPhase.prompt);
+              return;
+            }
+            if (kind == PreviewKind.text) {
+              unawaited(_loadText(file, _generation));
+            } else {
+              unawaited(_renderFile(file, kind, _generation));
+            }
+          })
+          .catchError((Object error) {
+            // A cache read failure is not a production failure — fall back
+            // to the prompt so a retry still exists.
+            if (_disposed) return;
+            if (_focusedKey == key) {
+              _refusal = PreviewRefusal.failed;
+              _setPhase(PreviewPhase.prompt);
+            }
+          }),
     );
   }
 
@@ -1186,11 +1187,8 @@ final class PreviewSession extends ChangeNotifier {
         },
       ),
     );
-    final production = _Production(
-      ticket: ticket,
-      focus: focus,
-      entry: entry,
-    )..gate = gate;
+    final production = _Production(ticket: ticket, focus: focus, entry: entry)
+      ..gate = gate;
     _productions[key] = production;
     if (_isCurrentProduction(key, focus.generation) &&
         !_panelHidden &&
@@ -1370,11 +1368,7 @@ final class PreviewSession extends ChangeNotifier {
       (item) => item.path == pane.entries[cursor].path,
     );
     _quickLookRequested = true;
-    await _quickLookFollowLocal(
-      paths,
-      index < 0 ? 0 : index,
-      _generation,
-    );
+    await _quickLookFollowLocal(paths, index < 0 ? 0 : index, _generation);
   }
 
   /// §5.1's selection-follow while the native panel is open: local
@@ -1405,9 +1399,7 @@ final class PreviewSession extends ChangeNotifier {
     final index = items.indexWhere(
       (item) => item.path == pane.entries[cursor].path,
     );
-    unawaited(
-      _quickLookFollowLocal(paths, index < 0 ? 0 : index, _generation),
-    );
+    unawaited(_quickLookFollowLocal(paths, index < 0 ? 0 : index, _generation));
   }
 
   Future<void> _quickLookFollowLocal(

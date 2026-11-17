@@ -85,8 +85,7 @@ void main() {
       }
     });
 
-    test('octalTextFor spells four digits and masks the file-type bits',
-        () {
+    test('octalTextFor spells four digits and masks the file-type bits', () {
       expect(PermissionsEditSession.octalTextFor(0x1ED), '0755');
       expect(PermissionsEditSession.octalTextFor(0x81A4), '0644');
       expect(PermissionsEditSession.octalTextFor(0x9ED), '4755');
@@ -230,36 +229,38 @@ void main() {
       ]);
     });
 
-    test('skips flagged names and symbolic links without a wire call',
-        () async {
-      final channel = FakePaneChannel('/home/tester')
-        ..listings['/home/tester/docs'] = [
-          _entry('bad\uFFFDname', root: '/home/tester/docs'),
-          _entry(
-            'link',
-            type: RemoteFileType.symbolicLink,
-            root: '/home/tester/docs',
-          ),
-          _entry('ok.txt', root: '/home/tester/docs'),
-        ];
+    test(
+      'skips flagged names and symbolic links without a wire call',
+      () async {
+        final channel = FakePaneChannel('/home/tester')
+          ..listings['/home/tester/docs'] = [
+            _entry('bad\uFFFDname', root: '/home/tester/docs'),
+            _entry(
+              'link',
+              type: RemoteFileType.symbolicLink,
+              root: '/home/tester/docs',
+            ),
+            _entry('ok.txt', root: '/home/tester/docs'),
+          ];
 
-      final result = await applyModeToEnclosed(
-        channel,
-        '/home/tester/docs',
-        targetName: 'docs',
-        mode: 0x1A4,
-        cancellation: RemoteTransferCancellation(),
-      );
+        final result = await applyModeToEnclosed(
+          channel,
+          '/home/tester/docs',
+          targetName: 'docs',
+          mode: 0x1A4,
+          cancellation: RemoteTransferCancellation(),
+        );
 
-      expect(result.stage, EnclosedApplyStage.done);
-      expect(result.applied, 2); // ok.txt + the target directory
-      expect(result.skippedUndecodable, 1);
-      expect(result.linksSkipped, 1);
-      expect(
-        channel.permissionsCalls,
-        [('/home/tester/docs/ok.txt', 0x1A4), ('/home/tester/docs', 0x1A4)],
-      );
-    });
+        expect(result.stage, EnclosedApplyStage.done);
+        expect(result.applied, 2); // ok.txt + the target directory
+        expect(result.skippedUndecodable, 1);
+        expect(result.linksSkipped, 1);
+        expect(channel.permissionsCalls, [
+          ('/home/tester/docs/ok.txt', 0x1A4),
+          ('/home/tester/docs', 0x1A4),
+        ]);
+      },
+    );
 
     test('a nested listing refusal counts unreadable and continues; a '
         'chmod refusal counts failed and continues', () async {
@@ -276,10 +277,10 @@ void main() {
         ]
         ..permissionsFailures['/home/tester/docs/denied.txt'] =
             const RemoteFileException(
-          kind: RemoteFileErrorKind.permissionDenied,
-          operation: 'setMode',
-          message: 'denied',
-        );
+              kind: RemoteFileErrorKind.permissionDenied,
+              operation: 'setMode',
+              message: 'denied',
+            );
 
       final result = await applyModeToEnclosed(
         channel,
@@ -301,8 +302,7 @@ void main() {
         ..listings['/home/tester/docs'] = [
           _entry('a.txt', root: '/home/tester/docs'),
         ]
-        ..permissionsFailures['/home/tester/docs'] =
-            const RemoteFileException(
+        ..permissionsFailures['/home/tester/docs'] = const RemoteFileException(
           kind: RemoteFileErrorKind.permissionDenied,
           operation: 'setMode',
           message: 'denied',
@@ -357,11 +357,7 @@ void main() {
         _entry('plain.txt', mode: 0x81A4),
         _entry('nomode.txt'),
         _entry('bad\uFFFDname', mode: 0x81A4),
-        _entry(
-          'link',
-          type: RemoteFileType.symbolicLink,
-          mode: 0xA1FF,
-        ),
+        _entry('link', type: RemoteFileType.symbolicLink, mode: 0xA1FF),
       ]);
       addTearDown(controller.dispose);
 
@@ -378,76 +374,74 @@ void main() {
 
       _cursorTo(controller, 'bad\uFFFDname');
       expect(controller.permissionsEdit, isNull);
-      expect(
-        controller.permissionsReadOnly,
-        PermissionsReadOnly.flaggedName,
-      );
+      expect(controller.permissionsReadOnly, PermissionsReadOnly.flaggedName);
 
       _cursorTo(controller, 'link');
       expect(controller.permissionsEdit, isNull);
-      expect(
-        controller.permissionsReadOnly,
-        PermissionsReadOnly.symbolicLink,
-      );
+      expect(controller.permissionsReadOnly, PermissionsReadOnly.symbolicLink);
     });
 
-    test('octal edits move the draft; checkbox edits re-seed the text',
-        () async {
-      final (controller, _) = await _browsedPane([
-        _entry('plain.txt', mode: 0x81A4),
-      ]);
-      addTearDown(controller.dispose);
-      controller.setCursorIndex(0);
+    test(
+      'octal edits move the draft; checkbox edits re-seed the text',
+      () async {
+        final (controller, _) = await _browsedPane([
+          _entry('plain.txt', mode: 0x81A4),
+        ]);
+        addTearDown(controller.dispose);
+        controller.setCursorIndex(0);
 
-      // Typing a valid value moves the mode — the grid reads it.
-      controller.editPermissionsOctal('0600');
-      var session = controller.permissionsEdit!;
-      expect(session.mode, 0x180);
-      expect(session.octalInvalid, isFalse);
-      expect(session.dirty, isTrue);
+        // Typing a valid value moves the mode — the grid reads it.
+        controller.editPermissionsOctal('0600');
+        var session = controller.permissionsEdit!;
+        expect(session.mode, 0x180);
+        expect(session.octalInvalid, isFalse);
+        expect(session.dirty, isTrue);
 
-      // A checkbox toggle moves the mode and re-seeds the field.
-      controller.setPermissionBit(permissionOtherRead, true);
-      session = controller.permissionsEdit!;
-      expect(session.mode, 0x184);
-      expect(session.octalText, '0604');
-      expect(session.octalRevision, greaterThan(0));
+        // A checkbox toggle moves the mode and re-seeds the field.
+        controller.setPermissionBit(permissionOtherRead, true);
+        session = controller.permissionsEdit!;
+        expect(session.mode, 0x184);
+        expect(session.octalText, '0604');
+        expect(session.octalRevision, greaterThan(0));
 
-      // The leading digit carries setuid: a typed special-bits value
-      // is preserved verbatim.
-      controller.editPermissionsOctal('4755');
-      session = controller.permissionsEdit!;
-      expect(session.mode, 0x9ED);
-      expect(session.mode & 0x800, isNonZero);
-    });
+        // The leading digit carries setuid: a typed special-bits value
+        // is preserved verbatim.
+        controller.editPermissionsOctal('4755');
+        session = controller.permissionsEdit!;
+        expect(session.mode, 0x9ED);
+        expect(session.mode & 0x800, isNonZero);
+      },
+    );
 
-    test('invalid octal flags the field and leaves the mode untouched',
-        () async {
-      final (controller, _) = await _browsedPane([
-        _entry('plain.txt', mode: 0x81A4),
-      ]);
-      addTearDown(controller.dispose);
-      controller.setCursorIndex(0);
+    test(
+      'invalid octal flags the field and leaves the mode untouched',
+      () async {
+        final (controller, _) = await _browsedPane([
+          _entry('plain.txt', mode: 0x81A4),
+        ]);
+        addTearDown(controller.dispose);
+        controller.setCursorIndex(0);
 
-      controller.editPermissionsOctal('8888');
-      var session = controller.permissionsEdit!;
-      expect(session.octalInvalid, isTrue);
-      expect(session.mode, 0x81A4);
-      expect(session.octalText, '8888'); // verbatim for correction
+        controller.editPermissionsOctal('8888');
+        var session = controller.permissionsEdit!;
+        expect(session.octalInvalid, isTrue);
+        expect(session.mode, 0x81A4);
+        expect(session.octalText, '8888'); // verbatim for correction
 
-      // The rejection is inline only — no chmod leaves the pane.
-      await controller.applyPermissions();
-      expect(session.applyError, isNull);
+        // The rejection is inline only — no chmod leaves the pane.
+        await controller.applyPermissions();
+        expect(session.applyError, isNull);
 
-      // A partial value stays invalid until the fourth digit lands.
-      controller.editPermissionsOctal('060');
-      session = controller.permissionsEdit!;
-      expect(session.octalInvalid, isTrue);
-      controller.editPermissionsOctal('0600');
-      session = controller.permissionsEdit!;
-      expect(session.octalInvalid, isFalse);
-      expect(session.mode, 0x180);
-    });
+        // A partial value stays invalid until the fourth digit lands.
+        controller.editPermissionsOctal('060');
+        session = controller.permissionsEdit!;
+        expect(session.octalInvalid, isTrue);
+        controller.editPermissionsOctal('0600');
+        session = controller.permissionsEdit!;
+        expect(session.octalInvalid, isFalse);
+        expect(session.mode, 0x180);
+      },
+    );
 
     test('Esc revert restores the applied baseline', () async {
       final (controller, _) = await _browsedPane([
@@ -464,8 +458,7 @@ void main() {
       expect(session.dirty, isFalse);
     });
 
-    test('apply writes the exact mode and rebaselines the draft',
-        () async {
+    test('apply writes the exact mode and rebaselines the draft', () async {
       final (controller, channel) = await _browsedPane([
         _entry('plain.txt', mode: 0x81A4),
       ]);
@@ -476,10 +469,7 @@ void main() {
       controller.editPermissionsOctal('0600');
       await controller.applyPermissions();
 
-      expect(
-        channel.permissionsCalls,
-        [('/home/tester/plain.txt', 0x180)],
-      );
+      expect(channel.permissionsCalls, [('/home/tester/plain.txt', 0x180)]);
       final session = controller.permissionsEdit!;
       expect(session.applying, isFalse);
       expect(session.applyError, isNull);
@@ -547,13 +537,10 @@ void main() {
     test('a refusal answering after a retarget reports through the pane '
         'error path, not a dead session', () async {
       final errors = <Object>[];
-      final (controller, channel) = await _browsedPane(
-        [
-          _entry('a.txt', mode: 0x81A4),
-          _entry('b.txt', mode: 0x81A4),
-        ],
-        onError: (error, _) => errors.add(error),
-      );
+      final (controller, channel) = await _browsedPane([
+        _entry('a.txt', mode: 0x81A4),
+        _entry('b.txt', mode: 0x81A4),
+      ], onError: (error, _) => errors.add(error));
       addTearDown(controller.dispose);
       _cursorTo(controller, 'a.txt');
 
@@ -582,10 +569,9 @@ void main() {
     test('a stale completion releases the in-flight flag — the '
         're-adopted session can apply again', () async {
       final errors = <Object>[];
-      final (controller, channel) = await _browsedPane(
-        [_entry('plain.txt', mode: 0x81A4)],
-        onError: (error, _) => errors.add(error),
-      );
+      final (controller, channel) = await _browsedPane([
+        _entry('plain.txt', mode: 0x81A4),
+      ], onError: (error, _) => errors.add(error));
       addTearDown(controller.dispose);
       controller.setCursorIndex(0);
 
@@ -683,8 +669,7 @@ void main() {
       await apply;
     });
 
-    test('the confirmation hedges when the count pass is incomplete',
-        () async {
+    test('the confirmation hedges when the count pass is incomplete', () async {
       final (controller, channel) = await _browsedPane([
         _entry('docs', type: RemoteFileType.directory, mode: 0x41ED),
       ]);
@@ -789,9 +774,7 @@ void main() {
       channel.heldPermissions = held;
       _cursorTo(controller, 'docs');
 
-      unawaited(
-        controller.requestApplyToEnclosed(confirm: () async => true),
-      );
+      unawaited(controller.requestApplyToEnclosed(confirm: () async => true));
       await _settle();
       expect(controller.applyToEnclosedInFlight, isTrue);
 
@@ -825,9 +808,7 @@ void main() {
       channel.heldPermissions = held;
       _cursorTo(controller, 'docs');
 
-      unawaited(
-        controller.requestApplyToEnclosed(confirm: () async => true),
-      );
+      unawaited(controller.requestApplyToEnclosed(confirm: () async => true));
       await _settle();
       expect(controller.applyToEnclosedInFlight, isTrue);
 
@@ -852,9 +833,7 @@ void main() {
       channel.heldPermissions = held;
       _cursorTo(controller, 'docs');
 
-      unawaited(
-        controller.requestApplyToEnclosed(confirm: () async => true),
-      );
+      unawaited(controller.requestApplyToEnclosed(confirm: () async => true));
       await _settle();
       expect(controller.enclosedApply?.stage, EnclosedApplyStage.applying);
       expect(controller.applyToEnclosedInFlight, isTrue);

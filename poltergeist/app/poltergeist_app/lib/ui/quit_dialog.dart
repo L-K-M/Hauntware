@@ -25,10 +25,7 @@ Future<QuitConfirmChoice?> showQuitConfirmDialog(
   required int remainingBytes,
   required QuitTaskDisposition disposition,
 }) {
-  assert(
-    activeTasks > 0,
-    'Quit dialog shown without live tasks (02 §10)',
-  );
+  assert(activeTasks > 0, 'Quit dialog shown without live tasks (02 §10)');
   return showDialog<QuitConfirmChoice>(
     context: context,
     // Scrim tap / Esc dismissal must veto the quit (02 §10); keep this

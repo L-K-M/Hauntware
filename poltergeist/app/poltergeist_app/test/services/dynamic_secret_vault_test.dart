@@ -10,12 +10,8 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 final _keyA = List<int>.generate(32, (i) => i);
 final _keyB = List<int>.generate(32, (i) => 255 - i);
 
-Secret _secret(String id) => Secret(
-      id: id,
-      kind: SecretKind.password,
-      value: 'value-$id',
-      updatedAt: 1,
-    );
+Secret _secret(String id) =>
+    Secret(id: id, kind: SecretKind.password, value: 'value-$id', updatedAt: 1);
 
 final class _Authenticator implements DeviceAuthenticator {
   @override
@@ -42,35 +38,38 @@ final class _DelayedStore extends InMemoryVaultStore {
 
 void main() {
   for (final operation in ['getSecret', 'readableSecret']) {
-    test('$operation refuses a result after its read authorization expires', () async {
-      var elapsed = Duration.zero;
-      final lock = AppLock(
-        authenticator: _Authenticator(),
-        mode: AppLockMode.on,
-        elapsed: () => elapsed,
-        wallClock: () => DateTime(2026).add(elapsed),
-      );
-      await lock.requireUnlocked();
-      final store = _DelayedStore();
-      final source = SecretVault(store, _keyA);
-      await source.putSecret(_secret('s1'));
-      store.gate = Completer<void>();
-      final vault = DynamicSecretVault(
-        store,
-        () => lock.read(() async => source),
-        readGuard: lock.read,
-      );
-      final pending = operation == 'getSecret'
-          ? vault.getSecret('s1')
-          : vault.readableSecret('s1');
-      await store.started.future;
-      lock.onLifecycle(AppLockLifecycle.background);
-      elapsed = appLockBackgroundTimeout + const Duration(seconds: 1);
-      expect(lock.requiresAuthentication, isTrue);
-      final refused = expectLater(pending, throwsA(isA<AppLockException>()));
-      store.gate!.complete();
-      await refused;
-    });
+    test(
+      '$operation refuses a result after its read authorization expires',
+      () async {
+        var elapsed = Duration.zero;
+        final lock = AppLock(
+          authenticator: _Authenticator(),
+          mode: AppLockMode.on,
+          elapsed: () => elapsed,
+          wallClock: () => DateTime(2026).add(elapsed),
+        );
+        await lock.requireUnlocked();
+        final store = _DelayedStore();
+        final source = SecretVault(store, _keyA);
+        await source.putSecret(_secret('s1'));
+        store.gate = Completer<void>();
+        final vault = DynamicSecretVault(
+          store,
+          () => lock.read(() async => source),
+          readGuard: lock.read,
+        );
+        final pending = operation == 'getSecret'
+            ? vault.getSecret('s1')
+            : vault.readableSecret('s1');
+        await store.started.future;
+        lock.onLifecycle(AppLockLifecycle.background);
+        elapsed = appLockBackgroundTimeout + const Duration(seconds: 1);
+        expect(lock.requiresAuthentication, isTrue);
+        final refused = expectLater(pending, throwsA(isA<AppLockException>()));
+        store.gate!.complete();
+        await refused;
+      },
+    );
   }
 
   test('every call lands on the key the provider reports now', () async {
@@ -89,8 +88,10 @@ void main() {
     key = _keyB;
     expect(await vault.readableSecret('s1'), isNull);
     await vault.putSecret(_secret('s2'));
-    expect((await SecretVault(store, _keyB).getSecret('s2'))!.value,
-        'value-s2');
+    expect(
+      (await SecretVault(store, _keyB).getSecret('s2'))!.value,
+      'value-s2',
+    );
     expect(await SecretVault(store, _keyA).readableSecret('s2'), isNull);
   });
 
@@ -146,17 +147,20 @@ void main() {
     expect(await source.getSecret('s1'), isNull);
   });
 
-  test('auth refusal keeps its type without reporting a keystore fault', () async {
-    final reports = <Object>[];
-    const failure = AppLockException('Authentication refused.');
-    final vault = DynamicSecretVault(
-      InMemoryVaultStore(),
-      () async => throw failure,
-      onError: (error, _) => reports.add(error),
-    );
-    await expectLater(vault.getSecret('s1'), throwsA(same(failure)));
-    expect(reports, isEmpty);
-  });
+  test(
+    'auth refusal keeps its type without reporting a keystore fault',
+    () async {
+      final reports = <Object>[];
+      const failure = AppLockException('Authentication refused.');
+      final vault = DynamicSecretVault(
+        InMemoryVaultStore(),
+        () async => throw failure,
+        onError: (error, _) => reports.add(error),
+      );
+      await expectLater(vault.getSecret('s1'), throwsA(same(failure)));
+      expect(reports, isEmpty);
+    },
+  );
 
   test('a failing keystore reports, then fails the call', () async {
     final reports = <Object>[];

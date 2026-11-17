@@ -44,18 +44,22 @@ class TofuVerifier {
     final pinned = await store.get(presented.host, presented.port);
     if (pinned == null) {
       return HostKeyDecision(
-          verdict: HostKeyVerdict.firstUse, presented: presented);
+        verdict: HostKeyVerdict.firstUse,
+        presented: presented,
+      );
     }
     if (pinned.fingerprintSha256 == presented.fingerprintSha256) {
       return HostKeyDecision(
-          verdict: HostKeyVerdict.trusted,
-          presented: presented,
-          pinned: pinned);
+        verdict: HostKeyVerdict.trusted,
+        presented: presented,
+        pinned: pinned,
+      );
     }
     return HostKeyDecision(
-        verdict: HostKeyVerdict.changed,
-        presented: presented,
-        pinned: pinned);
+      verdict: HostKeyVerdict.changed,
+      presented: presented,
+      pinned: pinned,
+    );
   }
 
   /// Pin (or re-pin) a key after the user has explicitly confirmed it.

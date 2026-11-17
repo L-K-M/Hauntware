@@ -1063,7 +1063,10 @@ void main() {
       store.saveFailure = StateError('disk full');
       await tester.tap(find.widgetWithText(TextButton, 'Undo'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Couldn’t undo “Remove Server”:'), findsOneWidget);
+      expect(
+        find.textContaining('Couldn’t undo “Remove Server”:'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       expect(store.bookmarks.map((bookmark) => bookmark.id), ['r2']);
     });
@@ -1352,7 +1355,10 @@ void main() {
         const ServerStatus(ServerConnectionState.connected),
       );
       await tester.pumpAndSettle();
-      return PoltergeistChrome.of(tester.element(find.byType(SidebarView)), poltergeistThemeStyle);
+      return PoltergeistChrome.of(
+        tester.element(find.byType(SidebarView)),
+        poltergeistThemeStyle,
+      );
     }
 
     testWidgets('a folded group shows the live server it hides', (
@@ -1487,7 +1493,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(row, findsOneWidget);
-      final chrome = PoltergeistChrome.of(tester.element(row), poltergeistThemeStyle);
+      final chrome = PoltergeistChrome.of(
+        tester.element(row),
+        poltergeistThemeStyle,
+      );
       expect(
         rowOf(tester, row).status,
         SidebarStatusDot(chrome.statusConnected),
@@ -2685,7 +2694,10 @@ void main() {
       expect(rowOf(tester, savedRow).selected, isTrue);
       // …and the session's own connection: a solid connected dot (not the
       // probe's reachable ring), and Disconnect drops the live session.
-      final chrome = PoltergeistChrome.of(tester.element(savedRow), poltergeistThemeStyle);
+      final chrome = PoltergeistChrome.of(
+        tester.element(savedRow),
+        poltergeistThemeStyle,
+      );
       expect(
         rowOf(tester, savedRow).status,
         SidebarStatusDot(chrome.statusConnected),

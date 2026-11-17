@@ -87,11 +87,13 @@ class _BandwidthPopoverState extends State<BandwidthPopover> {
         : parseTransferRate(field.text);
     setState(() {
       if (download) {
-        _downError =
-            parsed == null ? l10n.bandwidthInvalid(_maxText(l10n)) : null;
+        _downError = parsed == null
+            ? l10n.bandwidthInvalid(_maxText(l10n))
+            : null;
       } else {
-        _upError =
-            parsed == null ? l10n.bandwidthInvalid(_maxText(l10n)) : null;
+        _upError = parsed == null
+            ? l10n.bandwidthInvalid(_maxText(l10n))
+            : null;
       }
     });
     if (parsed == null) return;
@@ -273,10 +275,7 @@ class _DirectionRow extends StatelessWidget {
                 label: Text(
                   _presets[i] == null
                       ? l10n.bandwidthOff
-                      : formatTransferLimit(
-                          _presets[i]!,
-                          platform: platform,
-                        ),
+                      : formatTransferLimit(_presets[i]!, platform: platform),
                 ),
                 selected: !customSelected && current == _presets[i],
                 onSelected: (_) => onPreset(_presets[i]),

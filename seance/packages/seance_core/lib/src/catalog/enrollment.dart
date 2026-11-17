@@ -173,9 +173,11 @@ sealed class SyncEnrollmentException implements Exception {
 /// parameters.
 final class KdfDowngradeException extends SyncEnrollmentException {
   KdfDowngradeException(this.offered)
-      : super('The sync server returned weaker password-hashing parameters '
-            'than Poltergeist accepts — refusing to derive your key '
-            '(possible downgrade attack).');
+    : super(
+        'The sync server returned weaker password-hashing parameters '
+        'than Poltergeist accepts — refusing to derive your key '
+        '(possible downgrade attack).',
+      );
 
   /// The below-minimum parameters the server offered.
   final Argon2Params offered;
@@ -186,7 +188,7 @@ final class KdfDowngradeException extends SyncEnrollmentException {
 /// purpose and schema, so the enrollment can reject the passphrase directly.
 final class VaultPassphraseMismatchException extends SyncEnrollmentException {
   const VaultPassphraseMismatchException()
-      : super('The vault encryption passphrase is incorrect.');
+    : super('The vault encryption passphrase is incorrect.');
 }
 
 /// 403 `registration_closed` (04 §4.3) — the message is the verbatim copy.
@@ -205,15 +207,15 @@ final class SyncEnrollment {
     required SyncEnrollmentState state,
     required SyncRecordStore records,
     required List<RecordHandler> handlers,
-  })  : // Collaborator names stay public; the fields stay private.
-        // ignore: prefer_initializing_formals
-        _credentials = credentials,
-        // ignore: prefer_initializing_formals
-        _state = state,
-        // ignore: prefer_initializing_formals
-        _records = records,
-        // ignore: prefer_initializing_formals
-        _handlers = handlers;
+  }) : // Collaborator names stay public; the fields stay private.
+       // ignore: prefer_initializing_formals
+       _credentials = credentials,
+       // ignore: prefer_initializing_formals
+       _state = state,
+       // ignore: prefer_initializing_formals
+       _records = records,
+       // ignore: prefer_initializing_formals
+       _handlers = handlers;
 
   final SyncCredentialStore _credentials;
   final SyncEnrollmentState _state;
@@ -240,16 +242,18 @@ final class SyncEnrollment {
       params: params,
     );
     try {
-      final registered = await api.register(RegisterRequest(
-        username: username,
-        authVerifier: base64.encode(keys.authVerifier),
-        argonSalt: base64.encode(salt),
-        argonParams: params,
-        vaultKeyCheck: await VaultKeyCheck.create(
-          keys.vaultKey,
+      final registered = await api.register(
+        RegisterRequest(
           username: username,
+          authVerifier: base64.encode(keys.authVerifier),
+          argonSalt: base64.encode(salt),
+          argonParams: params,
+          vaultKeyCheck: await VaultKeyCheck.create(
+            keys.vaultKey,
+            username: username,
+          ),
         ),
-      ));
+      );
       await VaultKeyCheck.verify(
         keys.vaultKey,
         registered.vaultKeyCheck ?? '',
@@ -277,7 +281,10 @@ final class SyncEnrollment {
     // account — this passphrase was just minted, so the condition has
     // provably resolved.
     await _state.setNotice(syncNoticePassphraseCheckFailed, false);
-    return EnrollmentResult(passphraseUnverified: false, vaultKey: keys.vaultKey);
+    return EnrollmentResult(
+      passphraseUnverified: false,
+      vaultKey: keys.vaultKey,
+    );
   }
 
   /// Enrol against an existing account (04 §4.5, mirroring Séance's
@@ -307,22 +314,17 @@ final class SyncEnrollment {
       salt: base64.decode(pre.argonSalt),
       params: pre.argonParams,
     );
-    final login = await api.login(LoginRequest(
-      username: username,
-      authVerifier: base64.encode(keys.authVerifier),
-    ));
-    await observeRecordEnvelopeFloor(
-      _records,
-      login.recordEnvelopeFloor,
+    final login = await api.login(
+      LoginRequest(
+        username: username,
+        authVerifier: base64.encode(keys.authVerifier),
+      ),
     );
+    await observeRecordEnvelopeFloor(_records, login.recordEnvelopeFloor);
     final keyCheck = login.vaultKeyCheck;
     if (keyCheck != null) {
       try {
-        await VaultKeyCheck.verify(
-          keys.vaultKey,
-          keyCheck,
-          username: username,
-        );
+        await VaultKeyCheck.verify(keys.vaultKey, keyCheck, username: username);
       } catch (_) {
         throw const VaultPassphraseMismatchException();
       }
@@ -330,17 +332,13 @@ final class SyncEnrollment {
     final response = await api.pull(since: 0);
     if (response.recordEnvelopeFloor == kCurrentRecordEnvelopeVersion &&
         response.records.any(
-          (record) =>
-              record.envelopeVersion < kCurrentRecordEnvelopeVersion,
+          (record) => record.envelopeVersion < kCurrentRecordEnvelopeVersion,
         )) {
       throw const FormatException(
         'Authenticated-envelope account returned a legacy record',
       );
     }
-    await observeRecordEnvelopeFloor(
-      _records,
-      response.recordEnvelopeFloor,
-    );
+    await observeRecordEnvelopeFloor(_records, response.recordEnvelopeFloor);
     final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
     final handlersByPrefix = <String?, RecordHandler>{
       for (final handler in _handlers) handler.prefix: handler,
@@ -373,9 +371,8 @@ final class SyncEnrollment {
     // binds enrollment too). Auth success cannot prove the E2E passphrase.
     var unverified = keyCheck == null;
     String? warning;
-    for (final record in keyCheck == null
-        ? response.records
-        : const <EncryptedRecord>[]) {
+    for (final record
+        in keyCheck == null ? response.records : const <EncryptedRecord>[]) {
       if (record.deleted || record.blob.isEmpty) continue;
       if (!isDecryptableSyncId(record.id, _handlers)) continue;
       if (authenticated.containsKey(record)) {
@@ -437,7 +434,7 @@ final class SyncEnrollment {
   /// two are the same string runs Argon2 once, preserving the keys existing
   /// single-passphrase accounts already have.
   static Future<({List<int> authVerifier, List<int> vaultKey})>
-      _deriveSyncKeys({
+  _deriveSyncKeys({
     required String password,
     required String encryptionPassphrase,
     required List<int> salt,
@@ -449,10 +446,7 @@ final class SyncEnrollment {
       params: params,
     );
     if (password == encryptionPassphrase) {
-      return (
-        authVerifier: authKeys.authVerifier,
-        vaultKey: authKeys.vaultKey,
-      );
+      return (authVerifier: authKeys.authVerifier, vaultKey: authKeys.vaultKey);
     }
     final encryptionKeys = await VaultCrypto.deriveKeys(
       passphrase: encryptionPassphrase,
@@ -484,15 +478,13 @@ final class SyncEnrollment {
     await _credentials.writeVaultKey(vaultKey);
     await _state.deviceId();
     await _state.setAccount(
-        SyncAccount(baseUrl: baseUrl, username: username, mode: mode));
+      SyncAccount(baseUrl: baseUrl, username: username, mode: mode),
+    );
     await _state.setNotice(syncNoticeAccountAuthFailed, false);
   }
 }
 
-RecordKind? _trialKindForId(
-  String id,
-  Iterable<RecordHandler> handlers,
-) {
+RecordKind? _trialKindForId(String id, Iterable<RecordHandler> handlers) {
   final prefix = syncIdPrefix(id);
   if (prefix == ServerConfigHandler.idPrefix) {
     return RecordKind.serverConfig;

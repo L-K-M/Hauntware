@@ -15,16 +15,15 @@ ServerConfig _server(
   String? label,
   String? group,
   int? updatedAt,
-}) =>
-    ServerConfig(
-      id: id,
-      label: label ?? id,
-      host: '$id.example.com',
-      username: 'deploy',
-      group: group,
-      createdAt: _epochMs,
-      updatedAt: updatedAt ?? _epochMs,
-    );
+}) => ServerConfig(
+  id: id,
+  label: label ?? id,
+  host: '$id.example.com',
+  username: 'deploy',
+  group: group,
+  createdAt: _epochMs,
+  updatedAt: updatedAt ?? _epochMs,
+);
 
 void main() {
   late Directory dir;
@@ -51,9 +50,8 @@ void main() {
   FileServerConfigStore storeAt(String path, {int nowMs = 0}) =>
       FileServerConfigStore(
         path: path,
-        now: () => DateTime.fromMillisecondsSinceEpoch(
-            _epochMs + nowMs,
-            isUtc: true),
+        now: () =>
+            DateTime.fromMillisecondsSinceEpoch(_epochMs + nowMs, isUtc: true),
         syncDeviceId: () => 'device-a',
       );
 
@@ -87,17 +85,20 @@ void main() {
     test('applySyncedRecord and removeSyncedRecord persist the winning '
         'tuple verbatim', () async {
       final path = pathIn('servers.json');
-      const winner = ServerSyncTuple(
-          updatedAt: 42, deviceId: 'device-remote');
-      await storeAt(path).applySyncedRecord(
-          _server('web', updatedAt: 42), winner);
+      const winner = ServerSyncTuple(updatedAt: 42, deviceId: 'device-remote');
+      await storeAt(
+        path,
+      ).applySyncedRecord(_server('web', updatedAt: 42), winner);
 
       final reloaded = storeAt(path);
       expect((await reloaded.byId('web'))!.updatedAt, 42);
       expect(await reloaded.syncTupleOf('web'), winner);
 
       const tomb = ServerSyncTuple(
-          updatedAt: 50, deviceId: 'device-remote', deleted: true);
+        updatedAt: 50,
+        deviceId: 'device-remote',
+        deleted: true,
+      );
       await reloaded.removeSyncedRecord('web', tomb);
       final again = storeAt(path);
       expect(await again.load(), isEmpty);
@@ -108,13 +109,16 @@ void main() {
         'trails it', () async {
       final path = pathIn('servers.json');
       final winner = ServerSyncTuple(
-          updatedAt: _epochMs + 90000, deviceId: 'device-remote');
+        updatedAt: _epochMs + 90000,
+        deviceId: 'device-remote',
+      );
       final store = storeAt(path);
       await store.applySyncedRecord(
-          _server('web', updatedAt: _epochMs + 90000), winner);
+        _server('web', updatedAt: _epochMs + 90000),
+        winner,
+      );
 
-      final saved =
-          await store.save(_server('web', label: 'edited'));
+      final saved = await store.save(_server('web', label: 'edited'));
       expect(saved.updatedAt, _epochMs + 90001);
       expect((await store.syncTupleOf('web'))!.deviceId, 'device-a');
     });
@@ -141,49 +145,55 @@ void main() {
 
     test('a newer store version fails without quarantining', () async {
       final path = pathIn('servers.json');
-      await File(path).writeAsString(
-          jsonEncode({'version': 99, 'servers': []}));
+      await File(
+        path,
+      ).writeAsString(jsonEncode({'version': 99, 'servers': []}));
       final store = storeAt(path);
       await expectLater(store.load(), throwsFormatException);
       // Untouched: the file this build cannot read stays exactly as is.
       expect(jsonDecode(await File(path).readAsString())['version'], 99);
     });
 
-    test('preserves an undecodable record verbatim on the next write',
-        () async {
-      final path = pathIn('servers.json');
-      const alien = {
-        'id': 'alien-1',
-        'label': 'Future fields',
-        'brandNewField': {'nested': true},
-      };
-      await File(path).writeAsString(jsonEncode({
-        'version': 1,
-        'servers': [
-          _server('web').toJson(),
-          // `fromJson` is tolerant, so make the record undecodable the
-          // blunt way: no id at all.
-          {'label': 'no id'},
-          // A record a future Séance wrote: decodable here, round-trips
-          // as itself.
-        ],
-      }));
-      final store = storeAt(path);
-      await store.save(_server('new'));
+    test(
+      'preserves an undecodable record verbatim on the next write',
+      () async {
+        final path = pathIn('servers.json');
+        const alien = {
+          'id': 'alien-1',
+          'label': 'Future fields',
+          'brandNewField': {'nested': true},
+        };
+        await File(path).writeAsString(
+          jsonEncode({
+            'version': 1,
+            'servers': [
+              _server('web').toJson(),
+              // `fromJson` is tolerant, so make the record undecodable the
+              // blunt way: no id at all.
+              {'label': 'no id'},
+              // A record a future Séance wrote: decodable here, round-trips
+              // as itself.
+            ],
+          }),
+        );
+        final store = storeAt(path);
+        await store.save(_server('new'));
 
-      final decoded =
-          jsonDecode(await File(path).readAsString()) as Map;
-      final servers = decoded['servers'] as List;
-      // The undecodable record rides the next write verbatim.
-      expect(
+        final decoded = jsonDecode(await File(path).readAsString()) as Map;
+        final servers = decoded['servers'] as List;
+        // The undecodable record rides the next write verbatim.
+        expect(
           servers.whereType<Map>().any((m) => m['label'] == 'no id'),
-          isTrue);
-      expect(
+          isTrue,
+        );
+        expect(
           servers.whereType<Map>().map((m) => m['id']),
-          containsAll(<Object?>['web', 'new']));
-      // Sanity: an injected future-field record decodes as itself too.
-      expect(alien['brandNewField'], isA<Map>());
-    });
+          containsAll(<Object?>['web', 'new']),
+        );
+        // Sanity: an injected future-field record decodes as itself too.
+        expect(alien['brandNewField'], isA<Map>());
+      },
+    );
 
     test('a load waits for a queued write', () async {
       final path = pathIn('servers.json');
@@ -255,24 +265,25 @@ void main() {
   });
 
   group('sync bookkeeping', () {
-    test('syncTuples includes tombstone tuples for the recovery pass',
-        () async {
-      final store = storeAt(pathIn('servers.json'));
-      await store.save(_server('a'));
-      await store.save(_server('b'));
-      await store.remove('b');
-      final tuples = await store.syncTuples();
-      expect(tuples['a']!.deleted, isFalse);
-      expect(tuples['b']!.deleted, isTrue);
-    });
+    test(
+      'syncTuples includes tombstone tuples for the recovery pass',
+      () async {
+        final store = storeAt(pathIn('servers.json'));
+        await store.save(_server('a'));
+        await store.save(_server('b'));
+        await store.remove('b');
+        final tuples = await store.syncTuples();
+        expect(tuples['a']!.deleted, isFalse);
+        expect(tuples['b']!.deleted, isTrue);
+      },
+    );
 
     test('an unbound device id writes no tuples — the clean document '
         'shape', () async {
       final path = pathIn('servers.json');
       final store = FileServerConfigStore(path: path); // no syncDeviceId
       await store.save(_server('web'));
-      final decoded =
-          jsonDecode(await File(path).readAsString()) as Map;
+      final decoded = jsonDecode(await File(path).readAsString()) as Map;
       expect(decoded.containsKey('syncTuples'), isFalse);
       expect(await store.syncTuples(), isEmpty);
     });

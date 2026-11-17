@@ -510,7 +510,8 @@ List<RegisteredCommand> buildPaneCommands({
           return l10n.commandDisabledRenameBusy;
         }
         final cursor = pane?.cursorIndex;
-        final flagged = pane != null &&
+        final flagged =
+            pane != null &&
             cursor != null &&
             cursor >= 0 &&
             cursor < pane.entries.length &&
@@ -1351,7 +1352,8 @@ class CommandChordScope extends StatelessWidget {
             GhostChordBinding(
               activator: activator,
               repeats: command.repeatable,
-              leftAltOnly: !apple &&
+              leftAltOnly:
+                  !apple &&
                   switch (activator) {
                     SingleActivator a => a.alt,
                     CharacterActivator a => a.alt,

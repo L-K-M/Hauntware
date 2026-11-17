@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -632,24 +633,15 @@ void main() {
 
     // 02 §8.3's table: pane scope, ⌘E on macOS, Ctrl+E elsewhere.
     expect(quickSelect.scope, CommandScope.pane);
-    expect(
-      quickSelect.activators!(TargetPlatform.macOS),
-      [
-        const SingleActivator(LogicalKeyboardKey.keyE, meta: true),
-      ],
-    );
-    expect(
-      quickSelect.activators!(TargetPlatform.linux),
-      [
-        const SingleActivator(LogicalKeyboardKey.keyE, control: true),
-      ],
-    );
-    expect(
-      quickSelect.activators!(TargetPlatform.windows),
-      [
-        const SingleActivator(LogicalKeyboardKey.keyE, control: true),
-      ],
-    );
+    expect(quickSelect.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.keyE, meta: true),
+    ]);
+    expect(quickSelect.activators!(TargetPlatform.linux), [
+      const SingleActivator(LogicalKeyboardKey.keyE, control: true),
+    ]);
+    expect(quickSelect.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.keyE, control: true),
+    ]);
 
     // Enablement follows the ACTIVE pane; running opens the field on
     // that pane alone.
@@ -696,24 +688,15 @@ void main() {
 
     // 02 §8.3's table: pane scope, ⌘F on macOS, Ctrl+F elsewhere.
     expect(filter.scope, CommandScope.pane);
-    expect(
-      filter.activators!(TargetPlatform.macOS),
-      [
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true),
-      ],
-    );
-    expect(
-      filter.activators!(TargetPlatform.linux),
-      [
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true),
-      ],
-    );
-    expect(
-      filter.activators!(TargetPlatform.windows),
-      [
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true),
-      ],
-    );
+    expect(filter.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.keyF, meta: true),
+    ]);
+    expect(filter.activators!(TargetPlatform.linux), [
+      const SingleActivator(LogicalKeyboardKey.keyF, control: true),
+    ]);
+    expect(filter.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.keyF, control: true),
+    ]);
 
     // Enablement follows the ACTIVE pane; running opens the strip on
     // that pane alone.
@@ -735,8 +718,11 @@ void main() {
     workspace.setActivePane(leftStrip);
     await filter.run(tester.element(find.byType(Scaffold)));
     expect(left.filterFieldOpen, isTrue);
-    expect(right.filterFieldOpen, isTrue,
-        reason: 'the first open is per-pane state — it stays put');
+    expect(
+      right.filterFieldOpen,
+      isTrue,
+      reason: 'the first open is per-pane state — it stays put',
+    );
   });
 
   testWidgets('the go.* path and history commands carry the §8.3 chords '
@@ -778,47 +764,33 @@ void main() {
       const SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true),
       const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true),
     ]);
-    expect(
-      back.activators!(TargetPlatform.linux),
-      [const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true)],
-    );
+    expect(back.activators!(TargetPlatform.linux), [
+      const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true),
+    ]);
     expect(forward.activators!(TargetPlatform.macOS), [
       const SingleActivator(LogicalKeyboardKey.bracketRight, meta: true),
       const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true),
     ]);
-    expect(
-      forward.activators!(TargetPlatform.windows),
-      [const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true)],
-    );
+    expect(forward.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true),
+    ]);
     // ⇧⌘G / Ctrl+Shift+G and ⌘L / Ctrl+L.
-    expect(
-      toFolder.activators!(TargetPlatform.macOS),
-      [
-        const SingleActivator(
-          LogicalKeyboardKey.keyG,
-          meta: true,
-          shift: true,
-        ),
-      ],
-    );
-    expect(
-      toFolder.activators!(TargetPlatform.linux),
-      [
-        const SingleActivator(
-          LogicalKeyboardKey.keyG,
-          control: true,
-          shift: true,
-        ),
-      ],
-    );
-    expect(
-      editPath.activators!(TargetPlatform.macOS),
-      [const SingleActivator(LogicalKeyboardKey.keyL, meta: true)],
-    );
-    expect(
-      editPath.activators!(TargetPlatform.windows),
-      [const SingleActivator(LogicalKeyboardKey.keyL, control: true)],
-    );
+    expect(toFolder.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.keyG, meta: true, shift: true),
+    ]);
+    expect(toFolder.activators!(TargetPlatform.linux), [
+      const SingleActivator(
+        LogicalKeyboardKey.keyG,
+        control: true,
+        shift: true,
+      ),
+    ]);
+    expect(editPath.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.keyL, meta: true),
+    ]);
+    expect(editPath.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.keyL, control: true),
+    ]);
 
     // 10 §8's Go menu: Back 10, Forward 20, Enclosing 30, Home 40,
     // then the path-field section at 50/60.
@@ -1048,18 +1020,15 @@ void main() {
     // F2 elsewhere — declared for menus, dispatched by the pane's focus
     // node (02 §8.2), never by the chord layer.
     expect(rename.scope, CommandScope.selection);
-    expect(
-      rename.activators!(TargetPlatform.macOS),
-      [const SingleActivator(LogicalKeyboardKey.enter)],
-    );
-    expect(
-      rename.activators!(TargetPlatform.linux),
-      [const SingleActivator(LogicalKeyboardKey.f2)],
-    );
-    expect(
-      rename.activators!(TargetPlatform.windows),
-      [const SingleActivator(LogicalKeyboardKey.f2)],
-    );
+    expect(rename.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.enter),
+    ]);
+    expect(rename.activators!(TargetPlatform.linux), [
+      const SingleActivator(LogicalKeyboardKey.f2),
+    ]);
+    expect(rename.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.f2),
+    ]);
     // 02 §9's File menu: Rename follows Open in the file-verb group.
     expect(rename.menuPlacement?.menu, AppMenuId.file);
     expect(rename.menuPlacement?.order, 70);
@@ -1080,8 +1049,11 @@ void main() {
     );
     await rename.run(tester.element(find.byType(Scaffold)));
     expect(left.renameTarget?.name, 'b');
-    expect(right.renameTarget, isNull,
-        reason: 'the inactive pane never opens a session');
+    expect(
+      right.renameTarget,
+      isNull,
+      reason: 'the inactive pane never opens a session',
+    );
   });
 
   testWidgets('file.getInfo is selection-scoped, toggles the inspector\'s '
@@ -1110,18 +1082,15 @@ void main() {
     // 02 §8.3's table: selection scope; ⌘I on macOS, Alt+Enter
     // elsewhere.
     expect(getInfo.scope, CommandScope.selection);
-    expect(
-      getInfo.activators!(TargetPlatform.macOS),
-      [const SingleActivator(LogicalKeyboardKey.keyI, meta: true)],
-    );
-    expect(
-      getInfo.activators!(TargetPlatform.linux),
-      [const SingleActivator(LogicalKeyboardKey.enter, alt: true)],
-    );
-    expect(
-      getInfo.activators!(TargetPlatform.windows),
-      [const SingleActivator(LogicalKeyboardKey.enter, alt: true)],
-    );
+    expect(getInfo.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.keyI, meta: true),
+    ]);
+    expect(getInfo.activators!(TargetPlatform.linux), [
+      const SingleActivator(LogicalKeyboardKey.enter, alt: true),
+    ]);
+    expect(getInfo.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.enter, alt: true),
+    ]);
     // 10 §8's File menu: Get Info leads its section, ahead of Rename
     // at 70.
     expect(getInfo.menuPlacement?.menu, AppMenuId.file);
@@ -1195,30 +1164,15 @@ void main() {
     // 02 §8.3's table: selection scope; ⌥⌘E on macOS, Ctrl+Alt+E
     // elsewhere.
     expect(edit.scope, CommandScope.selection);
-    expect(
-      edit.activators!(TargetPlatform.macOS),
-      [const SingleActivator(LogicalKeyboardKey.keyE, meta: true, alt: true)],
-    );
-    expect(
-      edit.activators!(TargetPlatform.linux),
-      [
-        const SingleActivator(
-          LogicalKeyboardKey.keyE,
-          control: true,
-          alt: true,
-        ),
-      ],
-    );
-    expect(
-      edit.activators!(TargetPlatform.windows),
-      [
-        const SingleActivator(
-          LogicalKeyboardKey.keyE,
-          control: true,
-          alt: true,
-        ),
-      ],
-    );
+    expect(edit.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.keyE, meta: true, alt: true),
+    ]);
+    expect(edit.activators!(TargetPlatform.linux), [
+      const SingleActivator(LogicalKeyboardKey.keyE, control: true, alt: true),
+    ]);
+    expect(edit.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.keyE, control: true, alt: true),
+    ]);
     // 02 §9's File menu: between Open (60) and Get Info (65) — order 63
     // leaves the unregistered Open With slot open.
     expect(edit.menuPlacement?.menu, AppMenuId.file);
@@ -1239,8 +1193,11 @@ void main() {
     // The distinguishing case: a valid cursor on the now-inactive left
     // pane must not enable the command.
     workspace.setActivePane(rightStrip);
-    expect(edit.enabled(), isFalse,
-        reason: 'cursor on the inactive pane does not enable the command');
+    expect(
+      edit.enabled(),
+      isFalse,
+      reason: 'cursor on the inactive pane does not enable the command',
+    );
     workspace.setActivePane(leftStrip);
     expect(edit.enabled(), isTrue);
 
@@ -1259,14 +1216,15 @@ void main() {
     );
     await edit.run(tester.element(find.byType(Scaffold)));
     expect(opened.map((e) => e.path), [left.entries[1].path]);
-    expect(right.builtInEditorOpen, isNull,
-        reason: 'the inactive pane never opens an editor');
+    expect(
+      right.builtInEditorOpen,
+      isNull,
+      reason: 'the inactive pane never opens an editor',
+    );
   });
 
   testWidgets('go.open is selection-scoped, dispatches openEntry on the '
-      'active pane\'s cursor row, and documents its §8.3 keys', (
-    tester,
-  ) async {
+      'active pane\'s cursor row, and documents its §8.3 keys', (tester) async {
     final lanes = controller_test.FakePaneLanes();
     final leftChannel = controller_test.FakePaneChannel('/home/tester');
     leftChannel.listings['/home/tester'] = [
@@ -1296,21 +1254,16 @@ void main() {
     // for menus; the bare Enter leg is dispatched by the pane's focus
     // node (02 §8.2), never by the chord layer.
     expect(open.scope, CommandScope.selection);
-    expect(
-      open.activators!(TargetPlatform.macOS),
-      [
-        const SingleActivator(LogicalKeyboardKey.arrowDown, meta: true),
-        const SingleActivator(LogicalKeyboardKey.keyO, meta: true),
-      ],
-    );
-    expect(
-      open.activators!(TargetPlatform.linux),
-      [const SingleActivator(LogicalKeyboardKey.enter)],
-    );
-    expect(
-      open.activators!(TargetPlatform.windows),
-      [const SingleActivator(LogicalKeyboardKey.enter)],
-    );
+    expect(open.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.arrowDown, meta: true),
+      const SingleActivator(LogicalKeyboardKey.keyO, meta: true),
+    ]);
+    expect(open.activators!(TargetPlatform.linux), [
+      const SingleActivator(LogicalKeyboardKey.enter),
+    ]);
+    expect(open.activators!(TargetPlatform.windows), [
+      const SingleActivator(LogicalKeyboardKey.enter),
+    ]);
     // 02 §9's File menu: Open heads the file-verb group after the
     // (unregistered) New Folder/New File slots.
     expect(open.menuPlacement?.menu, AppMenuId.file);
@@ -1348,9 +1301,7 @@ void main() {
     expect(leftChannel.openCalls, ['/home/tester/b']);
   });
 
-  testWidgets('no chord fires while a text field holds focus', (
-    tester,
-  ) async {
+  testWidgets('no chord fires while a text field holds focus', (tester) async {
     var ran = false;
     final fieldNode = FocusNode();
     final siblingNode = FocusNode();
@@ -1428,11 +1379,7 @@ void main() {
 
     expect(toggle.scope, CommandScope.pane);
     expect(toggle.activators!(TargetPlatform.macOS), [
-      const SingleActivator(
-        LogicalKeyboardKey.period,
-        meta: true,
-        shift: true,
-      ),
+      const SingleActivator(LogicalKeyboardKey.period, meta: true, shift: true),
     ]);
     expect(toggle.activators!(TargetPlatform.linux), [
       const SingleActivator(LogicalKeyboardKey.keyH, control: true),
@@ -1498,11 +1445,10 @@ void main() {
     final l10n = AppLocalizations.of(context);
     expect(sortBy.menuPlacement?.menu, AppMenuId.view);
     final items = sortBy.submenuItems!(l10n);
-    expect([for (final item in items) item.label(l10n)], [
-      'Name',
-      'Size',
-      'Date Modified',
-    ]);
+    expect(
+      [for (final item in items) item.label(l10n)],
+      ['Name', 'Size', 'Date Modified'],
+    );
     expect([for (final item in items) item.checked!()], [true, false, false]);
 
     await items[1].run(context);
@@ -1537,7 +1483,10 @@ void main() {
       final command = buildKeepFoldersOnTopCommand(grouping: grouping);
       final context = await host(tester);
 
-      expect(command.label(AppLocalizations.of(context)), 'Keep Folders on Top');
+      expect(
+        command.label(AppLocalizations.of(context)),
+        'Keep Folders on Top',
+      );
       expect(command.scope, CommandScope.app);
       expect(command.menuPlacement?.menu, AppMenuId.view);
       expect(command.checked!(), isTrue);
@@ -1665,9 +1614,4 @@ Bookmark _remoteBookmark() {
 RemoteFileEntry _entry(
   String name, {
   RemoteFileType type = RemoteFileType.file,
-}) =>
-    RemoteFileEntry(
-      path: '/home/tester/$name',
-      name: name,
-      type: type,
-    );
+}) => RemoteFileEntry(path: '/home/tester/$name', name: name, type: type);

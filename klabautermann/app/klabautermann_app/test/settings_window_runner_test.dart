@@ -76,7 +76,7 @@ void main() {
       _usesOnlySnapshotValueImports(
         "import 'package:klabautermann_core/klabautermann_core.dart' "
         'show SyncPinConflict, SecretsRestoreSummary, '
-            'VaultRecoveryFailure, VaultRestorePolicy;',
+        'VaultRecoveryFailure, VaultRestorePolicy;',
       ),
       isTrue,
     );

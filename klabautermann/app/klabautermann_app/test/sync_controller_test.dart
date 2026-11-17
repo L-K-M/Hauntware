@@ -67,42 +67,41 @@ void main() {
     sync.dispose();
   });
 
-  test('a sync status and a PinConflictsChanged update the conflicts',
-      () async {
-    final engine = FakeEngineClient();
-    final sync = SyncController(engine);
+  test(
+    'a sync status and a PinConflictsChanged update the conflicts',
+    () async {
+      final engine = FakeEngineClient();
+      final sync = SyncController(engine);
 
-    engine.emit(
-      const SyncStatus(
-        SyncPhase.succeeded,
-        operation: SyncOperation.round,
-        pinConflicts: [_conflict],
-      ),
-    );
-    await pumpEventQueue();
-    expect(sync.conflicts, [_conflict]);
+      engine.emit(
+        const SyncStatus(
+          SyncPhase.succeeded,
+          operation: SyncOperation.round,
+          pinConflicts: [_conflict],
+        ),
+      );
+      await pumpEventQueue();
+      expect(sync.conflicts, [_conflict]);
 
-    const next = SyncPinConflict(
-      locator: 'bravo.example.com:22',
-      localFingerprintSha256: 'SHA256:local-b',
-      pulledFingerprintSha256: 'SHA256:pulled-b',
-    );
-    engine.emit(PinConflictsChanged([next]));
-    await pumpEventQueue();
-    expect(sync.conflicts, [next]);
+      const next = SyncPinConflict(
+        locator: 'bravo.example.com:22',
+        localFingerprintSha256: 'SHA256:local-b',
+        pulledFingerprintSha256: 'SHA256:pulled-b',
+      );
+      engine.emit(PinConflictsChanged([next]));
+      await pumpEventQueue();
+      expect(sync.conflicts, [next]);
 
-    sync.dispose();
-  });
+      sync.dispose();
+    },
+  );
 
   test('a resolution sends one request, marks resolving, and completes on '
       'the answer', () async {
     final engine = FakeEngineClient();
     final sync = SyncController(engine);
 
-    final resolved = sync.resolvePinConflict(
-      _conflict,
-      keepLocal: true,
-    );
+    final resolved = sync.resolvePinConflict(_conflict, keepLocal: true);
 
     expect(engine.sentOfType<ResolvePinConflict>(), hasLength(1));
     expect(sync.resolving, isTrue);
@@ -135,10 +134,7 @@ void main() {
     final engine = FakeEngineClient();
     final sync = SyncController(engine);
 
-    final resolved = sync.resolvePinConflict(
-      _conflict,
-      keepLocal: false,
-    );
+    final resolved = sync.resolvePinConflict(_conflict, keepLocal: false);
     engine.emit(const RequestRejected('ResolvePinConflict', 'no vault key'));
 
     await expectLater(
@@ -149,8 +145,7 @@ void main() {
     sync.dispose();
   });
 
-  test('a startup read updates the conflicts and survives a refusal',
-      () async {
+  test('a startup read updates the conflicts and survives a refusal', () async {
     final engine = FakeEngineClient();
     final sync = SyncController(engine);
 

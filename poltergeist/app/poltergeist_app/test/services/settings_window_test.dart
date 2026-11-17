@@ -461,8 +461,7 @@ void main() {
       expect(moved, 1);
     });
 
-    test('a failed save reaches the window, which keeps the change',
-        () async {
+    test('a failed save reaches the window, which keeps the change', () async {
       final remote = await openWindow();
       groupingSaveFailure = StateError('disk full');
 

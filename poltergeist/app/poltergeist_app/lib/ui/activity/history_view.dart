@@ -93,17 +93,13 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
                       hintStyle: fieldText?.copyWith(
                         color: chrome.secondaryText,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 6,
-                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 6),
                       prefixIcon: Icon(
                         Icons.search,
                         size: 16,
                         color: chrome.secondaryText,
                       ),
-                      prefixIconConstraints: const BoxConstraints(
-                        minWidth: 28,
-                      ),
+                      prefixIconConstraints: const BoxConstraints(minWidth: 28),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(7),
                         borderSide: BorderSide.none,
@@ -117,8 +113,9 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
               const SizedBox(width: 8),
               TextButton(
                 key: const ValueKey('history.clear'),
-                onPressed:
-                    history.isEmpty ? null : widget.controller.clearHistory,
+                onPressed: history.isEmpty
+                    ? null
+                    : widget.controller.clearHistory,
                 child: Text(l10n.activityHistoryClear),
               ),
             ],
@@ -149,9 +146,9 @@ class _HistoryRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).colorScheme;
     final localeName = Localizations.localeOf(context).toString();
-    final time = DateFormat.yMd(localeName)
-        .add_jm()
-        .format(entry.finishedAt.toLocal());
+    final time = DateFormat.yMd(
+      localeName,
+    ).add_jm().format(entry.finishedAt.toLocal());
     final verb = switch (entry.operation) {
       TransferOperation.copy => l10n.historyVerbCopy,
       TransferOperation.move => l10n.historyVerbMove,
@@ -189,8 +186,7 @@ class _HistoryRow extends StatelessWidget {
       builder: (context, menu, child) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onSecondaryTapUp: (tap) => menu.open(position: tap.localPosition),
-        onLongPressStart: (press) =>
-            menu.open(position: press.localPosition),
+        onLongPressStart: (press) => menu.open(position: press.localPosition),
         child: child,
       ),
       child: _content(context, title, details, colors),

@@ -42,8 +42,7 @@ class TransferRateTracker {
       return;
     }
     queue.addLast((at: now, bytes: cumulativeBytes));
-    while (queue.length > 1 &&
-        now.difference(queue.first.at) > window) {
+    while (queue.length > 1 && now.difference(queue.first.at) > window) {
       queue.removeFirst();
     }
   }
@@ -63,7 +62,8 @@ class TransferRateTracker {
     if (_clock().difference(queue.last.at) > window) return null;
     final span = queue.last.at.difference(queue.first.at);
     if (span.inMilliseconds <= 0) return null;
-    return (queue.last.bytes - queue.first.bytes) * 1000.0 /
+    return (queue.last.bytes - queue.first.bytes) *
+        1000.0 /
         span.inMilliseconds;
   }
 
@@ -89,7 +89,9 @@ class TransferRateTracker {
     if (last != null && now.difference(last.at) < etaRefresh) {
       return last.value;
     }
-    final value = Duration(milliseconds: (remainingBytes / rate * 1000).round());
+    final value = Duration(
+      milliseconds: (remainingBytes / rate * 1000).round(),
+    );
     _etas[taskId] = (value: value, at: now);
     return value;
   }

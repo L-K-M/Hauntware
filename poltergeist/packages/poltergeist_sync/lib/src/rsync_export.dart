@@ -232,20 +232,15 @@ String buildRsyncCommand(
   // field); the mtimeUnreliable fallback is the caller's, since that
   // state lives in sync_state outside the ruleset.
   final effectiveComparison =
-      rules.comparison == ComparisonMode.sizeAndMtime &&
-          !rules.preserveMtime
+      rules.comparison == ComparisonMode.sizeAndMtime && !rules.preserveMtime
       ? ComparisonMode.sizeOnly
       : rules.comparison;
   final filters = _filtersFor(rules);
   final trashSkipPaths = _trashSkipPaths(rules);
   final remote = remoteSides.singleOrNull;
   final directions = switch (rules.direction) {
-    SyncDirection.leftToRight => const [
-      (SyncSide.left, SyncSide.right),
-    ],
-    SyncDirection.rightToLeft => const [
-      (SyncSide.right, SyncSide.left),
-    ],
+    SyncDirection.leftToRight => const [(SyncSide.left, SyncSide.right)],
+    SyncDirection.rightToLeft => const [(SyncSide.right, SyncSide.left)],
     SyncDirection.bidirectional => const [
       (SyncSide.left, SyncSide.right),
       (SyncSide.right, SyncSide.left),
@@ -532,10 +527,7 @@ String _flags({
       '--delete-delay',
       '--max-delete=${rules.maxDelete}',
     ],
-    if (backupDir != null) ...[
-      '--backup',
-      '--backup-dir=$backupDir',
-    ],
+    if (backupDir != null) ...['--backup', '--backup-dir=$backupDir'],
     if (remote != null)
       remote.port == 22 ? "-e 'ssh'" : '-e ${_sq('ssh -p ${remote.port}')}',
     // Engine-imposed exclusions lead every ruleset filter — rsync is
@@ -680,18 +672,13 @@ _filtersFor(SyncRuleSet rules) {
 String _renderEndpoint(ResolvedSyncEndpoint endpoint, {required bool source}) {
   return switch (endpoint) {
     ResolvedLocalEndpoint(:final path, :final os) => _sq(
-        source ? _sourceTail(path, windows: os == SyncEndpointOs.windows) : path,
-      ),
-    ResolvedRemoteEndpoint(
-      :final user,
-      :final host,
-      :final path,
-    ) =>
-      _sq(
-        '${user.isEmpty ? '' : '$user@'}'
-        '${host.contains(':') ? '[$host]' : host}:'
-        '${_escapeRemotePath(source ? _sourceTail(path, windows: false) : path)}',
-      ),
+      source ? _sourceTail(path, windows: os == SyncEndpointOs.windows) : path,
+    ),
+    ResolvedRemoteEndpoint(:final user, :final host, :final path) => _sq(
+      '${user.isEmpty ? '' : '$user@'}'
+      '${host.contains(':') ? '[$host]' : host}:'
+      '${_escapeRemotePath(source ? _sourceTail(path, windows: false) : path)}',
+    ),
   };
 }
 
@@ -704,8 +691,7 @@ String _renderEndpoint(ResolvedSyncEndpoint endpoint, {required bool source}) {
 String _sourceTail(String path, {required bool windows}) {
   var trimmed = path;
   while (trimmed.length > 1 &&
-      (trimmed.endsWith('/') ||
-          (windows && trimmed.endsWith(r'\')))) {
+      (trimmed.endsWith('/') || (windows && trimmed.endsWith(r'\')))) {
     trimmed = trimmed.substring(0, trimmed.length - 1);
   }
   if (trimmed.isEmpty) return path;

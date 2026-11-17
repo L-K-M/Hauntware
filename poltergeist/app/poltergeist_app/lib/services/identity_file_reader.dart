@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 
-
 const _defaultAuditTimeout = Duration(seconds: 2);
 
 /// Reads "reference, don't store" identity files for the credential prompt

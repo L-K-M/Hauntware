@@ -102,17 +102,18 @@ class AuthChallengeRequiredError implements Exception {
 /// everything up to but excluding a shell channel. Production passes
 /// [openDartSshTransport]; tests inject a fake that records calls, prompts,
 /// and credentials without sockets.
-typedef SshTransportOpener = Future<SshTransport> Function({
-  required ServerConfig config,
-  required SshCredentials credentials,
-  required TofuVerifier tofu,
-  required HostKeyPrompter onHostKey,
-  KeyboardInteractiveResponder? onKeyboardInteractive,
-  required SshJumpHostResolver? resolveJumpHost,
-  required ConnectPrompting prompting,
-  Duration timeout,
-  SshConnectionLog? log,
-});
+typedef SshTransportOpener =
+    Future<SshTransport> Function({
+      required ServerConfig config,
+      required SshCredentials credentials,
+      required TofuVerifier tofu,
+      required HostKeyPrompter onHostKey,
+      KeyboardInteractiveResponder? onKeyboardInteractive,
+      required SshJumpHostResolver? resolveJumpHost,
+      required ConnectPrompting prompting,
+      Duration timeout,
+      SshConnectionLog? log,
+    });
 
 /// Verifies an endpoint's host key through the TOFU flow on a short-lived,
 /// never-authenticated SSH connection — the pool runs it on a pool's
@@ -157,7 +158,11 @@ Future<void> preflightDartSshHostKey({
   final SSHSocket socket;
   try {
     attemptLog.add('Verifying the host key of ${config.host}:${config.port} …');
-    socket = await SSHSocket.connect(config.host, config.port, timeout: timeout);
+    socket = await SSHSocket.connect(
+      config.host,
+      config.port,
+      timeout: timeout,
+    );
   } catch (error) {
     throw SshConnectException(
       'Could not reach ${config.host}:${config.port} — $error',
@@ -203,20 +208,22 @@ Future<void> preflightDartSshHostKey({
   unawaited(client.done.then<void>((_) {}, onError: (Object _) {}));
 
   try {
-    final accepted = await Future.any<bool>([
-      verdict.future,
-      // A connection that dies before key exchange never reaches the
-      // verifier.
-      client.done.then<bool>(
-        (_) => throw StateError('the connection closed before key exchange'),
-        onError: (Object error) => throw error,
-      ),
-    ]).timeout(
-      _preflightTimeout,
-      onTimeout: () => throw TimeoutException(
-        'Host key verification with $target timed out',
-      ),
-    );
+    final accepted =
+        await Future.any<bool>([
+          verdict.future,
+          // A connection that dies before key exchange never reaches the
+          // verifier.
+          client.done.then<bool>(
+            (_) =>
+                throw StateError('the connection closed before key exchange'),
+            onError: (Object error) => throw error,
+          ),
+        ]).timeout(
+          _preflightTimeout,
+          onTimeout: () => throw TimeoutException(
+            'Host key verification with $target timed out',
+          ),
+        );
     if (!accepted) {
       attemptLog.add('The host key was not accepted.');
       throw SshConnectException(
@@ -278,8 +285,9 @@ Future<SshTransport> openDartSshTransport({
       // this connect must not interact. Host-key verification is
       // deliberately not suppressed — a changed key must surface to the
       // caller (the pool hard-blocks on it), never be silently bypassed.
-      onKeyboardInteractive:
-          prompting == ConnectPrompting.enabled ? onKeyboardInteractive : null,
+      onKeyboardInteractive: prompting == ConnectPrompting.enabled
+          ? onKeyboardInteractive
+          : null,
       resolveJumpHost: resolveJumpHost,
       timeout: timeout,
       // The pool owns the idle-only keepalive policy (03 §3.3): disable
@@ -398,11 +406,16 @@ class _DartSshTransport implements SshTransport {
         // The open was abandoned before a channel existed (timeout).
         // Whatever arrives late on the abandoned open — immediately, if
         // it already has — is owned by nobody; close it.
-        unawaited(pending.then<void>((lateChannel) {
-          return closeSshResource(lateChannel.close);
-        }, onError: (Object _) {
-          // The abandoned open failed on its own — nothing to close.
-        }));
+        unawaited(
+          pending.then<void>(
+            (lateChannel) {
+              return closeSshResource(lateChannel.close);
+            },
+            onError: (Object _) {
+              // The abandoned open failed on its own — nothing to close.
+            },
+          ),
+        );
       }
       if (opening != null) {
         await closeSshResource(opening.close, maxWait: timeout);

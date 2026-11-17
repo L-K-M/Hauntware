@@ -310,8 +310,7 @@ final class TransferQueueAdapter implements AppTransferQueue {
     String itemId,
     ConflictResolution verb, {
     ConflictResolutionScope scope = ConflictResolutionScope.item,
-  }) =>
-      _queue.resolveConflict(taskId, itemId, verb, scope: scope);
+  }) => _queue.resolveConflict(taskId, itemId, verb, scope: scope);
 
   @override
   Future<void> clearHistory() => _queue.clearHistory();

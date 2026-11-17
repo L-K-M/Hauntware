@@ -366,9 +366,7 @@ class AdaptivePaneLayout extends StatefulWidget {
   /// take it from here; below the first [AdaptivePaneLayout] it is exact,
   /// above it the default answers wide.
   static bool isNarrow(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<_AdaptiveNarrow>()
-          ?.narrow ??
+      context.dependOnInheritedWidgetOfExactType<_AdaptiveNarrow>()?.narrow ??
       false;
 
   @override

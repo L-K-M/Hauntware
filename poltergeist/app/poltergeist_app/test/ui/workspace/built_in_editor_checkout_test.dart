@@ -190,9 +190,7 @@ final class FakeEditorRemoteFs implements RemoteFileSystem {
       size: entry.size,
       modifiedAt: entry.modifiedAt,
       mode: entry.mode,
-      contentSha256: computeHash
-          ? sha256.convert(file.bytes).toString()
-          : null,
+      contentSha256: computeHash ? sha256.convert(file.bytes).toString() : null,
     );
   }
 
@@ -220,8 +218,7 @@ final class FakeEditorRemoteFs implements RemoteFileSystem {
       final digestMatches =
           expected.contentSha256 == null ||
           (file != null &&
-              sha256.convert(file.bytes).toString() ==
-                  expected.contentSha256);
+              sha256.convert(file.bytes).toString() == expected.contentSha256);
       final matches =
           file != null &&
           file.bytes.length == expected.size &&
@@ -256,9 +253,7 @@ final class FakeEditorRemoteFs implements RemoteFileSystem {
       size: collected.length,
       modifiedAt: written,
       mode: _files[path]!.mode,
-      contentSha256: computeHash
-          ? sha256.convert(collected).toString()
-          : null,
+      contentSha256: computeHash ? sha256.convert(collected).toString() : null,
     );
   }
 
@@ -278,8 +273,7 @@ final class FakeEditorRemoteFs implements RemoteFileSystem {
     DateTime? modifiedAt,
   }) => Future.value();
   @override
-  Future<void> setOwner(String path, {int? uid, int? gid}) =>
-      Future.value();
+  Future<void> setOwner(String path, {int? uid, int? gid}) => Future.value();
   @override
   Future<String> readSymbolicLink(String path) =>
       Future.error(UnsupportedError('readSymbolicLink'));
@@ -322,9 +316,8 @@ final class FakeEditorConnections implements ConnectionManager {
   }) => Future.error(UnsupportedError('openBrowseChannel'));
 
   @override
-  Stream<ServerStatus> watchServer(String serverId) => Stream.value(
-    const ServerStatus(ServerConnectionState.connected),
-  );
+  Stream<ServerStatus> watchServer(String serverId) =>
+      Stream.value(const ServerStatus(ServerConnectionState.connected));
 
   @override
   Stream<ConnectLogLine> get connectLog => const Stream.empty();
@@ -571,9 +564,7 @@ Future<void> openEditorViaCommand(
   pane.setCursorIndex(cursor);
   await tester.pump();
 
-  final l10n = AppLocalizations.of(
-    tester.element(find.byType(WorkspaceShell)),
-  );
+  final l10n = AppLocalizations.of(tester.element(find.byType(WorkspaceShell)));
   await openShellMenu(tester, AppMenuId.file);
   await tester.tap(
     find.widgetWithText(MenuItemButton, l10n.fileEditBuiltInLabel),
@@ -662,77 +653,71 @@ void main() {
           find.widgetWithText(FilledButton, 'Overwrite Remote Version'),
         );
         await pollFor(tester, find.text('Saved and uploaded.'));
-        expect(utf8.decode(harness.fs.bytes(remoteConfigPath)!), 'window edit\n');
+        expect(
+          utf8.decode(harness.fs.bytes(remoteConfigPath)!),
+          'window edit\n',
+        );
         await tester.pumpWidget(const SizedBox());
         windows.dispose();
       });
     },
   );
 
-  testWidgets(
-    'a remote file opens through file.editBuiltIn, edits, and '
-    'save-and-upload rides the composed queue',
-    (tester) async {
-      await tester.runAsync(() async {
-        await mountEditorShell(tester, harness);
-        await openEditorViaCommand(tester, harness);
+  testWidgets('a remote file opens through file.editBuiltIn, edits, and '
+      'save-and-upload rides the composed queue', (tester) async {
+    await tester.runAsync(() async {
+      await mountEditorShell(tester, harness);
+      await openEditorViaCommand(tester, harness);
 
-        // The checkout's local bytes are the remote's — the editor's
-        // real disk load landed them in the field.
-        expect(
-          tester.widget<TextField>(editorField).controller?.text,
-          'one\ntwo\n',
-        );
-        // The remote route carries the upload action (06 §4.2).
-        expect(find.byTooltip('Save and upload'), findsOneWidget);
-        // The record landed in the session — the download task is the
-        // first queue row.
-        expect(
-          harness.checkout.checkoutFor('b1', remoteConfigPath),
-          isNotNull,
-        );
-        expect(harness.fs.downloadCalls, [remoteConfigPath]);
+      // The checkout's local bytes are the remote's — the editor's
+      // real disk load landed them in the field.
+      expect(
+        tester.widget<TextField>(editorField).controller?.text,
+        'one\ntwo\n',
+      );
+      // The remote route carries the upload action (06 §4.2).
+      expect(find.byTooltip('Save and upload'), findsOneWidget);
+      // The record landed in the session — the download task is the
+      // first queue row.
+      expect(harness.checkout.checkoutFor('b1', remoteConfigPath), isNotNull);
+      expect(harness.fs.downloadCalls, [remoteConfigPath]);
 
-        await tester.enterText(editorField, 'remote edit\n');
-        await tester.pump();
-        await tester.tap(find.byTooltip('Save and upload'));
-        await pollFor(tester, find.text('Saved and uploaded.'));
-        await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(editorField, 'remote edit\n');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Save and upload'));
+      await pollFor(tester, find.text('Saved and uploaded.'));
+      await tester.pump(const Duration(milliseconds: 300));
 
-        // The upload went through the queue's CAS hop exactly once —
-        // the remote now holds the edited bytes.
-        expect(harness.fs.uploadCalls, [remoteConfigPath]);
-        expect(
-          utf8.decode(harness.fs.bytes(remoteConfigPath)!),
-          'remote edit\n',
-        );
+      // The upload went through the queue's CAS hop exactly once —
+      // the remote now holds the edited bytes.
+      expect(harness.fs.uploadCalls, [remoteConfigPath]);
+      expect(utf8.decode(harness.fs.bytes(remoteConfigPath)!), 'remote edit\n');
 
-        // Upload-on-save is panel-visible (02 §6): the managed upload
-        // task completed on the same queue the panel mirrors.
-        final uploads = harness.queue.tasks.where(
-          (task) =>
-              task.spec.managedCheckout?.direction ==
-                  ManagedCheckoutDirection.upload &&
-              task.state == TransferTaskState.completed,
-        );
-        expect(uploads, hasLength(1));
+      // Upload-on-save is panel-visible (02 §6): the managed upload
+      // task completed on the same queue the panel mirrors.
+      final uploads = harness.queue.tasks.where(
+        (task) =>
+            task.spec.managedCheckout?.direction ==
+                ManagedCheckoutDirection.upload &&
+            task.state == TransferTaskState.completed,
+      );
+      expect(uploads, hasLength(1));
 
-        // Upload-on-save is panel-visible (02 §6): back on the shell,
-        // the completed upload row lists under the activity panel. The
-        // row is lazily built, so the read has to happen after the
-        // editor route pops — offstage lists have no viewport.
-        await tester.binding.handlePopRoute();
-        await pollFor(
-          tester,
-          find.descendant(
-            of: find.byKey(const ValueKey('activity.panel')),
-            matching: find.text('config.txt'),
-          ),
-        );
-        await tester.pump(const Duration(milliseconds: 300));
-      });
-    },
-  );
+      // Upload-on-save is panel-visible (02 §6): back on the shell,
+      // the completed upload row lists under the activity panel. The
+      // row is lazily built, so the read has to happen after the
+      // editor route pops — offstage lists have no viewport.
+      await tester.binding.handlePopRoute();
+      await pollFor(
+        tester,
+        find.descendant(
+          of: find.byKey(const ValueKey('activity.panel')),
+          matching: find.text('config.txt'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+    });
+  });
 
   testWidgets(
     'a remote change under the open checkout blocks the upload at the '
@@ -797,153 +782,142 @@ void main() {
     },
   );
 
-  testWidgets(
-    'the conflict dialog\'s overwrite retries with CAS waived and '
-    'commits the edit',
-    (tester) async {
-      await tester.runAsync(() async {
-        await mountEditorShell(tester, harness);
-        await openEditorViaCommand(tester, harness);
+  testWidgets('the conflict dialog\'s overwrite retries with CAS waived and '
+      'commits the edit', (tester) async {
+    await tester.runAsync(() async {
+      await mountEditorShell(tester, harness);
+      await openEditorViaCommand(tester, harness);
 
-        harness.fs.seed(
-          remoteConfigPath,
-          utf8.encode('server rewrite\n'),
-          modifiedAt: DateTime.utc(2026, 3, 3),
-        );
-        await tester.enterText(editorField, 'local edit\n');
-        await tester.pump();
-        await tester.tap(find.byTooltip('Save and upload'));
-        await pollFor(tester, find.text('Remote file changed'));
+      harness.fs.seed(
+        remoteConfigPath,
+        utf8.encode('server rewrite\n'),
+        modifiedAt: DateTime.utc(2026, 3, 3),
+      );
+      await tester.enterText(editorField, 'local edit\n');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Save and upload'));
+      await pollFor(tester, find.text('Remote file changed'));
 
-        await tester.tap(
-          find.widgetWithText(FilledButton, 'Overwrite Remote Version'),
-        );
-        await pollFor(tester, find.text('Saved and uploaded.'));
-        await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Overwrite Remote Version'),
+      );
+      await pollFor(tester, find.text('Saved and uploaded.'));
+      await tester.pump(const Duration(milliseconds: 300));
 
-        expect(harness.fs.uploadCalls, [remoteConfigPath]);
-        expect(
-          utf8.decode(harness.fs.bytes(remoteConfigPath)!),
-          'local edit\n',
-        );
+      expect(harness.fs.uploadCalls, [remoteConfigPath]);
+      expect(utf8.decode(harness.fs.bytes(remoteConfigPath)!), 'local edit\n');
+    });
+  });
+
+  testWidgets('an overwrite keeps the upload marked in flight until it lands', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final prompts = CheckoutPromptLedger();
+      await mountEditorShell(tester, harness, checkoutPrompts: prompts);
+      await openEditorViaCommand(tester, harness);
+
+      harness.fs.seed(
+        remoteConfigPath,
+        utf8.encode('server rewrite\n'),
+        modifiedAt: DateTime.utc(2026, 3, 3),
+      );
+      await tester.enterText(editorField, 'local edit\n');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Save and upload'));
+      await pollFor(tester, find.text('Remote file changed'));
+
+      final hold = harness.fs.holdUploads = Completer<void>();
+      addTearDown(() {
+        if (!hold.isCompleted) hold.complete();
       });
-    },
-  );
-
-  testWidgets(
-    'an overwrite keeps the upload marked in flight until it lands',
-    (tester) async {
-      await tester.runAsync(() async {
-        final prompts = CheckoutPromptLedger();
-        await mountEditorShell(tester, harness, checkoutPrompts: prompts);
-        await openEditorViaCommand(tester, harness);
-
-        harness.fs.seed(
-          remoteConfigPath,
-          utf8.encode('server rewrite\n'),
-          modifiedAt: DateTime.utc(2026, 3, 3),
-        );
-        await tester.enterText(editorField, 'local edit\n');
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Overwrite Remote Version'),
+      );
+      for (var i = 0; i < 160 && harness.fs.uploadCalls.isEmpty; i++) {
         await tester.pump();
-        await tester.tap(find.byTooltip('Save and upload'));
-        await pollFor(tester, find.text('Remote file changed'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(harness.fs.uploadCalls, [
+        remoteConfigPath,
+      ], reason: 'the overwrite upload never started');
+      // The dirty-file prompt skips keys in this set; while the
+      // overwrite is still uploading it must stay there.
+      expect(prompts.uploading, contains('b1|$remoteConfigPath'));
 
-        final hold = harness.fs.holdUploads = Completer<void>();
-        addTearDown(() {
-          if (!hold.isCompleted) hold.complete();
-        });
-        await tester.tap(
-          find.widgetWithText(FilledButton, 'Overwrite Remote Version'),
-        );
-        for (var i = 0; i < 160 && harness.fs.uploadCalls.isEmpty; i++) {
-          await tester.pump();
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-        expect(harness.fs.uploadCalls, [remoteConfigPath],
-            reason: 'the overwrite upload never started');
-        // The dirty-file prompt skips keys in this set; while the
-        // overwrite is still uploading it must stay there.
-        expect(prompts.uploading, contains('b1|$remoteConfigPath'));
+      hold.complete();
+      await pollFor(tester, find.text('Saved and uploaded.'));
+      expect(prompts.uploading, isEmpty);
+    });
+  });
 
-        hold.complete();
-        await pollFor(tester, find.text('Saved and uploaded.'));
-        expect(prompts.uploading, isEmpty);
-      });
-    },
-  );
+  testWidgets('re-opening a buried editor reveals it through the covering '
+      'editor\'s discard guard, never a force pop', (tester) async {
+    await tester.runAsync(() async {
+      await mountEditorShell(tester, harness);
+      await openEditorViaCommand(tester, harness, fileName: 'config.txt');
 
-  testWidgets(
-    're-opening a buried editor reveals it through the covering '
-    'editor\'s discard guard, never a force pop',
-    (tester) async {
-      await tester.runAsync(() async {
-        await mountEditorShell(tester, harness);
-        await openEditorViaCommand(tester, harness, fileName: 'config.txt');
-
-        // The pushed editor covers the shell, so a second open can't
-        // come from the menu — drive the pane's editor seam directly
-        // (the same entry point the command resolves to).
-        final pane = leftPane(tester);
-        final notes = pane.entries.firstWhere((e) => e.name == 'notes.txt');
-        unawaited(pane.editInBuiltInEditor(notes));
-        for (var i = 0; i < 80; i++) {
-          await tester.pump();
-          if (find
-                  .byType(BuiltInTextEditorScreen, skipOffstage: false)
-                  .evaluate()
-                  .length ==
-              2) {
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-        for (var i = 0; i < 80; i++) {
-          await tester.pump();
-          if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-        await tester.pump(const Duration(milliseconds: 400));
-
-        // Both editors stay in the tree (the covered route keeps its
-        // state) — address the covering one's field by its document.
-        Finder fieldWith(String text) => find.byWidgetPredicate(
-          (w) => w is TextField && w.controller?.text == text,
-        );
-
-        // Dirty the covering editor — its PopScope must arbitrate the
-        // reveal, not be stepped over by a forceful popUntil.
-        await tester.enterText(fieldWith('notes\n'), 'unsaved notes\n');
+      // The pushed editor covers the shell, so a second open can't
+      // come from the menu — drive the pane's editor seam directly
+      // (the same entry point the command resolves to).
+      final pane = leftPane(tester);
+      final notes = pane.entries.firstWhere((e) => e.name == 'notes.txt');
+      unawaited(pane.editInBuiltInEditor(notes));
+      for (var i = 0; i < 80; i++) {
         await tester.pump();
-
-        final config = pane.entries.firstWhere(
-          (e) => e.name == 'config.txt',
-        );
-        unawaited(pane.editInBuiltInEditor(config));
-        await pollFor(tester, find.text('Save changes to “notes.txt”?'));
-
-        // Cancel declines the reveal — the covering editor stays.
-        await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-        await tester.pump(const Duration(milliseconds: 300));
-        expect(fieldWith('unsaved notes\n'), findsOneWidget);
-
-        // Re-invoke, then Don't Save: the covering editor pops and the
-        // buried one surfaces with its own document.
-        unawaited(pane.editInBuiltInEditor(config));
-        await pollFor(tester, find.text('Save changes to “notes.txt”?'));
-        await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
-        for (var i = 0; i < 40; i++) {
-          await tester.pump();
-          if (fieldWith('one\ntwo\n').evaluate().isNotEmpty &&
-              fieldWith('unsaved notes\n').evaluate().isEmpty) {
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (find
+                .byType(BuiltInTextEditorScreen, skipOffstage: false)
+                .evaluate()
+                .length ==
+            2) {
+          break;
         }
-        await tester.pump(const Duration(milliseconds: 400));
-        expect(fieldWith('one\ntwo\n'), findsOneWidget);
-      });
-    },
-  );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      for (var i = 0; i < 80; i++) {
+        await tester.pump();
+        if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // Both editors stay in the tree (the covered route keeps its
+      // state) — address the covering one's field by its document.
+      Finder fieldWith(String text) => find.byWidgetPredicate(
+        (w) => w is TextField && w.controller?.text == text,
+      );
+
+      // Dirty the covering editor — its PopScope must arbitrate the
+      // reveal, not be stepped over by a forceful popUntil.
+      await tester.enterText(fieldWith('notes\n'), 'unsaved notes\n');
+      await tester.pump();
+
+      final config = pane.entries.firstWhere((e) => e.name == 'config.txt');
+      unawaited(pane.editInBuiltInEditor(config));
+      await pollFor(tester, find.text('Save changes to “notes.txt”?'));
+
+      // Cancel declines the reveal — the covering editor stays.
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(fieldWith('unsaved notes\n'), findsOneWidget);
+
+      // Re-invoke, then Don't Save: the covering editor pops and the
+      // buried one surfaces with its own document.
+      unawaited(pane.editInBuiltInEditor(config));
+      await pollFor(tester, find.text('Save changes to “notes.txt”?'));
+      await tester.tap(find.widgetWithText(TextButton, 'Don’t save'));
+      for (var i = 0; i < 40; i++) {
+        await tester.pump();
+        if (fieldWith('one\ntwo\n').evaluate().isNotEmpty &&
+            fieldWith('unsaved notes\n').evaluate().isEmpty) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(fieldWith('one\ntwo\n'), findsOneWidget);
+    });
+  });
 }

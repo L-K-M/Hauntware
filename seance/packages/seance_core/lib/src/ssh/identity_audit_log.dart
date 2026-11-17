@@ -34,14 +34,14 @@ class IdentityReadEvent {
   });
 
   Map<String, dynamic> toJson() => {
-        'at': at,
-        'serverId': serverId,
-        'serverLabel': serverLabel,
-        'path': path,
-        'viaBookmark': viaBookmark,
-        'ok': ok,
-        if (error != null) 'error': error,
-      };
+    'at': at,
+    'serverId': serverId,
+    'serverLabel': serverLabel,
+    'path': path,
+    'viaBookmark': viaBookmark,
+    'ok': ok,
+    if (error != null) 'error': error,
+  };
 
   static IdentityReadEvent? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
@@ -105,8 +105,11 @@ class IdentityAuditLog {
         // log names private-key paths, so it is owner-only on desktop POSIX.
         await file.create();
         restrictFileToOwner(file);
-        await file.writeAsString('${jsonEncode(event.toJson())}\n',
-            mode: FileMode.append, flush: true);
+        await file.writeAsString(
+          '${jsonEncode(event.toJson())}\n',
+          mode: FileMode.append,
+          flush: true,
+        );
         await _rotateIfNeeded();
         result.complete();
       } catch (error, stackTrace) {
@@ -129,7 +132,9 @@ class IdentityAuditLog {
       restrictFileToOwner(file);
     }
     final entries = <IdentityReadEvent>[];
-    for (final line in const LineSplitter().convert(await file.readAsString())) {
+    for (final line in const LineSplitter().convert(
+      await file.readAsString(),
+    )) {
       if (line.trim().isEmpty) continue;
       try {
         final event = IdentityReadEvent.fromJson(jsonDecode(line));

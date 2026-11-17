@@ -26,8 +26,7 @@ const kViewShowAlertsCommandId = 'view.showAlerts';
 const kConnectQuickConnectCommandId = 'connect.quickConnect';
 const kConnectDisconnectCommandId = 'connect.disconnect';
 const kViewToggleFullScreenCommandId = 'view.toggleFullScreen';
-const kSelectionTransferToOtherPaneCommandId =
-    'selection.transferToOtherPane';
+const kSelectionTransferToOtherPaneCommandId = 'selection.transferToOtherPane';
 const kSelectionMoveToOtherPaneCommandId = 'selection.moveToOtherPane';
 const kFileRevealCommandId = 'file.reveal';
 const kFileDownloadToCommandId = 'file.downloadTo';
@@ -443,8 +442,8 @@ List<RegisteredCommand> buildShellCommands({
     RegisteredCommand(
       id: kFileDeleteCommandId,
       scope: CommandScope.selection,
-      label: (l10n) => workspace.activeTabController?.location
-              is RemotePaneLocation
+      label: (l10n) =>
+          workspace.activeTabController?.location is RemotePaneLocation
           ? l10n.fileDeleteRemoteLabel
           : (defaultTargetPlatform == TargetPlatform.windows
                 ? l10n.fileMoveToRecycleBinLabel
@@ -478,15 +477,9 @@ List<RegisteredCommand> buildShellCommands({
       hue: FamilyHue.red,
       activators: _perPlatform(
         macOS: const [
-          SingleActivator(
-            LogicalKeyboardKey.backspace,
-            meta: true,
-            alt: true,
-          ),
+          SingleActivator(LogicalKeyboardKey.backspace, meta: true, alt: true),
         ],
-        other: const [
-          SingleActivator(LogicalKeyboardKey.delete, shift: true),
-        ],
+        other: const [SingleActivator(LogicalKeyboardKey.delete, shift: true)],
       ),
       enabled: () => fileOps() != null && hasSelection(),
       disabledReason: (l10n) => l10n.commandDisabledNoSelection,
@@ -504,12 +497,8 @@ List<RegisteredCommand> buildShellCommands({
       icon: Icons.keyboard_outlined,
       // ⌘/ is the macOS Help-menu convention for a shortcuts sheet.
       activators: _perPlatform(
-        macOS: const [
-          SingleActivator(LogicalKeyboardKey.slash, meta: true),
-        ],
-        other: const [
-          SingleActivator(LogicalKeyboardKey.slash, control: true),
-        ],
+        macOS: const [SingleActivator(LogicalKeyboardKey.slash, meta: true)],
+        other: const [SingleActivator(LogicalKeyboardKey.slash, control: true)],
       ),
       run: (context) => showKeyboardShortcutsDialog(
         context,
@@ -731,7 +720,7 @@ List<RegisteredCommand> buildShellCommands({
           group: 3,
         ),
       ),
-      if (revealer.supported)
+    if (revealer.supported)
       RegisteredCommand(
         id: kFileRevealCommandId,
         scope: CommandScope.selection,

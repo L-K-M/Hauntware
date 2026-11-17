@@ -58,10 +58,10 @@ Future<LocalShellSession> startWith(
   HeadlessTerminalEngine engine, {
   LocalShellCommand command = const LocalShellCommand(executable: '/bin/zsh'),
 }) => LocalShellSession.start(
-      launcher: (_, _) async => pty,
-      command: command,
-      engine: engine,
-    );
+  launcher: (_, _) async => pty,
+  command: command,
+  engine: engine,
+);
 
 /// An engine whose [dispose] can be held open, so a test can park teardown
 /// mid-flight and ask who is still waiting on it.
@@ -103,17 +103,19 @@ void main() {
       expect(localShellSupportedOn(LocalShellPlatform.unknown), isFalse);
     });
 
-    test('every unsupported platform explains itself, supported ones do not',
-        () {
-      for (final platform in LocalShellPlatform.values) {
-        final reason = localShellUnavailableReason(platform);
-        if (localShellSupportedOn(platform)) {
-          expect(reason, isEmpty, reason: '$platform');
-        } else {
-          expect(reason, isNotEmpty, reason: '$platform');
+    test(
+      'every unsupported platform explains itself, supported ones do not',
+      () {
+        for (final platform in LocalShellPlatform.values) {
+          final reason = localShellUnavailableReason(platform);
+          if (localShellSupportedOn(platform)) {
+            expect(reason, isEmpty, reason: '$platform');
+          } else {
+            expect(reason, isNotEmpty, reason: '$platform');
+          }
         }
-      }
-    });
+      },
+    );
   });
 
   group('LocalShellCommand.resolve', () {
@@ -145,9 +147,10 @@ void main() {
     });
 
     test('platform defaults when \$SHELL is unset', () {
-      String shellOn(LocalShellPlatform platform) =>
-          LocalShellCommand.resolve(platform: platform, environment: const {})
-              .executable;
+      String shellOn(LocalShellPlatform platform) => LocalShellCommand.resolve(
+        platform: platform,
+        environment: const {},
+      ).executable;
       expect(shellOn(LocalShellPlatform.macos), '/bin/zsh');
       expect(shellOn(LocalShellPlatform.linux), '/bin/bash');
       expect(shellOn(LocalShellPlatform.android), '/system/bin/sh');
@@ -155,11 +158,13 @@ void main() {
 
     test('Windows takes COMSPEC, in either casing, else cmd.exe', () {
       String shellFor(Map<String, String> env) => LocalShellCommand.resolve(
-            platform: LocalShellPlatform.windows,
-            environment: env,
-          ).executable;
-      expect(shellFor({'COMSPEC': r'C:\Windows\System32\cmd.exe'}),
-          r'C:\Windows\System32\cmd.exe');
+        platform: LocalShellPlatform.windows,
+        environment: env,
+      ).executable;
+      expect(
+        shellFor({'COMSPEC': r'C:\Windows\System32\cmd.exe'}),
+        r'C:\Windows\System32\cmd.exe',
+      );
       expect(shellFor({'ComSpec': r'C:\alt\cmd.exe'}), r'C:\alt\cmd.exe');
       expect(shellFor(const {}), 'cmd.exe');
     });
@@ -301,20 +306,22 @@ void main() {
       expect(pty.resizes, isEmpty);
     });
 
-    test('the shell exiting fires onClosed once and records the status',
-        () async {
-      final pty = FakeLocalPty();
-      final session = await startWith(pty, HeadlessTerminalEngine());
-      var closedCalls = 0;
-      session.onClosed = () => closedCalls++;
+    test(
+      'the shell exiting fires onClosed once and records the status',
+      () async {
+        final pty = FakeLocalPty();
+        final session = await startWith(pty, HeadlessTerminalEngine());
+        var closedCalls = 0;
+        session.onClosed = () => closedCalls++;
 
-      await pty.exit(0);
-      await pumpEventQueue();
+        await pty.exit(0);
+        await pumpEventQueue();
 
-      expect(closedCalls, 1);
-      expect(session.exitCode, 0);
-      expect(session.isClosed, isTrue);
-    });
+        expect(closedCalls, 1);
+        expect(session.exitCode, 0);
+        expect(session.isClosed, isTrue);
+      },
+    );
 
     test('onClosed assigned after a fast exit still fires', () async {
       final pty = FakeLocalPty();
@@ -341,21 +348,23 @@ void main() {
       expect(session.exitCode, 0);
     });
 
-    test('close kills the pty and disposes the engine, and is idempotent',
-        () async {
-      final pty = FakeLocalPty();
-      final engine = HeadlessTerminalEngine();
-      final session = await startWith(pty, engine);
+    test(
+      'close kills the pty and disposes the engine, and is idempotent',
+      () async {
+        final pty = FakeLocalPty();
+        final engine = HeadlessTerminalEngine();
+        final session = await startWith(pty, engine);
 
-      await session.close();
-      await session.close();
+        await session.close();
+        await session.close();
 
-      expect(pty.killCount, 1);
-      expect(session.isClosed, isTrue);
-      // The app relies on the transport disposing the engine: a second dispose
-      // of the engine's notifiers would assert, so this must happen once.
-      expect(() => engine.type('x'), throwsStateError);
-    });
+        expect(pty.killCount, 1);
+        expect(session.isClosed, isTrue);
+        // The app relies on the transport disposing the engine: a second dispose
+        // of the engine's notifiers would assert, so this must happen once.
+        expect(() => engine.type('x'), throwsStateError);
+      },
+    );
 
     test('closing after the shell exited does not tear down twice', () async {
       final pty = FakeLocalPty();
@@ -388,8 +397,11 @@ void main() {
 
       expect(session.isClosed, isTrue);
       expect(pty.killCount, 1);
-      expect(engineDisposedWhenNotified, isTrue,
-          reason: 'the engine must be disposed before onClosed fires');
+      expect(
+        engineDisposedWhenNotified,
+        isTrue,
+        reason: 'the engine must be disposed before onClosed fires',
+      );
     });
 
     test('a keystroke racing the exit never reaches the dead pty', () async {
@@ -409,28 +421,30 @@ void main() {
       expect(() => engine.type('ls\r'), throwsStateError);
     });
 
-    test('closing during the drain wait does not sit out the timeout',
-        () async {
-      final pty = FakeLocalPty();
-      final session = await startWith(pty, HeadlessTerminalEngine());
-      var closedCalls = 0;
-      session.onClosed = () => closedCalls++;
+    test(
+      'closing during the drain wait does not sit out the timeout',
+      () async {
+        final pty = FakeLocalPty();
+        final session = await startWith(pty, HeadlessTerminalEngine());
+        var closedCalls = 0;
+        session.onClosed = () => closedCalls++;
 
-      // The child is gone but its output stream never ends, so the session is
-      // now inside its two-second drain window.
-      pty.exitWithoutDraining(0);
-      await pumpEventQueue();
-      expect(closedCalls, 0, reason: 'still draining');
+        // The child is gone but its output stream never ends, so the session is
+        // now inside its two-second drain window.
+        pty.exitWithoutDraining(0);
+        await pumpEventQueue();
+        expect(closedCalls, 0, reason: 'still draining');
 
-      // Cancelling the output subscription does not fire onDone, so without
-      // _finish releasing the drain this would only resolve two seconds of
-      // real time later — long after the session was torn down.
-      await session.close();
-      await pumpEventQueue();
+        // Cancelling the output subscription does not fire onDone, so without
+        // _finish releasing the drain this would only resolve two seconds of
+        // real time later — long after the session was torn down.
+        await session.close();
+        await pumpEventQueue();
 
-      expect(closedCalls, 1);
-      expect(session.isClosed, isTrue);
-    });
+        expect(closedCalls, 1);
+        expect(session.isClosed, isTrue);
+      },
+    );
 
     test('a close() racing self-exit shares its in-flight teardown', () async {
       final pty = FakeLocalPty();
@@ -532,14 +546,22 @@ void main() {
         var calls = 0;
         session.onClosed = () => calls++;
         await pumpEventQueue();
-        expect(calls, 0,
-            reason: 'the engine never finished disposing, so the callback '
-                'contract was never met');
+        expect(
+          calls,
+          0,
+          reason:
+              'the engine never finished disposing, so the callback '
+              'contract was never met',
+        );
       }, (e, _) => unhandled.add(e));
 
-      expect(unhandled, hasLength(1),
-          reason: 'the exit-path propagation is the single report; a late '
-              'onClosed must not derive a second, unhandled copy');
+      expect(
+        unhandled,
+        hasLength(1),
+        reason:
+            'the exit-path propagation is the single report; a late '
+            'onClosed must not derive a second, unhandled copy',
+      );
     });
 
     test('a shell that cannot be spawned surfaces one readable line', () async {
@@ -565,8 +587,10 @@ void main() {
   group('SessionTransport', () {
     test('a local shell is usable through the shared contract', () async {
       final pty = FakeLocalPty();
-      final SessionTransport transport =
-          await startWith(pty, HeadlessTerminalEngine());
+      final SessionTransport transport = await startWith(
+        pty,
+        HeadlessTerminalEngine(),
+      );
       expect(transport.isClosed, isFalse);
       transport.resize(const TerminalSize(90, 30));
       await transport.close();

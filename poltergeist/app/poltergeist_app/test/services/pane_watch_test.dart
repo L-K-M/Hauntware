@@ -76,10 +76,7 @@ Future<(PaneController, FakePaneChannel, FakePaneLanes)> _watchedPane({
   final channel = FakePaneChannel('/home/tester')
     ..listings['/home/tester'] = [_entry('a.txt')];
   lanes.nextLocalChannel = channel;
-  final controller = PaneController(
-    paneTabId: 'pane.left.tab1',
-    lanes: lanes,
-  );
+  final controller = PaneController(paneTabId: 'pane.left.tab1', lanes: lanes);
   addTearDown(controller.dispose);
   unawaited(controller.openLocalHome());
   clock.flushMicrotasks();
@@ -113,92 +110,103 @@ void main() {
     expect(controller.entries.single.name, 'a.txt');
   });
 
-  test('a same-directory refresh keeps the watch; navigation retargets it',
-      () async {
-    final (controller, channel, _) =
-        await _watchedPane(dirs: ['/home/tester/docs']);
+  test(
+    'a same-directory refresh keeps the watch; navigation retargets it',
+    () async {
+      final (controller, channel, _) = await _watchedPane(
+        dirs: ['/home/tester/docs'],
+      );
 
-    controller.refresh();
-    await _settle();
-    expect(channel.watchCalls, ['/home/tester']);
-    expect(channel.listCalls, ['/home/tester', '/home/tester']);
+      controller.refresh();
+      await _settle();
+      expect(channel.watchCalls, ['/home/tester']);
+      expect(channel.listCalls, ['/home/tester', '/home/tester']);
 
-    controller.navigate('/home/tester/docs');
-    await _settle();
-    expect(channel.watchCalls, ['/home/tester', '/home/tester/docs']);
-    // The engine retargets atomically: nothing is released in between.
-    expect(channel.unwatchCalls, 0);
-  });
+      controller.navigate('/home/tester/docs');
+      await _settle();
+      expect(channel.watchCalls, ['/home/tester', '/home/tester/docs']);
+      // The engine retargets atomically: nothing is released in between.
+      expect(channel.unwatchCalls, 0);
+    },
+  );
 
-  test('a change re-lists quietly: no recents visit, no history entry',
-      () async {
-    final (controller, channel, _) = await _watchedPane();
-    final commits = <PaneLocation>[];
-    controller.onLocationCommitted =
-        (location, {remoteBookmark}) => commits.add(location);
+  test(
+    'a change re-lists quietly: no recents visit, no history entry',
+    () async {
+      final (controller, channel, _) = await _watchedPane();
+      final commits = <PaneLocation>[];
+      controller.onLocationCommitted = (location, {remoteBookmark}) =>
+          commits.add(location);
 
-    channel.listings['/home/tester'] = [_entry('a.txt'), _entry('b.txt')];
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    expect(controller.loading, isTrue);
-    expect(controller.navigationInFlight, isFalse);
-    await _settle();
-    expect(controller.entries.map((e) => e.name), ['a.txt', 'b.txt']);
-    expect(commits, isEmpty);
-    expect(controller.canGoBack, isFalse);
+      channel.listings['/home/tester'] = [_entry('a.txt'), _entry('b.txt')];
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      expect(controller.loading, isTrue);
+      expect(controller.navigationInFlight, isFalse);
+      await _settle();
+      expect(controller.entries.map((e) => e.name), ['a.txt', 'b.txt']);
+      expect(commits, isEmpty);
+      expect(controller.canGoBack, isFalse);
 
-    // A refresh the user asked for still records the visit.
-    controller.refresh();
-    expect(controller.navigationInFlight, isTrue);
-    await _settle();
-    expect(commits, [const LocalPaneLocation('/home/tester')]);
-  });
+      // A refresh the user asked for still records the visit.
+      controller.refresh();
+      expect(controller.navigationInFlight, isTrue);
+      await _settle();
+      expect(commits, [const LocalPaneLocation('/home/tester')]);
+    },
+  );
 
-  test('changes during an in-flight listing coalesce into one re-list',
-      () async {
-    final (controller, channel, _) = await _watchedPane();
-    final hold = Completer<void>();
-    channel.holdNext = hold;
-    controller.refresh();
-    await _settle();
+  test(
+    'changes during an in-flight listing coalesce into one re-list',
+    () async {
+      final (controller, channel, _) = await _watchedPane();
+      final hold = Completer<void>();
+      channel.holdNext = hold;
+      controller.refresh();
+      await _settle();
 
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    expect(channel.listCalls, hasLength(2));
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      expect(channel.listCalls, hasLength(2));
 
-    hold.complete();
-    await _settle();
-    await _settle();
-    expect(channel.listCalls, hasLength(3));
-    expect(controller.loading, isFalse);
-  });
+      hold.complete();
+      await _settle();
+      await _settle();
+      expect(channel.listCalls, hasLength(3));
+      expect(controller.loading, isFalse);
+    },
+  );
 
-  test('an open Quick Select session holds the re-list until it ends',
-      () async {
-    final (controller, channel, _) = await _watchedPane();
-    controller.openQuickSelect();
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    await _settle();
-    expect(channel.listCalls, hasLength(1));
-    expect(controller.quickSelectActive, isTrue);
+  test(
+    'an open Quick Select session holds the re-list until it ends',
+    () async {
+      final (controller, channel, _) = await _watchedPane();
+      controller.openQuickSelect();
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      await _settle();
+      expect(channel.listCalls, hasLength(1));
+      expect(controller.quickSelectActive, isTrue);
 
-    controller.cancelQuickSelect();
-    await _settle();
-    expect(channel.listCalls, hasLength(2));
-  });
+      controller.cancelQuickSelect();
+      await _settle();
+      expect(channel.listCalls, hasLength(2));
+    },
+  );
 
-  test('a pending type-ahead buffer holds the re-list until it clears',
-      () async {
-    final (controller, channel, _) = await _watchedPane();
-    controller.typeAhead('a');
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    await _settle();
-    expect(channel.listCalls, hasLength(1));
-    expect(controller.typeAheadBuffer, 'a');
+  test(
+    'a pending type-ahead buffer holds the re-list until it clears',
+    () async {
+      final (controller, channel, _) = await _watchedPane();
+      controller.typeAhead('a');
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      await _settle();
+      expect(channel.listCalls, hasLength(1));
+      expect(controller.typeAheadBuffer, 'a');
 
-    controller.clearTypeAhead();
-    await _settle();
-    expect(channel.listCalls, hasLength(2));
-  });
+      controller.clearTypeAhead();
+      await _settle();
+      expect(channel.listCalls, hasLength(2));
+    },
+  );
 
   test('a lost watch rescans at once and re-arms', () async {
     final (_, channel, _) = await _watchedPane();
@@ -238,35 +246,39 @@ void main() {
     expect(channel.listCalls, hasLength(4));
   });
 
-  test('a lost reply trailing a retarget is re-checked, not believed',
-      () async {
-    final (controller, channel, _) =
-        await _watchedPane(dirs: ['/home/tester/docs']);
-    // The replaced target's last words land before the new reply.
-    var first = true;
-    channel.onWatch = (_) {
-      if (!first) return;
-      first = false;
-      channel.emitWatch(DirectoryWatchSignal.lost, path: '/home/tester');
-    };
+  test(
+    'a lost reply trailing a retarget is re-checked, not believed',
+    () async {
+      final (controller, channel, _) = await _watchedPane(
+        dirs: ['/home/tester/docs'],
+      );
+      // The replaced target's last words land before the new reply.
+      var first = true;
+      channel.onWatch = (_) {
+        if (!first) return;
+        first = false;
+        channel.emitWatch(DirectoryWatchSignal.lost, path: '/home/tester');
+      };
 
-    controller.navigate('/home/tester/docs');
-    await _settle();
-    expect(channel.watchCalls, [
-      '/home/tester',
-      '/home/tester/docs',
-      '/home/tester/docs',
-    ]);
-    expect(controller.notice, isNull);
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    await _settle();
-    expect(channel.listCalls.last, '/home/tester/docs');
-    expect(channel.listCalls, hasLength(3));
-  });
+      controller.navigate('/home/tester/docs');
+      await _settle();
+      expect(channel.watchCalls, [
+        '/home/tester',
+        '/home/tester/docs',
+        '/home/tester/docs',
+      ]);
+      expect(controller.notice, isNull);
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      await _settle();
+      expect(channel.listCalls.last, '/home/tester/docs');
+      expect(channel.listCalls, hasLength(3));
+    },
+  );
 
   test('a stream that ends while no watch stands costs nothing', () async {
-    final (controller, channel, _) =
-        await _watchedPane(dirs: ['/home/tester/docs']);
+    final (controller, channel, _) = await _watchedPane(
+      dirs: ['/home/tester/docs'],
+    );
     // A refused arm leaves the subscription but no standing watch.
     channel.watchFailure = const RemoteFileException(
       kind: RemoteFileErrorKind.other,
@@ -309,8 +321,9 @@ void main() {
 
   test('a navigation that superseded a watch re-list, once cancelled, '
       'leaves the pane dirty', () async {
-    final (controller, channel, _) =
-        await _watchedPane(dirs: ['/home/tester/docs']);
+    final (controller, channel, _) = await _watchedPane(
+      dirs: ['/home/tester/docs'],
+    );
     final relist = Completer<void>();
     channel.holdNext = relist;
     channel.emitWatch(DirectoryWatchSignal.changed);
@@ -335,8 +348,7 @@ void main() {
     expect(channel.listCalls.last, '/home/tester');
   });
 
-  test('a change during a cancelled refresh leaves the pane dirty',
-      () async {
+  test('a change during a cancelled refresh leaves the pane dirty', () async {
     final (controller, channel, _) = await _watchedPane();
     final hold = Completer<void>();
     channel.holdNext = hold;
@@ -400,93 +412,99 @@ void main() {
     expect(controller.entries.single.name, 'a.txt');
   });
 
-  test('a background tab releases its watch and re-lists on activation',
-      () async {
-    final (controller, channel, _) = await _watchedPane();
-    final commits = <PaneLocation>[];
-    controller.onLocationCommitted =
-        (location, {remoteBookmark}) => commits.add(location);
+  test(
+    'a background tab releases its watch and re-lists on activation',
+    () async {
+      final (controller, channel, _) = await _watchedPane();
+      final commits = <PaneLocation>[];
+      controller.onLocationCommitted = (location, {remoteBookmark}) =>
+          commits.add(location);
 
-    controller.setTabActive(false);
-    expect(channel.unwatchCalls, 1);
-    expect(channel.hasWatchListener, isFalse);
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    await _settle();
-    expect(channel.listCalls, hasLength(1));
+      controller.setTabActive(false);
+      expect(channel.unwatchCalls, 1);
+      expect(channel.hasWatchListener, isFalse);
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      await _settle();
+      expect(channel.listCalls, hasLength(1));
 
-    controller.setTabActive(true);
-    await _settle(const Duration(milliseconds: 300));
-    expect(channel.watchCalls, hasLength(2));
-    expect(channel.listCalls, hasLength(2));
-    expect(commits, isEmpty);
-  });
+      controller.setTabActive(true);
+      await _settle(const Duration(milliseconds: 300));
+      expect(channel.watchCalls, hasLength(2));
+      expect(channel.listCalls, hasLength(2));
+      expect(commits, isEmpty);
+    },
+  );
 
-  test('a backgrounded watch refresh keeps its cache and drops late rows',
-      () async {
-    final (controller, channel, _) = await _watchedPane();
-    final cached = controller.entries;
-    controller.setCursorIndex(0);
-    final hold = Completer<void>();
-    channel.holdNext = hold;
-    channel.emitWatch(DirectoryWatchSignal.changed);
-    await _settle();
-    expect(controller.loading, isTrue);
+  test(
+    'a backgrounded watch refresh keeps its cache and drops late rows',
+    () async {
+      final (controller, channel, _) = await _watchedPane();
+      final cached = controller.entries;
+      controller.setCursorIndex(0);
+      final hold = Completer<void>();
+      channel.holdNext = hold;
+      channel.emitWatch(DirectoryWatchSignal.changed);
+      await _settle();
+      expect(controller.loading, isTrue);
 
-    controller.setTabActive(false);
-    expect(controller.loading, isFalse);
-    expect(controller.entries, same(cached));
-    expect(controller.cursorIndex, 0);
-    var notifications = 0;
-    controller.addListener(() => notifications++);
-    channel.listings['/home/tester'] = [_entry('b.txt')];
-    hold.complete();
-    await _settle();
-    expect(controller.entries, same(cached));
-    expect(notifications, 0);
+      controller.setTabActive(false);
+      expect(controller.loading, isFalse);
+      expect(controller.entries, same(cached));
+      expect(controller.cursorIndex, 0);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      channel.listings['/home/tester'] = [_entry('b.txt')];
+      hold.complete();
+      await _settle();
+      expect(controller.entries, same(cached));
+      expect(notifications, 0);
 
-    // Returning still re-arms before a fresh listing, so missed changes
-    // become visible even though the background response was ignored.
-    controller.setTabActive(true);
-    await _settle(const Duration(milliseconds: 300));
-    expect(controller.entries.single.name, 'b.txt');
-    expect(channel.listCalls, hasLength(3));
-    expect(channel.watchCalls, hasLength(2));
-  });
+      // Returning still re-arms before a fresh listing, so missed changes
+      // become visible even though the background response was ignored.
+      controller.setTabActive(true);
+      await _settle(const Duration(milliseconds: 300));
+      expect(controller.entries.single.name, 'b.txt');
+      expect(channel.listCalls, hasLength(3));
+      expect(channel.watchCalls, hasLength(2));
+    },
+  );
 
-  test('a backgrounded activation arm never starts an obsolete listing',
-      () async {
-    final (controller, channel, _) = await _watchedPane();
-    final cached = controller.entries;
-    controller.setTabActive(false);
-    final arm = Completer<void>();
-    channel.heldWatch = arm;
-    controller.setTabActive(true);
-    await _settle(const Duration(milliseconds: 300));
-    expect(channel.watchCalls, hasLength(2));
-    expect(channel.listCalls, hasLength(1));
+  test(
+    'a backgrounded activation arm never starts an obsolete listing',
+    () async {
+      final (controller, channel, _) = await _watchedPane();
+      final cached = controller.entries;
+      controller.setTabActive(false);
+      final arm = Completer<void>();
+      channel.heldWatch = arm;
+      controller.setTabActive(true);
+      await _settle(const Duration(milliseconds: 300));
+      expect(channel.watchCalls, hasLength(2));
+      expect(channel.listCalls, hasLength(1));
 
-    controller.setTabActive(false);
-    expect(controller.loading, isFalse);
-    var notifications = 0;
-    controller.addListener(() => notifications++);
-    channel.listings['/home/tester'] = [_entry('b.txt')];
-    arm.complete();
-    await _settle();
-    expect(channel.listCalls, hasLength(1));
-    expect(controller.entries, same(cached));
-    expect(notifications, 0);
+      controller.setTabActive(false);
+      expect(controller.loading, isFalse);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      channel.listings['/home/tester'] = [_entry('b.txt')];
+      arm.complete();
+      await _settle();
+      expect(channel.listCalls, hasLength(1));
+      expect(controller.entries, same(cached));
+      expect(notifications, 0);
 
-    controller.setTabActive(true);
-    await _settle(const Duration(milliseconds: 300));
-    expect(channel.watchCalls, hasLength(3));
-    expect(channel.listCalls, hasLength(2));
-    expect(controller.entries.single.name, 'b.txt');
-  });
+      controller.setTabActive(true);
+      await _settle(const Duration(milliseconds: 300));
+      expect(channel.watchCalls, hasLength(3));
+      expect(channel.listCalls, hasLength(2));
+      expect(controller.entries.single.name, 'b.txt');
+    },
+  );
 
-  test('backgrounding preserves an explicit navigation in flight',
-      () async {
-    final (controller, channel, _) =
-        await _watchedPane(dirs: ['/home/tester/docs']);
+  test('backgrounding preserves an explicit navigation in flight', () async {
+    final (controller, channel, _) = await _watchedPane(
+      dirs: ['/home/tester/docs'],
+    );
     final hold = Completer<void>();
     channel.holdNext = hold;
     controller.navigate('/home/tester/docs');
@@ -500,10 +518,10 @@ void main() {
     expect(controller.location, const LocalPaneLocation('/home/tester/docs'));
   });
 
-  test('Esc re-arms the restored directory without re-listing it',
-      () async {
-    final (controller, channel, _) =
-        await _watchedPane(dirs: ['/home/tester/slow']);
+  test('Esc re-arms the restored directory without re-listing it', () async {
+    final (controller, channel, _) = await _watchedPane(
+      dirs: ['/home/tester/slow'],
+    );
     final hold = Completer<void>();
     channel.holdNext = hold;
     controller.navigate('/home/tester/slow');
@@ -528,7 +546,7 @@ void main() {
 
   group('a cancelled replacement', () {
     Future<(PaneController, FakePaneChannel, Completer<void>)>
-        parkLocal() async {
+    parkLocal() async {
       final (controller, local, lanes) = await _watchedPane();
       final remoteOpen = Completer<void>();
       lanes.holdRemoteOpen = remoteOpen;
@@ -537,8 +555,7 @@ void main() {
       return (controller, local, remoteOpen);
     }
 
-    test('keeps the parked watch and restores without a re-list',
-        () async {
+    test('keeps the parked watch and restores without a re-list', () async {
       final (controller, local, remoteOpen) = await parkLocal();
       expect(local.unwatchCalls, 0);
 
@@ -582,8 +599,7 @@ void main() {
     expect(remote.hasWatchListener, isFalse);
   });
 
-  test('dispose lets go of the stream; the close releases the watch',
-      () async {
+  test('dispose lets go of the stream; the close releases the watch', () async {
     final (controller, channel, _) = await _watchedPane();
     controller.dispose();
     await _settle();
@@ -593,61 +609,67 @@ void main() {
   });
 
   group('activation debounce', () {
-    test('rapid tab visits keep cached rows and only the settled tab re-lists',
-        () {
-      fakeAsync((clock) {
-        final lanes = FakePaneLanes();
-        final first = FakePaneChannel('/home/tester')
-          ..listings['/home/tester'] = [_entry('a.txt')];
-        lanes.nextLocalChannel = first;
-        final strip = PaneTabsController(
-          paneId: PaneTabsController.leftPaneId,
-          lanes: lanes,
-          newTabTarget: NewTabTarget.home,
-        );
-        addTearDown(strip.dispose);
-        final tabA = strip.newTab();
-        clock.flushMicrotasks();
-        tabA.controller.setCursorIndex(0);
-        final cached = tabA.controller.entries;
-        final second = FakePaneChannel('/home/tester')
-          ..listings['/home/tester'] = [_entry('other.txt')];
-        lanes.nextLocalChannel = second;
-        final tabB = strip.newTab();
-        clock.flushMicrotasks();
+    test(
+      'rapid tab visits keep cached rows and only the settled tab re-lists',
+      () {
+        fakeAsync((clock) {
+          final lanes = FakePaneLanes();
+          final first = FakePaneChannel('/home/tester')
+            ..listings['/home/tester'] = [_entry('a.txt')];
+          lanes.nextLocalChannel = first;
+          final strip = PaneTabsController(
+            paneId: PaneTabsController.leftPaneId,
+            lanes: lanes,
+            newTabTarget: NewTabTarget.home,
+          );
+          addTearDown(strip.dispose);
+          final tabA = strip.newTab();
+          clock.flushMicrotasks();
+          tabA.controller.setCursorIndex(0);
+          final cached = tabA.controller.entries;
+          final second = FakePaneChannel('/home/tester')
+            ..listings['/home/tester'] = [_entry('other.txt')];
+          lanes.nextLocalChannel = second;
+          final tabB = strip.newTab();
+          clock.flushMicrotasks();
 
-        strip.activateTab(tabA);
-        clock.elapse(const Duration(milliseconds: 100));
-        strip.activateTab(tabB);
-        clock.elapse(const Duration(milliseconds: 100));
-        strip.activateTab(tabA);
-        final armed = Completer<void>();
-        first.heldWatch = armed;
-        first.listings['/home/tester'] = [_entry('new.txt')];
-        clock.elapse(const Duration(milliseconds: 299));
+          strip.activateTab(tabA);
+          clock.elapse(const Duration(milliseconds: 100));
+          strip.activateTab(tabB);
+          clock.elapse(const Duration(milliseconds: 100));
+          strip.activateTab(tabA);
+          final armed = Completer<void>();
+          first.heldWatch = armed;
+          first.listings['/home/tester'] = [_entry('new.txt')];
+          clock.elapse(const Duration(milliseconds: 299));
 
-        expect(first.watchCalls, hasLength(1));
-        expect(second.watchCalls, hasLength(1));
-        expect(first.listCalls, hasLength(1));
-        expect(second.listCalls, hasLength(1));
-        expect(tabA.controller.entries, same(cached));
-        expect(tabA.controller.cursorIndex, 0);
-        expect(tabA.controller.loading, isFalse);
-        expect(tabA.controller.verbsEnabled, isTrue);
+          expect(first.watchCalls, hasLength(1));
+          expect(second.watchCalls, hasLength(1));
+          expect(first.listCalls, hasLength(1));
+          expect(second.listCalls, hasLength(1));
+          expect(tabA.controller.entries, same(cached));
+          expect(tabA.controller.cursorIndex, 0);
+          expect(tabA.controller.loading, isFalse);
+          expect(tabA.controller.verbsEnabled, isTrue);
 
-        clock.elapse(const Duration(milliseconds: 1));
-        expect(first.watchCalls, hasLength(2));
-        expect(first.listCalls, hasLength(1), reason: 'watch arms before list');
-        expect(tabA.controller.navigationInFlight, isFalse);
-        armed.complete();
-        clock.flushMicrotasks();
-        expect(first.listCalls, hasLength(2));
-        expect(tabA.controller.entries.single.name, 'new.txt');
-        clock.elapse(const Duration(seconds: 1));
-        expect(first.listCalls, hasLength(2));
-        expect(second.listCalls, hasLength(1));
-      });
-    });
+          clock.elapse(const Duration(milliseconds: 1));
+          expect(first.watchCalls, hasLength(2));
+          expect(
+            first.listCalls,
+            hasLength(1),
+            reason: 'watch arms before list',
+          );
+          expect(tabA.controller.navigationInFlight, isFalse);
+          armed.complete();
+          clock.flushMicrotasks();
+          expect(first.listCalls, hasLength(2));
+          expect(tabA.controller.entries.single.name, 'new.txt');
+          clock.elapse(const Duration(seconds: 1));
+          expect(first.listCalls, hasLength(2));
+          expect(second.listCalls, hasLength(1));
+        });
+      },
+    );
 
     for (final action in ['deactivation', 'disposal']) {
       test('$action cancels a pending activation refresh', () {
@@ -669,31 +691,33 @@ void main() {
       });
     }
 
-    test('a replacement binding cancels the old delay and opens immediately',
-        () {
-      fakeAsync((clock) {
-        final (controller, previous, lanes) = _watchedPaneWithClock(clock);
-        controller.setTabActive(false);
-        controller.setTabActive(true);
-        clock.elapse(const Duration(milliseconds: 100));
-        final replacement = FakePaneChannel('/replacement')
-          ..listings['/replacement'] = [
-            _entry('replacement.txt', parent: '/replacement'),
-          ];
-        lanes.nextLocalChannel = replacement;
-        unawaited(controller.openLocalAt('/replacement'));
-        clock.flushMicrotasks();
+    test(
+      'a replacement binding cancels the old delay and opens immediately',
+      () {
+        fakeAsync((clock) {
+          final (controller, previous, lanes) = _watchedPaneWithClock(clock);
+          controller.setTabActive(false);
+          controller.setTabActive(true);
+          clock.elapse(const Duration(milliseconds: 100));
+          final replacement = FakePaneChannel('/replacement')
+            ..listings['/replacement'] = [
+              _entry('replacement.txt', parent: '/replacement'),
+            ];
+          lanes.nextLocalChannel = replacement;
+          unawaited(controller.openLocalAt('/replacement'));
+          clock.flushMicrotasks();
 
-        expect(replacement.watchCalls, ['/replacement']);
-        expect(replacement.listCalls, ['/replacement']);
-        expect(controller.entries.single.name, 'replacement.txt');
-        clock.elapse(const Duration(seconds: 1));
-        expect(previous.watchCalls, hasLength(1));
-        expect(previous.listCalls, hasLength(1));
-        expect(previous.closeCalls, 1);
-        expect(replacement.listCalls, hasLength(1));
-      });
-    });
+          expect(replacement.watchCalls, ['/replacement']);
+          expect(replacement.listCalls, ['/replacement']);
+          expect(controller.entries.single.name, 'replacement.txt');
+          clock.elapse(const Duration(seconds: 1));
+          expect(previous.watchCalls, hasLength(1));
+          expect(previous.listCalls, hasLength(1));
+          expect(previous.closeCalls, 1);
+          expect(replacement.listCalls, hasLength(1));
+        });
+      },
+    );
 
     for (final action in ['refresh', 'navigation']) {
       test('explicit $action bypasses the delay without a later duplicate', () {
@@ -722,33 +746,35 @@ void main() {
     }
 
     for (final heldFor in [100, 400]) {
-      test('Quick Select held for $heldFor ms preserves the pending refresh',
-          () {
-        fakeAsync((clock) {
-          final (controller, channel, _) = _watchedPaneWithClock(clock);
-          controller.openQuickSelect();
-          controller.setTabActive(false);
-          controller.setTabActive(true);
-          channel.listings['/home/tester'] = [_entry('new.txt')];
-          clock.elapse(Duration(milliseconds: heldFor));
-          expect(channel.listCalls, hasLength(1));
-          expect(controller.quickSelectActive, isTrue);
-          expect(controller.entries.single.name, 'a.txt');
+      test(
+        'Quick Select held for $heldFor ms preserves the pending refresh',
+        () {
+          fakeAsync((clock) {
+            final (controller, channel, _) = _watchedPaneWithClock(clock);
+            controller.openQuickSelect();
+            controller.setTabActive(false);
+            controller.setTabActive(true);
+            channel.listings['/home/tester'] = [_entry('new.txt')];
+            clock.elapse(Duration(milliseconds: heldFor));
+            expect(channel.listCalls, hasLength(1));
+            expect(controller.quickSelectActive, isTrue);
+            expect(controller.entries.single.name, 'a.txt');
 
-          controller.cancelQuickSelect();
-          clock.flushMicrotasks();
-          if (heldFor < 300) {
-            expect(channel.listCalls, hasLength(1));
-            clock.elapse(Duration(milliseconds: 299 - heldFor));
-            expect(channel.listCalls, hasLength(1));
-            clock.elapse(const Duration(milliseconds: 1));
-          }
-          expect(channel.listCalls, hasLength(2));
-          expect(controller.entries.single.name, 'new.txt');
-          clock.elapse(const Duration(seconds: 1));
-          expect(channel.listCalls, hasLength(2));
-        });
-      });
+            controller.cancelQuickSelect();
+            clock.flushMicrotasks();
+            if (heldFor < 300) {
+              expect(channel.listCalls, hasLength(1));
+              clock.elapse(Duration(milliseconds: 299 - heldFor));
+              expect(channel.listCalls, hasLength(1));
+              clock.elapse(const Duration(milliseconds: 1));
+            }
+            expect(channel.listCalls, hasLength(2));
+            expect(controller.entries.single.name, 'new.txt');
+            clock.elapse(const Duration(seconds: 1));
+            expect(channel.listCalls, hasLength(2));
+          });
+        },
+      );
     }
 
     test('an error holds freshness work until the error is dismissed', () {
@@ -783,8 +809,7 @@ void main() {
   });
 
   group('the tab strip (03 §7.5: the visible tab only)', () {
-    test('switching tabs moves the watch and re-lists the arrival',
-        () async {
+    test('switching tabs moves the watch and re-lists the arrival', () async {
       final lanes = FakePaneLanes();
       final first = FakePaneChannel('/home/tester')
         ..listings['/home/tester'] = [_entry('a.txt')];
@@ -817,17 +842,19 @@ void main() {
       expect(first.listCalls, hasLength(2));
     });
 
-    test('adopting a browsing tab keeps its watch and re-lists nothing',
-        () async {
-      final (controller, channel, _) = await _watchedPane();
-      final strip = PaneTabsController(paneId: PaneTabsController.leftPaneId)
-        ..addTab(controller);
-      addTearDown(strip.dispose);
-      await _settle();
-      expect(controller.tabActive, isTrue);
-      expect(channel.unwatchCalls, 0);
-      expect(channel.listCalls, hasLength(1));
-    });
+    test(
+      'adopting a browsing tab keeps its watch and re-lists nothing',
+      () async {
+        final (controller, channel, _) = await _watchedPane();
+        final strip = PaneTabsController(paneId: PaneTabsController.leftPaneId)
+          ..addTab(controller);
+        addTearDown(strip.dispose);
+        await _settle();
+        expect(controller.tabActive, isTrue);
+        expect(channel.unwatchCalls, 0);
+        expect(channel.listCalls, hasLength(1));
+      },
+    );
 
     test('a watch re-list never holds a tab close', () async {
       final (controller, channel, _) = await _watchedPane();

@@ -153,7 +153,10 @@ void main() {
       final labelX = tester.getTopLeft(find.text('notes.md')).dx;
       final notesRow = tester.getRect(
         find
-            .ancestor(of: find.text('notes.md'), matching: find.byType(Listener))
+            .ancestor(
+              of: find.text('notes.md'),
+              matching: find.byType(Listener),
+            )
             .first,
       );
 
@@ -274,8 +277,11 @@ void main() {
       expect(find.byKey(fieldKey), findsNothing);
       // The refresh re-anchored the cursor on the renamed row.
       expect(left.entries[left.cursorIndex!].name, 'renamed.txt');
-      expect(leftNode.hasPrimaryFocus, isTrue,
-          reason: 'the closed field returns focus to the listing');
+      expect(
+        leftNode.hasPrimaryFocus,
+        isTrue,
+        reason: 'the closed field returns focus to the listing',
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -302,10 +308,14 @@ void main() {
       expect(find.byKey(fieldKey), findsNothing);
       expect(left.inlineRenameActive, isFalse);
       expect(channel.renameCalls, isEmpty);
-      expect(channel.listCalls, ['/home/tester'],
-          reason: 'a cancelled rename must not refresh');
-      expect(leftNode.hasPrimaryFocus, isTrue,
-          reason: 'the cancelled field returns focus to the listing');
+      expect(channel.listCalls, [
+        '/home/tester',
+      ], reason: 'a cancelled rename must not refresh');
+      expect(
+        leftNode.hasPrimaryFocus,
+        isTrue,
+        reason: 'the cancelled field returns focus to the listing',
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -357,8 +367,11 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(fieldKey), findsOneWidget,
-          reason: 'a failed validation keeps the field open');
+      expect(
+        find.byKey(fieldKey),
+        findsOneWidget,
+        reason: 'a failed validation keeps the field open',
+      );
       expect(find.text('A name cannot contain “/”.'), findsOneWidget);
       expect(channel.renameCalls, isEmpty);
     } finally {
@@ -384,8 +397,11 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(fieldKey), findsOneWidget,
-          reason: 'a failed validation keeps the field open');
+      expect(
+        find.byKey(fieldKey),
+        findsOneWidget,
+        reason: 'a failed validation keeps the field open',
+      );
       expect(find.text('Enter a name.'), findsOneWidget);
       expect(channel.renameCalls, isEmpty);
     } finally {
@@ -418,8 +434,11 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(fieldKey), findsOneWidget,
-          reason: 'a typed refusal re-opens the field');
+      expect(
+        find.byKey(fieldKey),
+        findsOneWidget,
+        reason: 'a typed refusal re-opens the field',
+      );
       expect(find.text('Permission denied'), findsOneWidget);
       // The refused draft is re-seeded, not the pre-rename name.
       expect(
@@ -458,9 +477,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(left.entries, isEmpty);
-      expect(find.byKey(fieldKey), findsOneWidget,
-          reason: 'the detached editor keeps floating over the empty '
-              'state so its fault stays visible');
+      expect(
+        find.byKey(fieldKey),
+        findsOneWidget,
+        reason:
+            'the detached editor keeps floating over the empty '
+            'state so its fault stays visible',
+      );
       expect(
         find.text('The item is no longer in this folder.'),
         findsOneWidget,
@@ -506,8 +529,11 @@ void main() {
       await tester.pump();
       expect(left.cursorIndex, 2);
       expect(left.renameTarget, isNull);
-      expect(left.inlineRenameActive, isTrue,
-          reason: 'the in-flight commit holds the close guard');
+      expect(
+        left.inlineRenameActive,
+        isTrue,
+        reason: 'the in-flight commit holds the close guard',
+      );
 
       channel.listings['/home/tester'] = [
         _entry('docs', type: RemoteFileType.directory),

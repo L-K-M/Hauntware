@@ -236,6 +236,12 @@ jobs:
           packages/seance_protocol
           packages/seance_core
           packages/seance_sync_server
+      - name: Check formatting
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          packages/seance_protocol
+          packages/seance_core
+          packages/seance_sync_server
       - name: Test
         run: >-
           dart test
@@ -388,6 +394,11 @@ jobs:
             [[ -d "$package" ]] || continue
             dart analyze "$package"
           done
+      # Once, on Linux: the formatter's output does not depend on the OS,
+      # and Windows checkouts may carry CRLF line endings.
+      - name: Check formatting
+        if: runner.os == 'Linux'
+        run: dart format --output=none --set-exit-if-changed packages
       - name: Test
         run: |
           set -euo pipefail
@@ -1574,6 +1585,9 @@ jobs:
       - name: Test
         working-directory: seance/app/seance_app
         run: flutter test
+      - name: Check app formatting
+        working-directory: seance/app/seance_app
+        run: dart format --set-exit-if-changed --output=none .
       # App tests do not discover the vendored selection/IME/parser suite.
       - name: Resolve terminal fork dependencies
         working-directory: seance/third_party/xterm
@@ -1605,6 +1619,9 @@ jobs:
       - name: Test
         working-directory: poltergeist/app/poltergeist_app
         run: flutter test
+      - name: Check formatting
+        working-directory: poltergeist/app/poltergeist_app
+        run: dart format --set-exit-if-changed --output=none .
 
   klabautermann_flutter:
     name: Klabautermann app (analyze + test)
@@ -1629,6 +1646,9 @@ jobs:
       - name: Test
         working-directory: klabautermann/app/klabautermann_app
         run: flutter test
+      - name: Check formatting
+        working-directory: klabautermann/app/klabautermann_app
+        run: dart format --set-exit-if-changed --output=none .
 
   # ---- Client build matrices (keep in step with release.yml) ------------
   # Compile every client the release workflow ships (4 Planchette,

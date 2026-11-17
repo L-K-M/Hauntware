@@ -60,8 +60,7 @@ final class QuitGuard {
   /// dialog answers both, and the journal flushes once.
   Future<bool>? _inFlight;
 
-  void bindQueue(AppTransferQueue? Function() lookup) =>
-      _queueLookup = lookup;
+  void bindQueue(AppTransferQueue? Function() lookup) => _queueLookup = lookup;
 
   void unbindQueue(AppTransferQueue? Function() lookup) {
     if (identical(_queueLookup, lookup)) _queueLookup = null;

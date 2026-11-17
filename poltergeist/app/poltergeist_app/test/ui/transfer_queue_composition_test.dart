@@ -51,7 +51,8 @@ Future<ByteData> _fontBytes(String path) async {
 
 Future<void> _loadRealFonts() async {
   final home = Platform.environment['HOME'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home == null ? '' : '$home/.local/share/fonts');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -226,9 +227,7 @@ void main() {
     expect(task.state, TransferTaskState.failed);
   });
 
-  testWidgets('boot composes a restoring queue into the shell', (
-    tester,
-  ) async {
+  testWidgets('boot composes a restoring queue into the shell', (tester) async {
     tester.view.physicalSize = const Size(1180, 760);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -245,10 +244,7 @@ void main() {
         File('${srcDir.path}/queued.txt').writeAsStringSync('queued?');
 
         final done = first.queue.enqueue(copySpec('done.txt'));
-        await pumpUntil(
-          () => done.isTerminal,
-          reason: 'first task stuck',
-        );
+        await pumpUntil(() => done.isTerminal, reason: 'first task stuck');
         expect(done.state, TransferTaskState.completed);
         doneId = done.id;
 
@@ -333,10 +329,7 @@ void main() {
           operation: TransferOperation.copy,
         )!;
       });
-      expect(
-        session.queue.tasks.map((task) => task.id),
-        contains(dropped.id),
-      );
+      expect(session.queue.tasks.map((task) => task.id), contains(dropped.id));
 
       // The close path: live tasks warn, Pause and Quit journals the
       // pause and flushes through the same composed queue.
@@ -352,23 +345,16 @@ void main() {
           tester,
           () => isShown(find.byKey(const ValueKey('quit.dialog'))),
         );
-        expect(
-          find.byKey(const ValueKey('quit.dialog')),
-          findsOneWidget,
-        );
+        expect(find.byKey(const ValueKey('quit.dialog')), findsOneWidget);
         await tester.tap(find.byKey(const ValueKey('quit.pauseAndQuit')));
         // The close either resolves or the flush-failure warning opens
         // — both are observable; neither may stall the test.
         await waitFor(
           tester,
           () =>
-              closed ||
-              isShown(find.byKey(const ValueKey('quitFlush.dialog'))),
+              closed || isShown(find.byKey(const ValueKey('quitFlush.dialog'))),
         );
-        expect(
-          find.byKey(const ValueKey('quitFlush.dialog')),
-          findsNothing,
-        );
+        expect(find.byKey(const ValueKey('quitFlush.dialog')), findsNothing);
         expect(closed, isTrue);
         expect(await closing, isTrue);
         expect(closeAnswer, isTrue);
@@ -392,9 +378,7 @@ void main() {
 
       // The restored panel, captured over the real composed queue.
       if (_captureOn) {
-        final captureController = ActivityPanelController(
-          queue: session.queue,
-        );
+        final captureController = ActivityPanelController(queue: session.queue);
         final base = buildPoltergeistTheme(Brightness.dark);
         final theme = base.copyWith(
           textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
@@ -408,8 +392,7 @@ void main() {
             child: MaterialApp(
               debugShowCheckedModeBanner: false,
               theme: theme,
-              localizationsDelegates:
-                  AppLocalizations.localizationsDelegates,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: Scaffold(
                 body: Column(
@@ -442,16 +425,13 @@ void main() {
         final bytes = (await tester.runAsync(() async {
           final image = await boundary.toImage(pixelRatio: 2);
           try {
-            final data = await image.toByteData(
-              format: ui.ImageByteFormat.png,
-            );
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
             return data!.buffer.asUint8List();
           } finally {
             image.dispose();
           }
         }))!;
-        final outDir = Directory(_captureDir)
-          ..createSync(recursive: true);
+        final outDir = Directory(_captureDir)..createSync(recursive: true);
         final file = File('${outDir.path}/boot-restored-queue.png');
         // ignore: avoid_print
         print('capture: ${file.absolute.path}');

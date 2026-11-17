@@ -45,36 +45,40 @@ void main() {
   }
 
   group('FileVaultStore re-key journal', () {
-    test('a crash before the keystore write leaves the old key working',
-        () async {
-      await crashMidRekey();
+    test(
+      'a crash before the keystore write leaves the old key working',
+      () async {
+        await crashMidRekey();
 
-      // A fresh store is the next launch: it finds the journal and settles it
-      // against the key the keystore actually kept.
-      final reopened = FileVaultStore(vaultFile);
-      expect(await reopened.settleRekey(oldKey), VaultRekeyOutcome.adopted);
-      final vault = SecretVault(reopened, oldKey);
-      expect((await vault.getSecret('a'))!.value, 'value-a');
-      expect((await vault.getSecret('b'))!.value, 'value-b');
-      expect(await journalFile.exists(), isFalse);
-    });
+        // A fresh store is the next launch: it finds the journal and settles it
+        // against the key the keystore actually kept.
+        final reopened = FileVaultStore(vaultFile);
+        expect(await reopened.settleRekey(oldKey), VaultRekeyOutcome.adopted);
+        final vault = SecretVault(reopened, oldKey);
+        expect((await vault.getSecret('a'))!.value, 'value-a');
+        expect((await vault.getSecret('b'))!.value, 'value-b');
+        expect(await journalFile.exists(), isFalse);
+      },
+    );
 
-    test('a crash after the keystore write leaves the new key working',
-        () async {
-      await crashMidRekey();
+    test(
+      'a crash after the keystore write leaves the new key working',
+      () async {
+        await crashMidRekey();
 
-      final reopened = FileVaultStore(vaultFile);
-      expect(await reopened.settleRekey(newKey), VaultRekeyOutcome.adopted);
-      final vault = SecretVault(reopened, newKey);
-      expect((await vault.getSecret('a'))!.value, 'value-a');
-      expect((await vault.getSecret('b'))!.value, 'value-b');
-      expect(await journalFile.exists(), isFalse);
+        final reopened = FileVaultStore(vaultFile);
+        expect(await reopened.settleRekey(newKey), VaultRekeyOutcome.adopted);
+        final vault = SecretVault(reopened, newKey);
+        expect((await vault.getSecret('a'))!.value, 'value-a');
+        expect((await vault.getSecret('b'))!.value, 'value-b');
+        expect(await journalFile.exists(), isFalse);
 
-      // The generation actually committed to the vault file is the new one,
-      // so the next launch needs no journal to read it.
-      final next = SecretVault(FileVaultStore(vaultFile), newKey);
-      expect((await next.getSecret('a'))!.value, 'value-a');
-    });
+        // The generation actually committed to the vault file is the new one,
+        // so the next launch needs no journal to read it.
+        final next = SecretVault(FileVaultStore(vaultFile), newKey);
+        expect((await next.getSecret('a'))!.value, 'value-a');
+      },
+    );
 
     test('a key matching neither generation drops the journal, not the '
         'vault', () async {
@@ -84,27 +88,34 @@ void main() {
       // What matters is that the store does not stay wedged behind a journal
       // nothing can clear.
       final reopened = FileVaultStore(vaultFile);
-      expect(await reopened.settleRekey(secureRandomBytes(32)),
-          VaultRekeyOutcome.discarded);
+      expect(
+        await reopened.settleRekey(secureRandomBytes(32)),
+        VaultRekeyOutcome.discarded,
+      );
       expect(await journalFile.exists(), isFalse);
       expect(
-          directory.listSync().any((f) => f.path.contains('.corrupt')),
-          isTrue);
+        directory.listSync().any((f) => f.path.contains('.corrupt')),
+        isTrue,
+      );
 
       // The stored vault is untouched: staging never wrote it.
       expect(
-          (await SecretVault(reopened, oldKey).getSecret('a'))!.value,
-          'value-a');
+        (await SecretVault(reopened, oldKey).getSecret('a'))!.value,
+        'value-a',
+      );
       // And ordinary mutations are allowed again.
       await SecretVault(reopened, oldKey).putSecret(secret('c'));
       expect(
-          (await SecretVault(reopened, oldKey).getSecret('c'))!.value,
-          'value-c');
+        (await SecretVault(reopened, oldKey).getSecret('c'))!.value,
+        'value-c',
+      );
     });
 
     test('a stray or damaged journal never blocks a vault read', () async {
-      await SecretVault(FileVaultStore(vaultFile), oldKey)
-          .putSecret(secret('a'));
+      await SecretVault(
+        FileVaultStore(vaultFile),
+        oldKey,
+      ).putSecret(secret('a'));
       // The trap this guards: a journal no code path created and none could
       // clear, failing every read from here on.
       await journalFile.writeAsString('not json at all');
@@ -113,18 +124,17 @@ void main() {
       expect((await vault.getSecret('a'))!.value, 'value-a');
       expect(await journalFile.exists(), isFalse);
       expect(
-          directory.listSync().any((f) => f.path.contains('.corrupt')),
-          isTrue);
+        directory.listSync().any((f) => f.path.contains('.corrupt')),
+        isTrue,
+      );
     });
 
-    test('an entry the current key cannot open survives the re-key',
-        () async {
+    test('an entry the current key cannot open survives the re-key', () async {
       final store = FileVaultStore(vaultFile);
       await SecretVault(store, oldKey).putSecret(secret('live'));
       // An orphan left sealed under a key nobody holds any more. Re-keying
       // must not fail on it, and must not delete it either.
-      await SecretVault(store, secureRandomBytes(32))
-          .putSecret(secret('lost'));
+      await SecretVault(store, secureRandomBytes(32)).putSecret(secret('lost'));
 
       final rekey = await store.stageRekey(currentKey: oldKey, newKey: newKey);
       expect(await rekey.settle(newKey), VaultRekeyOutcome.adopted);
@@ -179,8 +189,10 @@ void main() {
     test('settling again after a crash mid-commit is harmless', () async {
       await crashMidRekey();
       final staged = await journalFile.readAsString();
-      expect(await FileVaultStore(vaultFile).settleRekey(newKey),
-          VaultRekeyOutcome.adopted);
+      expect(
+        await FileVaultStore(vaultFile).settleRekey(newKey),
+        VaultRekeyOutcome.adopted,
+      );
       // settleRekey flushes the vault and *then* clears the sidecar, so a
       // process dying between the two leaves a journal beside a vault that
       // already holds the adopted generation. The next launch settles it
@@ -189,8 +201,10 @@ void main() {
 
       final reopened = FileVaultStore(vaultFile);
       expect(await reopened.settleRekey(newKey), VaultRekeyOutcome.adopted);
-      expect((await SecretVault(reopened, newKey).getSecret('a'))!.value,
-          'value-a');
+      expect(
+        (await SecretVault(reopened, newKey).getSecret('a'))!.value,
+        'value-a',
+      );
       expect(await journalFile.exists(), isFalse);
     });
 
@@ -206,17 +220,21 @@ void main() {
       final store = FileVaultStore(vaultFile);
       expect(await store.settleRekey(oldKey), VaultRekeyOutcome.none);
       expect(
-          (await SecretVault(store, oldKey).getSecret('a'))!.value,
-          'value-a');
+        (await SecretVault(store, oldKey).getSecret('a'))!.value,
+        'value-a',
+      );
       expect(await journalFile.exists(), isFalse);
       expect(
-          directory.listSync().any((f) => f.path.contains('.corrupt')),
-          isTrue);
+        directory.listSync().any((f) => f.path.contains('.corrupt')),
+        isTrue,
+      );
     });
 
     test('an existing vault file is tightened when it is opened', () async {
-      await SecretVault(FileVaultStore(vaultFile), oldKey)
-          .putSecret(secret('a'));
+      await SecretVault(
+        FileVaultStore(vaultFile),
+        oldKey,
+      ).putSecret(secret('a'));
       // The state every install created before the store restricted the
       // file is in, and a vault that is only ever read never leaves it on
       // its own.
@@ -224,34 +242,47 @@ void main() {
       expect((await vaultFile.stat()).mode & 0x1ff, 0x1a4); // 0644
 
       final store = FileVaultStore(vaultFile);
-      expect((await SecretVault(store, oldKey).getSecret('a'))!.value,
-          'value-a');
+      expect(
+        (await SecretVault(store, oldKey).getSecret('a'))!.value,
+        'value-a',
+      );
 
       expect((await vaultFile.stat()).mode & 0x1ff, 0x180); // 0600
     }, skip: !Platform.isLinux && !Platform.isMacOS);
 
-    test('a settle that cannot be written keeps the session generation',
-        () async {
-      final store = FileVaultStore(vaultFile);
-      await SecretVault(store, oldKey).putSecret(secret('a'));
-      final rekey = await store.stageRekey(currentKey: oldKey, newKey: newKey);
+    test(
+      'a settle that cannot be written keeps the session generation',
+      () async {
+        final store = FileVaultStore(vaultFile);
+        await SecretVault(store, oldKey).putSecret(secret('a'));
+        final rekey = await store.stageRekey(
+          currentKey: oldKey,
+          newKey: newKey,
+        );
 
-      final blocker = await AtomicWriteBlocker(vaultFile).create();
-      await expectLater(
-          rekey.settle(newKey), throwsA(isA<FileSystemException>()));
-      // The caller adopts the new key only after a settle succeeds, so the
-      // cache has to stay on the generation its current key opens.
-      expect((await SecretVault(store, oldKey).getSecret('a'))!.value,
-          'value-a');
-      await blocker.delete();
-      rekey.release();
+        final blocker = await AtomicWriteBlocker(vaultFile).create();
+        await expectLater(
+          rekey.settle(newKey),
+          throwsA(isA<FileSystemException>()),
+        );
+        // The caller adopts the new key only after a settle succeeds, so the
+        // cache has to stay on the generation its current key opens.
+        expect(
+          (await SecretVault(store, oldKey).getSecret('a'))!.value,
+          'value-a',
+        );
+        await blocker.delete();
+        rekey.release();
 
-      // Released to recovery, which finishes against the installed key.
-      expect(await store.settleRekey(newKey), VaultRekeyOutcome.adopted);
-      expect((await SecretVault(store, newKey).getSecret('a'))!.value,
-          'value-a');
-      expect(await journalFile.exists(), isFalse);
-    });
+        // Released to recovery, which finishes against the installed key.
+        expect(await store.settleRekey(newKey), VaultRekeyOutcome.adopted);
+        expect(
+          (await SecretVault(store, newKey).getSecret('a'))!.value,
+          'value-a',
+        );
+        expect(await journalFile.exists(), isFalse);
+      },
+    );
   });
 
   group('a re-key this process staged', () {
@@ -265,16 +296,20 @@ void main() {
       // the new key the keystore takes next would open nothing.
       expect(await store.settleRekey(oldKey), VaultRekeyOutcome.deferred);
       expect(await journalFile.exists(), isTrue);
-      expect((await SecretVault(store, oldKey).getSecret('a'))!.value,
-          'value-a');
+      expect(
+        (await SecretVault(store, oldKey).getSecret('a'))!.value,
+        'value-a',
+      );
 
       expect(await rekey.settle(newKey), VaultRekeyOutcome.adopted);
       expect(await journalFile.exists(), isFalse);
       expect(
-          (await SecretVault(FileVaultStore(vaultFile), newKey)
-                  .getSecret('a'))!
-              .value,
-          'value-a');
+        (await SecretVault(
+          FileVaultStore(vaultFile),
+          newKey,
+        ).getSecret('a'))!.value,
+        'value-a',
+      );
       // Settled, so the ordinary path runs again.
       expect(await store.settleRekey(newKey), VaultRekeyOutcome.none);
       await expectLater(rekey.settle(newKey), throwsStateError);
@@ -295,8 +330,7 @@ void main() {
       await SecretVault(store, oldKey).putSecret(secret('b'));
     });
 
-    test('belongs to this store only; a reopened store recovers it',
-        () async {
+    test('belongs to this store only; a reopened store recovers it', () async {
       final store = FileVaultStore(vaultFile);
       await SecretVault(store, oldKey).putSecret(secret('a'));
       await store.stageRekey(currentKey: oldKey, newKey: newKey);

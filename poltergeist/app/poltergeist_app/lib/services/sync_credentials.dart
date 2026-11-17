@@ -40,9 +40,9 @@ abstract interface class RetainedSyncTokenStore {
 /// [SecureSyncCredentialStore]: writes throw, reads tolerate.
 final class SecureRetainedSyncTokenStore implements RetainedSyncTokenStore {
   SecureRetainedSyncTokenStore({required MasterKeyManager keys})
-      : // Keep the collaborator private.
-        // ignore: prefer_initializing_formals
-        _keys = keys;
+    : // Keep the collaborator private.
+      // ignore: prefer_initializing_formals
+      _keys = keys;
 
   final MasterKeyManager _keys;
 
@@ -64,11 +64,11 @@ final class SecureSyncCredentialStore implements SyncCredentialStore {
   SecureSyncCredentialStore({
     required MasterKeyManager keys,
     VaultRekeyJournal? vaultJournal,
-  })  : // Keep the collaborators private.
-        // ignore: prefer_initializing_formals
-        _keys = keys,
-        // ignore: prefer_initializing_formals
-        _vaultJournal = vaultJournal;
+  }) : // Keep the collaborators private.
+       // ignore: prefer_initializing_formals
+       _keys = keys,
+       // ignore: prefer_initializing_formals
+       _vaultJournal = vaultJournal;
 
   final MasterKeyManager _keys;
 
@@ -157,9 +157,9 @@ final class SecureSyncCredentialStore implements SyncCredentialStore {
 /// notice set. Never the bearer token — the keystore seam owns that.
 final class SettingsSyncEnrollmentState implements SyncEnrollmentState {
   SettingsSyncEnrollmentState({required SettingsStore store})
-      : // Keep the collaborator private.
-        // ignore: prefer_initializing_formals
-        _store = store;
+    : // Keep the collaborator private.
+      // ignore: prefer_initializing_formals
+      _store = store;
 
   final SettingsStore _store;
 
@@ -266,22 +266,18 @@ final class SettingsSyncEnrollmentState implements SyncEnrollmentState {
     }
     final parsedMode = SyncAccountMode.values.asNameMap()[mode];
     if (parsedMode == null) return null;
-    return SyncAccount(
-      baseUrl: baseUrl,
-      username: username,
-      mode: parsedMode,
-    );
+    return SyncAccount(baseUrl: baseUrl, username: username, mode: parsedMode);
   }
 
   @override
   Future<void> setAccount(SyncAccount? account) => _store.set(
-        _accountKey,
-        account == null
-            ? null
-            : {
-                'baseUrl': account.baseUrl,
-                'username': account.username,
-                'mode': account.mode.name,
-              },
-      );
+    _accountKey,
+    account == null
+        ? null
+        : {
+            'baseUrl': account.baseUrl,
+            'username': account.username,
+            'mode': account.mode.name,
+          },
+  );
 }

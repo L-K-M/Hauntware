@@ -4,7 +4,12 @@
 library;
 
 export 'package:ghost_theme/ghost_theme.dart'
-    show AppAppearance, resolveBrightness, ThemeModePreference, surfaceBrightness, automaticBrightness;
+    show
+        AppAppearance,
+        resolveBrightness,
+        ThemeModePreference,
+        surfaceBrightness,
+        automaticBrightness;
 
 import 'package:ghost_theme/ghost_theme.dart' show AppAppearance;
 

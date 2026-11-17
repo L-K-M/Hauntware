@@ -35,12 +35,8 @@ void main() {
     String name, {
     String parent = '/x',
     RemoteFileType type = RemoteFileType.file,
-  }) => RemoteFileEntry(
-    path: '$parent/$name',
-    name: name,
-    type: type,
-    size: 10,
-  );
+  }) =>
+      RemoteFileEntry(path: '$parent/$name', name: name, type: type, size: 10);
 
   /// Widget-test settle: the replay chain is commit → probe → mirrored
   /// list → commit across several microtask hops. Each pump drains the
@@ -55,7 +51,9 @@ void main() {
   /// Two panes bound local at their own roots — `/left/home` has a
   /// `leftOnly/` child the right lacks — inside a two-PaneView harness
   /// sharing the production widgets.
-  Future<({PaneController left, PaneController right, WorkspaceController workspace})>
+  Future<
+    ({PaneController left, PaneController right, WorkspaceController workspace})
+  >
   pumpPanes(WidgetTester tester) async {
     final lanes = controller_test.FakePaneLanes();
     final leftChannel = controller_test.FakePaneChannel('/left/home')
@@ -162,8 +160,9 @@ void main() {
       expect(find.byType(SyncBrowseChip), findsNothing);
     });
 
-    testWidgets('the amber chip carries the escape cause on both bars',
-        (tester) async {
+    testWidgets('the amber chip carries the escape cause on both bars', (
+      tester,
+    ) async {
       final rig = await pumpPanes(tester);
       rig.workspace.syncBrowsing.toggle();
       await tester.pump();
@@ -300,36 +299,23 @@ void main() {
       );
 
       expect(command.scope, CommandScope.app);
-      expect(
-        command.activators!(TargetPlatform.macOS),
-        [
-          const SingleActivator(
-            LogicalKeyboardKey.keyB,
-            meta: true,
-            alt: true,
-          ),
-        ],
-      );
-      expect(
-        command.activators!(TargetPlatform.linux),
-        [
-          const SingleActivator(
-            LogicalKeyboardKey.keyB,
-            control: true,
-            alt: true,
-          ),
-        ],
-      );
-      expect(
-        command.activators!(TargetPlatform.windows),
-        [
-          const SingleActivator(
-            LogicalKeyboardKey.keyB,
-            control: true,
-            alt: true,
-          ),
-        ],
-      );
+      expect(command.activators!(TargetPlatform.macOS), [
+        const SingleActivator(LogicalKeyboardKey.keyB, meta: true, alt: true),
+      ]);
+      expect(command.activators!(TargetPlatform.linux), [
+        const SingleActivator(
+          LogicalKeyboardKey.keyB,
+          control: true,
+          alt: true,
+        ),
+      ]);
+      expect(command.activators!(TargetPlatform.windows), [
+        const SingleActivator(
+          LogicalKeyboardKey.keyB,
+          control: true,
+          alt: true,
+        ),
+      ]);
       expect(command.menuPlacement?.menu, AppMenuId.go);
       expect(command.menuPlacement?.order, 80);
 
@@ -345,10 +331,7 @@ void main() {
         'stands nowhere', (tester) async {
       final lanes = controller_test.FakePaneLanes();
       final left = PaneController(paneTabId: 'pane.left.tab1', lanes: lanes);
-      final right = PaneController(
-        paneTabId: 'pane.right.tab1',
-        lanes: lanes,
-      );
+      final right = PaneController(paneTabId: 'pane.right.tab1', lanes: lanes);
       final workspace = WorkspaceController(
         left: testPaneStrip(left, lanes: lanes),
         right: testPaneStrip(right, lanes: lanes),
@@ -375,26 +358,16 @@ void main() {
       ).firstWhere((c) => c.id == kViewToggleSecondPaneCommandId);
 
       expect(command.scope, CommandScope.app);
-      expect(
-        command.activators!(TargetPlatform.macOS),
-        [
-          const SingleActivator(
-            LogicalKeyboardKey.keyD,
-            meta: true,
-            shift: true,
-          ),
-        ],
-      );
-      expect(
-        command.activators!(TargetPlatform.linux),
-        [
-          const SingleActivator(
-            LogicalKeyboardKey.keyD,
-            control: true,
-            shift: true,
-          ),
-        ],
-      );
+      expect(command.activators!(TargetPlatform.macOS), [
+        const SingleActivator(LogicalKeyboardKey.keyD, meta: true, shift: true),
+      ]);
+      expect(command.activators!(TargetPlatform.linux), [
+        const SingleActivator(
+          LogicalKeyboardKey.keyD,
+          control: true,
+          shift: true,
+        ),
+      ]);
       expect(command.menuPlacement?.menu, AppMenuId.view);
       expect(command.menuPlacement?.order, 70);
       expect(command.enabled(), isTrue);
@@ -416,7 +389,11 @@ void main() {
       engine.localChannels.addAll([
         session_test.FakeAppBrowseChannel(homePath: '/home/tester')
           ..listings['/home/tester'] = [
-            entry('docs', parent: '/home/tester', type: RemoteFileType.directory),
+            entry(
+              'docs',
+              parent: '/home/tester',
+              type: RemoteFileType.directory,
+            ),
           ]
           ..listings['/home'] = [entry('h.txt', parent: '/home')],
         session_test.FakeAppBrowseChannel(homePath: '/srv/files')
@@ -500,10 +477,7 @@ void main() {
       // declining keeps the tab and the link.
       await tester.tap(find.byKey(const ValueKey('pane.left.tab1.close')));
       await tester.pumpAndSettle();
-      expect(
-        find.textContaining('anchors a sync pair'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('anchors a sync pair'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(
@@ -529,14 +503,8 @@ void main() {
       // pane A's anchored path bar turns the amber chip.
       await runShellCommand(tester, 'view.toggleSecondPane');
 
-      expect(
-        find.byKey(const ValueKey('secondary-pane')),
-        findsNothing,
-      );
-      expect(
-        find.text('Sync browsing suspended'),
-        findsWidgets,
-      );
+      expect(find.byKey(const ValueKey('secondary-pane')), findsNothing);
+      expect(find.text('Sync browsing suspended'), findsWidgets);
 
       // While hidden, pane B's tabs take no commands (02 §3): the
       // refresh chord retargeted to the survivor adds exactly one list
@@ -554,10 +522,7 @@ void main() {
       // anchors never moved.
       await runShellCommand(tester, 'view.toggleSecondPane');
 
-      expect(
-        find.byKey(const ValueKey('secondary-pane')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('secondary-pane')), findsOneWidget);
       expect(find.text('Sync browsing'), findsWidgets);
       expect(find.text('Sync browsing suspended'), findsNothing);
     });

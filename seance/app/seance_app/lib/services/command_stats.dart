@@ -19,14 +19,14 @@ class CommandStats {
   final Set<String> dismissed;
 
   CommandStats({Map<String, int>? counts, Set<String>? dismissed})
-      : counts = {
-          for (final entry in (counts ?? <String, int>{}).entries)
-            if (_safeToRetain(entry.key)) entry.key: entry.value,
-        },
-        dismissed = {
-          for (final command in dismissed ?? <String>{})
-            if (_safeToRetain(command)) command,
-        };
+    : counts = {
+        for (final entry in (counts ?? <String, int>{}).entries)
+          if (_safeToRetain(entry.key)) entry.key: entry.value,
+      },
+      dismissed = {
+        for (final command in dismissed ?? <String>{})
+          if (_safeToRetain(command)) command,
+      };
 
   // Filter before persistence, independent of the assistant's redaction toggle.
   // An integrated command line can still contain an unmarked secret.
@@ -61,14 +61,17 @@ class CommandStats {
     int minCount = 3,
     int limit = 6,
   }) {
-    final candidates = counts.entries
-        .where((e) =>
-            e.value >= minCount &&
-            !dismissed.contains(e.key) &&
-            _safeToRetain(e.key) &&
-            !isExisting(e.key))
-        .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final candidates =
+        counts.entries
+            .where(
+              (e) =>
+                  e.value >= minCount &&
+                  !dismissed.contains(e.key) &&
+                  _safeToRetain(e.key) &&
+                  !isExisting(e.key),
+            )
+            .toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     return [for (final e in candidates.take(limit)) e.key];
   }
 
@@ -81,25 +84,25 @@ class CommandStats {
 
   // Existing callers can mutate these collections; guard the disk boundary too.
   Map<String, dynamic> toJson() => {
-        'counts': {
-          for (final entry in counts.entries)
-            if (_safeToRetain(entry.key)) entry.key: entry.value,
-        },
-        'dismissed': [
-          for (final command in dismissed)
-            if (_safeToRetain(command)) command,
-        ],
-      };
+    'counts': {
+      for (final entry in counts.entries)
+        if (_safeToRetain(entry.key)) entry.key: entry.value,
+    },
+    'dismissed': [
+      for (final command in dismissed)
+        if (_safeToRetain(command)) command,
+    ],
+  };
 
   factory CommandStats.fromJson(Map<String, dynamic> json) => CommandStats(
-        counts: {
-          for (final e in (json['counts'] as Map? ?? {}).entries)
-            e.key as String: (e.value as num).toInt(),
-        },
-        dismissed: {
-          for (final d in (json['dismissed'] as List? ?? [])) d as String,
-        },
-      );
+    counts: {
+      for (final e in (json['counts'] as Map? ?? {}).entries)
+        e.key as String: (e.value as num).toInt(),
+    },
+    dismissed: {
+      for (final d in (json['dismissed'] as List? ?? [])) d as String,
+    },
+  );
 }
 
 /// JSON-file store for [CommandStats]. Kept out of the sync record set on
@@ -131,8 +134,10 @@ class CommandStatsStore {
       await save(stats);
     } on FileSystemException {
       // Keep safe in-memory history usable; never log the rejected commands.
-      developer.log('Could not scrub command history; retry on next save.',
-          name: 'seance.command_stats');
+      developer.log(
+        'Could not scrub command history; retry on next save.',
+        name: 'seance.command_stats',
+      );
     }
     return stats;
   }

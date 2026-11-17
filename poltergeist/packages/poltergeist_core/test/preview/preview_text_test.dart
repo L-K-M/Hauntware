@@ -43,9 +43,10 @@ void main() {
     final file = await writeFile('big.txt', [...pad, ...tail]);
     final result = await loadPreviewText(file);
     expect(result.truncated, isTrue);
-    expect(utf8.encode(result.text).length, lessThanOrEqualTo(
-      previewTextMaximumBytes,
-    ));
+    expect(
+      utf8.encode(result.text).length,
+      lessThanOrEqualTo(previewTextMaximumBytes),
+    );
     // Decoded text ends on a whole codepoint.
     expect(result.text.endsWith('\uFFFD'), isFalse);
     expect(result.text.length, greaterThan(previewTextMaximumBytes - 20));
@@ -63,26 +64,33 @@ void main() {
       ]);
       final result = await loadPreviewText(file);
       expect(result.truncated, isTrue, reason: character);
-      expect(result.text, 'a' * (previewTextMaximumBytes - 1),
-          reason: character);
+      expect(
+        result.text,
+        'a' * (previewTextMaximumBytes - 1),
+        reason: character,
+      );
       expect(await fileLooksLikeUtf8Text(file), isTrue, reason: character);
     }
   });
 
-  test('still refuses a window ending on a byte no character starts with',
-      () async {
-    for (final byte in [0xC0, 0xC1, 0xF5]) {
-      final pad = List<int>.filled(previewTextMaximumBytes - 1, 0x61);
-      final file = await writeFile('bad-$byte.txt', [...pad, byte, 0x80]);
-      expect(await fileLooksLikeUtf8Text(file), isFalse, reason: '$byte');
-    }
-  });
+  test(
+    'still refuses a window ending on a byte no character starts with',
+    () async {
+      for (final byte in [0xC0, 0xC1, 0xF5]) {
+        final pad = List<int>.filled(previewTextMaximumBytes - 1, 0x61);
+        final file = await writeFile('bad-$byte.txt', [...pad, byte, 0x80]);
+        expect(await fileLooksLikeUtf8Text(file), isFalse, reason: '$byte');
+      }
+    },
+  );
 
   test('strips a leading UTF-8 BOM', () async {
-    final file = await writeFile(
-      'bom.txt',
-      [0xEF, 0xBB, 0xBF, ...utf8.encode('content')],
-    );
+    final file = await writeFile('bom.txt', [
+      0xEF,
+      0xBB,
+      0xBF,
+      ...utf8.encode('content'),
+    ]);
     final result = await loadPreviewText(file);
     expect(result.text, 'content');
   });
@@ -102,10 +110,7 @@ void main() {
   });
 
   test('refuses NUL-bearing bytes as binary', () async {
-    final file = await writeFile(
-      'nul.txt',
-      utf8.encode('has a \x00 byte'),
-    );
+    final file = await writeFile('nul.txt', utf8.encode('has a \x00 byte'));
     expect(
       () => loadPreviewText(file),
       throwsA(
@@ -120,9 +125,7 @@ void main() {
 
   test('fileLooksLikeUtf8Text classifies without throwing', () async {
     expect(
-      await fileLooksLikeUtf8Text(
-        await writeFile('ok', utf8.encode('plain')),
-      ),
+      await fileLooksLikeUtf8Text(await writeFile('ok', utf8.encode('plain'))),
       isTrue,
     );
     expect(

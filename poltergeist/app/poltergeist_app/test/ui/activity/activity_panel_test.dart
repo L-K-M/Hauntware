@@ -53,10 +53,8 @@ void main() {
                 // the direct harness mirrors that composition.
                 child: ListenableBuilder(
                   listenable: controller,
-                  builder: (context, _) => ActivityPanel(
-                    controller: controller,
-                    onClose: () {},
-                  ),
+                  builder: (context, _) =>
+                      ActivityPanel(controller: controller, onClose: () {}),
                 ),
               ),
             ],
@@ -215,7 +213,10 @@ void main() {
     tester,
   ) async {
     await pumpPanel(tester);
-    final task = queue.addTask(state: TransferTaskState.running, totalBytes: 4000);
+    final task = queue.addTask(
+      state: TransferTaskState.running,
+      totalBytes: 4000,
+    );
     queue.addItem(task, name: 'a.txt');
     final item = queue.addItem(task, name: 'b.txt');
     await settle(tester);
@@ -234,7 +235,10 @@ void main() {
   testWidgets('failed items offer Retry only when the queue says '
       're-enqueueable', (tester) async {
     await pumpPanel(tester);
-    final task = queue.addTask(state: TransferTaskState.running, totalBytes: 4000);
+    final task = queue.addTask(
+      state: TransferTaskState.running,
+      totalBytes: 4000,
+    );
     final retryable = queue.addItem(
       task,
       name: 'dead.txt',
@@ -272,7 +276,10 @@ void main() {
   testWidgets('task verbs follow state: cancel on live, retry+remove '
       'on failed', (tester) async {
     await pumpPanel(tester);
-    final live = queue.addTask(state: TransferTaskState.running, totalBytes: 4000);
+    final live = queue.addTask(
+      state: TransferTaskState.running,
+      totalBytes: 4000,
+    );
     final failed = queue.addTask(state: TransferTaskState.failed);
     queue.addItem(failed, state: TransferItemState.failed);
     await settle(tester);
@@ -287,10 +294,7 @@ void main() {
 
     // The failed task re-queued — back to live, so Remove is gone and
     // Cancel returns.
-    expect(
-      find.byKey(ValueKey('activity.remove.${failed.id}')),
-      findsNothing,
-    );
+    expect(find.byKey(ValueKey('activity.remove.${failed.id}')), findsNothing);
   });
 
   testWidgets('drag handles exist only on reorderable pending rows; a '
@@ -342,9 +346,7 @@ void main() {
     expect(order.indexOf(first.id), greaterThan(order.indexOf(second.id)));
   });
 
-  testWidgets('the header pause button drives the queue gate', (
-    tester,
-  ) async {
+  testWidgets('the header pause button drives the queue gate', (tester) async {
     await pumpPanel(tester);
     queue.addTask(state: TransferTaskState.running, totalBytes: 4000);
     await settle(tester);
@@ -461,8 +463,9 @@ void main() {
     expect(field.controller!.text, isNotEmpty);
   });
 
-  testWidgets('applying the pre-filled custom rate keeps the exact limit',
-      (tester) async {
+  testWidgets('applying the pre-filled custom rate keeps the exact limit', (
+    tester,
+  ) async {
     // The field shows the stored limit rounded ("2 KB/s" for 2048 B/s);
     // pressing Set without editing must not rewrite it to 2000.
     queue.downloadLimiter.bytesPerSecond = 2048;
@@ -505,23 +508,20 @@ void main() {
     );
   });
 
-  testWidgets('the tabs expose their selected state to screen readers',
-      (tester) async {
+  testWidgets('the tabs expose their selected state to screen readers', (
+    tester,
+  ) async {
     await pumpPanel(tester);
     expect(
       tester
-          .getSemantics(
-            find.byKey(const ValueKey('activity.tab.activity')),
-          )
+          .getSemantics(find.byKey(const ValueKey('activity.tab.activity')))
           .flagsCollection
           .isSelected,
       Tristate.isTrue,
     );
     expect(
       tester
-          .getSemantics(
-            find.byKey(const ValueKey('activity.tab.history')),
-          )
+          .getSemantics(find.byKey(const ValueKey('activity.tab.history')))
           .flagsCollection
           .isSelected,
       Tristate.isFalse,
@@ -531,17 +531,17 @@ void main() {
   testWidgets('the conflict strip renders parked conflicts and the '
       'dialog submits verb + apply-to-all scope', (tester) async {
     await pumpPanel(tester);
-    final task = queue.addTask(state: TransferTaskState.running, totalBytes: 4000);
+    final task = queue.addTask(
+      state: TransferTaskState.running,
+      totalBytes: 4000,
+    );
     final itemA = queue.addItem(task, name: 'a.txt');
     final itemB = queue.addItem(task, name: 'b.txt');
     queue.addConflict(task, itemA);
     queue.addConflict(task, itemB);
     await settle(tester);
 
-    expect(
-      find.byKey(const ValueKey('activity.conflicts')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('activity.conflicts')), findsOneWidget);
     expect(find.text('a.txt'), findsWidgets);
     expect(find.text('b.txt'), findsWidgets);
 
@@ -559,22 +559,21 @@ void main() {
         reason: 'file conflicts offer $verb',
       );
     }
-    expect(find.byKey(const ValueKey('conflict.verb.merge')),
-        findsNothing); // files cannot merge
+    expect(
+      find.byKey(const ValueKey('conflict.verb.merge')),
+      findsNothing,
+    ); // files cannot merge
     await tester.tap(find.byKey(const ValueKey('conflict.applyToAll')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('conflict.verb.replace')));
     await tester.pumpAndSettle();
 
-    expect(
-      queue.resolveConflictCalls.single,
-      (
-        task.id,
-        itemA.id,
-        ConflictResolution.replace,
-        ConflictResolutionScope.task,
-      ),
-    );
+    expect(queue.resolveConflictCalls.single, (
+      task.id,
+      itemA.id,
+      ConflictResolution.replace,
+      ConflictResolutionScope.task,
+    ));
     // Apply-to-all cleared BOTH parked conflicts in the task.
     expect(controller.pendingConflicts, isEmpty);
   });
@@ -582,7 +581,10 @@ void main() {
   testWidgets('a directory conflict offers Merge; Stop cancels the '
       'task', (tester) async {
     await pumpPanel(tester);
-    final task = queue.addTask(state: TransferTaskState.running, totalBytes: 4000);
+    final task = queue.addTask(
+      state: TransferTaskState.running,
+      totalBytes: 4000,
+    );
     final dir = queue.addItem(task, name: 'assets', isDirectory: true);
     queue.addConflict(task, dir, isDirectory: true);
     await settle(tester);
@@ -663,7 +665,8 @@ void main() {
       ),
     );
     await pumpPanel(tester);
-    const name = 'quarterly-report-final-revised-for-the-board-2026-'
+    const name =
+        'quarterly-report-final-revised-for-the-board-2026-'
         'with-appendices-and-every-last-footnote.pdf';
     queue.addHistory(rootPaths: const ['/home/tester/$name']);
     await settle(tester);
@@ -709,9 +712,7 @@ void main() {
     expect(centerY(hint), moreOrLessEquals(centerY(label), epsilon: 0.5));
   });
 
-  testWidgets('the restored banner offers Resume and Discard', (
-    tester,
-  ) async {
+  testWidgets('the restored banner offers Resume and Discard', (tester) async {
     await pumpPanel(tester);
     final restored = queue.addTask(
       state: TransferTaskState.paused,
@@ -744,23 +745,16 @@ void main() {
     );
     await settle(tester);
     expect(queue.cancelTaskCalls, contains(other.id));
-    expect(
-      find.byKey(const ValueKey('activity.restoredBanner')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('activity.restoredBanner')), findsNothing);
   });
 
-  testWidgets('clear-completed drops only completed rows', (
-    tester,
-  ) async {
+  testWidgets('clear-completed drops only completed rows', (tester) async {
     await pumpPanel(tester);
     final done = queue.addTask(state: TransferTaskState.completed);
     final failed = queue.addTask(state: TransferTaskState.failed);
     await settle(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey('activity.clearCompleted')),
-    );
+    await tester.tap(find.byKey(const ValueKey('activity.clearCompleted')));
     await settle(tester);
     expect(queue.removeTaskCalls, [done.id]);
     expect(controller.tasks.map((t) => t.id), [failed.id]);

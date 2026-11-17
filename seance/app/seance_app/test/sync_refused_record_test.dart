@@ -46,13 +46,15 @@ void main() {
   });
 
   test('a refused record still lets the round show what it pulled', () async {
-    await services.snippetStore.putSnippet(Snippet(
-      id: 'big',
-      title: 'deploy.sh',
-      body: 'x' * (100 * 1024),
-      createdAt: 1,
-      updatedAt: 20,
-    ));
+    await services.snippetStore.putSnippet(
+      Snippet(
+        id: 'big',
+        title: 'deploy.sh',
+        body: 'x' * (100 * 1024),
+        createdAt: 1,
+        updatedAt: 20,
+      ),
+    );
     final pulled = await RecordCodec(services.vaultKey!).encrypt(
       DecryptedRecord(
         id: 'from-elsewhere',
@@ -75,39 +77,55 @@ void main() {
     var seq = 1;
     final transport = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/v1/records/legacy') {
-        return http.Response(jsonEncode(const LegacyRecordPage(records: [],
-          nextId: null, hasMore: false, recordEnvelopeFloor: kCurrentRecordEnvelopeVersion).toJson()), HttpStatus.ok);
+        return http.Response(
+          jsonEncode(
+            const LegacyRecordPage(
+              records: [],
+              nextId: null,
+              hasMore: false,
+              recordEnvelopeFloor: kCurrentRecordEnvelopeVersion,
+            ).toJson(),
+          ),
+          HttpStatus.ok,
+        );
       }
       if (request.method == 'GET') {
         final since = int.parse(request.url.queryParameters['since'] ?? '0');
         return http.Response(
-          jsonEncode(PullResponse(
-            records: [if (since < 1) pulled.withSeq(1)],
-            latestSeq: seq,
-            limits: const PushLimits(maxBlobBytes: _maxBlobBytes),
-          ).toJson()),
+          jsonEncode(
+            PullResponse(
+              records: [if (since < 1) pulled.withSeq(1)],
+              latestSeq: seq,
+              limits: const PushLimits(maxBlobBytes: _maxBlobBytes),
+            ).toJson(),
+          ),
           HttpStatus.ok,
         );
       }
       final push = PushRequest.fromJson(
-          jsonDecode(request.body) as Map<String, dynamic>);
+        jsonDecode(request.body) as Map<String, dynamic>,
+      );
       if (push.records.any((r) => r.blob.length > _maxBlobBytes)) {
         return http.Response(
-          jsonEncode(const ApiError(
-            code: 'payload_too_large',
-            message: 'A record blob exceeds the 65536-byte limit',
-          ).toJson()),
+          jsonEncode(
+            const ApiError(
+              code: 'payload_too_large',
+              message: 'A record blob exceeds the 65536-byte limit',
+            ).toJson(),
+          ),
           HttpStatus.requestEntityTooLarge,
         );
       }
       return http.Response(
-        jsonEncode(PushResponse(
-          results: [
-            for (final r in push.records)
-              PushResult(id: r.id, seq: ++seq, accepted: true),
-          ],
-          latestSeq: seq,
-        ).toJson()),
+        jsonEncode(
+          PushResponse(
+            results: [
+              for (final r in push.records)
+                PushResult(id: r.id, seq: ++seq, accepted: true),
+            ],
+            latestSeq: seq,
+          ).toJson(),
+        ),
         HttpStatus.ok,
       );
     });
@@ -117,17 +135,27 @@ void main() {
     await http.runWithClient(
       () => expectLater(
         state.syncNow(),
-        throwsA(isA<SyncRecordsRefused>()
-            .having((e) => e.recordIds, 'recordIds', ['snippet:big'])),
+        throwsA(
+          isA<SyncRecordsRefused>().having((e) => e.recordIds, 'recordIds', [
+            'snippet:big',
+          ]),
+        ),
       ),
       () => transport,
     );
 
-    expect(state.servers.map((s) => s.label), ['added elsewhere'],
-        reason: 'the pulled server reaches the list the UI draws');
-    expect(state.snippets.single.title, 'deploy.sh',
-        reason: 'the refused snippet stays on this device');
-    expect(state.lastSyncError, contains('Snippet "deploy.sh"'),
-        reason: 'the sync status names the record to fix');
+    expect(state.servers.map((s) => s.label), [
+      'added elsewhere',
+    ], reason: 'the pulled server reaches the list the UI draws');
+    expect(
+      state.snippets.single.title,
+      'deploy.sh',
+      reason: 'the refused snippet stays on this device',
+    );
+    expect(
+      state.lastSyncError,
+      contains('Snippet "deploy.sh"'),
+      reason: 'the sync status names the record to fix',
+    );
   });
 }

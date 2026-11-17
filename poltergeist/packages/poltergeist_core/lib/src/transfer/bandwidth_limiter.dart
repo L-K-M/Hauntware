@@ -62,8 +62,9 @@ class BandwidthLimiter {
     if (normalized == _bytesPerSecond) return;
     _refill();
     _bytesPerSecond = normalized;
-    _capacity =
-        normalized == null ? maxChunkBytes : max(normalized, maxChunkBytes);
+    _capacity = normalized == null
+        ? maxChunkBytes
+        : max(normalized, maxChunkBytes);
     if (normalized == null) {
       // "Off" banks nothing — a later enable must not release a stale
       // burst banked under the previous rate.
@@ -111,18 +112,21 @@ class BandwidthLimiter {
     _waiters.addLast(waiter);
     if (cancellation != null) {
       unawaited(
-        cancellation.whenCancelled.then((_) {
-          if (waiter.completer.isCompleted) return;
-          if (_waiters.remove(waiter)) {
-            waiter.completer.completeError(_cancelledError());
-          }
-          // A removed head may have been blocking grantable waiters
-          // behind it — release what now fits.
-          _pumpWaiters();
-        }, onError: (Object _) {
-          // A failed cancellation signal must not become an unhandled
-          // async error; the waiter simply stays parked until granted.
-        }),
+        cancellation.whenCancelled.then(
+          (_) {
+            if (waiter.completer.isCompleted) return;
+            if (_waiters.remove(waiter)) {
+              waiter.completer.completeError(_cancelledError());
+            }
+            // A removed head may have been blocking grantable waiters
+            // behind it — release what now fits.
+            _pumpWaiters();
+          },
+          onError: (Object _) {
+            // A failed cancellation signal must not become an unhandled
+            // async error; the waiter simply stays parked until granted.
+          },
+        ),
       );
     }
     _armWakeTimer();
@@ -194,8 +198,7 @@ class BandwidthLimiter {
     }
     _wakeTimer = Timer(
       Duration(
-        microseconds:
-            (deficit / rate * Duration.microsecondsPerSecond).ceil(),
+        microseconds: (deficit / rate * Duration.microsecondsPerSecond).ceil(),
       ),
       _pumpWaiters,
     );

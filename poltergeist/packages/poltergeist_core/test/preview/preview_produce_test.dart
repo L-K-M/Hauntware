@@ -61,10 +61,7 @@ void main() {
     s1 = FakeTreeFileSystem();
     connections = FakeQueueConnectionManager({'s1': s1});
     persistence = RecordingPersistence();
-    queue = TransferQueue(
-      connections: connections,
-      persistence: persistence,
-    );
+    queue = TransferQueue(connections: connections, persistence: persistence);
     events = [];
     sub = queue.events.listen(events.add);
   });
@@ -89,51 +86,50 @@ void main() {
     );
     final entry = await ticket.result;
     expect(entry.contentSha256, isNotNull);
-    expect(
-      await File('${outDir.path}/hello.txt').readAsBytes(),
-      [104, 105],
-    );
+    expect(await File('${outDir.path}/hello.txt').readAsBytes(), [104, 105]);
     expect(s1.calls.where((c) => c == 'download:/r/hello.txt'), hasLength(1));
   });
 
-  test('a row removed before its event fails the waiter instead of hanging',
-      () async {
-    s1.addFile('/r/gone.txt', [1]);
-    // A listener ahead of the producer clears every finished row as its
-    // event arrives, so the producer handles the event of a row that is
-    // already gone.
-    final clearing = queue.events.listen((event) {
-      if (event is TransferQueueTaskEvent &&
-          const {
-            TransferTaskState.completed,
-            TransferTaskState.failed,
-            TransferTaskState.cancelled,
-          }.contains(event.state)) {
-        queue.removeTask(event.taskId);
-      }
-    });
-    addTearDown(clearing.cancel);
+  test(
+    'a row removed before its event fails the waiter instead of hanging',
+    () async {
+      s1.addFile('/r/gone.txt', [1]);
+      // A listener ahead of the producer clears every finished row as its
+      // event arrives, so the producer handles the event of a row that is
+      // already gone.
+      final clearing = queue.events.listen((event) {
+        if (event is TransferQueueTaskEvent &&
+            const {
+              TransferTaskState.completed,
+              TransferTaskState.failed,
+              TransferTaskState.cancelled,
+            }.contains(event.state)) {
+          queue.removeTask(event.taskId);
+        }
+      });
+      addTearDown(clearing.cancel);
 
-    final ticket = QueuePreviewProducer(queue).start(
-      PreviewProduceSpec(
-        serverId: 's1',
-        remotePath: '/r/gone.txt',
-        destinationPath: '${outDir.path}/gone.txt',
-        expectedSize: 1,
-      ),
-    );
-
-    await expectLater(
-      ticket.result.timeout(const Duration(seconds: 5)),
-      throwsA(
-        isA<RemoteFileException>().having(
-          (e) => e.message,
-          'message',
-          contains('no longer tracked'),
+      final ticket = QueuePreviewProducer(queue).start(
+        PreviewProduceSpec(
+          serverId: 's1',
+          remotePath: '/r/gone.txt',
+          destinationPath: '${outDir.path}/gone.txt',
+          expectedSize: 1,
         ),
-      ),
-    );
-  });
+      );
+
+      await expectLater(
+        ticket.result.timeout(const Duration(seconds: 5)),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (e) => e.message,
+            'message',
+            contains('no longer tracked'),
+          ),
+        ),
+      );
+    },
+  );
 
   test('a stale known size remains a progress hint', () async {
     s1.addFile('/r/grown.txt', [1, 2, 3, 4]);
@@ -186,10 +182,7 @@ void main() {
     final task = produce('/r/p.txt', 'p.txt', expectedSize: 3);
     await pumpUntil(() => task.isTerminal);
     expect(task.state, TransferTaskState.completed);
-    expect(
-      await File('${outDir.path}/p.txt').readAsBytes(),
-      [1, 2, 3],
-    );
+    expect(await File('${outDir.path}/p.txt').readAsBytes(), [1, 2, 3]);
   });
 
   test('produce is never journaled and never enters history', () async {
@@ -279,8 +272,7 @@ void main() {
     s1.addFile('/r/2.bin', List<int>.filled(4, 2));
     s1.addFile('/r/3.bin', List<int>.filled(4, 3));
     final gates = <String, Completer<void>>{};
-    s1.downloadGate = (path) =>
-        gates.putIfAbsent(path, Completer<void>.new);
+    s1.downloadGate = (path) => gates.putIfAbsent(path, Completer<void>.new);
     final t1 = produce('/r/1.bin', '1.bin');
     final t2 = produce('/r/2.bin', '2.bin');
     final t3 = produce('/r/3.bin', '3.bin');
@@ -315,10 +307,7 @@ void main() {
     gate.confirm();
     await pumpUntil(() => task.isTerminal);
     expect(task.state, TransferTaskState.completed);
-    expect(
-      (await File('${outDir.path}/g.bin').readAsBytes()).length,
-      64,
-    );
+    expect((await File('${outDir.path}/g.bin').readAsBytes()).length, 64);
   });
 
   test('a denied byte gate cancels the hop', () async {
@@ -432,10 +421,7 @@ void main() {
     queue.resumeTask(task.id);
     await pumpUntil(() => task.isTerminal);
     expect(task.state, TransferTaskState.completed);
-    expect(
-      (await File('${outDir.path}/pz.txt').readAsBytes()).length,
-      32,
-    );
+    expect((await File('${outDir.path}/pz.txt').readAsBytes()).length, 32);
   });
 
   group('drag-out produce (the D14 amendment)', () {

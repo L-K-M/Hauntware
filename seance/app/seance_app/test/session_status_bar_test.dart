@@ -101,25 +101,38 @@ void main() {
     }
   }
 
-  testWidgets('short targets leave the remaining width for cwd', (tester) async {
+  testWidgets('short targets leave the remaining width for cwd', (
+    tester,
+  ) async {
     final engine = XtermTerminalEngine();
     addTearDown(engine.dispose);
     final cwd = '/srv/${'segment/' * 8}application';
     final config = ServerConfig(
-      id: 'server', label: 'Database', host: 'db01', username: 'ops',
-      createdAt: 0, updatedAt: 0,
+      id: 'server',
+      label: 'Database',
+      host: 'db01',
+      username: 'ops',
+      createdAt: 0,
+      updatedAt: 0,
     );
     final session = TerminalSession(
-      id: 'session', serverId: config.id, config: config, engine: engine,
+      id: 'session',
+      serverId: config.id,
+      config: config,
+      engine: engine,
       connecting: false,
       initialMetadata: SessionMetadata(workingDirectory: cwd),
     );
     addTearDown(session.dispose);
     await tester.binding.setSurfaceSize(const Size(1200, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(
-      body: Center(child: SessionStatusBar(session: session)),
-    )));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(child: SessionStatusBar(session: session)),
+        ),
+      ),
+    );
 
     expect(tester.takeException(), isNull);
     expect(find.text('ops@db01:22'), findsOneWidget);
@@ -172,10 +185,12 @@ void main() {
 
           expect(tester.takeException(), isNull);
           expect(find.byTooltip(target), findsOneWidget);
-          final visibleTarget = tester.widget<Text>(find.descendant(
-            of: find.byTooltip(target),
-            matching: find.byType(Text),
-          ));
+          final visibleTarget = tester.widget<Text>(
+            find.descendant(
+              of: find.byTooltip(target),
+              matching: find.byType(Text),
+            ),
+          );
           expect(visibleTarget.data, contains('…'));
           final parts = visibleTarget.data!.split('…');
           expect(parts, hasLength(2));

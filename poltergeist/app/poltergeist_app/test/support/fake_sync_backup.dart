@@ -171,8 +171,7 @@ final class FakeSyncEnrollmentState implements SyncEnrollmentState {
   Future<bool> passphraseUnverified() async => unverified;
 
   @override
-  Future<void> setPassphraseUnverified(bool value) async =>
-      unverified = value;
+  Future<void> setPassphraseUnverified(bool value) async => unverified = value;
 
   @override
   Future<Set<String>> notices() async => Set.of(raised);
@@ -232,21 +231,19 @@ final class FakeSyncServer {
 SyncTransportFactory fakeTransportFactory(
   FakeSyncServer server,
   List<FakeSyncTransport> seen,
-) =>
-    (baseUrl, {token}) {
-      final transport =
-          FakeSyncTransport(server, baseUrl: baseUrl, token: token);
-      seen.add(transport);
-      return transport;
-    };
+) => (baseUrl, {token}) {
+  final transport = FakeSyncTransport(server, baseUrl: baseUrl, token: token);
+  seen.add(transport);
+  return transport;
+};
 
 /// A [SyncTransport] over [FakeSyncServer] — assign the seq the real
 /// server would and honor the scripted gates.
 final class FakeSyncTransport implements SyncTransport {
   FakeSyncTransport(this.server, {required this.baseUrl, String? token})
-      : // The seeded session token lands on the private slot.
-        // ignore: prefer_initializing_formals
-        _token = token;
+    : // The seeded session token lands on the private slot.
+      // ignore: prefer_initializing_formals
+      _token = token;
 
   final FakeSyncServer server;
   final String baseUrl;
@@ -267,19 +264,19 @@ final class FakeSyncTransport implements SyncTransport {
     server.registerCalls++;
     if (server.registrationClosed) {
       throw const ApiError(
-          code: 'registration_closed', message: 'registration closed');
+        code: 'registration_closed',
+        message: 'registration closed',
+      );
     }
     _token = 'token-${request.username}';
-    return LoginResponse(
-      token: _token!,
-      vaultKeyCheck: request.vaultKeyCheck,
-    );
+    return LoginResponse(token: _token!, vaultKeyCheck: request.vaultKeyCheck);
   }
 
   @override
-  Future<PreloginResponse> prelogin(String username) async =>
-      PreloginResponse(
-          argonSalt: server.argonSalt, argonParams: server.argonParams);
+  Future<PreloginResponse> prelogin(String username) async => PreloginResponse(
+    argonSalt: server.argonSalt,
+    argonParams: server.argonParams,
+  );
 
   @override
   Future<LoginResponse> login(LoginRequest request) async {
@@ -299,9 +296,8 @@ final class FakeSyncTransport implements SyncTransport {
     // delta pull — fail loudly so tests must stamp an explicit seq.
     final fresh = [
       for (final record in server.records)
-        if ((record.seq ?? (throw StateError(
-                'seeded record ${record.id} has no seq')))
-            >
+        if ((record.seq ??
+                (throw StateError('seeded record ${record.id} has no seq'))) >
             since)
           record,
     ];
@@ -337,10 +333,9 @@ final class FakeSyncTransport implements SyncTransport {
 
 /// A [SyncTrackingBookmarkStore] over [FakeBookmarkStore]'s local-edit
 /// surface plus the materialized-tuple map the recovery paths read.
-final class FakeSyncTrackingBookmarkStore
-    implements SyncTrackingBookmarkStore {
+final class FakeSyncTrackingBookmarkStore implements SyncTrackingBookmarkStore {
   FakeSyncTrackingBookmarkStore([List<Bookmark> bookmarks = const []])
-      : _inner = FakeBookmarkStore(bookmarks);
+    : _inner = FakeBookmarkStore(bookmarks);
 
   final FakeBookmarkStore _inner;
 
@@ -369,10 +364,15 @@ final class FakeSyncTrackingBookmarkStore
   Future<List<BookmarkGroupSection>> sections() => _inner.sections();
 
   @override
-  Future<String> sortKeyForInsert(
-          {String? group, String? beforeId, String? afterId}) =>
-      _inner.sortKeyForInsert(
-          group: group, beforeId: beforeId, afterId: afterId);
+  Future<String> sortKeyForInsert({
+    String? group,
+    String? beforeId,
+    String? afterId,
+  }) => _inner.sortKeyForInsert(
+    group: group,
+    beforeId: beforeId,
+    afterId: afterId,
+  );
 
   @override
   Future<void> upsertAll(Iterable<Bookmark> bookmarks) =>
@@ -395,9 +395,12 @@ final class FakeSyncTrackingBookmarkStore
   Future<bool> remove(String id) => _inner.remove(id);
 
   @override
-  Future<Bookmark> moveToGroup(String id, String? group,
-          {String? beforeId, String? afterId}) =>
-      _inner.moveToGroup(id, group, beforeId: beforeId, afterId: afterId);
+  Future<Bookmark> moveToGroup(
+    String id,
+    String? group, {
+    String? beforeId,
+    String? afterId,
+  }) => _inner.moveToGroup(id, group, beforeId: beforeId, afterId: afterId);
 
   @override
   Future<Bookmark> reorder(String id, {String? beforeId, String? afterId}) =>
@@ -411,7 +414,8 @@ final class FakeSyncTrackingBookmarkStore
 
   @override
   Future<void> applySyncedRecords(
-      Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows) async {
+    Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows,
+  ) async {
     final list = rows.toList();
     await _inner.applySynced(list.map((row) => row.bookmark));
     for (final row in list) {
@@ -421,7 +425,9 @@ final class FakeSyncTrackingBookmarkStore
 
   @override
   Future<void> removeSyncedRecord(
-      String id, BookmarkSyncTuple tombstone) async {
+    String id,
+    BookmarkSyncTuple tombstone,
+  ) async {
     await _inner.removeSynced(id);
     tuples[id] = tombstone;
   }
@@ -432,10 +438,9 @@ final class FakeSyncTrackingBookmarkStore
 
 /// A [SyncTrackingServerStore] in memory: rows keyed by id plus the
 /// materialized-tuple map the apply/recovery paths read.
-final class FakeSyncTrackingServerStore
-    implements SyncTrackingServerStore {
+final class FakeSyncTrackingServerStore implements SyncTrackingServerStore {
   FakeSyncTrackingServerStore([List<ServerConfig> servers = const []])
-      : _servers = {for (final server in servers) server.id: server};
+    : _servers = {for (final server in servers) server.id: server};
 
   final Map<String, ServerConfig> _servers;
   final tuples = <String, ServerSyncTuple>{};
@@ -444,12 +449,11 @@ final class FakeSyncTrackingServerStore
   /// flight so a test can race it against sign-out.
   Completer<void>? holdNextLoad;
 
-  List<ServerConfig> get rows =>
-      _servers.values.toList()
-        ..sort((a, b) {
-          final byLabel = a.label.toLowerCase().compareTo(b.label.toLowerCase());
-          return byLabel != 0 ? byLabel : a.id.compareTo(b.id);
-        });
+  List<ServerConfig> get rows => _servers.values.toList()
+    ..sort((a, b) {
+      final byLabel = a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      return byLabel != 0 ? byLabel : a.id.compareTo(b.id);
+    });
 
   @override
   Future<List<ServerConfig>> load() async {
@@ -494,14 +498,15 @@ final class FakeSyncTrackingServerStore
 
   @override
   Future<void> applySyncedRecord(
-      ServerConfig server, ServerSyncTuple winner) async {
+    ServerConfig server,
+    ServerSyncTuple winner,
+  ) async {
     _servers[server.id] = server;
     tuples[server.id] = winner;
   }
 
   @override
-  Future<void> removeSyncedRecord(
-      String id, ServerSyncTuple tombstone) async {
+  Future<void> removeSyncedRecord(String id, ServerSyncTuple tombstone) async {
     _servers.remove(id);
     tuples[id] = tombstone;
   }

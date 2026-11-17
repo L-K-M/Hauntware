@@ -7,14 +7,14 @@ import 'package:test/test.dart';
 // The comparator's id tiebreak keeps same-key pairs in one stable order on
 // every device.
 Bookmark _bookmark(String id, String sortKey) => Bookmark(
-      id: id,
-      kind: BookmarkKind.localFolder,
-      label: id,
-      localPath: '/tmp/$id',
-      sortKey: sortKey,
-      createdAt: DateTime.utc(2026, 9, 19, 8),
-      updatedAt: DateTime.utc(2026, 9, 19, 8),
-    );
+  id: id,
+  kind: BookmarkKind.localFolder,
+  label: id,
+  localPath: '/tmp/$id',
+  sortKey: sortKey,
+  createdAt: DateTime.utc(2026, 9, 19, 8),
+  updatedAt: DateTime.utc(2026, 9, 19, 8),
+);
 
 void main() {
   group('sortKeyBetween', () {
@@ -48,18 +48,20 @@ void main() {
       expect(pastZ.startsWith('z'), isTrue);
     });
 
-    test('repeated head insertion stays ordered and never reaches the floor',
-        () {
-      var head = sortKeyBetween(null, null);
-      final keys = <String>[head];
-      for (var i = 0; i < 200; i++) {
-        head = sortKeyBetween(null, head);
-        expect(head.compareTo(keys.last) < 0, isTrue);
-        expect(isValidSortKey(head), isTrue);
-        keys.add(head);
-      }
-      expect(keys.toSet(), hasLength(keys.length));
-    });
+    test(
+      'repeated head insertion stays ordered and never reaches the floor',
+      () {
+        var head = sortKeyBetween(null, null);
+        final keys = <String>[head];
+        for (var i = 0; i < 200; i++) {
+          head = sortKeyBetween(null, head);
+          expect(head.compareTo(keys.last) < 0, isTrue);
+          expect(isValidSortKey(head), isTrue);
+          keys.add(head);
+        }
+        expect(keys.toSet(), hasLength(keys.length));
+      },
+    );
 
     test('repeated tail insertion stays ordered', () {
       var tail = sortKeyBetween(null, null);
@@ -83,8 +85,7 @@ void main() {
       expect(() => sortKeyBetween('b', 'a'), throwsArgumentError);
     });
 
-    test('reports equal keys as exhaustion — a reachable post-merge state',
-        () {
+    test('reports equal keys as exhaustion — a reachable post-merge state', () {
       // Two devices minting the same key between the same neighbors is the
       // documented collision, so a pair of duplicate keys is not a caller
       // bug: callers run their re-keying recovery on exhaustion.

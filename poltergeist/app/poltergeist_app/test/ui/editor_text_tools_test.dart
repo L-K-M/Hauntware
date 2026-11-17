@@ -52,10 +52,7 @@ void main() {
     await _mount(tester);
     await _openBrowser(tester);
     expect(find.text('Text Tools'), findsOneWidget);
-    expect(
-      find.widgetWithText(TextField, 'Filter tools'),
-      findsOneWidget,
-    );
+    expect(find.widgetWithText(TextField, 'Filter tools'), findsOneWidget);
     expect(find.text('Sort Lines…'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('UPPERCASE'),
@@ -98,10 +95,9 @@ void main() {
     await _mount(tester, quitPending: true);
     await _openBrowser(tester);
     expect(find.text('Text Tools'), findsOneWidget);
-    final row = tester.widget<ListTile>(find.widgetWithText(
-      ListTile,
-      'Sort Lines…',
-    ));
+    final row = tester.widget<ListTile>(
+      find.widgetWithText(ListTile, 'Sort Lines…'),
+    );
     expect(row.enabled, isFalse);
     expect(row.onTap, isNull);
   });
@@ -153,10 +149,7 @@ void main() {
     // The notice's Undo restores the buffer through the shared controller.
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
-    expect(
-      find.widgetWithText(TextField, _sample),
-      findsOneWidget,
-    );
+    expect(find.widgetWithText(TextField, _sample), findsOneWidget);
   });
 
   testWidgets('the tool bar previews and applies a catalog tool', (
@@ -167,18 +160,17 @@ void main() {
     await tester.tap(find.text('Sort Lines…'));
     await tester.pumpAndSettle();
     expect(find.text('Applies to'), findsOneWidget);
-    expect(find.text('Nothing selected: whole document, 4 lines'),
-        findsOneWidget);
+    expect(
+      find.text('Nothing selected: whole document, 4 lines'),
+      findsOneWidget,
+    );
     expect(find.text('Order'), findsOneWidget);
 
     await tester.tap(find.text('Apply'));
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
     expect(find.text('alpha\nalpha\nbeta\ngamma\n'), findsOneWidget);
-    expect(
-      find.textContaining('Sort Lines: moved'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Sort Lines: moved'), findsOneWidget);
   });
 
   testWidgets('the browser and tool bar fit a phone-width window', (
@@ -237,9 +229,7 @@ void main() {
     final file = File('${dir.path}/crlf.txt');
     // BOM + CRLF: the loader normalizes the buffer to LF and keeps the
     // bytes as metadata; the saver must restore both.
-    file.writeAsBytesSync([
-      0xEF, 0xBB, 0xBF, ...utf8.encode('one\r\ntwo\r\n'),
-    ]);
+    file.writeAsBytesSync([0xEF, 0xBB, 0xBF, ...utf8.encode('one\r\ntwo\r\n')]);
 
     // The load and save ride real I/O, so the drive runs where the event
     // loop really turns; the assertions read the settled tree after. Each
@@ -270,9 +260,7 @@ void main() {
           ),
         ),
       );
-      await settle(
-        () => find.textContaining('13 bytes').evaluate().isNotEmpty,
-      );
+      await settle(() => find.textContaining('13 bytes').evaluate().isNotEmpty);
     });
 
     // The buffer is normalized to LF, but the status row reports what the

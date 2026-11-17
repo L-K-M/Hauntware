@@ -103,13 +103,10 @@ final class QuickConnectParse {
     QuickConnectTarget target, [
     Set<QuickConnectIssue> issues = const {},
     String? sanitizedInput,
-  ]) : this._(
-         target: target,
-         issues: issues,
-         sanitizedInput: sanitizedInput,
-       );
+  ]) : this._(target: target, issues: issues, sanitizedInput: sanitizedInput);
 
-  const QuickConnectParse.invalid(Set<QuickConnectIssue> issues, [
+  const QuickConnectParse.invalid(
+    Set<QuickConnectIssue> issues, [
     String? sanitizedInput,
   ]) : this._(target: null, issues: issues, sanitizedInput: sanitizedInput);
 
@@ -156,7 +153,9 @@ QuickConnectParse _parseUrlWithSanitized(String text) {
   final parsed = _parseUrl(text);
   final withoutScheme = text.substring('sftp://'.length);
   final slash = withoutScheme.indexOf('/');
-  final authority = slash < 0 ? withoutScheme : withoutScheme.substring(0, slash);
+  final authority = slash < 0
+      ? withoutScheme
+      : withoutScheme.substring(0, slash);
   final suffix = slash < 0 ? '' : withoutScheme.substring(slash);
   final split = _splitUserinfo(authority);
   if (!split.passwordStripped) return parsed;
@@ -181,7 +180,9 @@ bool _isSftpScheme(String text) =>
   String authority,
 ) {
   final at = authority.lastIndexOf('@');
-  if (at < 0) return (username: '', hostport: authority, passwordStripped: false);
+  if (at < 0) {
+    return (username: '', hostport: authority, passwordStripped: false);
+  }
   final userinfo = authority.substring(0, at);
   final colon = userinfo.indexOf(':');
   if (colon < 0) {
@@ -413,10 +414,10 @@ QuickConnectParse _parseBare(String text) {
 QuickConnectParse _parseUrl(String text) {
   final withoutScheme = text.substring('sftp://'.length);
   final slash = withoutScheme.indexOf('/');
-  final authority = slash < 0 ? withoutScheme : withoutScheme.substring(0, slash);
-  final path = slash < 0
-      ? null
-      : _decode(withoutScheme.substring(slash + 1));
+  final authority = slash < 0
+      ? withoutScheme
+      : withoutScheme.substring(0, slash);
+  final path = slash < 0 ? null : _decode(withoutScheme.substring(slash + 1));
   final split = _splitUserinfo(authority);
   final hostport = split.hostport;
   final remotePath = path == null || path.isEmpty ? null : '/$path';

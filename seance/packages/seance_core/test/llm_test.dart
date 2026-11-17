@@ -23,8 +23,10 @@ class FakeProvider implements LlmProvider {
   String get model => 'fake';
 
   @override
-  Future<ChatTurn> chat(
-      {required List<LlmMessage> messages, List<ToolSpec> tools = const []}) async {
+  Future<ChatTurn> chat({
+    required List<LlmMessage> messages,
+    List<ToolSpec> tools = const [],
+  }) async {
     received.add(messages);
     receivedTools.add(tools);
     return _turns[_i++];
@@ -34,9 +36,10 @@ class FakeProvider implements LlmProvider {
   Future<List<String>> listModels() async => const [];
 
   @override
-  Future<CommandSuggestion> generateCommand(
-          {required String prompt, HostContext context = HostContext.unknown}) =>
-      throw UnimplementedError();
+  Future<CommandSuggestion> generateCommand({
+    required String prompt,
+    HostContext context = HostContext.unknown,
+  }) => throw UnimplementedError();
 
   @override
   Stream<String> streamChat({required List<LlmMessage> messages}) =>
@@ -68,7 +71,10 @@ class _CloseTrackingClient extends http.BaseClient {
 
 void main() {
   group('AnthropicProvider', () {
-    final p = AnthropicProvider(apiKey: 'k', model: 'claude-haiku-4-5-20251001');
+    final p = AnthropicProvider(
+      apiKey: 'k',
+      model: 'claude-haiku-4-5-20251001',
+    );
 
     test('close leaves a borrowed HTTP client open', () {
       final client = _CloseTrackingClient();
@@ -100,12 +106,10 @@ void main() {
     });
 
     test('buildBody splits system from turns and maps tools', () {
-      final body = p.buildBody(messages: [
-        const LlmMessage.system('sys'),
-        const LlmMessage.user('hi'),
-      ], tools: [
-        ChatTools.webSearch
-      ]);
+      final body = p.buildBody(
+        messages: [const LlmMessage.system('sys'), const LlmMessage.user('hi')],
+        tools: [ChatTools.webSearch],
+      );
       expect(body['system'], 'sys');
       expect((body['messages'] as List).length, 1);
       expect((body['messages'] as List).first['role'], 'user');
@@ -121,17 +125,16 @@ void main() {
             'type': 'tool_use',
             'id': 't1',
             'name': 'web_search',
-            'input': {'query': 'q'}
+            'input': {'query': 'q'},
           },
-        ]
+        ],
       });
       expect(turn.text, 'sure');
       expect(turn.toolCalls.single.name, 'web_search');
       expect(turn.toolCalls.single.arguments['query'], 'q');
     });
 
-    test('generateCommand parses fenced JSON and merges linter danger',
-        () async {
+    test('generateCommand parses fenced JSON and merges linter danger', () async {
       final client = MockClient((req) async {
         expect(req.headers['x-api-key'], 'k');
         expect(req.headers['anthropic-version'], isNotNull);
@@ -141,9 +144,9 @@ void main() {
               {
                 'type': 'text',
                 'text':
-                    '```json\n{"command": "rm -rf /", "explanation": "x", "danger": "none"}\n```'
-              }
-            ]
+                    '```json\n{"command": "rm -rf /", "explanation": "x", "danger": "none"}\n```',
+              },
+            ],
           }),
           200,
         );
@@ -158,8 +161,7 @@ void main() {
 
     test('surfaces API errors', () async {
       const secret = 'server-echoed-secret';
-      final client =
-          MockClient((req) async => http.Response(secret, 429));
+      final client = MockClient((req) async => http.Response(secret, 429));
       final prov = AnthropicProvider(apiKey: 'k', client: client);
       expect(
         () => prov.chat(messages: [const LlmMessage.user('hi')]),
@@ -174,14 +176,16 @@ void main() {
     });
 
     test('refuses an oversized response body', () async {
-      final client = MockClient((req) async => http.Response(
-            jsonEncode({
-              'content': [
-                {'type': 'text', 'text': 'x' * (2 * 1024 * 1024 + 1)},
-              ],
-            }),
-            200,
-          ));
+      final client = MockClient(
+        (req) async => http.Response(
+          jsonEncode({
+            'content': [
+              {'type': 'text', 'text': 'x' * (2 * 1024 * 1024 + 1)},
+            ],
+          }),
+          200,
+        ),
+      );
       final prov = AnthropicProvider(apiKey: 'k', client: client);
       expect(
         () => prov.chat(messages: [const LlmMessage.user('hi')]),
@@ -200,7 +204,7 @@ void main() {
             'data': [
               {'id': 'claude-opus-4-8', 'display_name': 'Opus'},
               {'id': 'claude-haiku-4-5-20251001'},
-            ]
+            ],
           }),
           200,
         );
@@ -217,7 +221,9 @@ void main() {
     test('close leaves a borrowed HTTP client open', () {
       final client = _CloseTrackingClient();
       final provider = OpenAiCompatibleProvider(
-          baseUrl: 'http://localhost:11434/v1', client: client);
+        baseUrl: 'http://localhost:11434/v1',
+        client: client,
+      );
       provider.close();
       provider.close();
       expect(client.closeCalls, 0);
@@ -229,10 +235,7 @@ void main() {
         baseUrl: 'http://localhost:11434/v1',
         client: client,
       )..close();
-      await expectLater(
-        provider.listModels(),
-        throwsStateError,
-      );
+      await expectLater(provider.listModels(), throwsStateError);
       expect(client.sends, 0);
     });
 
@@ -255,44 +258,47 @@ void main() {
                   'id': 'c1',
                   'function': {
                     'name': 'paste_to_prompt',
-                    'arguments': '{"command": "ls -la"}'
-                  }
-                }
-              ]
-            }
-          }
-        ]
+                    'arguments': '{"command": "ls -la"}',
+                  },
+                },
+              ],
+            },
+          },
+        ],
       });
       expect(turn.toolCalls.single.name, 'paste_to_prompt');
       expect(turn.toolCalls.single.arguments['command'], 'ls -la');
     });
 
-    test('generateCommand posts with bearer auth and parses plain JSON',
-        () async {
-      final client = MockClient((req) async {
-        expect(req.headers['authorization'], 'Bearer secret');
-        return http.Response(
-          jsonEncode({
-            'choices': [
-              {
-                'message': {
-                  'content':
-                      '{"command":"ls","explanation":"list","danger":"none"}'
-                }
-              }
-            ]
-          }),
-          200,
-        );
-      });
-      final prov = OpenAiCompatibleProvider(
+    test(
+      'generateCommand posts with bearer auth and parses plain JSON',
+      () async {
+        final client = MockClient((req) async {
+          expect(req.headers['authorization'], 'Bearer secret');
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {
+                    'content':
+                        '{"command":"ls","explanation":"list","danger":"none"}',
+                  },
+                },
+              ],
+            }),
+            200,
+          );
+        });
+        final prov = OpenAiCompatibleProvider(
           baseUrl: 'https://api.openai.com/v1',
           apiKey: 'secret',
-          client: client);
-      final s = await prov.generateCommand(prompt: 'list files');
-      expect(s.command, 'ls');
-      expect(s.effectiveDanger, isNull);
-    });
+          client: client,
+        );
+        final s = await prov.generateCommand(prompt: 'list files');
+        expect(s.command, 'ls');
+        expect(s.effectiveDanger, isNull);
+      },
+    );
 
     test('listModels GETs /models and returns the ids', () async {
       Uri? seen;
@@ -303,26 +309,30 @@ void main() {
             'data': [
               {'id': 'llama3.1'},
               {'id': 'qwen2.5'},
-            ]
+            ],
           }),
           200,
         );
       });
       final prov = OpenAiCompatibleProvider(
-          baseUrl: 'http://localhost:11434/v1', client: client);
+        baseUrl: 'http://localhost:11434/v1',
+        client: client,
+      );
       final models = await prov.listModels();
       expect(seen, Uri.parse('http://localhost:11434/v1/models'));
       expect(models, ['llama3.1', 'qwen2.5']);
     });
 
     test('streamChat uses the bounded incremental SSE parser', () async {
-      final client = MockClient((req) async => http.Response(
-            'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n'
-            'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'
-            'data: [DONE]\n\n',
-            200,
-            headers: {'content-type': 'text/event-stream'},
-          ));
+      final client = MockClient(
+        (req) async => http.Response(
+          'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n'
+          'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'
+          'data: [DONE]\n\n',
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        ),
+      );
       final provider = OpenAiCompatibleProvider(
         baseUrl: 'https://api.example/v1',
         client: client,
@@ -334,11 +344,13 @@ void main() {
     });
 
     test('streamChat rejects a split oversized SSE line', () async {
-      final client = MockClient((req) async => http.Response(
-            'data: {"choices":[{"delta":{"content":"too long"}}]}\n\n',
-            200,
-            headers: {'content-type': 'text/event-stream'},
-          ));
+      final client = MockClient(
+        (req) async => http.Response(
+          'data: {"choices":[{"delta":{"content":"too long"}}]}\n\n',
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        ),
+      );
       final provider = OpenAiCompatibleProvider(
         baseUrl: 'https://api.example/v1',
         client: client,
@@ -373,13 +385,16 @@ void main() {
   group('parseCommandJson', () {
     test('handles prose-wrapped JSON', () {
       final s = parseCommandJson(
-          'Here you go: {"command":"pwd","explanation":"cwd","danger":"none"} hope that helps');
+        'Here you go: {"command":"pwd","explanation":"cwd","danger":"none"} hope that helps',
+      );
       expect(s.command, 'pwd');
     });
 
     test('throws when there is no JSON object', () {
-      expect(() => parseCommandJson('no json here'),
-          throwsA(isA<FormatException>()));
+      expect(
+        () => parseCommandJson('no json here'),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 
@@ -395,8 +410,9 @@ void main() {
         'data: [DONE]',
         '',
       ].join('\n');
-      final events =
-          await parseSseJson(Stream.value(utf8.encode(raw))).toList();
+      final events = await parseSseJson(
+        Stream.value(utf8.encode(raw)),
+      ).toList();
       expect(events.length, 2);
       final text = events
           .map((e) => (e['delta'] as Map)['text'] as String)
@@ -406,37 +422,44 @@ void main() {
   });
 
   group('ChatController', () {
-    test('stages a paste (first line only, never executes) and returns reply',
-        () async {
-      final provider = FakeProvider([
-        const ChatTurn(text: '', toolCalls: [
-          ToolCall(
-              id: 'c1',
-              name: 'paste_to_prompt',
-              arguments: {'command': 'tar -xzf a.tgz\nrm -rf /'}),
-        ]),
-        const ChatTurn(text: 'Done — review the command and press Enter.'),
-      ]);
-      final pasted = <String>[];
-      final chat = ChatController(
-        provider: provider,
-        onPaste: pasted.add,
-      );
-      final result = await chat.send('unpack a.tgz');
-      // Only the first line was staged; the newline (and rm -rf /) is gone.
-      expect(pasted.single, 'tar -xzf a.tgz');
-      expect(result.stagedCommands.single, 'tar -xzf a.tgz');
-      expect(result.reply, contains('press Enter'));
-    });
+    test(
+      'stages a paste (first line only, never executes) and returns reply',
+      () async {
+        final provider = FakeProvider([
+          const ChatTurn(
+            text: '',
+            toolCalls: [
+              ToolCall(
+                id: 'c1',
+                name: 'paste_to_prompt',
+                arguments: {'command': 'tar -xzf a.tgz\nrm -rf /'},
+              ),
+            ],
+          ),
+          const ChatTurn(text: 'Done — review the command and press Enter.'),
+        ]);
+        final pasted = <String>[];
+        final chat = ChatController(provider: provider, onPaste: pasted.add);
+        final result = await chat.send('unpack a.tgz');
+        // Only the first line was staged; the newline (and rm -rf /) is gone.
+        expect(pasted.single, 'tar -xzf a.tgz');
+        expect(result.stagedCommands.single, 'tar -xzf a.tgz');
+        expect(result.reply, contains('press Enter'));
+      },
+    );
 
     test('runs web_search via the backend and records the query', () async {
       final provider = FakeProvider([
-        const ChatTurn(text: '', toolCalls: [
-          ToolCall(
+        const ChatTurn(
+          text: '',
+          toolCalls: [
+            ToolCall(
               id: 'c1',
               name: 'web_search',
-              arguments: {'query': 'how to use rsync'}),
-        ]),
+              arguments: {'query': 'how to use rsync'},
+            ),
+          ],
+        ),
         const ChatTurn(text: 'Use rsync -av src dst.'),
       ]);
       final search = FakeSearch();
@@ -456,10 +479,12 @@ void main() {
       final chat = ChatController(provider: provider, onPaste: (_) {});
       final result = await chat.send(
         'why did this fail?',
-        terminalContext: 'export TOKEN=ghp_0123456789abcdef0123456789abcdef0123',
+        terminalContext:
+            'export TOKEN=ghp_0123456789abcdef0123456789abcdef0123',
       );
-      final sentContext =
-          result.sent.firstWhere((s) => s.label.contains('terminal'));
+      final sentContext = result.sent.firstWhere(
+        (s) => s.label.contains('terminal'),
+      );
       expect(sentContext.content, isNot(contains('ghp_0123456789')));
       expect(sentContext.content, contains('«redacted»'));
     });
@@ -575,30 +600,34 @@ void main() {
       expect(provider.receivedTools.last, isEmpty);
     });
 
-    test('zero tool iterations disables tools on the only provider call',
-        () async {
-      final provider = FakeProvider([
-        const ChatTurn(text: 'Tools were not needed.'),
-      ]);
-      final chat = ChatController(
-        provider: provider,
-        onPaste: (_) {},
-        maxToolIterations: 0,
-      );
+    test(
+      'zero tool iterations disables tools on the only provider call',
+      () async {
+        final provider = FakeProvider([
+          const ChatTurn(text: 'Tools were not needed.'),
+        ]);
+        final chat = ChatController(
+          provider: provider,
+          onPaste: (_) {},
+          maxToolIterations: 0,
+        );
 
-      final result = await chat.send('answer without tools');
+        final result = await chat.send('answer without tools');
 
-      expect(provider.received, hasLength(1));
-      expect(provider.receivedTools.single, isEmpty);
-      expect(result.reply, 'Tools were not needed.');
-    });
+        expect(provider.received, hasLength(1));
+        expect(provider.receivedTools.single, isEmpty);
+        expect(result.reply, 'Tools were not needed.');
+      },
+    );
 
     test('names the focused session so advice knows where it lands', () async {
       final provider = FakeProvider([const ChatTurn(text: 'ok')]);
       final chat = ChatController(provider: provider, onPaste: (_) {});
 
-      await chat.send('clean up disk space',
-          sessionTarget: 'this machine (a local shell — zsh · this machine)');
+      await chat.send(
+        'clean up disk space',
+        sessionTarget: 'this machine (a local shell — zsh · this machine)',
+      );
 
       final sent = provider.received.single.last.content;
       expect(sent, contains('Focused session: this machine'));
@@ -635,9 +664,7 @@ void main() {
     });
 
     test('returns a nonblank fallback for an empty provider turn', () async {
-      final provider = FakeProvider([
-        const ChatTurn(text: ''),
-      ]);
+      final provider = FakeProvider([const ChatTurn(text: '')]);
       final chat = ChatController(provider: provider, onPaste: (_) {});
 
       final result = await chat.send('hello');
@@ -693,9 +720,11 @@ void main() {
   });
 
   group('clipSearchSnippets', () {
-    SearchResult hit(String snippet,
-            {String title = 't', String url = 'https://x.example'}) =>
-        SearchResult(title: title, url: url, snippet: snippet);
+    SearchResult hit(
+      String snippet, {
+      String title = 't',
+      String url = 'https://x.example',
+    }) => SearchResult(title: title, url: url, snippet: snippet);
 
     test('a snippet under the cap is passed through untouched', () {
       final result = ChatController.clipSearchSnippets([hit('short')]).single;
@@ -720,8 +749,9 @@ void main() {
       final long = '${'x' * (ChatController.maxSnippetChars - 1)}😀 and more';
       final result = ChatController.clipSearchSnippets([hit(long)]).single;
       expect(result.snippet.endsWith('…'), isTrue);
-      final beforeEllipsis =
-          result.snippet.codeUnitAt(result.snippet.length - 2);
+      final beforeEllipsis = result.snippet.codeUnitAt(
+        result.snippet.length - 2,
+      );
       // Only the *high* half can be stranded: the kept text is a contiguous
       // prefix, so a trailing lone low surrogate is not reachable here. A
       // copy of this check applied to arbitrary text would need both.
@@ -749,13 +779,16 @@ void main() {
       // prefix is asserted exactly below, and a clip taken from the wrong
       // offset reproduces `'y' * n` perfectly.
       final long = 'START${'y' * (ChatController.maxTitleChars + 50)}';
-      final result =
-          ChatController.clipSearchSnippets([hit('short', title: long)]).single;
+      final result = ChatController.clipSearchSnippets([
+        hit('short', title: long),
+      ]).single;
       // The kept prefix itself, not just its length: a clip taken from the
       // wrong offset, or one that doubled a character while keeping the
       // count, satisfies a length-and-suffix pair exactly as well.
-      expect(result.title,
-          '${long.substring(0, ChatController.maxTitleChars)}…');
+      expect(
+        result.title,
+        '${long.substring(0, ChatController.maxTitleChars)}…',
+      );
       expect(result.title.length, ChatController.maxTitleChars + 1);
     });
 
@@ -803,8 +836,9 @@ void main() {
       // parameters is ordinary on the open web, and SearXNG and Brave copy
       // the field through as they find it.
       final long = 'https://x.example/?q=${'z' * ChatController.maxUrlChars}';
-      final result =
-          ChatController.clipSearchSnippets([hit('short', url: long)]).single;
+      final result = ChatController.clipSearchSnippets([
+        hit('short', url: long),
+      ]).single;
       // Visibly truncated, not silently shortened: a link that merely does
       // not resolve reads as a citation. Pinned as the exact prefix, for the
       // reason the title's is — the scheme and host have to survive the clip
@@ -814,7 +848,6 @@ void main() {
       // The rest of the result rides through unchanged.
       expect(result.title, 't');
       expect(result.snippet, 'short');
-
     });
 
     test('a URL cut that would split a surrogate backs off one unit', () {
@@ -831,9 +864,9 @@ void main() {
       const seed = 'https://x.example/';
       final emojiUrl =
           '$seed${'u' * (ChatController.maxUrlChars - seed.length - 1)}😀/p';
-      final emojiResult =
-          ChatController.clipSearchSnippets([hit('short', url: emojiUrl)])
-              .single;
+      final emojiResult = ChatController.clipSearchSnippets([
+        hit('short', url: emojiUrl),
+      ]).single;
       expect(
         emojiResult.url,
         '$seed${'u' * (ChatController.maxUrlChars - seed.length - 1)}…',
@@ -842,19 +875,18 @@ void main() {
       // half rather than keeping it, so the kept text stops one before the
       // cap and the whole string lands exactly on it.
       expect(emojiResult.url.length, ChatController.maxUrlChars);
-
     });
 
     test('a URL exactly at the cap rides through as the same instance', () {
       // The boundary: a URL exactly at the cap is not touched, and the
       // instance itself is passed through rather than rebuilt.
-      final edge = 'https://x.example/'.padRight(ChatController.maxUrlChars, 'a');
+      final edge = 'https://x.example/'.padRight(
+        ChatController.maxUrlChars,
+        'a',
+      );
       expect(edge.length, ChatController.maxUrlChars);
       final fits = hit('short', url: edge);
-      expect(
-        ChatController.clipSearchSnippets([fits]).single,
-        same(fits),
-      );
+      expect(ChatController.clipSearchSnippets([fits]).single, same(fits));
     });
 
     test('all three fields clip together without disturbing each other', () {

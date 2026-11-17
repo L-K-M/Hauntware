@@ -123,8 +123,7 @@ class PoltergeistApp extends StatefulWidget {
     this.dragOutProducer,
     this.dragOutBackend,
     this.quickLook,
-    this.initialPreviewThresholdBytes =
-        defaultLargeDownloadThresholdBytes,
+    this.initialPreviewThresholdBytes = defaultLargeDownloadThresholdBytes,
     this.onPreviewCacheCapacityChanged,
     this.onPreviewThresholdChanged,
     this.syncEnvironment,
@@ -269,8 +268,7 @@ class PoltergeistApp extends StatefulWidget {
   /// The persisted throttle limits seeded onto the queue's limiters.
   final int? initialDownloadLimit;
   final int? initialUploadLimit;
-  final FutureOr<void> Function(int? bytesPerSecond)?
-  onDownloadLimitChanged;
+  final FutureOr<void> Function(int? bytesPerSecond)? onDownloadLimitChanged;
   final FutureOr<void> Function(int? bytesPerSecond)? onUploadLimitChanged;
 
   /// D37's per-server transfer caps, already bound to the queue; the
@@ -433,14 +431,13 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
   @override
   void didUpdateWidget(PoltergeistApp oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final engineSwapped =
-        !identical(oldWidget.engineSession, widget.engineSession);
+    final engineSwapped = !identical(
+      oldWidget.engineSession,
+      widget.engineSession,
+    );
     if (engineSwapped ||
         !identical(oldWidget.quitGuard, widget.quitGuard) ||
-        !identical(
-          oldWidget.sessionPersistence,
-          widget.sessionPersistence,
-        ) ||
+        !identical(oldWidget.sessionPersistence, widget.sessionPersistence) ||
         !identical(oldWidget.archiveTasks, widget.archiveTasks)) {
       // The outgoing session's engine must not outlive its replacement
       // unnoticed — forward the exit state before re-attaching, but only
@@ -601,8 +598,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       onSidebarHiddenChanged: widget.onSidebarHiddenChanged,
       onSidebarHiddenSaveError: widget.onSidebarHiddenSaveError,
       initialSidebarCollapsedGroups: widget.initialSidebarCollapsedGroups,
-      onSidebarCollapsedGroupsChanged:
-          widget.onSidebarCollapsedGroupsChanged,
+      onSidebarCollapsedGroupsChanged: widget.onSidebarCollapsedGroupsChanged,
       initialSidebarDensity: widget.initialSidebarDensity,
       onSidebarDensityChanged: widget.onSidebarDensityChanged,
       initialSidebarPinnedServers: widget.initialSidebarPinnedServers,
@@ -613,8 +609,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       dragOutBackend: widget.dragOutBackend,
       quickLook: widget.quickLook,
       initialPreviewThresholdBytes: widget.initialPreviewThresholdBytes,
-      onPreviewCacheCapacityChanged:
-          widget.onPreviewCacheCapacityChanged,
+      onPreviewCacheCapacityChanged: widget.onPreviewCacheCapacityChanged,
       onPreviewThresholdChanged: widget.onPreviewThresholdChanged,
       syncEnvironment: widget.syncEnvironment,
       syncTasks: widget.syncTasks,

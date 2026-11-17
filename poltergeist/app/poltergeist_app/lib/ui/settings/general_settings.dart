@@ -161,8 +161,7 @@ class _GeneralSectionState extends State<GeneralSection> {
           title: Text(l10n.updateCheckEnabledLabel),
           subtitle: Text(l10n.updateCheckEnabledSubtitle),
           value: _checkForUpdates,
-          onChanged: (value) =>
-              unawaited(_commitCheckForUpdates(value)),
+          onChanged: (value) => unawaited(_commitCheckForUpdates(value)),
         ),
         // The running build, so a bug report can name it; the licenses
         // page repeats it under the app name.

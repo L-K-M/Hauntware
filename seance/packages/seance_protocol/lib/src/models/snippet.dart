@@ -39,26 +39,26 @@ class Snippet {
       });
 
   Snippet copyWith({String? title, String? body, int? updatedAt}) => Snippet(
-        id: id,
-        title: title ?? this.title,
-        body: body ?? this.body,
-        createdAt: createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+    id: id,
+    title: title ?? this.title,
+    body: body ?? this.body,
+    createdAt: createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'body': body,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-      };
+    'id': id,
+    'title': title,
+    'body': body,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+  };
 
   factory Snippet.fromJson(Map<String, dynamic> json) => Snippet(
-        id: json['id'] as String,
-        title: json['title'] as String? ?? '',
-        body: json['body'] as String? ?? '',
-        createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
-        updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    title: json['title'] as String? ?? '',
+    body: json['body'] as String? ?? '',
+    createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+    updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
+  );
 }

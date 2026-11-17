@@ -18,34 +18,36 @@ import '../support/preview_harness.dart';
 /// the overlay that renders it without ever taking the keyboard.
 void main() {
   group('InAppQuickLook', () {
-    test('shows, follows, hides; only the user close reports an edge',
-        () async {
-      final quickLook = InAppQuickLook();
-      addTearDown(quickLook.dispose);
-      var closes = 0;
-      final sub = quickLook.onClosed.listen((_) => closes++);
-      addTearDown(sub.cancel);
+    test(
+      'shows, follows, hides; only the user close reports an edge',
+      () async {
+        final quickLook = InAppQuickLook();
+        addTearDown(quickLook.dispose);
+        var closes = 0;
+        final sub = quickLook.onClosed.listen((_) => closes++);
+        addTearDown(sub.cancel);
 
-      expect(await quickLook.isAvailable(), isTrue);
-      await quickLook.updatePreview(['/a'], 0);
-      expect(quickLook.visible, isFalse, reason: 'update never opens');
+        expect(await quickLook.isAvailable(), isTrue);
+        await quickLook.updatePreview(['/a'], 0);
+        expect(quickLook.visible, isFalse, reason: 'update never opens');
 
-      await quickLook.showPreview(['/a', '/b'], 1);
-      expect(quickLook.currentPath, '/b');
-      await quickLook.updatePreview(['/c'], 0);
-      expect(quickLook.currentPath, '/c');
+        await quickLook.showPreview(['/a', '/b'], 1);
+        expect(quickLook.currentPath, '/b');
+        await quickLook.updatePreview(['/c'], 0);
+        expect(quickLook.currentPath, '/c');
 
-      await quickLook.hidePreview();
-      expect(quickLook.visible, isFalse);
-      await Future<void>.delayed(Duration.zero);
-      expect(closes, 0);
+        await quickLook.hidePreview();
+        expect(quickLook.visible, isFalse);
+        await Future<void>.delayed(Duration.zero);
+        expect(closes, 0);
 
-      await quickLook.showPreview(['/a'], 0);
-      quickLook.close();
-      expect(quickLook.visible, isFalse);
-      await Future<void>.delayed(Duration.zero);
-      expect(closes, 1);
-    });
+        await quickLook.showPreview(['/a'], 0);
+        quickLook.close();
+        expect(quickLook.visible, isFalse);
+        await Future<void>.delayed(Duration.zero);
+        expect(closes, 1);
+      },
+    );
 
     test('drives the session: Space opens, the overlay\'s own close '
         'clears the session\'s Quick Look state', () async {
@@ -129,15 +131,19 @@ void main() {
       }
     }
 
-    testWidgets('renders the shown text file large, with its position',
-        (tester) async {
+    testWidgets('renders the shown text file large, with its position', (
+      tester,
+    ) async {
       File('${dir.path}/a.txt').writeAsStringSync('alpha body\n');
       File('${dir.path}/b.txt').writeAsStringSync('bravo\n');
       final quickLook = await pumpOverlay(tester);
       expect(find.byKey(const ValueKey('quickLook.overlay')), findsNothing);
 
       await tester.runAsync(
-        () => quickLook.showPreview(['${dir.path}/a.txt', '${dir.path}/b.txt'], 0),
+        () => quickLook.showPreview([
+          '${dir.path}/a.txt',
+          '${dir.path}/b.txt',
+        ], 0),
       );
       await tester.pump();
       await settleBody(tester);
@@ -164,8 +170,9 @@ void main() {
       expect(find.text('1 of 2'), findsNothing);
     });
 
-    testWidgets('a folder or an unreadable kind gets the no-preview card',
-        (tester) async {
+    testWidgets('a folder or an unreadable kind gets the no-preview card', (
+      tester,
+    ) async {
       Directory('${dir.path}/photos').createSync();
       final quickLook = await pumpOverlay(tester);
       await tester.runAsync(

@@ -1,9 +1,10 @@
 /// What a vault [Secret] holds.
 enum SecretKind { password, privateKey }
 
-SecretKind _secretKindFromName(String name) =>
-    SecretKind.values.firstWhere((k) => k.name == name,
-        orElse: () => SecretKind.password);
+SecretKind _secretKindFromName(String name) => SecretKind.values.firstWhere(
+  (k) => k.name == name,
+  orElse: () => SecretKind.password,
+);
 
 /// A secret stored in the encrypted vault. Never present in plaintext config —
 /// a [ServerConfig] references one by id. The [value] is the password text or
@@ -63,43 +64,42 @@ class Secret {
     String? identityFilePassphrase,
     bool clearIdentityFilePassphrase = false,
     int? updatedAt,
-  }) =>
-      Secret(
-        id: id ?? this.id,
-        kind: kind ?? this.kind,
-        value: value ?? this.value,
-        keyPassphrase: clearKeyPassphrase
-            ? null
-            : keyPassphrase ?? this.keyPassphrase,
-        identityFilePath: clearIdentityFilePath
-            ? null
-            : identityFilePath ?? this.identityFilePath,
-        identityFilePassphrase: clearIdentityFilePassphrase
-            ? null
-            : identityFilePassphrase ?? this.identityFilePassphrase,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+  }) => Secret(
+    id: id ?? this.id,
+    kind: kind ?? this.kind,
+    value: value ?? this.value,
+    keyPassphrase: clearKeyPassphrase
+        ? null
+        : keyPassphrase ?? this.keyPassphrase,
+    identityFilePath: clearIdentityFilePath
+        ? null
+        : identityFilePath ?? this.identityFilePath,
+    identityFilePassphrase: clearIdentityFilePassphrase
+        ? null
+        : identityFilePassphrase ?? this.identityFilePassphrase,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': kind.name,
-        'value': value,
-        if (updatedAt != 0) 'updatedAt': updatedAt,
-        if (keyPassphrase != null) 'keyPassphrase': keyPassphrase,
-        if (identityFilePath != null) 'identityFilePath': identityFilePath,
-        if (identityFilePassphrase != null)
-          'identityFilePassphrase': identityFilePassphrase,
-      };
+    'id': id,
+    'kind': kind.name,
+    'value': value,
+    if (updatedAt != 0) 'updatedAt': updatedAt,
+    if (keyPassphrase != null) 'keyPassphrase': keyPassphrase,
+    if (identityFilePath != null) 'identityFilePath': identityFilePath,
+    if (identityFilePassphrase != null)
+      'identityFilePassphrase': identityFilePassphrase,
+  };
 
   factory Secret.fromJson(Map<String, dynamic> json) => Secret(
-        id: json['id'] as String,
-        kind: _secretKindFromName(json['kind'] as String? ?? 'password'),
-        value: json['value'] as String,
-        keyPassphrase: json['keyPassphrase'] as String?,
-        identityFilePath: json['identityFilePath'] as String?,
-        identityFilePassphrase: json['identityFilePassphrase'] as String?,
-        updatedAt: json['updatedAt'] as int? ?? 0,
-      );
+    id: json['id'] as String,
+    kind: _secretKindFromName(json['kind'] as String? ?? 'password'),
+    value: json['value'] as String,
+    keyPassphrase: json['keyPassphrase'] as String?,
+    identityFilePath: json['identityFilePath'] as String?,
+    identityFilePassphrase: json['identityFilePassphrase'] as String?,
+    updatedAt: json['updatedAt'] as int? ?? 0,
+  );
 
   @override
   String toString() => 'Secret(id: $id, kind: ${kind.name}, value: <redacted>)';

@@ -10,11 +10,7 @@ import '../support/fake_stored_id_set.dart';
 
 final _now = DateTime.utc(2026, 10, 1);
 
-Bookmark _remote(
-  String id, {
-  String? group,
-  String? sortKey,
-}) => Bookmark(
+Bookmark _remote(String id, {String? group, String? sortKey}) => Bookmark(
   id: id,
   kind: BookmarkKind.remotePath,
   label: 'label-$id',
@@ -79,10 +75,11 @@ void main() {
       'Beta',
       null,
     ]);
-    expect(
-      controller.bookmarks.map((bookmark) => bookmark.id),
-      ['a', 'b', 'u'],
-    );
+    expect(controller.bookmarks.map((bookmark) => bookmark.id), [
+      'a',
+      'b',
+      'u',
+    ]);
     // The explicit reload fires the re-derive edge exactly once.
     expect(changed, ['change']);
   });
@@ -120,35 +117,37 @@ void main() {
     expect(collapsedWrites.last, isEmpty);
   });
 
-  test('seeded collapse state applies and a failed sink keeps the toggle',
-      () async {
-    store.bookmarks = [_remote('a', group: 'alpha')];
-    // A pre-D32 set: the bare group key migrates into the fav: namespace.
-    final controller = buildController(collapsed: {'alpha'});
-    addTearDown(controller.dispose);
-    await controller.reload();
+  test(
+    'seeded collapse state applies and a failed sink keeps the toggle',
+    () async {
+      store.bookmarks = [_remote('a', group: 'alpha')];
+      // A pre-D32 set: the bare group key migrates into the fav: namespace.
+      final controller = buildController(collapsed: {'alpha'});
+      addTearDown(controller.dispose);
+      await controller.reload();
 
-    expect(
-      controller.isCollapsed(
-        SidebarCollapseKeys.favoriteGroup(controller.sections.single.key),
-      ),
-      isTrue,
-    );
+      expect(
+        controller.isCollapsed(
+          SidebarCollapseKeys.favoriteGroup(controller.sections.single.key),
+        ),
+        isTrue,
+      );
 
-    // A throwing persist seam is reported, not fatal — the in-memory
-    // toggle already landed.
-    final throwing = SidebarController(
-      store: store,
-      onCollapsedChanged: (_, {required collapsed}) =>
-          throw StateError('disk full'),
-      errors: ApplicationErrorReporter(sink: (error, _) => errors.add(error)),
-    );
-    addTearDown(throwing.dispose);
-    await throwing.reload();
-    throwing.toggleCollapsed(throwing.sections.single.key);
-    expect(errors, hasLength(1));
-    expect(throwing.isCollapsed(throwing.sections.single.key), isTrue);
-  });
+      // A throwing persist seam is reported, not fatal — the in-memory
+      // toggle already landed.
+      final throwing = SidebarController(
+        store: store,
+        onCollapsedChanged: (_, {required collapsed}) =>
+            throw StateError('disk full'),
+        errors: ApplicationErrorReporter(sink: (error, _) => errors.add(error)),
+      );
+      addTearDown(throwing.dispose);
+      await throwing.reload();
+      throwing.toggleCollapsed(throwing.sections.single.key);
+      expect(errors, hasLength(1));
+      expect(throwing.isCollapsed(throwing.sections.single.key), isTrue);
+    },
+  );
 
   test('rename saves the new label through the store', () async {
     store.bookmarks = [_remote('a')];
@@ -168,20 +167,15 @@ void main() {
     );
   });
 
-  test('rename on an unknown id throws without touching the store',
-      () async {
+  test('rename on an unknown id throws without touching the store', () async {
     final controller = buildController();
     addTearDown(controller.dispose);
 
-    await expectLater(
-      controller.rename('missing', 'x'),
-      throwsArgumentError,
-    );
+    await expectLater(controller.rename('missing', 'x'), throwsArgumentError);
     expect(store.bookmarks, isEmpty);
   });
 
-  test('remove deletes the record, then forwards the cascade id',
-      () async {
+  test('remove deletes the record, then forwards the cascade id', () async {
     store.bookmarks = [_remote('a'), _remote('b')];
     final controller = buildController();
     addTearDown(controller.dispose);
@@ -213,9 +207,9 @@ void main() {
     // A drop with no named neighbors appends after the group's tail.
     expect(
       compareBookmarkSortKeys(
-        store.bookmarks.firstWhere((b) => b.id == 'a'),
-        store.bookmarks.firstWhere((b) => b.id == 'c'),
-      ) >
+            store.bookmarks.firstWhere((b) => b.id == 'a'),
+            store.bookmarks.firstWhere((b) => b.id == 'c'),
+          ) >
           0,
       isTrue,
     );
@@ -235,10 +229,11 @@ void main() {
     // 'a' and 'b'.
     await controller.reorder('c', beforeId: 'a');
     await pumpEventQueue();
-    expect(
-      controller.bookmarks.map((bookmark) => bookmark.id),
-      ['a', 'c', 'b'],
-    );
+    expect(controller.bookmarks.map((bookmark) => bookmark.id), [
+      'a',
+      'c',
+      'b',
+    ]);
   });
 
   test('a failed load flips the state and reports once', () async {

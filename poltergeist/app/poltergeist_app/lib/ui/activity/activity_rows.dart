@@ -24,11 +24,7 @@ enum _RowBand { live, pending, terminal }
 /// a task exists (D16 forbids aggregate-only display), expandable into
 /// per-file sub-rows, draggable only inside the pending band.
 class ActivityTaskList extends StatefulWidget {
-  const ActivityTaskList({
-    super.key,
-    required this.controller,
-    this.onReveal,
-  });
+  const ActivityTaskList({super.key, required this.controller, this.onReveal});
 
   final ActivityPanelController controller;
 
@@ -46,10 +42,8 @@ class _ActivityTaskListState extends State<ActivityTaskList> {
   ActivityPanelController get _controller => widget.controller;
 
   static _RowBand _band(TransferTask task) => switch (task.state) {
-    TransferTaskState.running ||
-    TransferTaskState.paused => _RowBand.live,
-    TransferTaskState.queued ||
-    TransferTaskState.scanning => _RowBand.pending,
+    TransferTaskState.running || TransferTaskState.paused => _RowBand.live,
+    TransferTaskState.queued || TransferTaskState.scanning => _RowBand.pending,
     _ => _RowBand.terminal,
   };
 
@@ -92,8 +86,7 @@ class _ActivityTaskListState extends State<ActivityTaskList> {
       for (final entry in display)
         if (_isReorderable(entry)) entry.id,
     ];
-    final liveCount =
-        display.where((t) => _band(t) == _RowBand.live).length;
+    final liveCount = display.where((t) => _band(t) == _RowBand.live).length;
     final target = newIndex.clamp(liveCount, liveCount + pendingIds.length);
     final pendingIndex = target - liveCount;
     _controller.moveTask(
@@ -197,8 +190,9 @@ class _TaskRow extends StatelessWidget {
                   size: 18,
                   color: task.state == TransferTaskState.failed
                       ? colors.error
-                      : FamilyPalette.of(context)
-                          .glyph(_operationHue(task, presentation)),
+                      : FamilyPalette.of(
+                          context,
+                        ).glyph(_operationHue(task, presentation)),
                 ),
               ),
               Expanded(
@@ -231,8 +225,8 @@ class _TaskRow extends StatelessWidget {
                               _taskStateLabel(task, l10n),
                               style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
-                                    color: task.state ==
-                                            TransferTaskState.failed
+                                    color:
+                                        task.state == TransferTaskState.failed
                                         ? colors.error
                                         : colors.onSurfaceVariant,
                                   ),
@@ -385,9 +379,7 @@ class _TaskProgress extends StatelessWidget {
     final rate = controller.rateFor(task.id);
     final eta = controller.etaFor(task);
     final detail = StringBuffer()
-      ..write(
-        formatPaneSize(task.transferredBytes, platform: platform),
-      )
+      ..write(formatPaneSize(task.transferredBytes, platform: platform))
       ..write(' / ')
       ..write(formatPaneSize(total, platform: platform))
       ..write(task.scanComplete ? '' : '+');
@@ -451,9 +443,7 @@ class _TaskActions extends StatelessWidget {
                 ? l10n.activityCollapseTask
                 : l10n.activityExpandTask,
             onPressed: onToggleExpanded,
-            icon: Icon(
-              expanded ? Icons.expand_less : Icons.expand_more,
-            ),
+            icon: Icon(expanded ? Icons.expand_less : Icons.expand_more),
           ),
         const Spacer(),
         if (live &&
@@ -508,9 +498,8 @@ class _TaskActions extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             iconSize: 18,
             tooltip: l10n.activityCopyError,
-            onPressed: () => unawaited(
-              Clipboard.setData(ClipboardData(text: task.error!)),
-            ),
+            onPressed: () =>
+                unawaited(Clipboard.setData(ClipboardData(text: task.error!))),
             icon: const Icon(Icons.copy_outlined),
           ),
         if (onReveal != null && presentation.supports(AppTaskCapability.reveal))
@@ -565,8 +554,7 @@ class _ItemSubRow extends StatelessWidget {
     }
     // D15's disposition text on a completed delete item — the only
     // trash surfacing this task ships.
-    if (item.state == TransferItemState.completed &&
-        item.disposition != null) {
+    if (item.state == TransferItemState.completed && item.disposition != null) {
       detail
         ..write(' · ')
         ..write(
@@ -577,11 +565,7 @@ class _ItemSubRow extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsetsDirectional.only(
-        start: 42,
-        end: 10,
-        bottom: 2,
-      ),
+      padding: const EdgeInsetsDirectional.only(start: 42, end: 10, bottom: 2),
       child: Row(
         children: [
           kindIcon(
@@ -627,10 +611,7 @@ class _ItemSubRow extends StatelessWidget {
     );
   }
 
-  static String _itemStateLabel(
-    TransferItem item,
-    AppLocalizations l10n,
-  ) =>
+  static String _itemStateLabel(TransferItem item, AppLocalizations l10n) =>
       switch (item.state) {
         TransferItemState.pending => l10n.transferItemPending,
         TransferItemState.active => l10n.transferStateRunning,

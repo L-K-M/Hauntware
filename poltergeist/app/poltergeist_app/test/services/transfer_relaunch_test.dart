@@ -39,10 +39,7 @@ void main() {
   Future<TransferQueueAdapter> openSession() async {
     final store = await FileTransferPersistence.open(storeDir);
     stores.add(store);
-    final queue = TransferQueue(
-      connections: _NoPool(),
-      persistence: store,
-    );
+    final queue = TransferQueue(connections: _NoPool(), persistence: store);
     queues.add(queue);
     return TransferQueueAdapter(queue);
   }
@@ -101,80 +98,82 @@ void main() {
     }
   });
 
-  test('a kill mid-queue relaunches into a restored queue with history',
-      () async {
-    // Session 1: a live app session with the real journal.
-    final queue1 = await openSession();
-    openPanel(queue1);
+  test(
+    'a kill mid-queue relaunches into a restored queue with history',
+    () async {
+      // Session 1: a live app session with the real journal.
+      final queue1 = await openSession();
+      openPanel(queue1);
 
-    File('${srcDir.path}/done.txt').writeAsStringSync('done!');
-    File('${srcDir.path}/paused.txt').writeAsStringSync('paused?');
-    File('${srcDir.path}/queued.txt').writeAsStringSync('queued?');
+      File('${srcDir.path}/done.txt').writeAsStringSync('done!');
+      File('${srcDir.path}/paused.txt').writeAsStringSync('paused?');
+      File('${srcDir.path}/queued.txt').writeAsStringSync('queued?');
 
-    // One task completes before the kill — it belongs in history.
-    final done = queue1.enqueue(copySpec('done.txt'));
-    await pumpUntil(() => done.isTerminal, reason: 'first task stuck');
-    expect(done.state, TransferTaskState.completed);
+      // One task completes before the kill — it belongs in history.
+      final done = queue1.enqueue(copySpec('done.txt'));
+      await pumpUntil(() => done.isTerminal, reason: 'first task stuck');
+      expect(done.state, TransferTaskState.completed);
 
-    // A paused task and a queued task are mid-flight when the process
-    // dies: the queue-level pause holds admission so both stay
-    // non-terminal, and the paused one's per-task latch is journaled.
-    queue1.pauseQueue();
-    final paused = queue1.enqueue(copySpec('paused.txt'));
-    queue1.pauseTask(paused.id);
-    final queued = queue1.enqueue(copySpec('queued.txt'));
-    await pumpUntil(
-      () => paused.state == TransferTaskState.paused,
-      reason: 'pause never journaled',
-    );
-    // The queue gate holds admission, not scanning: the third task is
-    // still discovering work when the process dies. §4.6 replays both
-    // non-terminal shapes as queued.
-    expect(queued.isTerminal, isFalse);
+      // A paused task and a queued task are mid-flight when the process
+      // dies: the queue-level pause holds admission so both stay
+      // non-terminal, and the paused one's per-task latch is journaled.
+      queue1.pauseQueue();
+      final paused = queue1.enqueue(copySpec('paused.txt'));
+      queue1.pauseTask(paused.id);
+      final queued = queue1.enqueue(copySpec('queued.txt'));
+      await pumpUntil(
+        () => paused.state == TransferTaskState.paused,
+        reason: 'pause never journaled',
+      );
+      // The queue gate holds admission, not scanning: the third task is
+      // still discovering work when the process dies. §4.6 replays both
+      // non-terminal shapes as queued.
+      expect(queued.isTerminal, isFalse);
 
-    // The quit guard's durability point, then the kill: no shutdown, no
-    // compaction — the journal on disk is all the next session gets.
-    await queue1.flushJournal();
+      // The quit guard's durability point, then the kill: no shutdown, no
+      // compaction — the journal on disk is all the next session gets.
+      await queue1.flushJournal();
 
-    // Session 2: relaunch — new store + queue over the same directory.
-    final queue2 = await openSession();
-    await queues.last.restore();
-    final panel = openPanel(queue2);
+      // Session 2: relaunch — new store + queue over the same directory.
+      final queue2 = await openSession();
+      await queues.last.restore();
+      final panel = openPanel(queue2);
 
-    // §4.6's two latches: the journaled-paused task survives paused, the
-    // queued one waits under the forced queue-level pause.
-    expect(queue2.isPaused, isTrue);
-    final restoredPaused = queue2.tasks.singleWhere((t) => t.id == paused.id);
-    final restoredQueued = queue2.tasks.singleWhere((t) => t.id == queued.id);
-    expect(restoredPaused.state, TransferTaskState.paused);
-    expect(restoredQueued.state, TransferTaskState.queued);
-    expect(restoredPaused.wasRestored, isTrue);
-    expect(restoredQueued.wasRestored, isTrue);
+      // §4.6's two latches: the journaled-paused task survives paused, the
+      // queued one waits under the forced queue-level pause.
+      expect(queue2.isPaused, isTrue);
+      final restoredPaused = queue2.tasks.singleWhere((t) => t.id == paused.id);
+      final restoredQueued = queue2.tasks.singleWhere((t) => t.id == queued.id);
+      expect(restoredPaused.state, TransferTaskState.paused);
+      expect(restoredQueued.state, TransferTaskState.queued);
+      expect(restoredPaused.wasRestored, isTrue);
+      expect(restoredQueued.wasRestored, isTrue);
 
-    // The panel surface: the restored banner's two rows plus the
-    // completed task in the History tab's source.
-    expect(
-      panel.restoredTasks.map((t) => t.id),
-      unorderedEquals([paused.id, queued.id]),
-    );
-    expect(queue2.history.single.taskId, done.id);
-    expect(queue2.history.single.outcome, TransferTaskState.completed);
-    expect(File('${destDir.path}/paused.txt').existsSync(), isFalse);
+      // The panel surface: the restored banner's two rows plus the
+      // completed task in the History tab's source.
+      expect(
+        panel.restoredTasks.map((t) => t.id),
+        unorderedEquals([paused.id, queued.id]),
+      );
+      expect(queue2.history.single.taskId, done.id);
+      expect(queue2.history.single.outcome, TransferTaskState.completed);
+      expect(File('${destDir.path}/paused.txt').existsSync(), isFalse);
 
-    // The banner's Resume un-parks both latches and the work finishes.
-    panel.resumeRestoredQueue();
-    await pumpUntil(
-      () => restoredPaused.isTerminal && restoredQueued.isTerminal,
-      reason: 'restored tasks never finished after Resume',
-    );
-    expect(restoredPaused.state, TransferTaskState.completed);
-    expect(restoredQueued.state, TransferTaskState.completed);
-    expect(File('${destDir.path}/paused.txt').readAsStringSync(), 'paused?');
-    expect(File('${destDir.path}/queued.txt').readAsStringSync(), 'queued?');
-    expect(panel.restoredTasks, isEmpty);
-    await pumpUntil(
-      () => queue2.history.length == 3,
-      reason: 'history never recorded the resumed tasks',
-    );
-  });
+      // The banner's Resume un-parks both latches and the work finishes.
+      panel.resumeRestoredQueue();
+      await pumpUntil(
+        () => restoredPaused.isTerminal && restoredQueued.isTerminal,
+        reason: 'restored tasks never finished after Resume',
+      );
+      expect(restoredPaused.state, TransferTaskState.completed);
+      expect(restoredQueued.state, TransferTaskState.completed);
+      expect(File('${destDir.path}/paused.txt').readAsStringSync(), 'paused?');
+      expect(File('${destDir.path}/queued.txt').readAsStringSync(), 'queued?');
+      expect(panel.restoredTasks, isEmpty);
+      await pumpUntil(
+        () => queue2.history.length == 3,
+        reason: 'history never recorded the resumed tasks',
+      );
+    },
+  );
 }

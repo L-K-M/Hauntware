@@ -132,7 +132,8 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
         return;
       }
       final redactor = SecretRedactor(
-          enabled: widget.state.services.settings.redactionEnabled);
+        enabled: widget.state.services.settings.redactionEnabled,
+      );
       var prompt = request;
       if (widget.state.includeTerminalContext) {
         final recent = widget.session.engine.recentText(maxLines: 40);

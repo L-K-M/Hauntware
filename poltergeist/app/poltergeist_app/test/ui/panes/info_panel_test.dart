@@ -207,9 +207,7 @@ void main() {
     expect(inPanel(find.text('rw-r--r--')), findsOneWidget);
     expect(
       tester
-          .widget<TextField>(
-            find.byKey(const ValueKey('infoPanel.octalField')),
-          )
+          .widget<TextField>(find.byKey(const ValueKey('infoPanel.octalField')))
           .controller
           ?.text,
       '0644',
@@ -229,18 +227,13 @@ void main() {
     expect(inPanel(find.text('Group')), findsNWidgets(2));
     expect(inPanel(find.text('20')), findsOneWidget);
     expect(inPanel(find.text('Path')), findsOneWidget);
-    expect(
-      inPanel(find.text('/home/tester/report.txt')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('infoPanel.copyPath')),
-      findsOneWidget,
-    );
+    expect(inPanel(find.text('/home/tester/report.txt')), findsOneWidget);
+    expect(find.byKey(const ValueKey('infoPanel.copyPath')), findsOneWidget);
   });
 
-  testWidgets('a remote target renders its server-side uid/gid/mode',
-      (tester) async {
+  testWidgets('a remote target renders its server-side uid/gid/mode', (
+    tester,
+  ) async {
     final channel = controller_test.FakePaneChannel('/srv/home');
     channel.listings['/srv/home'] = [
       _entry(
@@ -267,18 +260,13 @@ void main() {
     expect(inPanel(find.text('rwxr-xr-x')), findsOneWidget);
     expect(
       tester
-          .widget<TextField>(
-            find.byKey(const ValueKey('infoPanel.octalField')),
-          )
+          .widget<TextField>(find.byKey(const ValueKey('infoPanel.octalField')))
           .controller
           ?.text,
       '0755',
     );
     expect(inPanel(find.text('0')), findsNWidgets(2));
-    expect(
-      inPanel(find.text('/srv/home/deploy.sh')),
-      findsOneWidget,
-    );
+    expect(inPanel(find.text('/srv/home/deploy.sh')), findsOneWidget);
   });
 
   testWidgets('retargets as the cursor moves and counts a '
@@ -321,14 +309,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(InfoPanel), findsOneWidget);
-    expect(
-      inPanel(find.text('Select an item to inspect it.')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('infoPanel.calculateSize')),
-      findsNothing,
-    );
+    expect(inPanel(find.text('Select an item to inspect it.')), findsOneWidget);
+    expect(find.byKey(const ValueKey('infoPanel.calculateSize')), findsNothing);
   });
 
   testWidgets('a row press retargets the panel at pointer-down', (
@@ -368,14 +350,9 @@ void main() {
   });
 
   testWidgets('the listing\'s Esc has no panel tier: the inspector owns '
-      'the panel, so the first Esc clears an unfocused filter', (
-    tester,
-  ) async {
+      'the panel, so the first Esc clears an unfocused filter', (tester) async {
     final channel = controller_test.FakePaneChannel('/home/tester');
-    channel.listings['/home/tester'] = [
-      _entry('a.txt'),
-      _entry('b.txt'),
-    ];
+    channel.listings['/home/tester'] = [_entry('a.txt'), _entry('b.txt')];
     lanes.nextLocalChannel = channel;
     await left.openLocalHome();
     await pumpShell(tester);
@@ -391,8 +368,11 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(left.filterActive, isFalse);
-    expect(find.byType(InfoPanel), findsOneWidget,
-        reason: 'the pane never hides the inspector\'s panel');
+    expect(
+      find.byType(InfoPanel),
+      findsOneWidget,
+      reason: 'the pane never hides the inspector\'s panel',
+    );
     expect(routedEscapes, isEmpty);
 
     // Release the pane's primary focus before teardown — disposing a
@@ -440,8 +420,11 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    expect(routedEscapes, hasLength(1),
-        reason: 'the panel hands Esc to its host, never swallows it');
+    expect(
+      routedEscapes,
+      hasLength(1),
+      reason: 'the panel hands Esc to its host, never swallows it',
+    );
 
     held.complete();
     await tester.pumpAndSettle();
@@ -461,12 +444,16 @@ void main() {
     left.setCursorIndex(0);
     await tester.pumpAndSettle();
     expect(inPanel(find.text('a.txt')), findsOneWidget);
-    expect(inPanel(find.byIcon(Icons.close)), findsNothing,
-        reason: 'the inspector column owns visibility (D32 §3)');
+    expect(
+      inPanel(find.byIcon(Icons.close)),
+      findsNothing,
+      reason: 'the inspector column owns visibility (D32 §3)',
+    );
   });
 
-  testWidgets('copy path writes the clipboard and posts the notice',
-      (tester) async {
+  testWidgets('copy path writes the clipboard and posts the notice', (
+    tester,
+  ) async {
     String? clipboardText;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
@@ -478,8 +465,10 @@ void main() {
       },
     );
     addTearDown(
-      () => tester.binding.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null),
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
     );
 
     final channel = controller_test.FakePaneChannel('/home/tester');
@@ -510,11 +499,7 @@ void main() {
     ];
     channel.listings['/home/tester/docs'] = [
       _entry('inner.txt', size: 4, root: '/home/tester/docs'),
-      _entry(
-        'deep',
-        type: RemoteFileType.directory,
-        root: '/home/tester/docs',
-      ),
+      _entry('deep', type: RemoteFileType.directory, root: '/home/tester/docs'),
     ];
     channel.listings['/home/tester/docs/deep'] = [
       _entry('d.txt', size: 8, root: '/home/tester/docs/deep'),
@@ -565,10 +550,7 @@ void main() {
     await tester.pump();
 
     expect(inPanel(find.textContaining('so far')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('infoPanel.cancelSize')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('infoPanel.cancelSize')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('infoPanel.cancelSize')));
     await tester.pump();
@@ -663,18 +645,16 @@ void main() {
   });
 
   group('permissions editor (02 §2.6, D28)', () {
-    Finder octalField() =>
-        find.byKey(const ValueKey('infoPanel.octalField'));
+    Finder octalField() => find.byKey(const ValueKey('infoPanel.octalField'));
 
     String octalText(WidgetTester tester) =>
         tester.widget<TextField>(octalField()).controller!.text;
 
-    bool cellValue(WidgetTester tester, String row, String column) =>
-        tester
-            .widget<Checkbox>(
-              find.byKey(ValueKey('infoPanel.permCell.$row.$column')),
-            )
-            .value!;
+    bool cellValue(WidgetTester tester, String row, String column) => tester
+        .widget<Checkbox>(
+          find.byKey(ValueKey('infoPanel.permCell.$row.$column')),
+        )
+        .value!;
 
     testWidgets('the octal field and the rwx grid stay in sync both '
         'ways, and Apply issues the chmod', (tester) async {
@@ -715,10 +695,7 @@ void main() {
         find.byKey(const ValueKey('infoPanel.applyPermissions')),
       );
       await tester.pumpAndSettle();
-      expect(
-        channel.permissionsCalls,
-        [('/home/tester/report.txt', 0x180)],
-      );
+      expect(channel.permissionsCalls, [('/home/tester/report.txt', 0x180)]);
     });
 
     testWidgets('invalid octal shows the inline error and blocks the '
@@ -750,8 +727,9 @@ void main() {
       expect(channel.permissionsCalls, isEmpty);
     });
 
-    testWidgets('a typed refusal renders inline under the editor',
-        (tester) async {
+    testWidgets('a typed refusal renders inline under the editor', (
+      tester,
+    ) async {
       final channel = controller_test.FakePaneChannel('/home/tester');
       channel.listings['/home/tester'] = [
         _entry('report.txt', size: 2048, mode: 0x81A4),
@@ -782,9 +760,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        inPanel(
-          find.text('Permission denied — you may not own this item.'),
-        ),
+        inPanel(find.text('Permission denied — you may not own this item.')),
         findsOneWidget,
       );
     });
@@ -793,11 +769,7 @@ void main() {
         'its read-only reason', (tester) async {
       final channel = controller_test.FakePaneChannel('/home/tester');
       channel.listings['/home/tester'] = [
-        _entry(
-          'link',
-          type: RemoteFileType.symbolicLink,
-          mode: 0xA1FF,
-        ),
+        _entry('link', type: RemoteFileType.symbolicLink, mode: 0xA1FF),
       ];
       lanes.nextLocalChannel = channel;
       await left.openLocalHome();
@@ -808,9 +780,7 @@ void main() {
 
       expect(inPanel(find.text('rwxrwxrwx (0777)')), findsOneWidget);
       expect(
-        inPanel(
-          find.text("A symbolic link's permissions can't be changed."),
-        ),
+        inPanel(find.text("A symbolic link's permissions can't be changed.")),
         findsOneWidget,
       );
       expect(octalField(), findsNothing);
@@ -896,9 +866,7 @@ void main() {
         find.byKey(const ValueKey('infoPanel.applyEnclosed')),
       );
       await tester.pump();
-      await tester.tap(
-        find.byKey(const ValueKey('infoPanel.applyEnclosed')),
-      );
+      await tester.tap(find.byKey(const ValueKey('infoPanel.applyEnclosed')));
       await tester.pumpAndSettle();
 
       // The counted confirmation: the mode and the quantified reach.
@@ -908,9 +876,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey('infoPanel.enclosedConfirm')),
-      );
+      await tester.tap(find.byKey(const ValueKey('infoPanel.enclosedConfirm')));
       await tester.pumpAndSettle();
 
       expect(channel.permissionsCalls, [
@@ -921,8 +887,9 @@ void main() {
       expect(inPanel(find.text('3 items changed')), findsOneWidget);
     });
 
-    testWidgets('declining the enclosed confirmation touches nothing',
-        (tester) async {
+    testWidgets('declining the enclosed confirmation touches nothing', (
+      tester,
+    ) async {
       final channel = controller_test.FakePaneChannel('/home/tester');
       channel.listings['/home/tester'] = [
         _entry('docs', type: RemoteFileType.directory, mode: 0x41ED),
@@ -941,15 +908,11 @@ void main() {
         find.byKey(const ValueKey('infoPanel.applyEnclosed')),
       );
       await tester.pump();
-      await tester.tap(
-        find.byKey(const ValueKey('infoPanel.applyEnclosed')),
-      );
+      await tester.tap(find.byKey(const ValueKey('infoPanel.applyEnclosed')));
       await tester.pumpAndSettle();
       expect(find.text('Apply to enclosed items?'), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const ValueKey('infoPanel.enclosedDecline')),
-      );
+      await tester.tap(find.byKey(const ValueKey('infoPanel.enclosedDecline')));
       await tester.pumpAndSettle();
 
       expect(channel.permissionsCalls, isEmpty);
@@ -976,9 +939,7 @@ void main() {
         find.byKey(const ValueKey('infoPanel.applyEnclosed')),
       );
       await tester.pump();
-      await tester.tap(
-        find.byKey(const ValueKey('infoPanel.applyEnclosed')),
-      );
+      await tester.tap(find.byKey(const ValueKey('infoPanel.applyEnclosed')));
       await tester.pumpAndSettle();
       expect(find.text('Apply to enclosed items?'), findsOneWidget);
 
@@ -1032,9 +993,7 @@ void main() {
 
       held.complete();
       await tester.pump();
-      expect(channel.permissionsCalls, [
-        ('/home/tester/report.txt', 0x1C0),
-      ]);
+      expect(channel.permissionsCalls, [('/home/tester/report.txt', 0x1C0)]);
 
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pump();

@@ -87,16 +87,10 @@ void main() {
 
   test('rejects malformed, binary, and oversized content', () async {
     await file.writeAsBytes([0xff]);
-    await expectLater(
-      load(file),
-      throwsA(isA<BuiltInEditorException>()),
-    );
+    await expectLater(load(file), throwsA(isA<BuiltInEditorException>()));
 
     await file.writeAsBytes([0, 1, 2]);
-    await expectLater(
-      load(file),
-      throwsA(isA<BuiltInEditorException>()),
-    );
+    await expectLater(load(file), throwsA(isA<BuiltInEditorException>()));
 
     await file.writeAsBytes([1, 2, 3]);
     await expectLater(
@@ -326,7 +320,10 @@ void main() {
     );
     await tester.pumpWidget(editor(20));
     await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(find.byType(TextField)).style?.fontSize, 20);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).style?.fontSize,
+      20,
+    );
 
     await tester.tap(find.byType(TextField));
     await tester.pumpAndSettle();
@@ -349,7 +346,10 @@ void main() {
     expect(find.widgetWithText(TextField, 'one\n'), findsOneWidget);
 
     await tester.pumpWidget(editor(11));
-    expect(tester.widget<TextField>(find.byType(TextField)).style?.fontSize, 11);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).style?.fontSize,
+      11,
+    );
   });
 
   testWidgets('draws in the app\'s editor font and ligature choice', (
@@ -1057,19 +1057,31 @@ void main() {
       final remote = _FakeRemoteFileSystem({'/etc/config.txt': 'one\n'});
       final controller = await _driftController(remote);
       addTearDown(controller.dispose);
-      final copy = await controller.checkoutRemoteFile(remote.entry('/etc/config.txt'));
+      final copy = await controller.checkoutRemoteFile(
+        remote.entry('/etc/config.txt'),
+      );
       remote.files['/etc/config.txt'] = 'server side\n';
       final key = GlobalKey<BuiltInTextEditorScreenState>();
-      await tester.pumpWidget(MaterialApp(home: BuiltInTextEditorScreen(
-        key: key,
-        file: controller.localFile(copy),
-        remotePath: copy.remotePath,
-        remoteFiles: controller,
-      )));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BuiltInTextEditorScreen(
+            key: key,
+            file: controller.localFile(copy),
+            remotePath: copy.remotePath,
+            remoteFiles: controller,
+          ),
+        ),
+      );
       await tester.pump();
-      await _pollUntil(tester, () => find.byType(TextField).evaluate().isNotEmpty);
-      await _pollUntil(tester, () =>
-          find.text('This file changed on the server.').evaluate().isNotEmpty);
+      await _pollUntil(
+        tester,
+        () => find.byType(TextField).evaluate().isNotEmpty,
+      );
+      await _pollUntil(
+        tester,
+        () =>
+            find.text('This file changed on the server.').evaluate().isNotEmpty,
+      );
       await tester.enterText(find.byType(TextField).first, 'local edit\n');
       await tester.pump();
       final started = Completer<void>();
@@ -1088,9 +1100,16 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         final dialog = find.byType(AlertDialog);
         expect(dialog, findsOneWidget);
-        expect(find.descendant(of: dialog,
-            matching: find.widgetWithText(FilledButton, 'Save')), findsNothing);
-        await tester.tap(find.descendant(of: dialog, matching: find.text('Cancel')));
+        expect(
+          find.descendant(
+            of: dialog,
+            matching: find.widgetWithText(FilledButton, 'Save'),
+          ),
+          findsNothing,
+        );
+        await tester.tap(
+          find.descendant(of: dialog, matching: find.text('Cancel')),
+        );
         await tester.pump(const Duration(milliseconds: 300));
         expect(await close, isFalse);
       } finally {

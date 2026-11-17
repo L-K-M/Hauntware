@@ -245,7 +245,8 @@ class _ActivityClient implements SftpClient {
   @override
   Future<void> link(String path, String target) => _request(path, null);
   @override
-  Future<void> mkdir(String path, [SftpFileAttrs? attrs]) => _request(path, null);
+  Future<void> mkdir(String path, [SftpFileAttrs? attrs]) =>
+      _request(path, null);
   @override
   Future<void> rename(String path, String target) => _request(path, null);
   @override

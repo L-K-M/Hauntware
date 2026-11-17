@@ -91,18 +91,18 @@ PreviewKind previewKindForName(String name) {
 /// "anything else falls back to the card"). Drives the dispatch table
 /// the pane's Space/Esc tests enumerate.
 bool previewKindIsRenderable(PreviewKind kind) => switch (kind) {
-      PreviewKind.text || PreviewKind.image || PreviewKind.pdf => true,
-      _ => false,
-    };
+  PreviewKind.text || PreviewKind.image || PreviewKind.pdf => true,
+  _ => false,
+};
 
 /// The per-kind download cap for remote production (06 §5.3), or null
 /// when the kind has none (text and the metadata card download whole —
 /// their only gates are the threshold prompt and the cache cap).
 int? previewKindCapBytes(PreviewKind kind) => switch (kind) {
-      PreviewKind.image => previewImageKindCapBytes,
-      PreviewKind.pdf => previewPdfKindCapBytes,
-      _ => null,
-    };
+  PreviewKind.image => previewImageKindCapBytes,
+  PreviewKind.pdf => previewPdfKindCapBytes,
+  _ => null,
+};
 
 /// A name's leaf extension in its original case, without the dot — null
 /// when the name has none (or ends in one). Dotfiles like `.zshrc` report
@@ -205,19 +205,65 @@ const _textExtensions = <String>{
 /// Basenames that are text regardless of extension (06 §5.3's
 /// "known-text basenames").
 const _textBasenames = <String>{
-  'readme', 'license', 'licence', 'copying', 'authors', 'contributors',
-  'changelog', 'news', 'todo', 'notice', 'install', 'makefile',
-  'dockerfile', 'vagrantfile', 'gemfile', 'rakefile', 'brewfile',
-  'podfile', 'fastfile', 'procfile', 'justfile', 'taskfile',
-  '.gitignore', '.gitattributes', '.gitmodules', '.editorconfig',
-  '.dockerignore', '.npmignore', '.babelrc', '.eslintrc', '.prettierrc',
-  '.zshrc', '.bashrc', '.bash_profile', '.profile', '.zprofile',
-  '.vimrc', '.emacs', '.nanorc', '.screenrc', '.tmux.conf',
+  'readme',
+  'license',
+  'licence',
+  'copying',
+  'authors',
+  'contributors',
+  'changelog',
+  'news',
+  'todo',
+  'notice',
+  'install',
+  'makefile',
+  'dockerfile',
+  'vagrantfile',
+  'gemfile',
+  'rakefile',
+  'brewfile',
+  'podfile',
+  'fastfile',
+  'procfile',
+  'justfile',
+  'taskfile',
+  '.gitignore',
+  '.gitattributes',
+  '.gitmodules',
+  '.editorconfig',
+  '.dockerignore',
+  '.npmignore',
+  '.babelrc',
+  '.eslintrc',
+  '.prettierrc',
+  '.zshrc',
+  '.bashrc',
+  '.bash_profile',
+  '.profile',
+  '.zprofile',
+  '.vimrc',
+  '.emacs',
+  '.nanorc',
+  '.screenrc',
+  '.tmux.conf',
 };
 
 const _imageExtensions = <String>{
-  'png', 'jpg', 'jpeg', 'jpe', 'gif', 'webp', 'bmp', 'dib', 'ico',
-  'cur', 'avif', 'heic', 'heif', 'tif', 'tiff',
+  'png',
+  'jpg',
+  'jpeg',
+  'jpe',
+  'gif',
+  'webp',
+  'bmp',
+  'dib',
+  'ico',
+  'cur',
+  'avif',
+  'heic',
+  'heif',
+  'tif',
+  'tiff',
 };
 
 const _pdfExtensions = <String>{'pdf'};

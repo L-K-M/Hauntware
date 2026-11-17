@@ -39,8 +39,8 @@ final class SyncAccountGate {
 
   /// The shipped gate — the recorded tag and its fix contents.
   const SyncAccountGate.production()
-      : minimumSharedVersion = kMinimumSharedAccountSeanceVersion,
-        sharedIncludesSeance56Fix = kMinSharedVersionIncludesSeance56Fix;
+    : minimumSharedVersion = kMinimumSharedAccountSeanceVersion,
+      sharedIncludesSeance56Fix = kMinSharedVersionIncludesSeance56Fix;
 
   /// The first Séance release tag carrying PR-S1, or null while none is
   /// recorded. §4.3's shared-account copy interpolates this tag — with

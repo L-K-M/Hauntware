@@ -50,9 +50,11 @@ class FakeWatchBackend implements LocalWatchBackend {
   @override
   Stream<FileSystemEvent> watch(String directory) {
     return (controllers[directory] ??=
-            StreamController<FileSystemEvent>.broadcast(onCancel: () {
-              cancelled.add(directory);
-            }))
+            StreamController<FileSystemEvent>.broadcast(
+              onCancel: () {
+                cancelled.add(directory);
+              },
+            ))
         .stream;
   }
 
@@ -245,18 +247,15 @@ class HostHarness {
         ListDirectoryRequest(requestId: id, channelId: channelId, path: path),
   );
 
-  Future<EngineResult> rename(
-    int channelId,
-    String oldPath,
-    String newPath,
-  ) => call(
-    (id) => RenameEntryRequest(
-      requestId: id,
-      channelId: channelId,
-      oldPath: oldPath,
-      newPath: newPath,
-    ),
-  );
+  Future<EngineResult> rename(int channelId, String oldPath, String newPath) =>
+      call(
+        (id) => RenameEntryRequest(
+          requestId: id,
+          channelId: channelId,
+          oldPath: oldPath,
+          newPath: newPath,
+        ),
+      );
 
   /// §2.6/D28's chmod request on [channelId].
   Future<EngineResult> setPermissions(
@@ -274,11 +273,8 @@ class HostHarness {
 
   /// §2.6's local-file Open request on [channelId].
   Future<EngineResult> openFile(int channelId, String path) => call(
-    (id) => OpenLocalFileRequest(
-      requestId: id,
-      channelId: channelId,
-      path: path,
-    ),
+    (id) =>
+        OpenLocalFileRequest(requestId: id, channelId: channelId, path: path),
   );
 
   /// Opens a local channel (03 §5's engine-side seam) and fails loudly on
@@ -453,9 +449,7 @@ void main() {
     final refreshed = await h.call(
       (id) => ReplaceServerCatalogRequest(
         requestId: id,
-        configs: [
-          direct.copyWith(jumpHostId: 'bastion', updatedAt: 1),
-        ],
+        configs: [direct.copyWith(jumpHostId: 'bastion', updatedAt: 1)],
       ),
     );
     await h.pumping();
@@ -585,17 +579,12 @@ void main() {
     final inner = _config(
       id: 'inner',
     ).copyWith(host: 'inner.example.com', jumpHostId: 'outer');
-    final outer = _config(
-      id: 'outer',
-    ).copyWith(host: 'outer.example.com');
+    final outer = _config(id: 'outer').copyWith(host: 'outer.example.com');
     final catalog = [target, inner, outer];
 
     expect(
       await h.call(
-        (id) => ReplaceServerCatalogRequest(
-          requestId: id,
-          configs: catalog,
-        ),
+        (id) => ReplaceServerCatalogRequest(requestId: id, configs: catalog),
       ),
       isA<EngineAck>(),
     );
@@ -642,10 +631,8 @@ void main() {
       final current = _config(id: 'catalog-1');
       expect(
         await h.call(
-          (id) => ReplaceServerCatalogRequest(
-            requestId: id,
-            configs: [current],
-          ),
+          (id) =>
+              ReplaceServerCatalogRequest(requestId: id, configs: [current]),
         ),
         isA<EngineAck>(),
       );
@@ -683,73 +670,72 @@ void main() {
     });
   }
 
-  test('a removed catalog route drains work and refuses stale requests',
-      () async {
-    final h = HostHarness();
-    addTearDown(h.dispose);
-    final direct = _config(id: 'catalog-1');
-    expect(
-      await h.call(
-        (id) => ReplaceServerCatalogRequest(
-          requestId: id,
-          configs: [direct],
+  test(
+    'a removed catalog route drains work and refuses stale requests',
+    () async {
+      final h = HostHarness();
+      addTearDown(h.dispose);
+      final direct = _config(id: 'catalog-1');
+      expect(
+        await h.call(
+          (id) => ReplaceServerCatalogRequest(requestId: id, configs: [direct]),
         ),
-      ),
-      isA<EngineAck>(),
-    );
+        isA<EngineAck>(),
+      );
 
-    final opened = h.call(
-      (id) => OpenBrowseChannelRequest(
-        requestId: id,
-        serverId: 'favorite-1',
-        paneTabId: 'tab-1',
-        config: direct,
-      ),
-    );
-    await h.pumping();
-    h.reply(h.takePrompt(), _credentials);
-    await h.pumping();
-    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
-    final channel = await opened as BrowseChannelOpened;
-
-    expect(
-      await h.call(
-        (id) => ReplaceServerCatalogRequest(requestId: id, configs: const []),
-      ),
-      isA<EngineAck>(),
-    );
-    expect(
-      await h.list(channel.channelId, '/home/test'),
-      isA<DirectoryListed>(),
-    );
-
-    final staleAfterRemoval = direct.copyWith(
-      updatedAt: direct.updatedAt + 1000,
-    );
-
-    for (final attempt in [
-      h.call(
+      final opened = h.call(
         (id) => OpenBrowseChannelRequest(
           requestId: id,
           serverId: 'favorite-1',
-          paneTabId: 'stale-tab',
-          config: staleAfterRemoval,
+          paneTabId: 'tab-1',
+          config: direct,
         ),
-      ),
-      h.call(
-        (id) => LeaseTransferChannelRequest(
-          requestId: id,
-          serverId: 'favorite-1',
-          config: staleAfterRemoval,
+      );
+      await h.pumping();
+      h.reply(h.takePrompt(), _credentials);
+      await h.pumping();
+      h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+      final channel = await opened as BrowseChannelOpened;
+
+      expect(
+        await h.call(
+          (id) => ReplaceServerCatalogRequest(requestId: id, configs: const []),
         ),
-      ),
-    ]) {
-      final failure = await expectError(attempt);
-      expect(failure.kind, RemoteFileErrorKind.disconnected);
-    }
-    expect(h.events.whereType<EnginePromptEvent>(), isEmpty);
-    expect(h.opener.calls, hasLength(1));
-  });
+        isA<EngineAck>(),
+      );
+      expect(
+        await h.list(channel.channelId, '/home/test'),
+        isA<DirectoryListed>(),
+      );
+
+      final staleAfterRemoval = direct.copyWith(
+        updatedAt: direct.updatedAt + 1000,
+      );
+
+      for (final attempt in [
+        h.call(
+          (id) => OpenBrowseChannelRequest(
+            requestId: id,
+            serverId: 'favorite-1',
+            paneTabId: 'stale-tab',
+            config: staleAfterRemoval,
+          ),
+        ),
+        h.call(
+          (id) => LeaseTransferChannelRequest(
+            requestId: id,
+            serverId: 'favorite-1',
+            config: staleAfterRemoval,
+          ),
+        ),
+      ]) {
+        final failure = await expectError(attempt);
+        expect(failure.kind, RemoteFileErrorKind.disconnected);
+      }
+      expect(h.events.whereType<EnginePromptEvent>(), isEmpty);
+      expect(h.opener.calls, hasLength(1));
+    },
+  );
 
   for (final lease in [false, true]) {
     test('a catalog refresh cancels a pending direct '
@@ -801,9 +787,7 @@ void main() {
         '${lease ? 'lease' : 'open'} before dialing', () async {
       final h = HostHarness();
       addTearDown(h.dispose);
-      final staleDirect = _config(
-        id: 'catalog-1',
-      ).copyWith(updatedAt: 999);
+      final staleDirect = _config(id: 'catalog-1').copyWith(updatedAt: 999);
       final jumpRoute = staleDirect.copyWith(
         jumpHostId: 'bastion',
         updatedAt: 1,
@@ -1049,7 +1033,9 @@ void main() {
   });
 
   test('an empty agent reply reaches the SSH opener as agent auth', () async {
-    final h = HostHarness(opener: FakeTransportOpener(authKind: AuthKind.agent));
+    final h = HostHarness(
+      opener: FakeTransportOpener(authKind: AuthKind.agent),
+    );
     addTearDown(h.dispose);
 
     final opened = h.openBrowse(
@@ -1258,11 +1244,7 @@ void main() {
 
     final channel = await h.openWithDefaults();
 
-    final result = await h.rename(
-      channel.channelId,
-      '/tmp/a',
-      '/tmp/b',
-    );
+    final result = await h.rename(channel.channelId, '/tmp/a', '/tmp/b');
     expect(result, isA<EngineAck>());
     expect(h.fs.renameCalls, [('/tmp/a', '/tmp/b')]);
   });
@@ -1960,11 +1942,7 @@ void main() {
       // A rename onto an existing name refuses typed — the request never
       // carries an overwrite flag (02 §2.6: no silent clobber).
       final conflict = await expectError(
-        h.rename(
-          opened.channelId,
-          '$home/renamed.txt',
-          '$home/b.txt',
-        ),
+        h.rename(opened.channelId, '$home/renamed.txt', '$home/b.txt'),
       );
       expect(conflict.kind, RemoteFileErrorKind.conflict);
     });
@@ -1993,8 +1971,7 @@ void main() {
       expect(File('${root.path}/a.txt').statSync().mode & 0x1FF, 0x180);
     });
 
-    test('openLocalFile launches through the opener seam and acks',
-        () async {
+    test('openLocalFile launches through the opener seam and acks', () async {
       final opener = FakeFileOpener();
       final h = HostHarness(fileOpener: opener);
       addTearDown(h.dispose);
@@ -2035,19 +2012,21 @@ void main() {
       expect(opener.opened, isEmpty);
     });
 
-    test('openLocalFile rejects an empty path before touching the opener',
-        () async {
-      final opener = FakeFileOpener();
-      final h = HostHarness(fileOpener: opener);
-      addTearDown(h.dispose);
-      final root = _localFixture('pg-local-open-empty');
+    test(
+      'openLocalFile rejects an empty path before touching the opener',
+      () async {
+        final opener = FakeFileOpener();
+        final h = HostHarness(fileOpener: opener);
+        addTearDown(h.dispose);
+        final root = _localFixture('pg-local-open-empty');
 
-      final opened = await h.openLocal(root.path);
-      final error = await expectError(h.openFile(opened.channelId, ''));
+        final opened = await h.openLocal(root.path);
+        final error = await expectError(h.openFile(opened.channelId, ''));
 
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(opener.opened, isEmpty);
-    });
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(opener.opened, isEmpty);
+      },
+    );
 
     test('an opener failure serializes its typed kind', () async {
       final opener = FakeFileOpener()
@@ -2419,33 +2398,35 @@ void main() {
       ];
     }
 
-    test('watch canonicalizes the target and forwards debounced changes',
-        () async {
-      final root = _localFixture('pg-watch-forward');
-      final (h, backend, channelId, homePath) = await watchFixture(root);
-      addTearDown(h.dispose);
+    test(
+      'watch canonicalizes the target and forwards debounced changes',
+      () async {
+        final root = _localFixture('pg-watch-forward');
+        final (h, backend, channelId, homePath) = await watchFixture(root);
+        addTearDown(h.dispose);
 
-      // The backend receives the canonical path, not the raw request one.
-      expect(backend.controllers.keys, [homePath]);
-      backend.emit(homePath, FileSystemCreateEvent('$homePath/new.txt', false));
+        // The backend receives the canonical path, not the raw request one.
+        expect(backend.controllers.keys, [homePath]);
+        backend.emit(
+          homePath,
+          FileSystemCreateEvent('$homePath/new.txt', false),
+        );
 
-      final events = await awaitWatchEvents(h);
-      expect(events, hasLength(1));
-      expect(events.single.channelId, channelId);
-      expect(events.single.path, homePath);
-      expect(events.single.signal, DirectoryWatchSignal.changed);
-      expect(events.single.detail, isNull);
-    });
+        final events = await awaitWatchEvents(h);
+        expect(events, hasLength(1));
+        expect(events.single.channelId, channelId);
+        expect(events.single.path, homePath);
+        expect(events.single.signal, DirectoryWatchSignal.changed);
+        expect(events.single.detail, isNull);
+      },
+    );
 
     test('root loss crosses immediately, never silently', () async {
       final root = _localFixture('pg-watch-lost');
       final (h, backend, channelId, homePath) = await watchFixture(root);
       addTearDown(h.dispose);
 
-      backend.emit(
-        homePath,
-        FileSystemDeleteEvent(homePath, false),
-      );
+      backend.emit(homePath, FileSystemDeleteEvent(homePath, false));
       await h.pumping();
 
       final events = watchEvents(h);
@@ -2468,12 +2449,12 @@ void main() {
       final subCanonical = await _canonical(sub.path);
 
       Future<EngineResult> watch(String path) => h.call(
-            (id) => WatchLocalDirectoryRequest(
-              requestId: id,
-              channelId: opened.channelId,
-              path: path,
-            ),
-          );
+        (id) => WatchLocalDirectoryRequest(
+          requestId: id,
+          channelId: opened.channelId,
+          path: path,
+        ),
+      );
 
       expect(await watch(homePath), isA<EngineAck>());
       expect(await watch(subCanonical), isA<EngineAck>());
@@ -2605,10 +2586,8 @@ void main() {
 
       expect(
         await h.call(
-          (id) => UnwatchLocalDirectoryRequest(
-            requestId: id,
-            channelId: channelId,
-          ),
+          (id) =>
+              UnwatchLocalDirectoryRequest(requestId: id, channelId: channelId),
         ),
         isA<EngineAck>(),
       );
@@ -2617,10 +2596,8 @@ void main() {
       // Idempotent: a channel with no watch still acks.
       expect(
         await h.call(
-          (id) => UnwatchLocalDirectoryRequest(
-            requestId: id,
-            channelId: channelId,
-          ),
+          (id) =>
+              UnwatchLocalDirectoryRequest(requestId: id, channelId: channelId),
         ),
         isA<EngineAck>(),
       );
@@ -2636,10 +2613,7 @@ void main() {
       addTearDown(h.dispose);
 
       await h.call(
-        (id) => CloseBrowseChannelRequest(
-          requestId: id,
-          channelId: channelId,
-        ),
+        (id) => CloseBrowseChannelRequest(requestId: id, channelId: channelId),
       );
       expect(backend.cancelled, [homePath]);
 

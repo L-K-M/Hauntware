@@ -8,11 +8,7 @@ import 'package:poltergeist_sync/poltergeist_sync.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const file = EntrySnapshot(
-    kind: EntryKind.file,
-    size: 10,
-    mtimeSecs: 100,
-  );
+  const file = EntrySnapshot(kind: EntryKind.file, size: 10, mtimeSecs: 100);
 
   EntrySnapshot at(int? secs, {int size = 10, String? sha}) => EntrySnapshot(
     kind: EntryKind.file,
@@ -36,14 +32,8 @@ void main() {
         // delta of at least ~2.1s — compares different.
         expect(comparator.compare(at(100), at(101)), CompareVerdict.equal);
         expect(comparator.compare(at(100), at(102)), CompareVerdict.equal);
-        expect(
-          comparator.compare(at(100), at(103)),
-          CompareVerdict.rightNewer,
-        );
-        expect(
-          comparator.compare(at(103), at(100)),
-          CompareVerdict.leftNewer,
-        );
+        expect(comparator.compare(at(100), at(103)), CompareVerdict.rightNewer);
+        expect(comparator.compare(at(103), at(100)), CompareVerdict.leftNewer);
       },
     );
 
@@ -68,25 +58,13 @@ void main() {
       // 3603 lies outside mtimeToleranceSecs of 3600.
       expect(dst.compare(at(100), at(3703)), CompareVerdict.rightNewer);
       // Without the shift the same delta is a real difference.
-      expect(
-        comparator.compare(at(100), at(3700)),
-        CompareVerdict.rightNewer,
-      );
+      expect(comparator.compare(at(100), at(3700)), CompareVerdict.rightNewer);
     });
 
     test('missing mtimes degrade explicitly, never silently equal', () {
-      expect(
-        comparator.compare(at(null), at(null)),
-        CompareVerdict.equal,
-      );
-      expect(
-        comparator.compare(at(null), at(100)),
-        CompareVerdict.rightNewer,
-      );
-      expect(
-        comparator.compare(at(100), at(null)),
-        CompareVerdict.leftNewer,
-      );
+      expect(comparator.compare(at(null), at(null)), CompareVerdict.equal);
+      expect(comparator.compare(at(null), at(100)), CompareVerdict.rightNewer);
+      expect(comparator.compare(at(100), at(null)), CompareVerdict.leftNewer);
     });
 
     test('out-of-range mtimes compare clamped (05 §4)', () {
@@ -94,10 +72,7 @@ void main() {
       expect(comparator.compare(at(-5), at(0)), CompareVerdict.equal);
       // Beyond the uint32 ceiling and AT the ceiling compare equal.
       expect(
-        comparator.compare(
-          at(maxSftpMtimeSecs + 1),
-          at(maxSftpMtimeSecs),
-        ),
+        comparator.compare(at(maxSftpMtimeSecs + 1), at(maxSftpMtimeSecs)),
         CompareVerdict.equal,
       );
       // In-range pairs still use their originals.
@@ -113,14 +88,8 @@ void main() {
     });
 
     test('symlinks never compare contents (v1 skip policy)', () {
-      const a = EntrySnapshot(
-        kind: EntryKind.symlink,
-        symlinkTarget: 'x',
-      );
-      const b = EntrySnapshot(
-        kind: EntryKind.symlink,
-        symlinkTarget: 'y',
-      );
+      const a = EntrySnapshot(kind: EntryKind.symlink, symlinkTarget: 'x');
+      const b = EntrySnapshot(kind: EntryKind.symlink, symlinkTarget: 'y');
       expect(comparator.compare(a, b), CompareVerdict.equal);
     });
 
@@ -133,10 +102,7 @@ void main() {
         CompareVerdict.typeDiffers,
       );
       expect(
-        comparator.compare(
-          file,
-          const EntrySnapshot(kind: EntryKind.symlink),
-        ),
+        comparator.compare(file, const EntrySnapshot(kind: EntryKind.symlink)),
         CompareVerdict.typeDiffers,
       );
     });
@@ -146,10 +112,7 @@ void main() {
     const comparator = EntryComparator(comparison: ComparisonMode.sizeOnly);
 
     test('same size compares equal however far the mtimes drift', () {
-      expect(
-        comparator.compare(at(1), at(999999)),
-        CompareVerdict.equal,
-      );
+      expect(comparator.compare(at(1), at(999999)), CompareVerdict.equal);
     });
 
     test('different size is the only difference it sees', () {
@@ -161,22 +124,16 @@ void main() {
   });
 
   group('EntryComparator — contentHash', () {
-    const comparator = EntryComparator(
-      comparison: ComparisonMode.contentHash,
-    );
+    const comparator = EntryComparator(comparison: ComparisonMode.contentHash);
 
     test('size still shortcuts before hashing', () {
       expect(
-        comparator.compare(
-          at(100, size: 10),
-          at(100, size: 11),
-        ),
+        comparator.compare(at(100, size: 10), at(100, size: 11)),
         CompareVerdict.sizeDiffers,
       );
     });
 
-    test('equal digests compare equal, different compare contentDiffers',
-        () {
+    test('equal digests compare equal, different compare contentDiffers', () {
       expect(
         comparator.compare(at(100, sha: 'a'), at(100, sha: 'a')),
         CompareVerdict.equal,
@@ -188,10 +145,7 @@ void main() {
     });
 
     test('unhashed snapshots are refused, never guessed', () {
-      expect(
-        () => comparator.compare(at(100), at(100)),
-        throwsStateError,
-      );
+      expect(() => comparator.compare(at(100), at(100)), throwsStateError);
       // One-sided missing hash is the realistic mid-run race — refused
       // exactly like the both-missing case, never compared as nulls.
       expect(
@@ -272,14 +226,8 @@ void main() {
     test('caseCollisions only fire against insensitive destinations', () {
       final source = scanOf(['Foo.txt', 'foo.txt', 'ok.txt']);
 
-      expect(
-        caseCollisions(source, destinationCaseSensitive: true),
-        isEmpty,
-      );
-      final hazards = caseCollisions(
-        source,
-        destinationCaseSensitive: false,
-      );
+      expect(caseCollisions(source, destinationCaseSensitive: true), isEmpty);
+      final hazards = caseCollisions(source, destinationCaseSensitive: false);
       expect(hazards, hasLength(1));
       expect(hazards.single.collidingPaths, hasLength(2));
     });
@@ -288,10 +236,7 @@ void main() {
       final source = scanOf(['CON.txt', 'dir/trailing.', 'a<b.txt', 'ok']);
 
       expect(
-        invalidDestinationNames(
-          source,
-          destinationEnforcesLocalNames: false,
-        ),
+        invalidDestinationNames(source, destinationEnforcesLocalNames: false),
         isEmpty,
       );
       final hazards = invalidDestinationNames(
@@ -302,10 +247,7 @@ void main() {
         hazards.map((h) => h.relativePath),
         containsAll(['CON.txt', 'dir/trailing.', 'a<b.txt']),
       );
-      expect(
-        hazards.map((h) => h.relativePath),
-        isNot(contains('ok')),
-      );
+      expect(hazards.map((h) => h.relativePath), isNot(contains('ok')));
     });
   });
 }

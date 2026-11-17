@@ -103,8 +103,7 @@ abstract final class ThemePresets {
   static ThemePalette get terminal => poltergeistThemePresets.terminal;
   static ThemePalette get vapor => poltergeistThemePresets.vapor;
   static ThemePalette get bubblegum => poltergeistThemePresets.bubblegum;
-  static ThemePalette get highContrast =>
-      poltergeistThemePresets.highContrast;
+  static ThemePalette get highContrast => poltergeistThemePresets.highContrast;
 
   static List<ThemePalette> get all => poltergeistThemePresets.all;
   static ThemePalette get initial => poltergeistThemePresets.initial;

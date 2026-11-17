@@ -22,9 +22,11 @@ class FakeBackend implements LocalWatchBackend {
       throw const FileSystemException('backend refused', 'watch');
     }
     return (controllers[directory] ??=
-            StreamController<FileSystemEvent>.broadcast(onCancel: () {
-              cancelled.add(directory);
-            }))
+            StreamController<FileSystemEvent>.broadcast(
+              onCancel: () {
+                cancelled.add(directory);
+              },
+            ))
         .stream;
   }
 
@@ -380,8 +382,7 @@ void main() {
 
   test('a backend that throws at subscribe signals lost immediately', () {
     fakeAsync((async) {
-      final backend = FakeBackend()
-        ..throwOn = _root;
+      final backend = FakeBackend()..throwOn = _root;
       final watcher = LocalDirectoryWatcher(backend: backend);
 
       final signals = <LocalWatchSignal>[];
@@ -517,10 +518,7 @@ void main() {
     final watcher = LocalDirectoryWatcher(backend: backend);
 
     final done = Completer<void>();
-    watcher.signals.listen(
-      (_) {},
-      onDone: done.complete,
-    );
+    watcher.signals.listen((_) {}, onDone: done.complete);
     await watcher.retarget(_root);
     backend.emit(_root, _create('$_root/a.txt'));
 
@@ -530,8 +528,7 @@ void main() {
     expect(backend.cancelled, [_root]);
   });
 
-  test('stop completes only when the backend cancellation completes',
-      () async {
+  test('stop completes only when the backend cancellation completes', () async {
     // A gated backend: the subscription's cancel future parks on the
     // gate, so release completion is driven by explicit delayed
     // completion, never by timing.
@@ -589,18 +586,18 @@ void main() {
     );
 
     final done = Completer<void>();
-    watcher.signals.listen(
-      (_) {},
-      onDone: done.complete,
-    );
+    watcher.signals.listen((_) {}, onDone: done.complete);
     await watcher.retarget(_root);
 
     final disposed = watcher.dispose();
     var closed = false;
     unawaited(done.future.then((_) => closed = true));
     await pumpEventQueue();
-    expect(closed, isFalse,
-        reason: 'signals must not close before the backend released');
+    expect(
+      closed,
+      isFalse,
+      reason: 'signals must not close before the backend released',
+    );
 
     gate.complete();
     await disposed;
@@ -629,8 +626,11 @@ void main() {
     var secondDone = false;
     unawaited(second.then((_) => secondDone = true));
     await pumpEventQueue();
-    expect(secondDone, isFalse,
-        reason: 'the second dispose must await the first teardown');
+    expect(
+      secondDone,
+      isFalse,
+      reason: 'the second dispose must await the first teardown',
+    );
 
     gate.complete();
     await first;
@@ -654,8 +654,11 @@ void main() {
     var acked = false;
     unawaited(watcher.retarget(_other).then((_) => acked = true));
     await pumpEventQueue();
-    expect(acked, isTrue,
-        reason: 'the retarget ack must not wait the replaced release');
+    expect(
+      acked,
+      isTrue,
+      reason: 'the retarget ack must not wait the replaced release',
+    );
 
     expect(backend.gate.isCompleted, isFalse);
     // Dispose must await the replaced watch's parked release — the
@@ -665,8 +668,11 @@ void main() {
     var disposeDone = false;
     disposed.then((_) => disposeDone = true).ignore();
     await pumpEventQueue();
-    expect(disposeDone, isFalse,
-        reason: 'dispose must await the replaced watch release');
+    expect(
+      disposeDone,
+      isFalse,
+      reason: 'dispose must await the replaced watch release',
+    );
 
     backend.gate.complete();
     await disposed;

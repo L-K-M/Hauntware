@@ -75,10 +75,7 @@ final class FrameSlice {
 /// below two frames: one vsync stamps no interval.
 double estimateRefreshHz(List<FrameSlice> frames) {
   if (frames.length < 2) {
-    throw InsufficientFramesException(
-      captured: frames.length,
-      required: 2,
-    );
+    throw InsufficientFramesException(captured: frames.length, required: 2);
   }
   final sorted = [...frames]
     ..sort((a, b) => a.vsyncStartUs.compareTo(b.vsyncStartUs));

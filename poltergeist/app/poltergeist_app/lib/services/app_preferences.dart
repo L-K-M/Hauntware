@@ -54,7 +54,6 @@ const _skipRuleSetsKey = 'sync.skipRuleSets';
 /// fixed cap is stored as its number.
 const _automaticConcurrency = 'automatic';
 
-
 class AppPreferences {
   AppPreferences({required SettingsStore store})
     // Keep the backing store private to the preference facade.
@@ -204,8 +203,9 @@ class AppPreferences {
   Future<void> _saveLimit(String key, int? bytesPerSecond) {
     // A null write decodes back to "no stored limit" — the same answer
     // as an absent key, so removal is not needed.
-    final normalized =
-        bytesPerSecond != null && bytesPerSecond > 0 ? bytesPerSecond : null;
+    final normalized = bytesPerSecond != null && bytesPerSecond > 0
+        ? bytesPerSecond
+        : null;
     return _store.set(key, normalized);
   }
 
@@ -458,8 +458,7 @@ class AppPreferences {
     }
   }
 
-  Future<void> saveAppLock(bool enabled) =>
-      _store.set(_appLockKey, enabled);
+  Future<void> saveAppLock(bool enabled) => _store.set(_appLockKey, enabled);
 
   /// CRED-05's enrolment prompt answer, `poltergeist.recoveryPromptDeclined`:
   /// "Not now" is remembered so the offer is not made again; Settings
@@ -593,10 +592,8 @@ class AppPreferences {
 
   /// The §8 "Preview & downloads" cache cap (06 §8): bytes, default
   /// 512 MiB. A missing or corrupt value decodes to the default.
-  Future<int> loadPreviewCacheCapacityBytes() => _loadBytes(
-    _previewCacheCapacityKey,
-    defaultPreviewCacheCapacityBytes,
-  );
+  Future<int> loadPreviewCacheCapacityBytes() =>
+      _loadBytes(_previewCacheCapacityKey, defaultPreviewCacheCapacityBytes);
 
   Future<void> savePreviewCacheCapacityBytes(int bytes) => _store.set(
     _previewCacheCapacityKey,
@@ -607,10 +604,8 @@ class AppPreferences {
   /// bytes, default 100 MiB — one setting gating remote previews,
   /// Quick Look productions, compare sides, and external-editor
   /// checkouts.
-  Future<int> loadPreviewThresholdBytes() => _loadBytes(
-    _previewThresholdKey,
-    defaultLargeDownloadThresholdBytes,
-  );
+  Future<int> loadPreviewThresholdBytes() =>
+      _loadBytes(_previewThresholdKey, defaultLargeDownloadThresholdBytes);
 
   Future<void> savePreviewThresholdBytes(int bytes) => _store.set(
     _previewThresholdKey,

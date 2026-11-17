@@ -34,13 +34,12 @@ enum LocalShellPlatform { linux, macos, windows, android, ios, unknown }
 /// `unknown` — web, or a platform added after this was written — is refused
 /// for the same reason we cannot reason about it.
 bool localShellSupportedOn(LocalShellPlatform platform) => switch (platform) {
-      LocalShellPlatform.linux || LocalShellPlatform.macos => true,
-      LocalShellPlatform.windows ||
-      LocalShellPlatform.android ||
-      LocalShellPlatform.ios ||
-      LocalShellPlatform.unknown =>
-        false,
-    };
+  LocalShellPlatform.linux || LocalShellPlatform.macos => true,
+  LocalShellPlatform.windows ||
+  LocalShellPlatform.android ||
+  LocalShellPlatform.ios ||
+  LocalShellPlatform.unknown => false,
+};
 
 /// Why [localShellSupportedOn] said no, as one user-facing sentence. Empty for
 /// a platform that does support it.
@@ -204,10 +203,8 @@ abstract class LocalPty {
 }
 
 /// Opens a pty running [command], sized to [size].
-typedef LocalPtyLauncher = Future<LocalPty> Function(
-  LocalShellCommand command,
-  TerminalSize size,
-);
+typedef LocalPtyLauncher =
+    Future<LocalPty> Function(LocalShellCommand command, TerminalSize size);
 
 /// Thrown when a local shell could not be started. [message] is a one-line,
 /// user-facing summary; [cause] is the original error.
@@ -273,14 +270,16 @@ class LocalShellSession implements SessionTransport {
     // the notify onto the shared teardown.
     final teardown = _finishFuture;
     if (teardown != null) {
-      unawaited(teardown.then(
-        (_) => _notifyClosed(),
-        // The error already reaches whoever awaits close() — re-raising it
-        // on this derived future would make an unhandled copy, and firing
-        // the callback would report an exit notification whose contract
-        // ("the engine is gone") the failed teardown never satisfied.
-        onError: (_) {},
-      ));
+      unawaited(
+        teardown.then(
+          (_) => _notifyClosed(),
+          // The error already reaches whoever awaits close() — re-raising it
+          // on this derived future would make an unhandled copy, and firing
+          // the callback would report an exit notification whose contract
+          // ("the engine is gone") the failed teardown never satisfied.
+          onError: (_) {},
+        ),
+      );
     }
   }
 

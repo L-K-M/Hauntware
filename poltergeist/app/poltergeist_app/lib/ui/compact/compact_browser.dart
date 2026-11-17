@@ -162,7 +162,10 @@ class CompactBrowser extends StatelessWidget {
 
     return Scaffold(
       key: const ValueKey(CompactKey.browser),
-      backgroundColor: PoltergeistChrome.of(context, poltergeistThemeStyle).paneBackground,
+      backgroundColor: PoltergeistChrome.of(
+        context,
+        poltergeistThemeStyle,
+      ).paneBackground,
       appBar: _SwitchingAppBar(
         child: showsSelection
             ? _selectionBar(context, l10n, pane)

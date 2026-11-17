@@ -21,10 +21,10 @@ final class DynamicSecretVault extends SecretVault {
     this._current, {
     void Function(Object error, StackTrace stackTrace)? onError,
     this._readGuard,
-  })  : // Keep the reporter private while allowing injection.
-        // ignore: prefer_initializing_formals
-        _onError = onError,
-        super(store, const <int>[]);
+  }) : // Keep the reporter private while allowing injection.
+       // ignore: prefer_initializing_formals
+       _onError = onError,
+       super(store, const <int>[]);
 
   final Future<SecretVault?> Function() _current;
   final void Function(Object error, StackTrace stackTrace)? _onError;
@@ -57,8 +57,7 @@ final class DynamicSecretVault extends SecretVault {
   }
 
   @override
-  Future<Secret?> getSecret(String id) =>
-      _read((vault) => vault.getSecret(id));
+  Future<Secret?> getSecret(String id) => _read((vault) => vault.getSecret(id));
 
   @override
   Future<Secret?> readableSecret(String id) =>

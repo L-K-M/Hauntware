@@ -407,7 +407,8 @@ void main() {
       sent.add(signal);
       return true;
     };
-    void Function() hangupRecorder() => () => hangups++;
+    void Function() hangupRecorder() =>
+        () => hangups++;
 
     setUp(() {
       sent = [];
@@ -568,34 +569,45 @@ void main() {
         state.setLocalShellEnabled(false),
         throwsA(isA<StateError>()),
       );
-      expect(services.settings.localShell, isTrue,
-          reason: 'the flag reverts when the save did not land');
-      expect(state.tabs, contains(tab),
-          reason: 'an off that never persisted must not kill the shells');
+      expect(
+        services.settings.localShell,
+        isTrue,
+        reason: 'the flag reverts when the save did not land',
+      );
+      expect(
+        state.tabs,
+        contains(tab),
+        reason: 'an off that never persisted must not kill the shells',
+      );
       expect(transports.single.closed, isFalse);
     });
 
-    test('a newer toggle during the save keeps the shells it re-enabled',
-        () async {
-      localTab('l1');
-      final gate = Completer<void>();
-      services.saveGate = gate;
+    test(
+      'a newer toggle during the save keeps the shells it re-enabled',
+      () async {
+        localTab('l1');
+        final gate = Completer<void>();
+        services.saveGate = gate;
 
-      final disabling = state.setLocalShellEnabled(false);
-      await pumpEventQueue();
-      expect(services.settings.localShell, isFalse);
+        final disabling = state.setLocalShellEnabled(false);
+        await pumpEventQueue();
+        expect(services.settings.localShell, isFalse);
 
-      // The user flips it back on while the off-save is still in flight.
-      await state.setLocalShellEnabled(true);
-      gate.complete();
-      await disabling;
+        // The user flips it back on while the off-save is still in flight.
+        await state.setLocalShellEnabled(true);
+        gate.complete();
+        await disabling;
 
-      expect(services.settings.localShell, isTrue);
-      expect(state.tabs, hasLength(1),
-          reason: 'the re-enabled shells belong to the newer toggle');
-      expect(transports.single.closed, isFalse);
-      expect(services.saves, 2);
-    });
+        expect(services.settings.localShell, isTrue);
+        expect(
+          state.tabs,
+          hasLength(1),
+          reason: 'the re-enabled shells belong to the newer toggle',
+        );
+        expect(transports.single.closed, isFalse);
+        expect(services.saves, 2);
+      },
+    );
   });
 }
 

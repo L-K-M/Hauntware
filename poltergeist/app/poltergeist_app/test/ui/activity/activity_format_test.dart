@@ -6,8 +6,7 @@ import 'package:poltergeist_app/ui/activity/activity_format.dart';
 /// line's shared-parent arithmetic keeps every level the roots share.
 void main() {
   group('parseTransferRate', () {
-    test('rejects a magnitude whose byte product overflows to infinity',
-        () {
+    test('rejects a magnitude whose byte product overflows to infinity', () {
       // double.parse saturates an over-range literal to Infinity, and
       // Infinity.round() throws — the field's inline-error contract
       // (invalid input is rejected, never clamped) must cover it.

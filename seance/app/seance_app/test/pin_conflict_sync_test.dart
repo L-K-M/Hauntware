@@ -17,8 +17,7 @@ MockClient _currentServerClient(
   Future<http.Response> Function(http.Request) handler,
 ) {
   return MockClient((request) async {
-    if (request.method == 'GET' &&
-        request.url.path == '/v1/records/legacy') {
+    if (request.method == 'GET' && request.url.path == '/v1/records/legacy') {
       return http.Response(
         jsonEncode(
           const LegacyRecordPage(

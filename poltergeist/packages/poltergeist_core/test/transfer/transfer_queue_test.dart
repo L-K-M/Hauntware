@@ -161,8 +161,7 @@ void main() {
   });
 
   group('scan-then-execute', () {
-    test('single file local→remote lands bytes and releases leases',
-        () async {
+    test('single file local→remote lands bytes and releases leases', () async {
       final file = writeLocal('hello.txt', 'payload'.codeUnits);
       final task = enqueue(
         copySpec(
@@ -193,37 +192,45 @@ void main() {
       expect(states.last, TransferTaskState.completed);
     });
 
-    test('directory tree remote→remote: parents-first mkdir, symlink skip',
-        () async {
-      s1.addDirectory('/src/dir/sub');
-      s1.addFile('/src/dir/a.txt', 'aaa'.codeUnits);
-      s1.addFile('/src/dir/sub/b.txt', 'bb'.codeUnits);
-      s1.addSymlink('/src/dir/link');
+    test(
+      'directory tree remote→remote: parents-first mkdir, symlink skip',
+      () async {
+        s1.addDirectory('/src/dir/sub');
+        s1.addFile('/src/dir/a.txt', 'aaa'.codeUnits);
+        s1.addFile('/src/dir/sub/b.txt', 'bb'.codeUnits);
+        s1.addSymlink('/src/dir/link');
 
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src/dir'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/dir'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
 
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/dir/a.txt'], 'aaa'.codeUnits);
-      expect(s2.fileBytes['/dst/dir/sub/b.txt'], 'bb'.codeUnits);
-      expect(task.plan!.skippedSymlinks, 1);
-      // Parents first: dir before sub, and both before any upload into
-      // them (scan order is the append order).
-      final mkdirs = s2.calls.where((c) => c.startsWith('mkdir:')).toList();
-      expect(mkdirs, containsAllInOrder(['mkdir:/dst/dir', 'mkdir:/dst/dir/sub']));
-      final uploads = s2.calls.where((c) => c.startsWith('upload:')).toList();
-      expect(
-        uploads,
-        containsAllInOrder(['upload:/dst/dir/a.txt', 'upload:/dst/dir/sub/b.txt']),
-      );
-    });
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/dir/a.txt'], 'aaa'.codeUnits);
+        expect(s2.fileBytes['/dst/dir/sub/b.txt'], 'bb'.codeUnits);
+        expect(task.plan!.skippedSymlinks, 1);
+        // Parents first: dir before sub, and both before any upload into
+        // them (scan order is the append order).
+        final mkdirs = s2.calls.where((c) => c.startsWith('mkdir:')).toList();
+        expect(
+          mkdirs,
+          containsAllInOrder(['mkdir:/dst/dir', 'mkdir:/dst/dir/sub']),
+        );
+        final uploads = s2.calls.where((c) => c.startsWith('upload:')).toList();
+        expect(
+          uploads,
+          containsAllInOrder([
+            'upload:/dst/dir/a.txt',
+            'upload:/dst/dir/sub/b.txt',
+          ]),
+        );
+      },
+    );
 
     test('first bytes flow before the scan completes', () async {
       s1.addDirectory('/src');
@@ -259,68 +266,71 @@ void main() {
       expect(s2.fileBytes['/dst/src/slow/late.txt'], 'late'.codeUnits);
     });
 
-    test('growing totals: totalBytes is a floor until the scan closes',
-        () async {
-      s1.addDirectory('/src');
-      s1.addFile('/src/a.bin', List.filled(10, 1));
-      s1.addDirectory('/src/more');
-      s1.addFile('/src/more/b.bin', List.filled(20, 2));
-      final gate = Completer<void>();
-      s1.listGate = (path) => path == '/src/more' ? gate : null;
+    test(
+      'growing totals: totalBytes is a floor until the scan closes',
+      () async {
+        s1.addDirectory('/src');
+        s1.addFile('/src/a.bin', List.filled(10, 1));
+        s1.addDirectory('/src/more');
+        s1.addFile('/src/more/b.bin', List.filled(20, 2));
+        final gate = Completer<void>();
+        s1.listGate = (path) => path == '/src/more' ? gate : null;
 
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src'],
-          destinationDir: '/dst',
-        ),
-      );
-      await pumpUntil(() => (task.totalBytes ?? 0) > 0);
-      // Only a.bin is discovered so far: the floor is 10 of a final 30.
-      expect(task.totalBytes, 10);
-      expect(task.scanComplete, isFalse);
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src'],
+            destinationDir: '/dst',
+          ),
+        );
+        await pumpUntil(() => (task.totalBytes ?? 0) > 0);
+        // Only a.bin is discovered so far: the floor is 10 of a final 30.
+        expect(task.totalBytes, 10);
+        expect(task.scanComplete, isFalse);
 
-      gate.complete();
-      await awaitTaskDone(task);
-      expect(task.totalBytes, 30);
-      expect(task.transferredBytes, 30);
-    });
+        gate.complete();
+        await awaitTaskDone(task);
+        expect(task.totalBytes, 30);
+        expect(task.transferredBytes, 30);
+      },
+    );
 
-    test('remote→local tree materializes under the local destination dir',
-        () async {
-      final localDest = Directory('${tempDir.path}/local-dest')
-        ..createSync();
-      s1.addDirectory('/src/dir');
-      s1.addFile('/src/dir/a.txt', 'aaa'.codeUnits);
-      s1.addFile('/src/dir/deep/b.bin', [1, 2, 3]);
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const LocalFsLocation(),
-          rootPaths: ['/src/dir'],
-          destinationDir: localDest.path,
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(task.completedFiles, 2);
-      expect(
-        File('${localDest.path}/dir/a.txt').readAsBytesSync(),
-        'aaa'.codeUnits,
-      );
-      expect(
-        File('${localDest.path}/dir/deep/b.bin').readAsBytesSync(),
-        [1, 2, 3],
-      );
-      // Local endpoints hold no channel lease — only the source did.
-      expect(connections.activeLeases('s1'), 0);
-      expect(connections.maxActiveLeases('s1'), greaterThan(0));
-      expect(connections.filesystems.containsKey('local'), isFalse);
-    });
+    test(
+      'remote→local tree materializes under the local destination dir',
+      () async {
+        final localDest = Directory('${tempDir.path}/local-dest')..createSync();
+        s1.addDirectory('/src/dir');
+        s1.addFile('/src/dir/a.txt', 'aaa'.codeUnits);
+        s1.addFile('/src/dir/deep/b.bin', [1, 2, 3]);
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const LocalFsLocation(),
+            rootPaths: ['/src/dir'],
+            destinationDir: localDest.path,
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(task.completedFiles, 2);
+        expect(
+          File('${localDest.path}/dir/a.txt').readAsBytesSync(),
+          'aaa'.codeUnits,
+        );
+        expect(File('${localDest.path}/dir/deep/b.bin').readAsBytesSync(), [
+          1,
+          2,
+          3,
+        ]);
+        // Local endpoints hold no channel lease — only the source did.
+        expect(connections.activeLeases('s1'), 0);
+        expect(connections.maxActiveLeases('s1'), greaterThan(0));
+        expect(connections.filesystems.containsKey('local'), isFalse);
+      },
+    );
 
-    test('scan-time existing hint is populated but never trusted',
-        () async {
+    test('scan-time existing hint is populated but never trusted', () async {
       s1.addFile('/src/dup.txt', 'new-bytes'.codeUnits);
       s2.addFile('/dst/dup.txt', 'old'.codeUnits);
       final task = enqueue(
@@ -378,61 +388,65 @@ void main() {
       expect(s1.maxActiveDownloads, 3);
     });
 
-    test('per-server lease capacity blocks admission and frees on release',
-        () async {
-      queue = newQueue(leaseCap: 2);
-      for (var i = 0; i < 4; i++) {
-        s1.addFile('/src/f$i.bin', List.filled(4, i));
-      }
-      final gate = Completer<void>();
-      s1.downloadGate = (_) => gate;
+    test(
+      'per-server lease capacity blocks admission and frees on release',
+      () async {
+        queue = newQueue(leaseCap: 2);
+        for (var i = 0; i < 4; i++) {
+          s1.addFile('/src/f$i.bin', List.filled(4, i));
+        }
+        final gate = Completer<void>();
+        s1.downloadGate = (_) => gate;
 
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src'],
-          destinationDir: '/dst',
-        ),
-      );
-      // While the scan holds one s1 lease only one dispatch fits; once it
-      // finishes, two downloads may hold leases — never three.
-      await pumpUntil(
-        () => task.scanComplete && s1.activeDownloads == 2,
-        reason: 'two dispatches should hold the two free leases',
-      );
-      await pump();
-      expect(s1.activeDownloads, lessThanOrEqualTo(2));
-      expect(connections.maxActiveLeases('s1'), lessThanOrEqualTo(2));
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src'],
+            destinationDir: '/dst',
+          ),
+        );
+        // While the scan holds one s1 lease only one dispatch fits; once it
+        // finishes, two downloads may hold leases — never three.
+        await pumpUntil(
+          () => task.scanComplete && s1.activeDownloads == 2,
+          reason: 'two dispatches should hold the two free leases',
+        );
+        await pump();
+        expect(s1.activeDownloads, lessThanOrEqualTo(2));
+        expect(connections.maxActiveLeases('s1'), lessThanOrEqualTo(2));
 
-      gate.complete();
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(task.completedFiles, 4);
-      expect(connections.activeLeases('s1'), 0);
-      expect(connections.activeLeases('s2'), 0);
-    });
+        gate.complete();
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(task.completedFiles, 4);
+        expect(connections.activeLeases('s1'), 0);
+        expect(connections.activeLeases('s2'), 0);
+      },
+    );
 
-    test('cancel while a lease call is blocked unwinds without a wedge',
-        () async {
-      connections.leaseGate = Completer<void>(); // never completed
-      final file = writeLocal('x.txt', [1, 2, 3]);
-      final task = enqueue(
-        copySpec(
-          source: const LocalFsLocation(),
-          destination: const ServerFsLocation('s1'),
-          rootPaths: [file.path],
-          destinationDir: '/dst',
-        ),
-      );
-      await pumpUntil(() => connections.leaseCalls > 0);
-      queue.cancelTask(task.id);
-      await pumpUntil(() => task.state == TransferTaskState.cancelled);
-      // The pending lease future is released when it eventually lands —
-      // here it never does, and nothing waits on it.
-      connections.leaseGate!.complete();
-      await pump();
-    });
+    test(
+      'cancel while a lease call is blocked unwinds without a wedge',
+      () async {
+        connections.leaseGate = Completer<void>(); // never completed
+        final file = writeLocal('x.txt', [1, 2, 3]);
+        final task = enqueue(
+          copySpec(
+            source: const LocalFsLocation(),
+            destination: const ServerFsLocation('s1'),
+            rootPaths: [file.path],
+            destinationDir: '/dst',
+          ),
+        );
+        await pumpUntil(() => connections.leaseCalls > 0);
+        queue.cancelTask(task.id);
+        await pumpUntil(() => task.state == TransferTaskState.cancelled);
+        // The pending lease future is released when it eventually lands —
+        // here it never does, and nothing waits on it.
+        connections.leaseGate!.complete();
+        await pump();
+      },
+    );
   });
 
   // 00 D37: the user's per-server caps on files in flight.
@@ -696,60 +710,66 @@ void main() {
   });
 
   group('pause and cancel', () {
-    test('queue pause stops new dispatch; in-flight completes; resume drains',
-        () async {
-      s1.addDirectory('/src');
-      s1.addFile('/src/f0.bin', List.filled(4, 0));
-      s1.addDirectory('/src/rest');
-      s1.addFile('/src/rest/f1.bin', List.filled(4, 1));
-      s1.addFile('/src/rest/f2.bin', List.filled(4, 2));
-      // Hold the subtree listing: f1/f2 get discovered during the pause.
-      final listGate = Completer<void>();
-      s1.listGate = (path) => path == '/src/rest' ? listGate : null;
-      final downloadGates = {
-        for (final p in ['/src/f0.bin', '/src/rest/f1.bin', '/src/rest/f2.bin'])
-          p: Completer<void>(),
-      };
-      s1.downloadGate = (path) => downloadGates[path];
+    test(
+      'queue pause stops new dispatch; in-flight completes; resume drains',
+      () async {
+        s1.addDirectory('/src');
+        s1.addFile('/src/f0.bin', List.filled(4, 0));
+        s1.addDirectory('/src/rest');
+        s1.addFile('/src/rest/f1.bin', List.filled(4, 1));
+        s1.addFile('/src/rest/f2.bin', List.filled(4, 2));
+        // Hold the subtree listing: f1/f2 get discovered during the pause.
+        final listGate = Completer<void>();
+        s1.listGate = (path) => path == '/src/rest' ? listGate : null;
+        final downloadGates = {
+          for (final p in [
+            '/src/f0.bin',
+            '/src/rest/f1.bin',
+            '/src/rest/f2.bin',
+          ])
+            p: Completer<void>(),
+        };
+        s1.downloadGate = (path) => downloadGates[path];
 
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src'],
-          destinationDir: '/dst',
-        ),
-      );
-      await pumpUntil(() => s1.activeDownloads == 1);
-      queue.pauseQueue();
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src'],
+            destinationDir: '/dst',
+          ),
+        );
+        await pumpUntil(() => s1.activeDownloads == 1);
+        queue.pauseQueue();
 
-      // The scan keeps discovering while paused; the new files become
-      // eligible but cannot dispatch.
-      listGate.complete();
-      await pumpUntil(() => task.scanComplete);
-      expect(task.items.length, greaterThan(3));
+        // The scan keeps discovering while paused; the new files become
+        // eligible but cannot dispatch.
+        listGate.complete();
+        await pumpUntil(() => task.scanComplete);
+        expect(task.items.length, greaterThan(3));
 
-      // The in-flight f0 still completes — pause stops admission, not
-      // running VFS work (03 §4.4).
-      downloadGates['/src/f0.bin']!.complete();
-      await pumpUntil(
-        () => s2.fileBytes.containsKey('/dst/src/f0.bin'),
-        reason: 'in-flight download should complete during queue pause',
-      );
-      await pump();
-      expect(s2.fileBytes.containsKey('/dst/src/rest/f1.bin'), isFalse);
-      expect(s1.activeDownloads, 0);
+        // The in-flight f0 still completes — pause stops admission, not
+        // running VFS work (03 §4.4).
+        downloadGates['/src/f0.bin']!.complete();
+        await pumpUntil(
+          () => s2.fileBytes.containsKey('/dst/src/f0.bin'),
+          reason: 'in-flight download should complete during queue pause',
+        );
+        await pump();
+        expect(s2.fileBytes.containsKey('/dst/src/rest/f1.bin'), isFalse);
+        expect(s1.activeDownloads, 0);
 
-      queue.resumeQueue();
-      await pumpUntil(() => s1.activeDownloads == 2);
-      downloadGates['/src/rest/f1.bin']!.complete();
-      downloadGates['/src/rest/f2.bin']!.complete();
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(task.completedFiles, 3);
-      expect(s2.fileBytes['/dst/src/rest/f1.bin'], List.filled(4, 1));
-      expect(s2.fileBytes['/dst/src/rest/f2.bin'], List.filled(4, 2));
-    });
+        queue.resumeQueue();
+        await pumpUntil(() => s1.activeDownloads == 2);
+        downloadGates['/src/rest/f1.bin']!.complete();
+        downloadGates['/src/rest/f2.bin']!.complete();
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(task.completedFiles, 3);
+        expect(s2.fileBytes['/dst/src/rest/f1.bin'], List.filled(4, 1));
+        expect(s2.fileBytes['/dst/src/rest/f2.bin'], List.filled(4, 2));
+      },
+    );
 
     test('cancelling a paused managed checkout settles it without an '
         'unhandled error', () async {
@@ -817,45 +837,47 @@ void main() {
       expect(s2.fileBytes['/dst/big.bin'], List.filled(64, 7));
     });
 
-    test('task cancel stops new work, drains in-flight, releases leases',
-        () async {
-      for (var i = 0; i < 4; i++) {
-        s1.addFile('/src/f$i.bin', List.filled(8, i));
-      }
-      final gate = Completer<void>();
-      s1.downloadGate = (_) => gate;
+    test(
+      'task cancel stops new work, drains in-flight, releases leases',
+      () async {
+        for (var i = 0; i < 4; i++) {
+          s1.addFile('/src/f$i.bin', List.filled(8, i));
+        }
+        final gate = Completer<void>();
+        s1.downloadGate = (_) => gate;
 
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src'],
-          destinationDir: '/dst',
-        ),
-      );
-      await pumpUntil(() => s1.activeDownloads > 0);
-      queue.cancelTask(task.id);
-      await pumpUntil(() => task.state == TransferTaskState.cancelled);
-      expect(
-        task.items.every(
-          (i) =>
-              i.state == TransferItemState.cancelled ||
-              i.state == TransferItemState.completed,
-        ),
-        isTrue,
-      );
-      // Release the parked fake read so the in-flight attempt unwinds
-      // through the cancelled attempt token.
-      gate.complete();
-      await pumpUntil(
-        () =>
-            connections.activeLeases('s1') == 0 &&
-            connections.activeLeases('s2') == 0,
-        reason: 'cancelled task never released its leases',
-      );
-      // No partial commit landed on the destination.
-      expect(s2.fileBytes, isEmpty);
-    });
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src'],
+            destinationDir: '/dst',
+          ),
+        );
+        await pumpUntil(() => s1.activeDownloads > 0);
+        queue.cancelTask(task.id);
+        await pumpUntil(() => task.state == TransferTaskState.cancelled);
+        expect(
+          task.items.every(
+            (i) =>
+                i.state == TransferItemState.cancelled ||
+                i.state == TransferItemState.completed,
+          ),
+          isTrue,
+        );
+        // Release the parked fake read so the in-flight attempt unwinds
+        // through the cancelled attempt token.
+        gate.complete();
+        await pumpUntil(
+          () =>
+              connections.activeLeases('s1') == 0 &&
+              connections.activeLeases('s2') == 0,
+          reason: 'cancelled task never released its leases',
+        );
+        // No partial commit landed on the destination.
+        expect(s2.fileBytes, isEmpty);
+      },
+    );
 
     test('cancel during scan stops the walk without wedging', () async {
       s1.addDirectory('/src');
@@ -940,34 +962,34 @@ void main() {
       expect(task.state, TransferTaskState.completed);
       expect(s2.fileBytes['/dst/new.txt'], 'new'.codeUnits);
       expect(s2.fileBytes['/dst/old.txt'], 'y'.codeUnits);
-      final bySource = {
-        for (final i in task.items) i.sourcePath: i,
-      };
+      final bySource = {for (final i in task.items) i.sourcePath: i};
       expect(bySource['/src/new.txt']!.state, TransferItemState.completed);
       expect(bySource['/src/old.txt']!.state, TransferItemState.skipped);
     });
 
-    test('keepBoth lands the numbered name and preserves the original',
-        () async {
-      s1.addFile('/src/report.pdf', 'new'.codeUnits);
-      s2.addFile('/dst/report.pdf', 'old'.codeUnits);
-      s2.addFile('/dst/report (2).pdf', 'older'.codeUnits);
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src/report.pdf'],
-          destinationDir: '/dst',
-          files: ConflictResolution.keepBoth,
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/report.pdf'], 'old'.codeUnits);
-      expect(s2.fileBytes['/dst/report (2).pdf'], 'older'.codeUnits);
-      expect(s2.fileBytes['/dst/report (3).pdf'], 'new'.codeUnits);
-      expect(task.items.single.destinationPath, '/dst/report (3).pdf');
-    });
+    test(
+      'keepBoth lands the numbered name and preserves the original',
+      () async {
+        s1.addFile('/src/report.pdf', 'new'.codeUnits);
+        s2.addFile('/dst/report.pdf', 'old'.codeUnits);
+        s2.addFile('/dst/report (2).pdf', 'older'.codeUnits);
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/report.pdf'],
+            destinationDir: '/dst',
+            files: ConflictResolution.keepBoth,
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/report.pdf'], 'old'.codeUnits);
+        expect(s2.fileBytes['/dst/report (2).pdf'], 'older'.codeUnits);
+        expect(s2.fileBytes['/dst/report (3).pdf'], 'new'.codeUnits);
+        expect(task.items.single.destinationPath, '/dst/report (3).pdf');
+      },
+    );
 
     test('keepBoth reserves its resolved name against later sources', () async {
       queue = newQueue(maxInFlightFiles: 1);
@@ -1329,8 +1351,7 @@ void main() {
       expect(task.state, TransferTaskState.completed);
     });
 
-    test('case-insensitive destination serializes folded duplicates',
-        () async {
+    test('case-insensitive destination serializes folded duplicates', () async {
       queue = newQueue(isCaseInsensitiveDestination: (_) => true);
       events = [];
       queue.events.listen(events.add);
@@ -1923,10 +1944,7 @@ void main() {
         copySpec(
           source: const ServerFsLocation('s1'),
           destination: const ServerFsLocation('s2'),
-          rootPaths: const [
-            '/left/stra\u00dfe.txt',
-            '/right/strasse.txt',
-          ],
+          rootPaths: const ['/left/stra\u00dfe.txt', '/right/strasse.txt'],
           destinationDir: '/dst',
           files: ConflictResolution.replace,
           operation: TransferOperation.move,
@@ -2192,24 +2210,24 @@ void main() {
 
     test(
       'folder keepBoth rebases the subtree into the numbered directory',
-        () async {
-      s1.addDirectory('/src/dir');
-      s1.addFile('/src/dir/inside.txt', 'in'.codeUnits);
-      s2.addDirectory('/dst/dir');
-      s2.addFile('/dst/dir/stale.txt', 'stale'.codeUnits);
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src/dir'],
-          destinationDir: '/dst',
-          folders: ConflictResolution.keepBoth,
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/dir (2)/inside.txt'], 'in'.codeUnits);
-      expect(s2.fileBytes['/dst/dir/stale.txt'], 'stale'.codeUnits);
+      () async {
+        s1.addDirectory('/src/dir');
+        s1.addFile('/src/dir/inside.txt', 'in'.codeUnits);
+        s2.addDirectory('/dst/dir');
+        s2.addFile('/dst/dir/stale.txt', 'stale'.codeUnits);
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/dir'],
+            destinationDir: '/dst',
+            folders: ConflictResolution.keepBoth,
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/dir (2)/inside.txt'], 'in'.codeUnits);
+        expect(s2.fileBytes['/dst/dir/stale.txt'], 'stale'.codeUnits);
       },
     );
 
@@ -2463,21 +2481,23 @@ void main() {
         expect(s1.deleteCalls, 0);
       });
 
-      test('a resumed move copies again when its landed copy vanished',
-          () async {
-        s2.setTimesFailure = (path) {
-          s2.setTimesFailure = null;
-          unawaited(s2.delete(s2.entryAt(path)!));
-          return dropped;
-        };
-        final task = enqueueMove();
-        await awaitTaskDone(task);
+      test(
+        'a resumed move copies again when its landed copy vanished',
+        () async {
+          s2.setTimesFailure = (path) {
+            s2.setTimesFailure = null;
+            unawaited(s2.delete(s2.entryAt(path)!));
+            return dropped;
+          };
+          final task = enqueueMove();
+          await awaitTaskDone(task);
 
-        expect(task.state, TransferTaskState.completed);
-        expect(s2.uploadCalls, 2);
-        expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
-        expect(s1.entryAt('/src/m.txt'), isNull);
-      });
+          expect(task.state, TransferTaskState.completed);
+          expect(s2.uploadCalls, 2);
+          expect(s2.fileBytes['/dst/m.txt'], 'mm'.codeUnits);
+          expect(s1.entryAt('/src/m.txt'), isNull);
+        },
+      );
 
       for (final kind in [
         RemoteFileErrorKind.permissionDenied,
@@ -2593,58 +2613,62 @@ void main() {
       expect(s2.fileBytes['/dst/f.bin'], List.filled(8, 9));
     });
 
-    test('a retry re-reads a source that changed size after the scan',
-        () async {
-      s1.addFile('/src/log.txt', List.filled(8, 1));
-      // The file grows between the scan and its transfer.
-      s1.downloadFailure = (path) {
-        s1.downloadFailure = null;
-        s1.addFile(path, List.filled(12, 2));
-        return null;
-      };
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src/log.txt'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
-      final item = task.items.single;
-      expect(item.state, TransferItemState.failed);
-      expect(s2.entryAt('/dst/log.txt'), isNull);
+    test(
+      'a retry re-reads a source that changed size after the scan',
+      () async {
+        s1.addFile('/src/log.txt', List.filled(8, 1));
+        // The file grows between the scan and its transfer.
+        s1.downloadFailure = (path) {
+          s1.downloadFailure = null;
+          s1.addFile(path, List.filled(12, 2));
+          return null;
+        };
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/log.txt'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
+        final item = task.items.single;
+        expect(item.state, TransferItemState.failed);
+        expect(s2.entryAt('/dst/log.txt'), isNull);
 
-      expect(queue.retryItem(task.id, item.id), isTrue);
-      await awaitTaskDone(task);
+        expect(queue.retryItem(task.id, item.id), isTrue);
+        await awaitTaskDone(task);
 
-      expect(task.state, TransferTaskState.completed, reason: item.error);
-      expect(s2.fileBytes['/dst/log.txt'], List.filled(12, 2));
-    });
+        expect(task.state, TransferTaskState.completed, reason: item.error);
+        expect(s2.fileBytes['/dst/log.txt'], List.filled(12, 2));
+      },
+    );
 
-    test('persistent disconnect beyond the retry budget fails the task',
-        () async {
-      queue = newQueue(taskRetryLimit: 1);
-      events = [];
-      queue.events.listen(events.add);
-      s1.addFile('/src/f.bin', List.filled(8, 9));
-      s1.downloadFailure = (_) => const RemoteFileException(
-        kind: RemoteFileErrorKind.disconnected,
-        operation: 'download',
-        message: 'transport dropped',
-      );
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src/f.bin'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.failed);
-      expect(task.failureKind, RemoteFileErrorKind.disconnected);
-    });
+    test(
+      'persistent disconnect beyond the retry budget fails the task',
+      () async {
+        queue = newQueue(taskRetryLimit: 1);
+        events = [];
+        queue.events.listen(events.add);
+        s1.addFile('/src/f.bin', List.filled(8, 9));
+        s1.downloadFailure = (_) => const RemoteFileException(
+          kind: RemoteFileErrorKind.disconnected,
+          operation: 'download',
+          message: 'transport dropped',
+        );
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/f.bin'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.failed);
+        expect(task.failureKind, RemoteFileErrorKind.disconnected);
+      },
+    );
 
     test('an upload that dies early aborts the download instead of '
         'buffering the whole file', () async {
@@ -2675,8 +2699,7 @@ void main() {
       expect(task.transferredBytes, lessThan(512 * 1024));
     });
 
-    test('unsafe destination names fail the item, not the task scan',
-        () async {
+    test('unsafe destination names fail the item, not the task scan', () async {
       s1.addDirectory('/src');
       s1.addFile('/src/good.txt', 'g'.codeUnits);
       // Backslash is rejected by validatePathComponent for every
@@ -2702,10 +2725,7 @@ void main() {
       expect(task.state, TransferTaskState.failed);
       final bySource = {for (final i in task.items) i.sourcePath: i};
       expect(bySource['/src/good.txt']!.state, TransferItemState.completed);
-      expect(
-        bySource['/src/evil\\name.txt']!.state,
-        TransferItemState.failed,
-      );
+      expect(bySource['/src/evil\\name.txt']!.state, TransferItemState.failed);
       expect(s2.fileBytes['/dst/src/good.txt'], 'g'.codeUnits);
     });
 
@@ -2727,33 +2747,35 @@ void main() {
       expect(s2.fileBytes['/dst/here.txt'], 'h'.codeUnits);
     });
 
-    test('a mid-scan listing failure fails that directory; siblings finish',
-        () async {
-      s1.addDirectory('/src');
-      s1.addDirectory('/src/bad');
-      s1.addFile('/src/bad/x.txt', [1]);
-      s1.addFile('/src/ok.txt', 'ok'.codeUnits);
-      s1.listFailure = (path) => path == '/src/bad'
-          ? const RemoteFileException(
-              kind: RemoteFileErrorKind.permissionDenied,
-              operation: 'list',
-              message: 'denied',
-            )
-          : null;
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.failed);
-      expect(s2.fileBytes['/dst/src/ok.txt'], 'ok'.codeUnits);
-      final dir = task.items.firstWhere((i) => i.sourcePath == '/src/bad');
-      expect(dir.state, TransferItemState.failed);
-    });
+    test(
+      'a mid-scan listing failure fails that directory; siblings finish',
+      () async {
+        s1.addDirectory('/src');
+        s1.addDirectory('/src/bad');
+        s1.addFile('/src/bad/x.txt', [1]);
+        s1.addFile('/src/ok.txt', 'ok'.codeUnits);
+        s1.listFailure = (path) => path == '/src/bad'
+            ? const RemoteFileException(
+                kind: RemoteFileErrorKind.permissionDenied,
+                operation: 'list',
+                message: 'denied',
+              )
+            : null;
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.failed);
+        expect(s2.fileBytes['/dst/src/ok.txt'], 'ok'.codeUnits);
+        final dir = task.items.firstWhere((i) => i.sourcePath == '/src/bad');
+        expect(dir.state, TransferItemState.failed);
+      },
+    );
   });
 
   group('lifecycle', () {
@@ -2774,50 +2796,55 @@ void main() {
       await queue.dispose();
       expect(task.state, TransferTaskState.cancelled);
       expect(connections.activeLeases('s1'), 0);
-      await pumpUntil(() => closed.isCompleted,
-          reason: 'the event stream never closed');
-    });
-
-    test('dispose waits for move directory cleanup to release leases', () async {
-      const sourcePath = '/src/folder';
-      s1.addDirectory(sourcePath);
-      final cleanupStarted = Completer<void>();
-      final cleanupGate = Completer<void>();
-      var sourceLists = 0;
-      s1.listGate = (path) {
-        if (path != sourcePath) return null;
-
-        sourceLists++;
-        if (sourceLists != 2) return null;
-        cleanupStarted.complete();
-        return cleanupGate;
-      };
-      enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: const [sourcePath],
-          destinationDir: '/dst',
-          operation: TransferOperation.move,
-        ),
+      await pumpUntil(
+        () => closed.isCompleted,
+        reason: 'the event stream never closed',
       );
-
-      try {
-        await cleanupStarted.future;
-        var disposed = false;
-        final dispose = queue.dispose().then((_) => disposed = true);
-        await pump(20);
-
-        expect(disposed, isFalse);
-        expect(connections.activeLeases('s1'), 1);
-
-        cleanupGate.complete();
-        await dispose;
-        expect(connections.activeLeases('s1'), 0);
-      } finally {
-        if (!cleanupGate.isCompleted) cleanupGate.complete();
-      }
     });
+
+    test(
+      'dispose waits for move directory cleanup to release leases',
+      () async {
+        const sourcePath = '/src/folder';
+        s1.addDirectory(sourcePath);
+        final cleanupStarted = Completer<void>();
+        final cleanupGate = Completer<void>();
+        var sourceLists = 0;
+        s1.listGate = (path) {
+          if (path != sourcePath) return null;
+
+          sourceLists++;
+          if (sourceLists != 2) return null;
+          cleanupStarted.complete();
+          return cleanupGate;
+        };
+        enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: const [sourcePath],
+            destinationDir: '/dst',
+            operation: TransferOperation.move,
+          ),
+        );
+
+        try {
+          await cleanupStarted.future;
+          var disposed = false;
+          final dispose = queue.dispose().then((_) => disposed = true);
+          await pump(20);
+
+          expect(disposed, isFalse);
+          expect(connections.activeLeases('s1'), 1);
+
+          cleanupGate.complete();
+          await dispose;
+          expect(connections.activeLeases('s1'), 0);
+        } finally {
+          if (!cleanupGate.isCompleted) cleanupGate.complete();
+        }
+      },
+    );
 
     test('cross-task destination claims serialize commits', () async {
       s1.addFile('/src/shared.txt', 'first'.codeUnits);
@@ -3107,12 +3134,12 @@ void main() {
           task.items.where((item) => item.state == TransferItemState.skipped),
           isEmpty,
         );
-    });
+      },
+    );
   });
 
   group('review regressions', () {
-    test('a same-server transfer holds one lease and strands none',
-        () async {
+    test('a same-server transfer holds one lease and strands none', () async {
       // FsLocation has no value equality — source and destination naming
       // one server must still dedupe to a single server id, or the
       // double-lease's overwritten map entry never releases.
@@ -3133,77 +3160,81 @@ void main() {
       expect(connections.activeLeases('s1'), 0);
     });
 
-    test('a commit-time conflict retries on a fresh cancellation token',
-        () async {
-      // The first upload loses the decide→commit race; the retry must not
-      // reuse the attempt token _pipe cancelled when its upload died —
-      // a dead token would abort the retry instantly and bounce the item
-      // through a pointless requeue.
-      s1.addFile('/src/f.txt', 'new'.codeUnits);
-      var failOnce = true;
-      s2.uploadFailure = (path) {
-        if (path != '/dst/f.txt' || !failOnce) return null;
-        failOnce = false;
-        return const RemoteFileException(
-          kind: RemoteFileErrorKind.conflict,
-          operation: 'upload',
-          path: '/dst/f.txt',
-          message: 'appeared mid-transfer',
+    test(
+      'a commit-time conflict retries on a fresh cancellation token',
+      () async {
+        // The first upload loses the decide→commit race; the retry must not
+        // reuse the attempt token _pipe cancelled when its upload died —
+        // a dead token would abort the retry instantly and bounce the item
+        // through a pointless requeue.
+        s1.addFile('/src/f.txt', 'new'.codeUnits);
+        var failOnce = true;
+        s2.uploadFailure = (path) {
+          if (path != '/dst/f.txt' || !failOnce) return null;
+          failOnce = false;
+          return const RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'upload',
+            path: '/dst/f.txt',
+            message: 'appeared mid-transfer',
+          );
+        };
+        final task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/f.txt'],
+            destinationDir: '/dst',
+          ),
         );
-      };
-      final task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src/f.txt'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/f.txt'], 'new'.codeUnits);
-      // Exactly two commits: the raced one plus its in-place retry.
-      expect(s2.uploadCalls, 2);
-    });
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/f.txt'], 'new'.codeUnits);
+        // Exactly two commits: the raced one plus its in-place retry.
+        expect(s2.uploadCalls, 2);
+      },
+    );
 
-    test('a pause landing in the scan disconnect retry parks lease-free',
-        () async {
-      s1.addDirectory('/src');
-      s1.addFile('/src/f.txt', 'x'.codeUnits);
-      late TransferTask task;
-      var failOnce = true;
-      s1.listFailure = (path) {
-        if (path != '/src' || !failOnce) return null;
-        failOnce = false;
-        // Pause inside the failing op: the retry must release the scan
-        // leases and park on notPaused rather than re-leasing under a
-        // paused task.
-        queue.pauseTask(task.id);
-        return const RemoteFileException(
-          kind: RemoteFileErrorKind.disconnected,
-          operation: 'list',
-          message: 'transport dropped',
+    test(
+      'a pause landing in the scan disconnect retry parks lease-free',
+      () async {
+        s1.addDirectory('/src');
+        s1.addFile('/src/f.txt', 'x'.codeUnits);
+        late TransferTask task;
+        var failOnce = true;
+        s1.listFailure = (path) {
+          if (path != '/src' || !failOnce) return null;
+          failOnce = false;
+          // Pause inside the failing op: the retry must release the scan
+          // leases and park on notPaused rather than re-leasing under a
+          // paused task.
+          queue.pauseTask(task.id);
+          return const RemoteFileException(
+            kind: RemoteFileErrorKind.disconnected,
+            operation: 'list',
+            message: 'transport dropped',
+          );
+        };
+        task = enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src'],
+            destinationDir: '/dst',
+          ),
         );
-      };
-      task = enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src'],
-          destinationDir: '/dst',
-        ),
-      );
-      await pumpUntil(() => task.state == TransferTaskState.paused);
-      await pump(16);
-      // Parked: no retry listing ran and no lease is held while paused.
-      expect(s1.listCalls, 1);
-      expect(connections.activeLeases('s1'), 0);
+        await pumpUntil(() => task.state == TransferTaskState.paused);
+        await pump(16);
+        // Parked: no retry listing ran and no lease is held while paused.
+        expect(s1.listCalls, 1);
+        expect(connections.activeLeases('s1'), 0);
 
-      queue.resumeTask(task.id);
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/src/f.txt'], 'x'.codeUnits);
-    });
+        queue.resumeTask(task.id);
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/src/f.txt'], 'x'.codeUnits);
+      },
+    );
 
     test('a mkdir-conflict on the destination root merges the raced '
         'directory', () async {
@@ -3248,8 +3279,7 @@ void main() {
       expect(s2.fileBytes['/dst/f.txt'], 'old'.codeUnits);
     });
 
-    test('a failed source-directory removal reports an item event',
-        () async {
+    test('a failed source-directory removal reports an item event', () async {
       s1.addDirectory('/src/dir');
       s1.addFile('/src/dir/f.txt', 'x'.codeUnits);
       s1.deleteFailure = (entry) => entry.isDirectory
@@ -3279,9 +3309,9 @@ void main() {
       expect(dir.error, contains('could not be removed'));
       expect(task.error, isNotNull);
       expect(
-        events
-            .whereType<TransferQueueItemEvent>()
-            .any((e) => e.itemId == dir.id && e.error != null),
+        events.whereType<TransferQueueItemEvent>().any(
+          (e) => e.itemId == dir.id && e.error != null,
+        ),
         isTrue,
         reason: 'the dir-removal failure must surface as an item event',
       );
@@ -3364,10 +3394,7 @@ void main() {
 
 /// Independent model of Linux NFDICF name identity.
 String _linuxNfdCaseFold(String path) => unorm.nfc(
-  path
-      .toLowerCase()
-      .replaceAll('\u00df', 'ss')
-      .replaceAll('\u00ad', ''),
+  path.toLowerCase().replaceAll('\u00df', 'ss').replaceAll('\u00ad', ''),
 );
 
 /// Independent model of HFS+-style normalized one-code-point folding.

@@ -58,7 +58,8 @@ Future<KeyPassphraseAnswer?> showKeyPassphraseDialog(
       KeyPassphraseAnswer(keyPassphrase, saveToVault: saveToVault),
     GhostPasswordReply(:final password, :final saveToVault) =>
       KeyPassphraseAnswer(password, saveToVault: saveToVault),
-    GhostPrivateKeyReply() =>
-      throw StateError('The passphrase prompt cannot replace a private key'),
+    GhostPrivateKeyReply() => throw StateError(
+      'The passphrase prompt cannot replace a private key',
+    ),
   };
 }

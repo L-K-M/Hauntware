@@ -56,7 +56,7 @@ void main() {
 
   Map<String, dynamic> sessionJson() =>
       (jsonDecode(settingsFile.readAsStringSync())
-          as Map<String, dynamic>)['session.state']
+              as Map<String, dynamic>)['session.state']
           as Map<String, dynamic>;
 
   List<dynamic> tabsOf(String paneId) => [
@@ -115,8 +115,7 @@ void main() {
     return channel;
   }
 
-  test('attach schedules the first write; flush writes immediately',
-      () async {
+  test('attach schedules the first write; flush writes immediately', () async {
     persistence.attach(workspace);
     expect(debounce.lastDelay, isNotNull);
 
@@ -197,8 +196,7 @@ void main() {
     expect(sessionJson()['secondPaneHidden'], isTrue);
   });
 
-  test('the inspector\'s visibility and tab are commit points (D32)',
-      () async {
+  test('the inspector\'s visibility and tab are commit points (D32)', () async {
     persistence.attach(workspace);
     await debounce.fire();
     // Default-shown on Info (10 §3).
@@ -251,11 +249,7 @@ void main() {
 
   test('the written document decodes back to the live session', () async {
     persistence.attach(workspace);
-    await bindLocal(
-      left,
-      '/home/tester/docs',
-      rows: [_row('a.txt')],
-    );
+    await bindLocal(left, '/home/tester/docs', rows: [_row('a.txt')]);
     await Future<void>.delayed(Duration.zero);
     workspace.setSecondPaneHidden(true);
     await persistence.flush();
@@ -370,18 +364,20 @@ void main() {
       expect(writeCount, afterAttach + 1);
     });
 
-    test('the last window detaching writes nothing and keeps the document',
-        () async {
-      persistence.attach(workspace);
-      await persistence.flush();
-      final writesBefore = writeCount;
+    test(
+      'the last window detaching writes nothing and keeps the document',
+      () async {
+        persistence.attach(workspace);
+        await persistence.flush();
+        final writesBefore = writeCount;
 
-      persistence.detach(workspace);
-      await debounce.fire();
-      await persistence.flush();
+        persistence.detach(workspace);
+        await debounce.fire();
+        await persistence.flush();
 
-      expect(writeCount, writesBefore);
-      expect(sessionJson()['version'], SessionState.schemaVersion);
-    });
+        expect(writeCount, writesBefore);
+        expect(sessionJson()['version'], SessionState.schemaVersion);
+      },
+    );
   });
 }

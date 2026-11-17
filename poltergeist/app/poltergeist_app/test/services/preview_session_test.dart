@@ -215,36 +215,37 @@ void main() {
       await untilPhase(h.session, PreviewPhase.gateConfirm);
     });
 
-    test('unknown size parks at the threshold; keep-downloading resumes',
-        () async {
-      final h = await PreviewHarness.create(thresholdBytes: 8);
-      await h.connectRemote([previewEntry('stream.txt')]);
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.prompt);
+    test(
+      'unknown size parks at the threshold; keep-downloading resumes',
+      () async {
+        final h = await PreviewHarness.create(thresholdBytes: 8);
+        await h.connectRemote([previewEntry('stream.txt')]);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.prompt);
 
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.producing);
-      await untilTrue(() => h.producer.specs.isNotEmpty);
-      final spec = h.producer.specs.single;
-      expect(spec.expectedSize, isNull);
-      expect(spec.gate, isNotNull);
-      expect(spec.maximumBytes, h.cache.capacityBytes);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.producing);
+        await untilTrue(() => h.producer.specs.isNotEmpty);
+        final spec = h.producer.specs.single;
+        expect(spec.expectedSize, isNull);
+        expect(spec.gate, isNotNull);
+        expect(spec.maximumBytes, h.cache.capacityBytes);
 
-      // The fake producer drives the gate's park through the spec's
-      // gate object — crossing the threshold flips the card.
-      spec.gate!.wrap(const NullByteSink()).add(List.filled(16, 0));
-      await untilPhase(h.session, PreviewPhase.gateConfirm);
+        // The fake producer drives the gate's park through the spec's
+        // gate object — crossing the threshold flips the card.
+        spec.gate!.wrap(const NullByteSink()).add(List.filled(16, 0));
+        await untilPhase(h.session, PreviewPhase.gateConfirm);
 
-      h.session.confirmDownload();
-      expect(h.session.phase, PreviewPhase.producing);
-      expect(spec.gate!.isAwaitingConfirmation, isFalse);
+        h.session.confirmDownload();
+        expect(h.session.phase, PreviewPhase.producing);
+        expect(spec.gate!.isAwaitingConfirmation, isFalse);
 
-      await h.producer.complete(0, utf8.encode('streamed bytes here'));
-      await untilPhase(h.session, PreviewPhase.rendered);
-    });
+        await h.producer.complete(0, utf8.encode('streamed bytes here'));
+        await untilPhase(h.session, PreviewPhase.rendered);
+      },
+    );
 
-    test('denying the gate aborts and returns the cancelled prompt',
-        () async {
+    test('denying the gate aborts and returns the cancelled prompt', () async {
       final h = await PreviewHarness.create(thresholdBytes: 8);
       await h.connectRemote([previewEntry('stream.txt')]);
       h.session.previewFocused();
@@ -271,51 +272,45 @@ void main() {
       expect(h.session.refusal, PreviewRefusal.cancelled);
     });
 
-    test(
-      'unknown-size over-cap produce renders the refusal, not a '
-      'retryable failure',
-      () async {
-        final h = await PreviewHarness.create();
-        await h.connectRemote([previewEntry('stream.txt')]);
-        h.session.previewFocused();
-        await untilPhase(h.session, PreviewPhase.prompt);
-        h.session.previewFocused();
-        await untilPhase(h.session, PreviewPhase.producing);
-        await untilTrue(() => h.producer.specs.isNotEmpty);
-        // The queue re-pins the stream-cap abort to the typed limit
-        // error (the produce seam's suffix-pin); the session maps it
-        // to the over-cap refusal card — never failed→prompt→retry.
-        h.producer.fail(
-          0,
-          const CheckoutLimitException('preview limit exceeded'),
-        );
-        await untilPhase(h.session, PreviewPhase.rendered);
-        expect(h.session.refusal, PreviewRefusal.overCacheCap);
-      },
-    );
+    test('unknown-size over-cap produce renders the refusal, not a '
+        'retryable failure', () async {
+      final h = await PreviewHarness.create();
+      await h.connectRemote([previewEntry('stream.txt')]);
+      h.session.previewFocused();
+      await untilPhase(h.session, PreviewPhase.prompt);
+      h.session.previewFocused();
+      await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.isNotEmpty);
+      // The queue re-pins the stream-cap abort to the typed limit
+      // error (the produce seam's suffix-pin); the session maps it
+      // to the over-cap refusal card — never failed→prompt→retry.
+      h.producer.fail(
+        0,
+        const CheckoutLimitException('preview limit exceeded'),
+      );
+      await untilPhase(h.session, PreviewPhase.rendered);
+      expect(h.session.refusal, PreviewRefusal.overCacheCap);
+    });
 
-    test(
-      'unknown-size image over the kind cap renders overKindCap',
-      () async {
-        final h = await PreviewHarness.create(cacheCapacityBytes: 128 << 20);
-        await h.connectRemote([previewEntry('photo.png')]);
-        h.session.previewFocused();
-        await untilPhase(h.session, PreviewPhase.prompt);
-        h.session.previewFocused();
-        await untilPhase(h.session, PreviewPhase.producing);
-        await untilTrue(() => h.producer.specs.isNotEmpty);
-        expect(
-          h.producer.specs.single.maximumBytes,
-          previewKindCapBytes(PreviewKind.image),
-        );
-        h.producer.fail(
-          0,
-          const CheckoutLimitException('preview limit exceeded'),
-        );
-        await untilPhase(h.session, PreviewPhase.rendered);
-        expect(h.session.refusal, PreviewRefusal.overKindCap);
-      },
-    );
+    test('unknown-size image over the kind cap renders overKindCap', () async {
+      final h = await PreviewHarness.create(cacheCapacityBytes: 128 << 20);
+      await h.connectRemote([previewEntry('photo.png')]);
+      h.session.previewFocused();
+      await untilPhase(h.session, PreviewPhase.prompt);
+      h.session.previewFocused();
+      await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.isNotEmpty);
+      expect(
+        h.producer.specs.single.maximumBytes,
+        previewKindCapBytes(PreviewKind.image),
+      );
+      h.producer.fail(
+        0,
+        const CheckoutLimitException('preview limit exceeded'),
+      );
+      await untilPhase(h.session, PreviewPhase.rendered);
+      expect(h.session.refusal, PreviewRefusal.overKindCap);
+    });
 
     test('disposing a gated production cancels and releases it', () async {
       final h = await PreviewHarness.create(thresholdBytes: 8);
@@ -344,28 +339,30 @@ void main() {
       next!.release();
     });
 
-    test('a late successful producer cannot recreate a disposed temp',
-        () async {
-      final producer = _LateCompletingPreviewProducer();
-      final h = await PreviewHarness.create(previewProducer: producer);
-      await h.connectRemote([previewEntry('a.txt', size: 2)]);
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.prompt);
-      h.session.previewFocused();
-      await untilTrue(() => producer.specs.isNotEmpty);
+    test(
+      'a late successful producer cannot recreate a disposed temp',
+      () async {
+        final producer = _LateCompletingPreviewProducer();
+        final h = await PreviewHarness.create(previewProducer: producer);
+        await h.connectRemote([previewEntry('a.txt', size: 2)]);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.prompt);
+        h.session.previewFocused();
+        await untilTrue(() => producer.specs.isNotEmpty);
 
-      h.session.dispose();
-      await previewSettle();
-      await producer.complete(utf8.encode('hi'));
-      await previewSettle();
-      final temps = await h.tempDir
-          .list()
-          .where((entry) => entry.path.endsWith('.part'))
-          .toList();
+        h.session.dispose();
+        await previewSettle();
+        await producer.complete(utf8.encode('hi'));
+        await previewSettle();
+        final temps = await h.tempDir
+            .list()
+            .where((entry) => entry.path.endsWith('.part'))
+            .toList();
 
-      expect(producer.cancels, ['late-produce']);
-      expect(temps, isEmpty);
-    });
+        expect(producer.cancels, ['late-produce']);
+        expect(temps, isEmpty);
+      },
+    );
 
     test(
       'dispose after a reservation grant skips lookup and releases',
@@ -406,26 +403,28 @@ void main() {
       },
     );
 
-    test('a failed production returns the prompt with the failure card',
-        () async {
-      final h = await PreviewHarness.create();
-      await h.connectRemote([previewEntry('a.txt', size: 2)]);
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.prompt);
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.producing);
-      await untilTrue(() => h.producer.specs.isNotEmpty);
-      h.producer.fail(
-        0,
-        const RemoteFileException(
-          kind: RemoteFileErrorKind.other,
-          operation: 'preview produce',
-          message: 'boom',
-        ),
-      );
-      await untilPhase(h.session, PreviewPhase.prompt);
-      expect(h.session.refusal, PreviewRefusal.failed);
-    });
+    test(
+      'a failed production returns the prompt with the failure card',
+      () async {
+        final h = await PreviewHarness.create();
+        await h.connectRemote([previewEntry('a.txt', size: 2)]);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.prompt);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.producing);
+        await untilTrue(() => h.producer.specs.isNotEmpty);
+        h.producer.fail(
+          0,
+          const RemoteFileException(
+            kind: RemoteFileErrorKind.other,
+            operation: 'preview produce',
+            message: 'boom',
+          ),
+        );
+        await untilPhase(h.session, PreviewPhase.prompt);
+        expect(h.session.refusal, PreviewRefusal.failed);
+      },
+    );
 
     test('a reserved cache lookup failure remains retryable', () async {
       final h = await PreviewHarness.create();
@@ -458,8 +457,7 @@ void main() {
       expect(h.producer.specs, isEmpty);
     });
 
-    test('metadata refusal for a known size over the cache cap',
-        () async {
+    test('metadata refusal for a known size over the cache cap', () async {
       final h = await PreviewHarness.create(cacheCapacityBytes: 8);
       await h.connectRemote([previewEntry('huge.txt', size: 4096)]);
       h.session.previewFocused();
@@ -478,8 +476,7 @@ void main() {
       expect(h.producer.specs, isEmpty);
     });
 
-    test('a stale completion still commits to the cache, unrendered',
-        () async {
+    test('a stale completion still commits to the cache, unrendered', () async {
       final h = await PreviewHarness.create();
       await h.connectRemote([
         previewEntry('one.txt', size: 2),
@@ -606,45 +603,46 @@ void main() {
       },
     );
 
-    test('a confirmed pending start re-attaches and can be cancelled',
-        () async {
-      final h = await PreviewHarness.create(
-        platform: TargetPlatform.android,
-        thresholdBytes: 8,
-      );
-      final first = previewEntry('a.txt', size: 100);
-      await h.connectRemote([first, previewEntry('b.txt', size: 2)]);
-      final key = previewCacheKey('srv-1', first.path, null, 100);
-      final owner = await h.cache.reserveProduction(key);
-      addTearDown(() => owner?.release());
+    test(
+      'a confirmed pending start re-attaches and can be cancelled',
+      () async {
+        final h = await PreviewHarness.create(
+          platform: TargetPlatform.android,
+          thresholdBytes: 8,
+        );
+        final first = previewEntry('a.txt', size: 100);
+        await h.connectRemote([first, previewEntry('b.txt', size: 2)]);
+        final key = previewCacheKey('srv-1', first.path, null, 100);
+        final owner = await h.cache.reserveProduction(key);
+        addTearDown(() => owner?.release());
 
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.prompt);
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.confirm);
-      h.session.confirmDownload();
-      await previewSettle();
-      expect(h.producer.specs, isEmpty);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.prompt);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.confirm);
+        h.session.confirmDownload();
+        await previewSettle();
+        expect(h.producer.specs, isEmpty);
 
-      h.left.setCursorIndex(1);
-      await untilTrue(() => h.session.entry?.name == 'b.txt');
-      h.left.setCursorIndex(0);
-      await untilTrue(() => h.session.entry?.name == 'a.txt');
-      await previewSettle();
-      final phaseAfterReturn = h.session.phase;
-      expect(h.session.escape(), isTrue);
+        h.left.setCursorIndex(1);
+        await untilTrue(() => h.session.entry?.name == 'b.txt');
+        h.left.setCursorIndex(0);
+        await untilTrue(() => h.session.entry?.name == 'a.txt');
+        await previewSettle();
+        final phaseAfterReturn = h.session.phase;
+        expect(h.session.escape(), isTrue);
 
-      owner!.release();
-      await previewSettle();
+        owner!.release();
+        await previewSettle();
 
-      expect(phaseAfterReturn, PreviewPhase.producing);
-      expect(h.session.phase, PreviewPhase.prompt);
-      expect(h.session.refusal, PreviewRefusal.cancelled);
-      expect(h.producer.specs, isEmpty);
-    });
+        expect(phaseAfterReturn, PreviewPhase.producing);
+        expect(h.session.phase, PreviewPhase.prompt);
+        expect(h.session.refusal, PreviewRefusal.cancelled);
+        expect(h.producer.specs, isEmpty);
+      },
+    );
 
-    test('Esc cancels a confirmed start waiting for cache ownership',
-        () async {
+    test('Esc cancels a confirmed start waiting for cache ownership', () async {
       final h = await PreviewHarness.create(
         platform: TargetPlatform.android,
         thresholdBytes: 8,
@@ -671,8 +669,7 @@ void main() {
       expect(h.producer.specs, isEmpty);
     });
 
-    test('a cancelled prepare cannot reattach after focus returns',
-        () async {
+    test('a cancelled prepare cannot reattach after focus returns', () async {
       final prepareStarted = Completer<void>();
       final releasePrepare = Completer<void>();
       addTearDown(() {
@@ -782,37 +779,38 @@ void main() {
       expect(h.producer.specs, isEmpty);
     });
 
-    test('re-focusing an in-flight item re-attaches to its production',
-        () async {
-      final h = await PreviewHarness.create();
-      await h.connectRemote([
-        previewEntry('one.txt', size: 2),
-        previewEntry('two.txt', size: 2),
-      ]);
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.prompt);
-      h.session.previewFocused();
-      await untilPhase(h.session, PreviewPhase.producing);
-      await untilTrue(() => h.producer.specs.isNotEmpty);
-      h.producer.progress(0, 1, 2);
-      expect(h.session.transferred, 1);
+    test(
+      're-focusing an in-flight item re-attaches to its production',
+      () async {
+        final h = await PreviewHarness.create();
+        await h.connectRemote([
+          previewEntry('one.txt', size: 2),
+          previewEntry('two.txt', size: 2),
+        ]);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.prompt);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.producing);
+        await untilTrue(() => h.producer.specs.isNotEmpty);
+        h.producer.progress(0, 1, 2);
+        expect(h.session.transferred, 1);
 
-      h.left.setCursorIndex(1);
-      await untilPhase(h.session, PreviewPhase.prompt);
-      h.left.setCursorIndex(0);
-      await untilPhase(h.session, PreviewPhase.producing);
-      expect(h.session.transferred, 1);
-      expect(h.producer.specs, hasLength(1));
+        h.left.setCursorIndex(1);
+        await untilPhase(h.session, PreviewPhase.prompt);
+        h.left.setCursorIndex(0);
+        await untilPhase(h.session, PreviewPhase.producing);
+        expect(h.session.transferred, 1);
+        expect(h.producer.specs, hasLength(1));
 
-      h.producer.progress(0, 2, 2);
-      expect(h.session.transferred, 2);
-      await h.producer.complete(0, utf8.encode('hi'));
-      await untilPhase(h.session, PreviewPhase.rendered);
-      expect(h.session.text?.text, 'hi');
-    });
+        h.producer.progress(0, 2, 2);
+        expect(h.session.transferred, 2);
+        await h.producer.complete(0, utf8.encode('hi'));
+        await untilPhase(h.session, PreviewPhase.rendered);
+        expect(h.session.text?.text, 'hi');
+      },
+    );
 
-    test('no producer: prompt stays honest, canProduce is false',
-        () async {
+    test('no producer: prompt stays honest, canProduce is false', () async {
       final h = await PreviewHarness.create(withProducer: false);
       await h.connectRemote([previewEntry('a.txt', size: 2)]);
       expect(h.session.canProduce, isFalse);
@@ -860,33 +858,34 @@ void main() {
       expect(h.session.text, isNotNull);
     });
 
-    test('a late text sniff never retypes the item selected after it',
-        () async {
-      final h = await PreviewHarness.create(infoTabShown: true);
-      File('${h.tempDir.path}/note').writeAsStringSync('plain words\n');
-      File('${h.tempDir.path}/pic.png').writeAsBytesSync([0x89, 0x50, 0x4E]);
-      await h.connectLocal(h.tempDir, [
-        previewEntry('note', size: 12, parent: h.tempDir.path),
-        previewEntry('pic.png', size: 3, parent: h.tempDir.path),
-      ], cursor: -1);
+    test(
+      'a late text sniff never retypes the item selected after it',
+      () async {
+        final h = await PreviewHarness.create(infoTabShown: true);
+        File('${h.tempDir.path}/note').writeAsStringSync('plain words\n');
+        File('${h.tempDir.path}/pic.png').writeAsBytesSync([0x89, 0x50, 0x4E]);
+        await h.connectLocal(h.tempDir, [
+          previewEntry('note', size: 12, parent: h.tempDir.path),
+          previewEntry('pic.png', size: 3, parent: h.tempDir.path),
+        ], cursor: -1);
 
-      // The shown well evaluates note at once; its extensionless name
-      // sends it through the asynchronous text sniff, and the selection
-      // moves on before that read answers.
-      h.left.setCursorIndex(0);
-      h.left.setCursorIndex(1);
-      await untilTrue(() => h.session.entry?.name == 'pic.png');
-      await previewSettle();
-      await previewSettle();
+        // The shown well evaluates note at once; its extensionless name
+        // sends it through the asynchronous text sniff, and the selection
+        // moves on before that read answers.
+        h.left.setCursorIndex(0);
+        h.left.setCursorIndex(1);
+        await untilTrue(() => h.session.entry?.name == 'pic.png');
+        await previewSettle();
+        await previewSettle();
 
-      expect(h.session.entry?.name, 'pic.png');
-      expect(h.session.kind, PreviewKind.image);
-    });
+        expect(h.session.entry?.name, 'pic.png');
+        expect(h.session.kind, PreviewKind.image);
+      },
+    );
 
     test('a missing local file reports the missing refusal', () async {
       final h = await PreviewHarness.create();
-      final ghost = Directory('${h.tempDir.path}/listing')
-        ..createSync();
+      final ghost = Directory('${h.tempDir.path}/listing')..createSync();
       await h.connectLocal(ghost, [
         previewEntry('gone.txt', size: 4, parent: ghost.path),
       ]);
@@ -900,8 +899,7 @@ void main() {
   // tab, which is shown by default — a passive well that follows the
   // selection. The groups above start from a user-hidden inspector.
   group('Info tab well (D32 default)', () {
-    test('the selection evaluates on its own; it never downloads',
-        () async {
+    test('the selection evaluates on its own; it never downloads', () async {
       final h = await PreviewHarness.create(infoTabShown: true);
       expect(h.workspace.previewPanelHidden, isFalse);
       await h.connectRemote([previewEntry('notes.txt', size: 4)]);
@@ -910,8 +908,7 @@ void main() {
       expect(h.producer.specs, isEmpty);
     });
 
-    test('Space on the prompt card downloads at the first press',
-        () async {
+    test('Space on the prompt card downloads at the first press', () async {
       final h = await PreviewHarness.create(infoTabShown: true);
       await h.connectRemote([previewEntry('notes.txt', size: 4)]);
       await untilPhase(h.session, PreviewPhase.prompt);
@@ -1048,9 +1045,7 @@ void main() {
         h.left.setCursorIndex(1);
         await untilTrue(() => h.quickLook.updates.isNotEmpty);
         expect(h.quickLook.updates.last.$1.single, endsWith('b.txt'));
-        await untilTrue(
-          () => h.session.file?.path.endsWith('b.txt') ?? false,
-        );
+        await untilTrue(() => h.session.file?.path.endsWith('b.txt') ?? false);
         expect(h.session.entry?.name, 'b.txt');
         expect(h.session.text?.text, 'bravo\n');
       });
@@ -1100,8 +1095,7 @@ void main() {
       expect(h.quickLook.shows, isEmpty);
     });
 
-    test('local Space opens the native panel; Space again closes',
-        () async {
+    test('local Space opens the native panel; Space again closes', () async {
       final h = await PreviewHarness.create(
         platform: TargetPlatform.macOS,
         quickLookAvailable: true,
@@ -1213,87 +1207,86 @@ void main() {
       await untilTrue(() => h.producer.specs.isNotEmpty);
     });
 
-    test('a Quick Look confirm is retargeted before it can be reused',
-        () async {
-      final lookupStarted = Completer<void>();
-      final releaseLookup = Completer<void>();
-      addTearDown(() {
-        if (!releaseLookup.isCompleted) releaseLookup.complete();
-      });
-      final h = await PreviewHarness.create(
-        platform: TargetPlatform.macOS,
-        quickLookAvailable: true,
-        thresholdBytes: 8,
-        lookupCacheFileExists: (file) async {
-          if (!lookupStarted.isCompleted) lookupStarted.complete();
-          await releaseLookup.future;
-          return false;
-        },
-      );
-      final second = previewEntry('b.bin', size: 200);
-      await h.connectRemote([previewEntry('a.bin', size: 100), second]);
-      final secondKey = previewCacheKey('srv-1', second.path, null, 200);
-      final cached = await h.cache.prepare(secondKey, extension: 'bin');
-      await cached.tempFile.writeAsString('stale');
-      await cached.commit();
-      h.session.previewFocused();
-      await untilTrue(
-        () => h.session.quickLookCard == QuickLookCardKind.confirm,
-      );
+    test(
+      'a Quick Look confirm is retargeted before it can be reused',
+      () async {
+        final lookupStarted = Completer<void>();
+        final releaseLookup = Completer<void>();
+        addTearDown(() {
+          if (!releaseLookup.isCompleted) releaseLookup.complete();
+        });
+        final h = await PreviewHarness.create(
+          platform: TargetPlatform.macOS,
+          quickLookAvailable: true,
+          thresholdBytes: 8,
+          lookupCacheFileExists: (file) async {
+            if (!lookupStarted.isCompleted) lookupStarted.complete();
+            await releaseLookup.future;
+            return false;
+          },
+        );
+        final second = previewEntry('b.bin', size: 200);
+        await h.connectRemote([previewEntry('a.bin', size: 100), second]);
+        final secondKey = previewCacheKey('srv-1', second.path, null, 200);
+        final cached = await h.cache.prepare(secondKey, extension: 'bin');
+        await cached.tempFile.writeAsString('stale');
+        await cached.commit();
+        h.session.previewFocused();
+        await untilTrue(
+          () => h.session.quickLookCard == QuickLookCardKind.confirm,
+        );
 
-      h.left.setCursorIndex(1);
-      await previewSettle();
-      final followedSelection = lookupStarted.isCompleted;
-      final cardAfterFocus = h.session.quickLookCard;
-      h.session.quickLookConfirm();
-      releaseLookup.complete();
-      await untilTrue(
-        () => h.session.quickLookCard == QuickLookCardKind.confirm,
-      );
+        h.left.setCursorIndex(1);
+        await previewSettle();
+        final followedSelection = lookupStarted.isCompleted;
+        final cardAfterFocus = h.session.quickLookCard;
+        h.session.quickLookConfirm();
+        releaseLookup.complete();
+        await untilTrue(
+          () => h.session.quickLookCard == QuickLookCardKind.confirm,
+        );
 
-      expect(followedSelection, isTrue);
-      expect(cardAfterFocus, QuickLookCardKind.none);
-      expect(h.session.entry?.name, 'b.bin');
-      expect(h.producer.specs, isEmpty);
-    });
+        expect(followedSelection, isTrue);
+        expect(cardAfterFocus, QuickLookCardKind.none);
+        expect(h.session.entry?.name, 'b.bin');
+        expect(h.producer.specs, isEmpty);
+      },
+    );
 
-    test('a local focus replaces a pending remote Quick Look request',
-        () async {
-      final h = await PreviewHarness.create(
-        platform: TargetPlatform.macOS,
-        quickLookAvailable: true,
-        thresholdBytes: 8,
-      );
-      await h.connectRemote([previewEntry('big.bin', size: 100)]);
-      h.session.previewFocused();
-      await untilTrue(
-        () => h.session.quickLookCard == QuickLookCardKind.confirm,
-      );
+    test(
+      'a local focus replaces a pending remote Quick Look request',
+      () async {
+        final h = await PreviewHarness.create(
+          platform: TargetPlatform.macOS,
+          quickLookAvailable: true,
+          thresholdBytes: 8,
+        );
+        await h.connectRemote([previewEntry('big.bin', size: 100)]);
+        h.session.previewFocused();
+        await untilTrue(
+          () => h.session.quickLookCard == QuickLookCardKind.confirm,
+        );
 
-      final local = File('${h.tempDir.path}/local.txt')
-        ..writeAsStringSync('local');
-      await h.connectRightLocal(h.tempDir, [
-        previewEntry(
-          'local.txt',
-          size: 5,
-          parent: h.tempDir.path,
-        ),
-      ]);
-      h.workspace.setActivePane(h.workspace.right);
-      await previewSettle();
-      final openedLocal = h.quickLook.shows.isNotEmpty;
-      final activeAfterFocus = h.session.quickLookActive;
-      h.session.previewFocused();
-      await previewSettle();
+        final local = File('${h.tempDir.path}/local.txt')
+          ..writeAsStringSync('local');
+        await h.connectRightLocal(h.tempDir, [
+          previewEntry('local.txt', size: 5, parent: h.tempDir.path),
+        ]);
+        h.workspace.setActivePane(h.workspace.right);
+        await previewSettle();
+        final openedLocal = h.quickLook.shows.isNotEmpty;
+        final activeAfterFocus = h.session.quickLookActive;
+        h.session.previewFocused();
+        await previewSettle();
 
-      expect(openedLocal, isTrue);
-      expect(activeAfterFocus, isTrue);
-      expect(h.quickLook.shows.single.$1, [local.path]);
-      expect(h.quickLook.hideCalls, 1);
-    });
+        expect(openedLocal, isTrue);
+        expect(activeAfterFocus, isTrue);
+        expect(h.quickLook.shows.single.$1, [local.path]);
+        expect(h.quickLook.hideCalls, 1);
+      },
+    );
 
-    test('a local focus change retargets a pending Quick Look open',
-        () async {
+    test('a local focus change retargets a pending Quick Look open', () async {
       final quickLook = _BlockingQuickLookChannel();
       addTearDown(quickLook.releaseDelivery);
       final h = await PreviewHarness.create(
@@ -1353,10 +1346,7 @@ void main() {
         quickLookAvailable: true,
         thresholdBytes: 8,
       );
-      await h.connectRemote([
-        previewEntry('a.bin'),
-        previewEntry('b.bin'),
-      ]);
+      await h.connectRemote([previewEntry('a.bin'), previewEntry('b.bin')]);
       h.session.previewFocused();
       await untilTrue(() => h.producer.specs.isNotEmpty);
       final firstGate = h.producer.specs.first.gate!;
@@ -1377,18 +1367,14 @@ void main() {
       expect(h.producer.specs, hasLength(2));
     });
 
-    test('pending cancellation updates Quick Look and the Info well',
-        () async {
+    test('pending cancellation updates Quick Look and the Info well', () async {
       final h = await PreviewHarness.create(
         platform: TargetPlatform.macOS,
         quickLookAvailable: true,
         infoTabShown: true,
       );
       final first = previewEntry('a.txt', size: 2);
-      await h.connectRemote([
-        first,
-        previewEntry('b.txt', size: 2 << 20),
-      ]);
+      await h.connectRemote([first, previewEntry('b.txt', size: 2 << 20)]);
       final key = previewCacheKey('srv-1', first.path, null, 2);
       final owner = await h.cache.reserveProduction(key);
       addTearDown(() => owner?.release());
@@ -1418,34 +1404,36 @@ void main() {
       expect(h.producer.specs, isEmpty);
     });
 
-    test('Quick Look accepts an immediate retry of a cancelled start',
-        () async {
-      final h = await PreviewHarness.create(
-        platform: TargetPlatform.macOS,
-        quickLookAvailable: true,
-      );
-      final entry = previewEntry('a.txt', size: 2);
-      await h.connectRemote([entry]);
-      final key = previewCacheKey('srv-1', entry.path, null, 2);
-      final owner = await h.cache.reserveProduction(key);
-      addTearDown(() => owner?.release());
+    test(
+      'Quick Look accepts an immediate retry of a cancelled start',
+      () async {
+        final h = await PreviewHarness.create(
+          platform: TargetPlatform.macOS,
+          quickLookAvailable: true,
+        );
+        final entry = previewEntry('a.txt', size: 2);
+        await h.connectRemote([entry]);
+        final key = previewCacheKey('srv-1', entry.path, null, 2);
+        final owner = await h.cache.reserveProduction(key);
+        addTearDown(() => owner?.release());
 
-      h.session.previewFocused();
-      await untilTrue(
-        () => h.session.quickLookCard == QuickLookCardKind.producing,
-      );
-      expect(h.session.escape(), isTrue);
+        h.session.previewFocused();
+        await untilTrue(
+          () => h.session.quickLookCard == QuickLookCardKind.producing,
+        );
+        expect(h.session.escape(), isTrue);
 
-      h.session.previewFocused();
-      owner!.release();
-      await untilTrue(() => h.producer.specs.isNotEmpty);
-      expect(h.producer.specs, isNotEmpty);
-      await h.producer.complete(0, utf8.encode('hi'));
-      await untilTrue(() => h.session.quickLookActive);
+        h.session.previewFocused();
+        owner!.release();
+        await untilTrue(() => h.producer.specs.isNotEmpty);
+        expect(h.producer.specs, isNotEmpty);
+        await h.producer.complete(0, utf8.encode('hi'));
+        await untilTrue(() => h.session.quickLookActive);
 
-      expect(h.quickLook.shows, hasLength(1));
-      expect(h.producer.specs, hasLength(1));
-    });
+        expect(h.quickLook.shows, hasLength(1));
+        expect(h.producer.specs, hasLength(1));
+      },
+    );
 
     test('a direct cache lookup failure leaves Quick Look retryable', () async {
       final h = await PreviewHarness.create(
@@ -1555,8 +1543,7 @@ void main() {
   });
 
   group('selection header', () {
-    test('count, summed bytes, and unknown-size rows stay honest',
-        () async {
+    test('count, summed bytes, and unknown-size rows stay honest', () async {
       final h = await PreviewHarness.create();
       await h.connectRemote([
         previewEntry('a.txt', size: 10),
@@ -1607,8 +1594,7 @@ final class _BlockingQuickLookChannel implements QuickLookChannel {
   Stream<void> get onClosed => const Stream.empty();
 }
 
-final class _BlockingAvailabilityQuickLookChannel
-    implements QuickLookChannel {
+final class _BlockingAvailabilityQuickLookChannel implements QuickLookChannel {
   final availabilityStarted = Completer<void>();
   final _availabilityRelease = Completer<void>();
   final shows = <(List<String>, int)>[];

@@ -245,17 +245,11 @@ String? _errorText(AppLocalizations l10n, QuickConnectParse parse) {
 List<String> _hintTexts(AppLocalizations l10n, QuickConnectParse parse) {
   final target = parse.target;
   final hints = <String>[];
-  if (target != null &&
-      parse.issues.contains(QuickConnectIssue.portAssumed)) {
-    hints.add(
-      l10n.quickConnectHintPort('${target.port}', target.host),
-    );
+  if (target != null && parse.issues.contains(QuickConnectIssue.portAssumed)) {
+    hints.add(l10n.quickConnectHintPort('${target.port}', target.host));
   }
-  if (target != null &&
-      parse.issues.contains(QuickConnectIssue.pathAssumed)) {
-    hints.add(
-      l10n.quickConnectHintPath(target.remotePath ?? ''),
-    );
+  if (target != null && parse.issues.contains(QuickConnectIssue.pathAssumed)) {
+    hints.add(l10n.quickConnectHintPath(target.remotePath ?? ''));
   }
   if (parse.issues.contains(QuickConnectIssue.passwordStripped)) {
     hints.add(l10n.quickConnectPasswordStripped);

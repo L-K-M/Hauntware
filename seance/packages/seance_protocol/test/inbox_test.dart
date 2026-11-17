@@ -9,15 +9,15 @@ final DateTime _now = DateTime.utc(2026, 9, 29, 12);
 final int _nowSeconds = _now.millisecondsSinceEpoch ~/ 1000;
 
 Map<String, dynamic> _proposal([Map<String, dynamic> overrides = const {}]) => {
-      'v': 1,
-      'id': 'restart-worker-3',
-      'host': 'prod-db-1',
-      'title': 'Restart stuck queue worker',
-      'reason': 'Backlog since 09:12',
-      'script': 'systemctl restart queue-worker@3\nsystemctl status x',
-      'created': _nowSeconds - 60,
-      ...overrides,
-    };
+  'v': 1,
+  'id': 'restart-worker-3',
+  'host': 'prod-db-1',
+  'title': 'Restart stuck queue worker',
+  'reason': 'Backlog since 09:12',
+  'script': 'systemctl restart queue-worker@3\nsystemctl status x',
+  'created': _nowSeconds - 60,
+  ...overrides,
+};
 
 InboxProposal _parse(Map<String, dynamic> json) =>
     InboxProposal.parse(utf8.encode(jsonEncode(json)), now: _now);
@@ -144,10 +144,12 @@ void main() {
     });
 
     test('caps expires at seven days and ignores unknown fields', () {
-      final p = _parse(_proposal({
-        'expires': _nowSeconds + 30 * 86400,
-        'extra': {'x': 1},
-      }));
+      final p = _parse(
+        _proposal({
+          'expires': _nowSeconds + 30 * 86400,
+          'extra': {'x': 1},
+        }),
+      );
       expect(p.expires, p.created + kInboxRetention.inSeconds);
       final short = _parse(_proposal({'expires': _nowSeconds + 10}));
       expect(short.expires, _nowSeconds + 10);
@@ -156,10 +158,10 @@ void main() {
 
     test('rejects malformed input', () {
       void rejects(Map<String, dynamic> json) => expect(
-            () => _parse(json),
-            throwsA(isA<InboxProposalException>()),
-            reason: jsonEncode(json),
-          );
+        () => _parse(json),
+        throwsA(isA<InboxProposalException>()),
+        reason: jsonEncode(json),
+      );
       rejects(_proposal({'v': 2}));
       rejects(_proposal({'id': 'has space'}));
       rejects(_proposal({'id': 'x' * 65}));
@@ -234,7 +236,11 @@ void main() {
         throwsFormatException,
       );
       expect(
-        () => InboxApp.fromJson({'id': id, 'key': key, 'servers': [1]}),
+        () => InboxApp.fromJson({
+          'id': id,
+          'key': key,
+          'servers': [1],
+        }),
         throwsFormatException,
       );
       expect(
@@ -273,9 +279,12 @@ void main() {
       throwsFormatException,
     );
     expect(
-      () => InboxItem.fromJson(
-        {'app': 'a', 'item': 'i', 'received': '1', 'blob': ''},
-      ),
+      () => InboxItem.fromJson({
+        'app': 'a',
+        'item': 'i',
+        'received': '1',
+        'blob': '',
+      }),
       throwsFormatException,
     );
   });
@@ -306,8 +315,7 @@ void main() {
     expect(
       InboxPage.bodyBytesFor(
         itemCount: items.length,
-        itemBytes:
-            items.fold(0, (sum, item) => sum + item.encodedJsonBytes()),
+        itemBytes: items.fold(0, (sum, item) => sum + item.encodedJsonBytes()),
         throughReceived: 12,
         nextReceived: 9,
         hasMore: true,
@@ -322,4 +330,5 @@ void main() {
   });
 }
 
-const String _libsodiumVector = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYX9qsLvAvYNNAPeYc6y/Cwu6pt';
+const String _libsodiumVector =
+    'AAECAwQFBgcICQoLDA0ODxAREhMUFRYX9qsLvAvYNNAPeYc6y/Cwu6pt';

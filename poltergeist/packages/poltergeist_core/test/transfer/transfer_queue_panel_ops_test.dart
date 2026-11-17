@@ -38,14 +38,16 @@ void main() {
         message: 'simulated $operation failure',
       );
 
-  List<String> downloads() => remote.calls
-      .where((call) => call.startsWith('download:'))
-      .toList();
+  List<String> downloads() =>
+      remote.calls.where((call) => call.startsWith('download:')).toList();
 
   setUp(() {
     remote = FakeTreeFileSystem();
     destination = FakeTreeFileSystem()..addDirectory('/dst');
-    connections = FakeQueueConnectionManager({'src': remote, 'dst': destination});
+    connections = FakeQueueConnectionManager({
+      'src': remote,
+      'dst': destination,
+    });
     persistence = RecordingPersistence();
     // One file in flight keeps the observable dispatch order strict —
     // a second task's work can never overtake a first task's through
@@ -121,8 +123,7 @@ void main() {
       remote.addFile('/src/a.txt', [1]);
       remote.addFile('/src/b.txt', [2]);
       final gate = Completer<void>();
-      remote.downloadGate = (path) =>
-          path == '/src/a.txt' ? gate : null;
+      remote.downloadGate = (path) => path == '/src/a.txt' ? gate : null;
       final first = queue.enqueue(copySpec(rootPaths: ['/src/a.txt']));
       final second = queue.enqueue(copySpec(rootPaths: ['/src/b.txt']));
       await pumpUntil(
@@ -163,9 +164,7 @@ void main() {
         copySpec(rootPaths: ['/src/a.txt', '/src/b.txt']),
       );
       await pumpUntil(() => task.items.length == 2, reason: 'items planned');
-      final item = task.items.firstWhere(
-        (i) => i.sourcePath == '/src/b.txt',
-      );
+      final item = task.items.firstWhere((i) => i.sourcePath == '/src/b.txt');
       expect(item.state, TransferItemState.pending);
 
       expect(queue.cancelItem(task.id, item.id), isTrue);
@@ -173,9 +172,7 @@ void main() {
       // The journal got the removal record before the state flip's
       // observable window.
       expect(
-        persistence.journal
-            .whereType<ItemRemovedRecord>()
-            .map((r) => r.itemId),
+        persistence.journal.whereType<ItemRemovedRecord>().map((r) => r.itemId),
         contains(item.id),
       );
 
@@ -221,10 +218,7 @@ void main() {
 
       expect(queue.cancelItem(task.id, item.id), isTrue);
       gate.complete();
-      await pumpUntil(
-        () => task.isTerminal,
-        reason: 'task never drained',
-      );
+      await pumpUntil(() => task.isTerminal, reason: 'task never drained');
       expect(item.state, TransferItemState.cancelled);
       // The unwinding pipe must not re-pend the row — the task settles
       // completed (no failures), not stuck behind a resurrected item.
@@ -284,77 +278,80 @@ void main() {
   });
 
   group('retryItem / retryTask', () {
-    test('retries a failed file in place (same itemId, journal record)',
-        () async {
-      remote.addFile('/src/a.txt', [1, 2, 3]);
-      remote.downloadFailure = (path) => failure('download', path);
-      final task = queue.enqueue(copySpec());
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.failed);
-      final item = task.items.single;
-      expect(item.state, TransferItemState.failed);
-      final itemId = item.id;
+    test(
+      'retries a failed file in place (same itemId, journal record)',
+      () async {
+        remote.addFile('/src/a.txt', [1, 2, 3]);
+        remote.downloadFailure = (path) => failure('download', path);
+        final task = queue.enqueue(copySpec());
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.failed);
+        final item = task.items.single;
+        expect(item.state, TransferItemState.failed);
+        final itemId = item.id;
 
-      remote.downloadFailure = null;
-      expect(queue.canRetryItem(task.id, itemId), isTrue);
-      expect(queue.retryItem(task.id, itemId), isTrue);
-      // The re-arm dispatches through the normal path — the row may
-      // already read active by the time the call returns.
-      expect(item.state, isNot(TransferItemState.failed));
-      expect(task.items.single.id, itemId);
-      await pumpUntil(() => task.isTerminal, reason: 'retry never settled');
-      expect(item.state, TransferItemState.completed);
-      expect(task.state, TransferTaskState.completed);
-      // The retry's state churn journaled: task went back to queued.
-      expect(
-        persistence.journal.whereType<TaskStateRecord>().map((r) => r.state),
-        containsAllInOrder([
-          TransferTaskState.failed,
-          TransferTaskState.queued,
-          TransferTaskState.completed,
-        ]),
-      );
-      // History carries both terminal passes — the failed attempt and
-      // the retried success.
-      expect(persistence.historyEntries, hasLength(2));
-    });
+        remote.downloadFailure = null;
+        expect(queue.canRetryItem(task.id, itemId), isTrue);
+        expect(queue.retryItem(task.id, itemId), isTrue);
+        // The re-arm dispatches through the normal path — the row may
+        // already read active by the time the call returns.
+        expect(item.state, isNot(TransferItemState.failed));
+        expect(task.items.single.id, itemId);
+        await pumpUntil(() => task.isTerminal, reason: 'retry never settled');
+        expect(item.state, TransferItemState.completed);
+        expect(task.state, TransferTaskState.completed);
+        // The retry's state churn journaled: task went back to queued.
+        expect(
+          persistence.journal.whereType<TaskStateRecord>().map((r) => r.state),
+          containsAllInOrder([
+            TransferTaskState.failed,
+            TransferTaskState.queued,
+            TransferTaskState.completed,
+          ]),
+        );
+        // History carries both terminal passes — the failed attempt and
+        // the retried success.
+        expect(persistence.historyEntries, hasLength(2));
+      },
+    );
 
-    test('a retried directory re-arms its collateral-skipped subtree',
-        () async {
-      remote.addFile('/src/dir/one.txt', [1]);
-      remote.addFile('/src/dir/two.txt', [2]);
-      // Failing the destination stat fails the dir's materialization;
-      // its children skip as collateral.
-      destination.statFailure = (path) =>
-          path == '/dst/dir' ? failure('stat', path) : null;
-      final task = queue.enqueue(copySpec(rootPaths: ['/src/dir']));
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.failed);
-      final dirItem = task.items.firstWhere((i) => i.isDirectory);
-      expect(dirItem.state, TransferItemState.failed);
-      expect(
-        task.items.where((i) => i.state == TransferItemState.skipped),
-        hasLength(2),
-      );
+    test(
+      'a retried directory re-arms its collateral-skipped subtree',
+      () async {
+        remote.addFile('/src/dir/one.txt', [1]);
+        remote.addFile('/src/dir/two.txt', [2]);
+        // Failing the destination stat fails the dir's materialization;
+        // its children skip as collateral.
+        destination.statFailure = (path) =>
+            path == '/dst/dir' ? failure('stat', path) : null;
+        final task = queue.enqueue(copySpec(rootPaths: ['/src/dir']));
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.failed);
+        final dirItem = task.items.firstWhere((i) => i.isDirectory);
+        expect(dirItem.state, TransferItemState.failed);
+        expect(
+          task.items.where((i) => i.state == TransferItemState.skipped),
+          hasLength(2),
+        );
 
-      destination.statFailure = null;
-      expect(queue.canRetryTask(task.id), isTrue);
-      expect(queue.retryItem(task.id, dirItem.id), isTrue);
-      expect(task.state, TransferTaskState.queued);
-      await pumpUntil(() => task.isTerminal, reason: 'retry never settled');
-      expect(task.state, TransferTaskState.completed);
-      expect(
-        task.items.every((i) => i.state == TransferItemState.completed),
-        isTrue,
-      );
-      expect(task.failedItems, 0);
-      expect(task.skippedItems, 0);
-    });
+        destination.statFailure = null;
+        expect(queue.canRetryTask(task.id), isTrue);
+        expect(queue.retryItem(task.id, dirItem.id), isTrue);
+        expect(task.state, TransferTaskState.queued);
+        await pumpUntil(() => task.isTerminal, reason: 'retry never settled');
+        expect(task.state, TransferTaskState.completed);
+        expect(
+          task.items.every((i) => i.state == TransferItemState.completed),
+          isTrue,
+        );
+        expect(task.failedItems, 0);
+        expect(task.skippedItems, 0);
+      },
+    );
 
     test('retryItem refuses rows without a work order', () async {
-      remote.statFailure = (path) => path == '/src/a.txt'
-          ? failure('stat', path)
-          : null;
+      remote.statFailure = (path) =>
+          path == '/src/a.txt' ? failure('stat', path) : null;
       final task = queue.enqueue(copySpec());
       await awaitTaskDone(task);
       expect(task.state, TransferTaskState.failed);
@@ -391,42 +388,44 @@ void main() {
       );
     });
 
-    test('retryTask on a mid-scan failure re-scans without duplicate rows',
-        () async {
-      remote.addFile('/src/dir/one.txt', [1]);
-      remote.addFile('/src/dir/two.txt', [2]);
-      // A walk-ending listing failure kills the scan after the root
-      // dir's row was planned — the task fails mid-scan.
-      remote.listFailure = (path) => path == '/src/dir'
-          ? RemoteFileException(
-              kind: RemoteFileErrorKind.disconnected,
-              operation: 'list',
-              path: path,
-              message: 'simulated disconnect mid-scan',
-            )
-          : null;
-      final task = queue.enqueue(copySpec(rootPaths: ['/src/dir']));
-      await pumpUntil(() => task.isTerminal, reason: 'task never failed');
-      expect(task.state, TransferTaskState.failed);
-      expect(task.scanComplete, isFalse);
-      expect(task.items, hasLength(1));
-      final dirItemId = task.items.single.id;
+    test(
+      'retryTask on a mid-scan failure re-scans without duplicate rows',
+      () async {
+        remote.addFile('/src/dir/one.txt', [1]);
+        remote.addFile('/src/dir/two.txt', [2]);
+        // A walk-ending listing failure kills the scan after the root
+        // dir's row was planned — the task fails mid-scan.
+        remote.listFailure = (path) => path == '/src/dir'
+            ? RemoteFileException(
+                kind: RemoteFileErrorKind.disconnected,
+                operation: 'list',
+                path: path,
+                message: 'simulated disconnect mid-scan',
+              )
+            : null;
+        final task = queue.enqueue(copySpec(rootPaths: ['/src/dir']));
+        await pumpUntil(() => task.isTerminal, reason: 'task never failed');
+        expect(task.state, TransferTaskState.failed);
+        expect(task.scanComplete, isFalse);
+        expect(task.items, hasLength(1));
+        final dirItemId = task.items.single.id;
 
-      remote.listFailure = null;
-      expect(queue.canRetryTask(task.id), isTrue);
-      expect(queue.retryTask(task.id), isTrue);
-      await pumpUntil(() => task.isTerminal, reason: 'rescan never settled');
-      expect(task.state, TransferTaskState.completed);
-      expect(task.scanComplete, isTrue);
-      // The re-scan merged onto the journaled row — dir + two files,
-      // and the dir kept its itemId instead of minting a duplicate.
-      expect(task.items, hasLength(3));
-      expect(task.items.firstWhere((i) => i.isDirectory).id, dirItemId);
-      expect(
-        task.items.every((i) => i.state == TransferItemState.completed),
-        isTrue,
-      );
-    });
+        remote.listFailure = null;
+        expect(queue.canRetryTask(task.id), isTrue);
+        expect(queue.retryTask(task.id), isTrue);
+        await pumpUntil(() => task.isTerminal, reason: 'rescan never settled');
+        expect(task.state, TransferTaskState.completed);
+        expect(task.scanComplete, isTrue);
+        // The re-scan merged onto the journaled row — dir + two files,
+        // and the dir kept its itemId instead of minting a duplicate.
+        expect(task.items, hasLength(3));
+        expect(task.items.firstWhere((i) => i.isDirectory).id, dirItemId);
+        expect(
+          task.items.every((i) => i.state == TransferItemState.completed),
+          isTrue,
+        );
+      },
+    );
 
     test('a restored mid-scan item keeps its id on retry (no duplicate '
         'journal rows)', () async {

@@ -103,78 +103,66 @@ void main() {
     expect(await session.recoveredCheckouts(), isEmpty);
   });
 
-  test(
-    'a checkout attempt enqueues on the composed queue — panel-visible '
-    '— and fails honestly while remote endpoints are unavailable',
-    () async {
-      final session = await boot();
-      final entry = remoteEntry('/home/test/notes.txt', size: 5);
-      await expectLater(
-        session.checkout(serverId: 'server-a', entry: entry),
-        throwsA(
-          isA<RemoteFileException>().having(
-            (e) => e.kind,
-            'kind',
-            RemoteFileErrorKind.unsupported,
-          ),
+  test('a checkout attempt enqueues on the composed queue — panel-visible '
+      '— and fails honestly while remote endpoints are unavailable', () async {
+    final session = await boot();
+    final entry = remoteEntry('/home/test/notes.txt', size: 5);
+    await expectLater(
+      session.checkout(serverId: 'server-a', entry: entry),
+      throwsA(
+        isA<RemoteFileException>().having(
+          (e) => e.kind,
+          'kind',
+          RemoteFileErrorKind.unsupported,
         ),
-      );
-      // The download hop rode the shared queue: the AppTransferQueue
-      // seam the activity panel mirrors shows the managed task and its
-      // honest terminal failure — never an invisible or wedged row.
-      final tasks = queueSession.queue.tasks;
-      expect(tasks, hasLength(1));
-      final managed = tasks.single.spec.managedCheckout;
-      expect(managed, isNotNull);
-      expect(managed!.direction, ManagedCheckoutDirection.download);
-      expect(managed.serverId, 'server-a');
-      expect(managed.remotePath, '/home/test/notes.txt');
-      expect(tasks.single.state, TransferTaskState.failed);
-      // The failed checkout leaves no record and no plaintext behind.
-      expect(session.copiesFor('server-a'), isEmpty);
-      expect(
-        await session.recoveredCheckouts(),
-        isEmpty,
-      );
-    },
-  );
+      ),
+    );
+    // The download hop rode the shared queue: the AppTransferQueue
+    // seam the activity panel mirrors shows the managed task and its
+    // honest terminal failure — never an invisible or wedged row.
+    final tasks = queueSession.queue.tasks;
+    expect(tasks, hasLength(1));
+    final managed = tasks.single.spec.managedCheckout;
+    expect(managed, isNotNull);
+    expect(managed!.direction, ManagedCheckoutDirection.download);
+    expect(managed.serverId, 'server-a');
+    expect(managed.remotePath, '/home/test/notes.txt');
+    expect(tasks.single.state, TransferTaskState.failed);
+    // The failed checkout leaves no record and no plaintext behind.
+    expect(session.copiesFor('server-a'), isEmpty);
+    expect(await session.recoveredCheckouts(), isEmpty);
+  });
 
-  test(
-    'a persisted record survives relaunch: exposed, watchable, '
-    'reconciled dirty on edit',
-    () async {
-      final seeded = await seedRecord(
-        serverId: 'server-a',
-        remotePath: '/home/test/notes.txt',
-        content: 'original',
-      );
-      final session = await boot();
+  test('a persisted record survives relaunch: exposed, watchable, '
+      'reconciled dirty on edit', () async {
+    final seeded = await seedRecord(
+      serverId: 'server-a',
+      remotePath: '/home/test/notes.txt',
+      content: 'original',
+    );
+    final session = await boot();
 
-      // Durable state is exposed to the future editor UI — and the
-      // reconcile pass left it clean (baseline matches the file).
-      final restored = session.checkoutFor('server-a', seeded.remotePath);
-      expect(restored, isNotNull);
-      expect(restored!.dirty, isFalse);
-      // Round-trip of the seeded id; D17's derivation is covered in core.
-      expect(restored.editSessionId, 'server-a');
-      expect(session.localFile(restored).existsSync(), isTrue);
+    // Durable state is exposed to the future editor UI — and the
+    // reconcile pass left it clean (baseline matches the file).
+    final restored = session.checkoutFor('server-a', seeded.remotePath);
+    expect(restored, isNotNull);
+    expect(restored!.dirty, isFalse);
+    // Round-trip of the seeded id; D17's derivation is covered in core.
+    expect(restored.editSessionId, 'server-a');
+    expect(session.localFile(restored).existsSync(), isTrue);
 
-      // An edit the watcher may have missed still surfaces through the
-      // explicit resume reconcile — and the session notifies listeners.
-      var notified = 0;
-      session.addListener(() => notified++);
-      await File(session.localFile(restored).path).writeAsString('edited');
-      await session.reconcileOnResume();
-      // `changes` is a broadcast stream — its delivery lags the awaited
-      // verb by a microtask, so pump before reading the flag.
-      await pumpEventQueue();
-      expect(notified, greaterThan(0));
-      expect(
-        session.checkoutFor('server-a', seeded.remotePath)!.dirty,
-        isTrue,
-      );
-    },
-  );
+    // An edit the watcher may have missed still surfaces through the
+    // explicit resume reconcile — and the session notifies listeners.
+    var notified = 0;
+    session.addListener(() => notified++);
+    await File(session.localFile(restored).path).writeAsString('edited');
+    await session.reconcileOnResume();
+    // `changes` is a broadcast stream — its delivery lags the awaited
+    // verb by a microtask, so pump before reading the flag.
+    await pumpEventQueue();
+    expect(notified, greaterThan(0));
+    expect(session.checkoutFor('server-a', seeded.remotePath)!.dirty, isTrue);
+  });
 
   test('discard removes the record and its plaintext', () async {
     final seeded = await seedRecord(
@@ -196,31 +184,28 @@ void main() {
     expect(notified, greaterThan(0));
   });
 
-  test(
-    'uploadLocalCopy reaches the same unsupported refusal honestly '
-    '(no silent upload, no fake lease)',
-    () async {
-      await seedRecord(
-        serverId: 'server-a',
-        remotePath: '/home/test/notes.txt',
-        content: 'original',
-      );
-      final session = await boot();
-      final record = session.checkoutFor('server-a', '/home/test/notes.txt')!;
-      await expectLater(
-        session.uploadLocalCopy(record),
-        throwsA(
-          isA<RemoteFileException>().having(
-            (e) => e.kind,
-            'kind',
-            RemoteFileErrorKind.unsupported,
-          ),
+  test('uploadLocalCopy reaches the same unsupported refusal honestly '
+      '(no silent upload, no fake lease)', () async {
+    await seedRecord(
+      serverId: 'server-a',
+      remotePath: '/home/test/notes.txt',
+      content: 'original',
+    );
+    final session = await boot();
+    final record = session.checkoutFor('server-a', '/home/test/notes.txt')!;
+    await expectLater(
+      session.uploadLocalCopy(record),
+      throwsA(
+        isA<RemoteFileException>().having(
+          (e) => e.kind,
+          'kind',
+          RemoteFileErrorKind.unsupported,
         ),
-      );
-      // The refused save must not disturb the local copy or its record.
-      expect(session.checkoutFor('server-a', '/home/test/notes.txt'), isNotNull);
-    },
-  );
+      ),
+    );
+    // The refused save must not disturb the local copy or its record.
+    expect(session.checkoutFor('server-a', '/home/test/notes.txt'), isNotNull);
+  });
 
   test('shutdown is idempotent — repeat calls share one teardown', () async {
     final session = await boot();

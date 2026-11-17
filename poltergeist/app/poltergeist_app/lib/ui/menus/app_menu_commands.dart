@@ -106,10 +106,7 @@ RegisteredCommand buildAboutCommand({required String? version}) {
         applicationLegalese: l10n.openSourceLicensesLegalese,
       );
     },
-    menuPlacement: const CommandMenuPlacement(
-      menu: AppMenuId.help,
-      order: 40,
-    ),
+    menuPlacement: const CommandMenuPlacement(menu: AppMenuId.help, order: 40),
   );
 }
 

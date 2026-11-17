@@ -21,8 +21,6 @@ Icon commandIcon(
   return Icon(
     command.icon ?? fallback,
     size: size,
-    color: enabled && hue != null
-        ? FamilyPalette.of(context).glyph(hue)
-        : ink,
+    color: enabled && hue != null ? FamilyPalette.of(context).glyph(hue) : ink,
   );
 }

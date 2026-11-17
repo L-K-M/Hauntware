@@ -93,9 +93,11 @@ HostAuthenticator liveHostAuthenticator({
       // Interpolated, not restated: this line is quoted back in "the
       // connection hung" reports, and a tuned bound with a stale number in
       // the message makes those reports say the wrong thing.
-      log.add('Closing the trial connection timed out after '
-          '${closeTimeout.inSeconds}s. It was abandoned rather than waited '
-          'out, and may stay open until it fails on its own.');
+      log.add(
+        'Closing the trial connection timed out after '
+        '${closeTimeout.inSeconds}s. It was abandoned rather than waited '
+        'out, and may stay open until it fails on its own.',
+      );
     } catch (error, stackTrace) {
       // Authentication has already succeeded by here, and that is the only
       // thing this reports: a socket that misbehaves on the way down must not
@@ -199,7 +201,8 @@ Future<ConnectionTestResult> runConnectionTest({
     final host = config.host.contains(':')
         ? '[${config.host.replaceAll('[', '').replaceAll(']', '')}]'
         : config.host;
-    final summary = 'Authenticated as ${config.username}@$host:${config.port} '
+    final summary =
+        'Authenticated as ${config.username}@$host:${config.port} '
         '(${authKindLabel(kind)}).';
     // Into the transcript too, not only onto the result. A success ended with
     // whatever the SSH layer last wrote — which, when the close misbehaves, is

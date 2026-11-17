@@ -34,9 +34,6 @@ void main() {
       serverSearchHaystack(_server('Web', group: 'Prod')),
       'web ops@web.example.com:22 prod',
     );
-    expect(
-      serverSearchHaystack(_server('db')),
-      'db ops@db.example.com:22 ',
-    );
+    expect(serverSearchHaystack(_server('db')), 'db ops@db.example.com:22 ');
   });
 }

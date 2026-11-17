@@ -129,35 +129,32 @@ class LocalFileSystem implements RemoteFileSystem {
   });
 
   @override
-  Future<List<RemoteFileEntry>> listDirectory(String path) => _guard(
-    'list',
-    path,
-    () async {
-      final entries = <RemoteFileEntry>[];
-      await for (final entity in Directory(path).list(followLinks: false)) {
-        final name = p.basename(entity.path);
-        if (name == '.' || name == '..') continue;
-        // followLinks: false reports a symlink as a Link instance, so
-        // link detection needs no extra syscall — and links are never
-        // statted (a stat would follow and report the target's identity
-        // as the link's own).
-        if (entity is Link) {
-          entries.add(
-            RemoteFileEntry(
-              path: entity.path,
-              name: name,
-              type: RemoteFileType.symbolicLink,
-            ),
-          );
-          continue;
+  Future<List<RemoteFileEntry>> listDirectory(String path) =>
+      _guard('list', path, () async {
+        final entries = <RemoteFileEntry>[];
+        await for (final entity in Directory(path).list(followLinks: false)) {
+          final name = p.basename(entity.path);
+          if (name == '.' || name == '..') continue;
+          // followLinks: false reports a symlink as a Link instance, so
+          // link detection needs no extra syscall — and links are never
+          // statted (a stat would follow and report the target's identity
+          // as the link's own).
+          if (entity is Link) {
+            entries.add(
+              RemoteFileEntry(
+                path: entity.path,
+                name: name,
+                type: RemoteFileType.symbolicLink,
+              ),
+            );
+            continue;
+          }
+          final stat = await FileStat.stat(entity.path);
+          if (stat.type == FileSystemEntityType.notFound) continue;
+          entries.add(_entryFromStat(entity.path, name, stat));
         }
-        final stat = await FileStat.stat(entity.path);
-        if (stat.type == FileSystemEntityType.notFound) continue;
-        entries.add(_entryFromStat(entity.path, name, stat));
-      }
-      return entries;
-    },
-  );
+        return entries;
+      });
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) =>
@@ -201,10 +198,10 @@ class LocalFileSystem implements RemoteFileSystem {
     }
     return _guard('change permissions for', path, () async {
       final before = await _lstatNonLink(path, 'permissions');
-      final result = await _runUtility(
-        'chmod',
-        [permissions.toRadixString(8), path],
-      );
+      final result = await _runUtility('chmod', [
+        permissions.toRadixString(8),
+        path,
+      ]);
       _throwForUtilityExit(result, 'change permissions for', path);
       await _verifySameType(path, before, 'permissions');
     });
@@ -322,32 +319,29 @@ class LocalFileSystem implements RemoteFileSystem {
       });
 
   @override
-  Future<void> createDirectory(String path) => _guard(
-    'create directory',
-    path,
-    () async {
-      // dart:io's create() is a silent no-op on an existing directory;
-      // the contract (and the funnel's EEXIST→conflict rule) calls that
-      // a conflict instead.
-      // dart:io's create() is a silent no-op when a *directory* takes
-      // the path mid-race (undetectable without O_EXCL semantics); a
-      // racing *file* throws the plain EEXIST form, which becomes the
-      // typed conflict here instead of the funnel's generic shape.
-      if (await FileSystemEntity.type(path, followLinks: false) !=
-          FileSystemEntityType.notFound) {
-        throw _conflictExists('create directory', path);
-      }
-      try {
-        await Directory(path).create(recursive: false);
-      } on FileSystemException catch (error) {
-        final code = error.osError?.errorCode;
-        if (code == _eexist || code == _winAlreadyExists) {
+  Future<void> createDirectory(String path) =>
+      _guard('create directory', path, () async {
+        // dart:io's create() is a silent no-op on an existing directory;
+        // the contract (and the funnel's EEXIST→conflict rule) calls that
+        // a conflict instead.
+        // dart:io's create() is a silent no-op when a *directory* takes
+        // the path mid-race (undetectable without O_EXCL semantics); a
+        // racing *file* throws the plain EEXIST form, which becomes the
+        // typed conflict here instead of the funnel's generic shape.
+        if (await FileSystemEntity.type(path, followLinks: false) !=
+            FileSystemEntityType.notFound) {
           throw _conflictExists('create directory', path);
         }
-        rethrow;
-      }
-    },
-  );
+        try {
+          await Directory(path).create(recursive: false);
+        } on FileSystemException catch (error) {
+          final code = error.osError?.errorCode;
+          if (code == _eexist || code == _winAlreadyExists) {
+            throw _conflictExists('create directory', path);
+          }
+          rethrow;
+        }
+      });
 
   @override
   Future<void> rename(
@@ -388,8 +382,7 @@ class LocalFileSystem implements RemoteFileSystem {
   /// case-sensitive host a same-lowercase pair can still be two distinct
   /// entries; the caller resolves that with [_isDistinctEntry].
   bool _isCaseOnlyVariant(String oldPath, String newPath) =>
-      oldPath != newPath &&
-      oldPath.toLowerCase() == newPath.toLowerCase();
+      oldPath != newPath && oldPath.toLowerCase() == newPath.toLowerCase();
 
   /// Whether two same-lowercase paths are different entries (only
   /// possible on a case-sensitive volume). Missing paths canonicalize
@@ -494,43 +487,41 @@ class LocalFileSystem implements RemoteFileSystem {
   }
 
   @override
-  Future<void> delete(RemoteFileEntry entry) => _guard(
-    'delete',
-    entry.path,
-    () async {
-      try {
-        switch (entry.type) {
-          // Directory.delete(recursive: false) refuses a non-empty
-          // directory; recursion stays app-level by contract.
-          case RemoteFileType.directory:
-            await Directory(entry.path).delete(recursive: false);
-          case RemoteFileType.symbolicLink:
-            await Link(entry.path).delete();
-          default:
-            await File(entry.path).delete();
+  Future<void> delete(RemoteFileEntry entry) =>
+      _guard('delete', entry.path, () async {
+        try {
+          switch (entry.type) {
+            // Directory.delete(recursive: false) refuses a non-empty
+            // directory; recursion stays app-level by contract.
+            case RemoteFileType.directory:
+              await Directory(entry.path).delete(recursive: false);
+            case RemoteFileType.symbolicLink:
+              await Link(entry.path).delete();
+            default:
+              await File(entry.path).delete();
+          }
+        } on FileSystemException catch (error) {
+          final code = error.osError?.errorCode;
+          final nonEmpty =
+              code == _enotemptyLinux ||
+              code == _enotemptyDarwin ||
+              code == _eexist ||
+              code == _winDirNotEmpty ||
+              code == _winAlreadyExists;
+          if (nonEmpty) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.other,
+              operation: 'delete',
+              path: entry.path,
+              message:
+                  'Could not delete "${entry.path}": '
+                  'Only an empty directory can be deleted.',
+              cause: error,
+            );
+          }
+          rethrow;
         }
-      } on FileSystemException catch (error) {
-        final code = error.osError?.errorCode;
-        final nonEmpty = code == _enotemptyLinux ||
-            code == _enotemptyDarwin ||
-            code == _eexist ||
-            code == _winDirNotEmpty ||
-            code == _winAlreadyExists;
-        if (nonEmpty) {
-          throw RemoteFileException(
-            kind: RemoteFileErrorKind.other,
-            operation: 'delete',
-            path: entry.path,
-            message:
-                'Could not delete "${entry.path}": '
-                'Only an empty directory can be deleted.',
-            cause: error,
-          );
-        }
-        rethrow;
-      }
-    },
-  );
+      });
 
   @override
   Future<RemoteFileEntry> download(
@@ -539,68 +530,63 @@ class LocalFileSystem implements RemoteFileSystem {
     RemoteTransferProgress? onProgress,
     RemoteTransferCancellation? cancellation,
     bool computeHash = true,
-  }) => _guard(
-    'download',
-    path,
-    () async {
-      cancellation?.throwIfCancelled();
-      final pathType = await FileSystemEntity.type(path, followLinks: false);
-      if (pathType == FileSystemEntityType.notFound) {
-        await _throwIfNotActuallyMissing(path);
-        throw _notFound('download', path);
-      }
-      if (pathType != FileSystemEntityType.file) {
-        throw RemoteFileException(
-          kind: RemoteFileErrorKind.unsupported,
-          operation: 'download',
-          path: path,
-          message: 'Only regular local files can be downloaded.',
-        );
-      }
-      final initial = await FileStat.stat(path);
-      // FileStat.size is non-nullable — a size is always reported.
-      final length = initial.size;
-      var transferred = 0;
-      final digestSink = computeHash ? _DigestSink() : null;
-      final hashInput = digestSink == null
-          ? null
-          : sha256.startChunkedConversion(digestSink);
-      await destination.addStream(
-        _cancelWhenRequested(File(path).openRead(), cancellation).map((chunk) {
-          hashInput?.add(chunk);
-          transferred += chunk.length;
-          onProgress?.call(transferred, length);
-          return chunk;
-        }),
+  }) => _guard('download', path, () async {
+    cancellation?.throwIfCancelled();
+    final pathType = await FileSystemEntity.type(path, followLinks: false);
+    if (pathType == FileSystemEntityType.notFound) {
+      await _throwIfNotActuallyMissing(path);
+      throw _notFound('download', path);
+    }
+    if (pathType != FileSystemEntityType.file) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'download',
+        path: path,
+        message: 'Only regular local files can be downloaded.',
       );
-      hashInput?.close();
-      cancellation?.throwIfCancelled();
-      if (transferred != length) {
-        throw RemoteFileException(
-          kind: RemoteFileErrorKind.conflict,
-          operation: 'download',
-          path: path,
-          message:
-              'The local file changed while it was downloading '
-              '($transferred of $length bytes received).',
-        );
-      }
-      final finalStat = await FileStat.stat(path);
-      if (!_sameSnapshot(initial, finalStat)) {
-        throw RemoteFileException(
-          kind: RemoteFileErrorKind.conflict,
-          operation: 'download',
-          path: path,
-          message: 'The local file changed while it was downloading.',
-        );
-      }
-      return _copyEntryWithDigest(
-        _entryFromStat(path, p.basename(path), finalStat),
-        digestSink?.value.toString(),
+    }
+    final initial = await FileStat.stat(path);
+    // FileStat.size is non-nullable — a size is always reported.
+    final length = initial.size;
+    var transferred = 0;
+    final digestSink = computeHash ? _DigestSink() : null;
+    final hashInput = digestSink == null
+        ? null
+        : sha256.startChunkedConversion(digestSink);
+    await destination.addStream(
+      _cancelWhenRequested(File(path).openRead(), cancellation).map((chunk) {
+        hashInput?.add(chunk);
+        transferred += chunk.length;
+        onProgress?.call(transferred, length);
+        return chunk;
+      }),
+    );
+    hashInput?.close();
+    cancellation?.throwIfCancelled();
+    if (transferred != length) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'download',
+        path: path,
+        message:
+            'The local file changed while it was downloading '
+            '($transferred of $length bytes received).',
       );
-    },
-    cancellation: cancellation,
-  );
+    }
+    final finalStat = await FileStat.stat(path);
+    if (!_sameSnapshot(initial, finalStat)) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'download',
+        path: path,
+        message: 'The local file changed while it was downloading.',
+      );
+    }
+    return _copyEntryWithDigest(
+      _entryFromStat(path, p.basename(path), finalStat),
+      digestSink?.value.toString(),
+    );
+  }, cancellation: cancellation);
 
   @override
   Future<RemoteFileEntry> upload(
@@ -619,126 +605,123 @@ class LocalFileSystem implements RemoteFileSystem {
     // disk — the lexical half of the traversal defense, thrown raw like
     // every other precondition failure.
     validateLocalName(p.basename(path));
-    return _guard(
-      'upload',
-      path,
-      () async {
-        final existing = await _statOrNull(path);
-        if (existing != null && !overwrite) {
-          throw _conflictExists('upload', path);
+    return _guard('upload', path, () async {
+      final existing = await _statOrNull(path);
+      if (existing != null && !overwrite) {
+        throw _conflictExists('upload', path);
+      }
+      if (expectedTarget != null &&
+          (existing == null ||
+              !await _matchesExpectedTarget(existing, expectedTarget, path))) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.conflict,
+          operation: 'upload',
+          path: path,
+          message:
+              '"${p.basename(path)}" changed on disk before the upload started.',
+        );
+      }
+
+      cancellation?.throwIfCancelled();
+      final tempPath = await _createExclusiveTemp(path);
+      final temp = File(tempPath);
+      try {
+        final sink = temp.openWrite(mode: FileMode.append);
+        var transferred = 0;
+        final digestSink = computeHash ? _DigestSink() : null;
+        final hashInput = digestSink == null
+            ? null
+            : sha256.startChunkedConversion(digestSink);
+        try {
+          await for (final chunk in _cancelWhenRequested(
+            content,
+            cancellation,
+          )) {
+            cancellation?.throwIfCancelled();
+            if (chunk.isEmpty) continue;
+            hashInput?.add(chunk);
+            sink.add(chunk);
+            // Await each chunk's drain: IOSink.add alone never
+            // applies backpressure, and a fast source onto a slow
+            // disk would buffer the whole transfer in memory.
+            await sink.flush();
+            transferred += chunk.length;
+            onProgress?.call(transferred, length);
+          }
+          hashInput?.close();
+          cancellation?.throwIfCancelled();
+          await sink.flush();
+        } finally {
+          await sink.close();
         }
-        if (expectedTarget != null &&
-            (existing == null ||
-                !await _matchesExpectedTarget(existing, expectedTarget, path))) {
+        if (length != null && transferred != length) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.other,
+            operation: 'upload',
+            path: path,
+            message: 'Upload ended after $transferred of $length bytes.',
+          );
+        }
+
+        final mode = preserveMode ?? existing?.mode;
+        if (mode != null && !Platform.isWindows) {
+          final created = (await temp.stat()).mode & _modeBits;
+          // A replaced local file keeps its own mode whole. A mode from
+          // the other side (a server's, for a download) brings only
+          // the permission bits the local umask allows, as `sftp get`
+          // and `cp` do (deep review P1-05): a hostile server cannot
+          // plant a setuid binary or a world-writable file.
+          final wanted = preserveMode == null
+              ? mode & _modeBits
+              : _incomingMode(preserveMode, created);
+          if (wanted != created) {
+            final result = await _runUtility('chmod', [
+              wanted.toRadixString(8),
+              tempPath,
+            ]);
+            _throwForUtilityExit(result, 'upload', tempPath);
+          }
+        }
+
+        final latest = await _statOrNull(path);
+        if (!overwrite && latest != null) {
           throw RemoteFileException(
             kind: RemoteFileErrorKind.conflict,
             operation: 'upload',
             path: path,
             message:
-                '"${p.basename(path)}" changed on disk before the upload started.',
+                'A local item named "${p.basename(path)}" was created '
+                'while the upload was running.',
           );
         }
-
-        cancellation?.throwIfCancelled();
-        final tempPath = await _createExclusiveTemp(path);
-        final temp = File(tempPath);
-        try {
-          final sink = temp.openWrite(mode: FileMode.append);
-          var transferred = 0;
-          final digestSink = computeHash ? _DigestSink() : null;
-          final hashInput = digestSink == null
-              ? null
-              : sha256.startChunkedConversion(digestSink);
-          try {
-            await for (final chunk
-                in _cancelWhenRequested(content, cancellation)) {
-              cancellation?.throwIfCancelled();
-              if (chunk.isEmpty) continue;
-              hashInput?.add(chunk);
-              sink.add(chunk);
-              // Await each chunk's drain: IOSink.add alone never
-              // applies backpressure, and a fast source onto a slow
-              // disk would buffer the whole transfer in memory.
-              await sink.flush();
-              transferred += chunk.length;
-              onProgress?.call(transferred, length);
-            }
-            hashInput?.close();
-            cancellation?.throwIfCancelled();
-            await sink.flush();
-          } finally {
-            await sink.close();
-          }
-          if (length != null && transferred != length) {
-            throw RemoteFileException(
-              kind: RemoteFileErrorKind.other,
-              operation: 'upload',
-              path: path,
-              message: 'Upload ended after $transferred of $length bytes.',
-            );
-          }
-
-          final mode = preserveMode ?? existing?.mode;
-          if (mode != null && !Platform.isWindows) {
-            final created = (await temp.stat()).mode & _modeBits;
-            // A replaced local file keeps its own mode whole. A mode from
-            // the other side (a server's, for a download) brings only
-            // the permission bits the local umask allows, as `sftp get`
-            // and `cp` do (deep review P1-05): a hostile server cannot
-            // plant a setuid binary or a world-writable file.
-            final wanted = preserveMode == null
-                ? mode & _modeBits
-                : _incomingMode(preserveMode, created);
-            if (wanted != created) {
-              final result = await _runUtility('chmod', [
-                wanted.toRadixString(8),
-                tempPath,
-              ]);
-              _throwForUtilityExit(result, 'upload', tempPath);
-            }
-          }
-
-          final latest = await _statOrNull(path);
-          if (!overwrite && latest != null) {
-            throw RemoteFileException(
-              kind: RemoteFileErrorKind.conflict,
-              operation: 'upload',
-              path: path,
-              message:
-                  'A local item named "${p.basename(path)}" was created '
-                  'while the upload was running.',
-            );
-          }
-          if (expectedTarget != null &&
-              (latest == null ||
-                  !await _matchesExpectedTarget(latest, expectedTarget, path))) {
-            throw RemoteFileException(
-              kind: RemoteFileErrorKind.conflict,
-              operation: 'upload',
-              path: path,
-              message:
-                  '"${p.basename(path)}" changed on disk while the upload '
-                  'was running.',
-            );
-          }
-          await replaceLocalFile(temp, File(path));
-
-          final uploaded = await stat(path, followLinks: false);
-          return digestSink == null
-              ? uploaded
-              : _copyEntryWithDigest(uploaded, digestSink.value.toString());
-        } catch (_) {
-          // The temp never survives a failed upload — commit or cleanup.
-          try {
-            if (await temp.exists()) await temp.delete();
-          } on Object {
-            // Cleanup must not mask the original failure.
-          }
-          rethrow;
+        if (expectedTarget != null &&
+            (latest == null ||
+                !await _matchesExpectedTarget(latest, expectedTarget, path))) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'upload',
+            path: path,
+            message:
+                '"${p.basename(path)}" changed on disk while the upload '
+                'was running.',
+          );
         }
-      },
-      cancellation: cancellation,
-    );
+        await replaceLocalFile(temp, File(path));
+
+        final uploaded = await stat(path, followLinks: false);
+        return digestSink == null
+            ? uploaded
+            : _copyEntryWithDigest(uploaded, digestSink.value.toString());
+      } catch (_) {
+        // The temp never survives a failed upload — commit or cleanup.
+        try {
+          if (await temp.exists()) await temp.delete();
+        } on Object {
+          // Cleanup must not mask the original failure.
+        }
+        rethrow;
+      }
+    }, cancellation: cancellation);
   }
 
   /// D26's local→local file copy (00 D26, 07 §3.10): the fast path the
@@ -771,18 +754,123 @@ class LocalFileSystem implements RemoteFileSystem {
     // Same leaf-validation as upload: a remote-derived name is checked
     // before it touches the disk.
     validateLocalName(p.basename(destinationPath));
-    return _guard(
-      'copy',
-      destinationPath,
-      () async {
-        final existing = await _statOrNull(destinationPath);
-        if (existing != null && !overwrite) {
-          throw _conflictExists('copy', destinationPath);
+    return _guard('copy', destinationPath, () async {
+      final existing = await _statOrNull(destinationPath);
+      if (existing != null && !overwrite) {
+        throw _conflictExists('copy', destinationPath);
+      }
+      if (expectedTarget != null &&
+          (existing == null ||
+              !await _matchesExpectedTarget(
+                existing,
+                expectedTarget,
+                destinationPath,
+              ))) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.conflict,
+          operation: 'copy',
+          path: destinationPath,
+          message:
+              '"${p.basename(destinationPath)}" changed on disk before '
+              'the copy started.',
+        );
+      }
+
+      cancellation?.throwIfCancelled();
+      final sourceType = await FileSystemEntity.type(
+        sourcePath,
+        followLinks: false,
+      );
+      if (sourceType == FileSystemEntityType.notFound) {
+        await _throwIfNotActuallyMissing(sourcePath);
+        throw _notFound('copy', sourcePath);
+      }
+      if (sourceType != FileSystemEntityType.file) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.unsupported,
+          operation: 'copy',
+          path: sourcePath,
+          message: 'Only regular local files can be copied.',
+        );
+      }
+      final initial = await FileStat.stat(sourcePath);
+      // FileStat.size is non-nullable — a size is always reported.
+      final length = initial.size;
+
+      final tempPath = await _createExclusiveTemp(destinationPath);
+      final temp = File(tempPath);
+      try {
+        var transferred = 0;
+        void chunkProgress(int bytes) {
+          transferred += bytes;
+          onProgress?.call(transferred, length);
+        }
+
+        final pumped = await localCopyPump(
+          sourcePath,
+          tempPath,
+          length: length,
+          cancellation: cancellation,
+          onBytes: chunkProgress,
+        );
+        if (!pumped) {
+          // The mechanism declined (EXDEV, EOPNOTSUPP, ENOSYS, …):
+          // restart through the streamed pump — it truncates the
+          // temp's partial bytes itself.
+          transferred = 0;
+          await streamedLocalCopyPump(
+            sourcePath,
+            tempPath,
+            length: length,
+            cancellation: cancellation,
+            onBytes: chunkProgress,
+          );
+        }
+        cancellation?.throwIfCancelled();
+        if (transferred != length) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'copy',
+            path: sourcePath,
+            message:
+                'The local file changed while it was copying '
+                '($transferred of $length bytes received).',
+          );
+        }
+        final finalStat = await FileStat.stat(sourcePath);
+        if (!_sameSnapshot(initial, finalStat)) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'copy',
+            path: sourcePath,
+            message: 'The local file changed while it was copying.',
+          );
+        }
+
+        final mode = preserveMode ?? existing?.mode;
+        if (mode != null && !Platform.isWindows) {
+          final result = await _runUtility('chmod', [
+            (mode & 0xFFF).toRadixString(8),
+            tempPath,
+          ]);
+          _throwForUtilityExit(result, 'copy', tempPath);
+        }
+
+        final latest = await _statOrNull(destinationPath);
+        if (!overwrite && latest != null) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'copy',
+            path: destinationPath,
+            message:
+                'A local item named "${p.basename(destinationPath)}" '
+                'was created while the copy was running.',
+          );
         }
         if (expectedTarget != null &&
-            (existing == null ||
+            (latest == null ||
                 !await _matchesExpectedTarget(
-                  existing,
+                  latest,
                   expectedTarget,
                   destinationPath,
                 ))) {
@@ -791,133 +879,23 @@ class LocalFileSystem implements RemoteFileSystem {
             operation: 'copy',
             path: destinationPath,
             message:
-                '"${p.basename(destinationPath)}" changed on disk before '
-                'the copy started.',
+                '"${p.basename(destinationPath)}" changed on disk while '
+                'the copy was running.',
           );
         }
+        await replaceLocalFile(temp, File(destinationPath));
 
-        cancellation?.throwIfCancelled();
-        final sourceType = await FileSystemEntity.type(
-          sourcePath,
-          followLinks: false,
-        );
-        if (sourceType == FileSystemEntityType.notFound) {
-          await _throwIfNotActuallyMissing(sourcePath);
-          throw _notFound('copy', sourcePath);
-        }
-        if (sourceType != FileSystemEntityType.file) {
-          throw RemoteFileException(
-            kind: RemoteFileErrorKind.unsupported,
-            operation: 'copy',
-            path: sourcePath,
-            message: 'Only regular local files can be copied.',
-          );
-        }
-        final initial = await FileStat.stat(sourcePath);
-        // FileStat.size is non-nullable — a size is always reported.
-        final length = initial.size;
-
-        final tempPath = await _createExclusiveTemp(destinationPath);
-        final temp = File(tempPath);
+        return await stat(destinationPath, followLinks: false);
+      } catch (_) {
+        // The temp never survives a failed copy — commit or cleanup.
         try {
-          var transferred = 0;
-          void chunkProgress(int bytes) {
-            transferred += bytes;
-            onProgress?.call(transferred, length);
-          }
-
-          final pumped = await localCopyPump(
-            sourcePath,
-            tempPath,
-            length: length,
-            cancellation: cancellation,
-            onBytes: chunkProgress,
-          );
-          if (!pumped) {
-            // The mechanism declined (EXDEV, EOPNOTSUPP, ENOSYS, …):
-            // restart through the streamed pump — it truncates the
-            // temp's partial bytes itself.
-            transferred = 0;
-            await streamedLocalCopyPump(
-              sourcePath,
-              tempPath,
-              length: length,
-              cancellation: cancellation,
-              onBytes: chunkProgress,
-            );
-          }
-          cancellation?.throwIfCancelled();
-          if (transferred != length) {
-            throw RemoteFileException(
-              kind: RemoteFileErrorKind.conflict,
-              operation: 'copy',
-              path: sourcePath,
-              message:
-                  'The local file changed while it was copying '
-                  '($transferred of $length bytes received).',
-            );
-          }
-          final finalStat = await FileStat.stat(sourcePath);
-          if (!_sameSnapshot(initial, finalStat)) {
-            throw RemoteFileException(
-              kind: RemoteFileErrorKind.conflict,
-              operation: 'copy',
-              path: sourcePath,
-              message: 'The local file changed while it was copying.',
-            );
-          }
-
-          final mode = preserveMode ?? existing?.mode;
-          if (mode != null && !Platform.isWindows) {
-            final result = await _runUtility('chmod', [
-              (mode & 0xFFF).toRadixString(8),
-              tempPath,
-            ]);
-            _throwForUtilityExit(result, 'copy', tempPath);
-          }
-
-          final latest = await _statOrNull(destinationPath);
-          if (!overwrite && latest != null) {
-            throw RemoteFileException(
-              kind: RemoteFileErrorKind.conflict,
-              operation: 'copy',
-              path: destinationPath,
-              message:
-                  'A local item named "${p.basename(destinationPath)}" '
-                  'was created while the copy was running.',
-            );
-          }
-          if (expectedTarget != null &&
-              (latest == null ||
-                  !await _matchesExpectedTarget(
-                    latest,
-                    expectedTarget,
-                    destinationPath,
-                  ))) {
-            throw RemoteFileException(
-              kind: RemoteFileErrorKind.conflict,
-              operation: 'copy',
-              path: destinationPath,
-              message:
-                  '"${p.basename(destinationPath)}" changed on disk while '
-                  'the copy was running.',
-            );
-          }
-          await replaceLocalFile(temp, File(destinationPath));
-
-          return await stat(destinationPath, followLinks: false);
-        } catch (_) {
-          // The temp never survives a failed copy — commit or cleanup.
-          try {
-            if (await temp.exists()) await temp.delete();
-          } on Object {
-            // Cleanup must not mask the original failure.
-          }
-          rethrow;
+          if (await temp.exists()) await temp.delete();
+        } on Object {
+          // Cleanup must not mask the original failure.
         }
-      },
-      cancellation: cancellation,
-    );
+        rethrow;
+      }
+    }, cancellation: cancellation);
   }
 
   /// dart:io's stat/type fold every probe failure — including EACCES
@@ -930,7 +908,8 @@ class LocalFileSystem implements RemoteFileSystem {
       await Directory(path).resolveSymbolicLinks();
     } on FileSystemException catch (error) {
       final code = error.osError?.errorCode;
-      final missing = code == _enoent ||
+      final missing =
+          code == _enoent ||
           code == _enotdir ||
           code == _winFileNotFound ||
           code == _winPathNotFound;
@@ -991,10 +970,11 @@ class LocalFileSystem implements RemoteFileSystem {
   /// (so stderr stays deterministic English — chmod localizes via
   /// strerror — and `PATH` survives).
   Future<ProcessResult> _runUtility(String name, List<String> arguments) {
-    return Process.run(_resolveUtility(name), [
-      '--',
-      ...arguments,
-    ], environment: {..._environment, 'LC_ALL': 'C'});
+    return Process.run(
+      _resolveUtility(name),
+      ['--', ...arguments],
+      environment: {..._environment, 'LC_ALL': 'C'},
+    );
   }
 
   /// Finds [name] on this file system's own `PATH`. The child's
@@ -1046,8 +1026,8 @@ class LocalFileSystem implements RemoteFileSystem {
         ? (lastLine.isEmpty ? 'exit code ${result.exitCode}' : lastLine)
         : lastLine.substring(separator + 2);
     final kind = switch (detail) {
-      'Operation not permitted' || 'Permission denied' =>
-        RemoteFileErrorKind.permissionDenied,
+      'Operation not permitted' ||
+      'Permission denied' => RemoteFileErrorKind.permissionDenied,
       'No such file or directory' => RemoteFileErrorKind.notFound,
       _ => RemoteFileErrorKind.other,
     };
@@ -1206,13 +1186,15 @@ class LocalFileSystem implements RemoteFileSystem {
     return context.normalize(absolute);
   }
 
-  static RemoteFileException _unsupportedOnWindows(String operation, String path) =>
-      RemoteFileException(
-        kind: RemoteFileErrorKind.unsupported,
-        operation: operation,
-        path: path,
-        message: _message(operation, path, 'not supported on Windows'),
-      );
+  static RemoteFileException _unsupportedOnWindows(
+    String operation,
+    String path,
+  ) => RemoteFileException(
+    kind: RemoteFileErrorKind.unsupported,
+    operation: operation,
+    path: path,
+    message: _message(operation, path, 'not supported on Windows'),
+  );
 
   static RemoteFileException _notFound(String operation, String path) =>
       RemoteFileException(
@@ -1328,9 +1310,7 @@ class LocalFileSystem implements RemoteFileSystem {
   static bool isCrossDeviceRenameError(
     int? errorCode, {
     required bool windows,
-  }) =>
-      errorCode == _exdev ||
-      (windows && errorCode == _winNotSameDevice);
+  }) => errorCode == _exdev || (windows && errorCode == _winNotSameDevice);
 }
 
 /// An attribute write (setMode/setOwner/setTimes) whose path was swapped
@@ -1371,16 +1351,14 @@ class LocalCrossDeviceRenameException extends RemoteFileException {
   /// The destination the same-device rename could not reach.
   final String newPath;
 
-  LocalCrossDeviceRenameException({
-    required super.path,
-    required this.newPath,
-  }) : super(
-         kind: RemoteFileErrorKind.other,
-         operation: 'rename',
-         message:
-             'Could not rename "$path" to "$newPath": the paths are on '
-             'different filesystems',
-       );
+  LocalCrossDeviceRenameException({required super.path, required this.newPath})
+    : super(
+        kind: RemoteFileErrorKind.other,
+        operation: 'rename',
+        message:
+            'Could not rename "$path" to "$newPath": the paths are on '
+            'different filesystems',
+      );
 }
 
 /// Racer with the same semantics as the pinned adapter's: check before

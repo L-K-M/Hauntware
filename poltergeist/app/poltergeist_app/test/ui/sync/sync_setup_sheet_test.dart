@@ -636,9 +636,13 @@ void main() {
       await tester.pump();
       expect(puts, 1);
 
-      write.complete([SkipRuleSet(name: 'Logs', patterns: ['*.log'])]);
+      write.complete([
+        SkipRuleSet(name: 'Logs', patterns: ['*.log']),
+      ]);
       await tester.pumpAndSettle();
-      expect(sets.value, [SkipRuleSet(name: 'Logs', patterns: ['*.log'])]);
+      expect(sets.value, [
+        SkipRuleSet(name: 'Logs', patterns: ['*.log']),
+      ]);
     });
 
     testWidgets('a name the store already holds is refused in the editor', (

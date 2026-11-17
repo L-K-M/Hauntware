@@ -59,8 +59,7 @@ Future<void> _loadRealFonts() async {
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
   final mono = File('$dir/DejaVuSansMono.ttf');
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -110,9 +109,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme: base.primaryTextTheme.apply(
-        fontFamily: 'DejaVu Sans',
-      ),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     return MaterialApp(
       theme: theme,
@@ -121,11 +118,7 @@ void main() {
       home: Scaffold(
         body: RepaintBoundary(
           key: const ValueKey('capture.preview'),
-          child: SizedBox(
-            width: 420,
-            height: 620,
-            child: child,
-          ),
+          child: SizedBox(width: 420, height: 620, child: child),
         ),
       ),
     );
@@ -275,10 +268,7 @@ void main() {
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
       await untilTrue(() => h.producer.specs.length > producerCount);
-      await h.producer.complete(
-        h.producer.specs.length - 1,
-        _pngBytes,
-      );
+      await h.producer.complete(h.producer.specs.length - 1, _pngBytes);
       await untilPhase(h.session, PreviewPhase.rendered);
     });
     await tester.pump();
@@ -348,9 +338,7 @@ void main() {
     await tester.pumpWidget(
       app(
         SizedBox.expand(
-          child: Stack(
-            children: [PreviewQuickLookOverlay(session: h.session)],
-          ),
+          child: Stack(children: [PreviewQuickLookOverlay(session: h.session)]),
         ),
       ),
     );
@@ -358,16 +346,11 @@ void main() {
       find.byKey(const ValueKey('capture.preview')),
     );
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('preview.quickLookCard')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('preview.quickLookCard')), findsOneWidget);
     await capture(tester, '09-quicklook-overlay');
   });
 
-  testWidgets('captures the preview/download settings section', (
-    tester,
-  ) async {
+  testWidgets('captures the preview/download settings section', (tester) async {
     captureEnabled = Platform.environment['POLTERGEIST_CAPTURE'] == '1';
     late PreviewHarness h;
     await tester.runAsync(() async {
@@ -386,9 +369,7 @@ void main() {
     late EditorRegistryController registry;
     await tester.runAsync(() async {
       registry = EditorRegistryController(
-        store: SettingsStore(
-          path: '${h.tempDir.path}/capture-settings.json',
-        ),
+        store: SettingsStore(path: '${h.tempDir.path}/capture-settings.json'),
       );
       await registry.load();
     });

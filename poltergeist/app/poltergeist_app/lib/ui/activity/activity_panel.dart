@@ -65,11 +65,12 @@ class ActivityPanel extends StatelessWidget {
           Expanded(
             child: switch (controller.tab) {
               ActivityPanelTab.activity => ActivityTaskList(
-                  controller: controller,
-                  onReveal: onReveal,
-                ),
-              ActivityPanelTab.history =>
-                ActivityHistoryView(controller: controller),
+                controller: controller,
+                onReveal: onReveal,
+              ),
+              ActivityPanelTab.history => ActivityHistoryView(
+                controller: controller,
+              ),
             },
           ),
           // Totals of nothing ("0 of 0 items · 0 B of 0 B so far") only
@@ -140,8 +141,9 @@ class _ActivityHeader extends StatelessWidget {
               tooltip: paused
                   ? l10n.queueResumeTooltip
                   : l10n.queuePauseTooltip,
-              onPressed:
-                  controller.queue == null ? null : controller.toggleQueuePause,
+              onPressed: controller.queue == null
+                  ? null
+                  : controller.toggleQueuePause,
               icon: Icon(paused ? Icons.play_arrow : Icons.pause),
             ),
             _BandwidthButton(
@@ -198,10 +200,7 @@ class _PanelTab extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(4),
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: selected ? colors.surfaceContainerHighest : null,
               borderRadius: BorderRadius.circular(4),
@@ -389,7 +388,8 @@ class _TotalsFooter extends StatelessWidget {
     var totalBytes = 0;
     var growing = false;
     for (final task in controller.tasks) {
-      done += task.completedFiles +
+      done +=
+          task.completedFiles +
           task.completedDirectories +
           task.failedItems +
           task.skippedItems;
@@ -407,7 +407,7 @@ class _TotalsFooter extends StatelessWidget {
           '$total${growing ? '+' : ''}',
           formatPaneSize(bytes, platform: platform),
           '${formatPaneSize(totalBytes, platform: platform)}'
-          '${growing ? '+' : ''}',
+              '${growing ? '+' : ''}',
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

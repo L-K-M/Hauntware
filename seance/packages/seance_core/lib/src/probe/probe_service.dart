@@ -16,8 +16,11 @@ enum ProbeStatus { online, offline, unknown }
 /// Probes a single endpoint. Injected so the periodic service can be tested
 /// without real sockets.
 abstract class Prober {
-  Future<ProbeStatus> probe(String host, int port,
-      {Duration timeout = const Duration(seconds: 5)});
+  Future<ProbeStatus> probe(
+    String host,
+    int port, {
+    Duration timeout = const Duration(seconds: 5),
+  });
 }
 
 /// Real prober: opens a TCP connection and reads the SSH identification banner.
@@ -28,8 +31,11 @@ class TcpBannerProber implements Prober {
   const TcpBannerProber();
 
   @override
-  Future<ProbeStatus> probe(String host, int port,
-      {Duration timeout = const Duration(seconds: 5)}) async {
+  Future<ProbeStatus> probe(
+    String host,
+    int port, {
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
     Socket? socket;
     try {
       socket = await Socket.connect(host, port, timeout: timeout);
@@ -99,8 +105,8 @@ class ProbeService {
     this.maxConcurrentProbes = 6,
     this.connectedServerIds,
     Random? random,
-  })  : assert(maxConcurrentProbes > 0),
-        _random = random ?? Random();
+  }) : assert(maxConcurrentProbes > 0),
+       _random = random ?? Random();
 
   /// Latest status per server id, pushed on every sweep.
   Stream<Map<String, ProbeStatus>> get statuses => _controller.stream;

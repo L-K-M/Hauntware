@@ -31,10 +31,9 @@ void main() {
     }
 
     // A command that already exists as a snippet drops off.
-    expect(
-      s.suggestions(isExisting: (c) => c == 'tail -f app.log'),
-      ['docker compose up -d'],
-    );
+    expect(s.suggestions(isExisting: (c) => c == 'tail -f app.log'), [
+      'docker compose up -d',
+    ]);
 
     // A dismissed command never comes back.
     s.dismiss('docker compose up -d');

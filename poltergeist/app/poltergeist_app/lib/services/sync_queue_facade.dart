@@ -121,8 +121,8 @@ final class SyncTaskBinding {
     if (row == null) return;
     row.state = switch (item.status) {
       SyncItemStatus.done => TransferItemState.completed,
-      SyncItemStatus.failed || SyncItemStatus.conflicted =>
-        TransferItemState.failed,
+      SyncItemStatus.failed ||
+      SyncItemStatus.conflicted => TransferItemState.failed,
       // Cancelled pending work journals 'skipped' with a 'Cancelled'
       // error — the panel's cancelled state reads more honestly.
       SyncItemStatus.skipped =>
@@ -147,12 +147,7 @@ final class SyncTaskBinding {
       task.skippedItems++;
     }
     _owner._emit(
-      TransferQueueItemEvent(
-        task.id,
-        row.id,
-        row.state,
-        error: item.error,
-      ),
+      TransferQueueItemEvent(task.id, row.id, row.state, error: item.error),
     );
   }
 
@@ -295,20 +290,19 @@ final class SyncQueueTasks {
 
   /// The source snapshot an actionable item moves (null for
   /// skip/conflict rows — they carry no work and no row).
-  EntrySnapshot? _actionableSource(SyncItem item) => switch (
-        item.effective) {
-        SyncActionType.copyLeftToRight ||
-        SyncActionType.updateLeftToRight ||
-        SyncActionType.makeDirRight => item.left,
-        SyncActionType.copyRightToLeft ||
-        SyncActionType.updateRightToLeft ||
-        SyncActionType.makeDirLeft => item.right,
-        // Delete-phase rows execute real removals — the panel shows
-        // them as zero-byte rows.
-        SyncActionType.deleteLeft => item.left,
-        SyncActionType.deleteRight => item.right,
-        SyncActionType.skip || SyncActionType.conflict => null,
-      };
+  EntrySnapshot? _actionableSource(SyncItem item) => switch (item.effective) {
+    SyncActionType.copyLeftToRight ||
+    SyncActionType.updateLeftToRight ||
+    SyncActionType.makeDirRight => item.left,
+    SyncActionType.copyRightToLeft ||
+    SyncActionType.updateRightToLeft ||
+    SyncActionType.makeDirLeft => item.right,
+    // Delete-phase rows execute real removals — the panel shows
+    // them as zero-byte rows.
+    SyncActionType.deleteLeft => item.left,
+    SyncActionType.deleteRight => item.right,
+    SyncActionType.skip || SyncActionType.conflict => null,
+  };
 
   /// `pauseTask`/`resumeTask` → the run's §10 gate (the panel labels
   /// the row paused through the task event, not the flag).

@@ -318,7 +318,9 @@ SidebarAdhocSession? _sessionSavedAs(_SidebarData data, Bookmark bookmark) {
     statuses.map(ghostSessionOf),
   );
   if (live == null) return null;
-  final colors = poltergeistStatusColors(PoltergeistChrome.of(data.context, poltergeistThemeStyle));
+  final colors = poltergeistStatusColors(
+    PoltergeistChrome.of(data.context, poltergeistThemeStyle),
+  );
   return (dot: ghostStatusDot(live, colors)!, label: live.label!);
 }
 

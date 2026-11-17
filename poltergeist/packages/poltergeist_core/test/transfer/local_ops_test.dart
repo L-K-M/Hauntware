@@ -83,9 +83,9 @@ void main() {
   /// unlink landing. Poll rather than asserting on a torn view.
   Future<void> expectNoOrphanTemps() async {
     await pumpUntil(
-      () => !localDst
-          .listSync()
-          .any((e) => p.basename(e.path).startsWith('.poltergeist-')),
+      () => !localDst.listSync().any(
+        (e) => p.basename(e.path).startsWith('.poltergeist-'),
+      ),
       reason: 'aborted upload left a temp behind',
     );
   }
@@ -126,87 +126,83 @@ void main() {
   });
 
   group('D26 streamed copy', () {
-    test(
-      'copies a local→local file through the copy pump with progress — '
-      'never through the pipe',
-      () async {
-        final bytes = List<int>.generate(256 * 1024, (i) => i & 0xFF);
-        writeLocal('big.bin', bytes);
-        // The scripted pump emits deterministic 256-byte chunks so the
-        // progress events stay granular enough to observe.
-        localFs.chunkedDownload = true;
-        queue = newQueue(pipeBufferBytes: 8 * 1024);
+    test('copies a local→local file through the copy pump with progress — '
+        'never through the pipe', () async {
+      final bytes = List<int>.generate(256 * 1024, (i) => i & 0xFF);
+      writeLocal('big.bin', bytes);
+      // The scripted pump emits deterministic 256-byte chunks so the
+      // progress events stay granular enough to observe.
+      localFs.chunkedDownload = true;
+      queue = newQueue(pipeBufferBytes: 8 * 1024);
 
-        final task = queue.enqueue(
-          localSpec(
-            rootPaths: [p.join(localSrc.path, 'big.bin')],
-            destinationDir: localDst.path,
-          ),
-        );
-        await awaitTaskDone(task);
+      final task = queue.enqueue(
+        localSpec(
+          rootPaths: [p.join(localSrc.path, 'big.bin')],
+          destinationDir: localDst.path,
+        ),
+      );
+      await awaitTaskDone(task);
 
-        expect(task.state, TransferTaskState.completed);
-        expect(dstFile('big.bin').readAsBytesSync(), bytes);
-        // The M9 fast path (00 D26): bytes moved through the pump seat —
-        // the bounded pipe (and its download/upload VFS pair) never ran.
-        expect(localFs.copyCalls, 1);
-        expect(localFs.downloadCalls, 0);
-        expect(localFs.uploadCalls, 0);
-        final progress = events
-            .whereType<TransferQueueProgressEvent>()
-            .map((event) => event.transferred)
-            .toList();
-        expect(progress, isNotEmpty);
-        expect(progress.last, bytes.length);
-        // Local endpoints never touch the channel pool (03 §4.3).
-        expect(connections.leaseCalls, 0);
-      },
-    );
+      expect(task.state, TransferTaskState.completed);
+      expect(dstFile('big.bin').readAsBytesSync(), bytes);
+      // The M9 fast path (00 D26): bytes moved through the pump seat —
+      // the bounded pipe (and its download/upload VFS pair) never ran.
+      expect(localFs.copyCalls, 1);
+      expect(localFs.downloadCalls, 0);
+      expect(localFs.uploadCalls, 0);
+      final progress = events
+          .whereType<TransferQueueProgressEvent>()
+          .map((event) => event.transferred)
+          .toList();
+      expect(progress, isNotEmpty);
+      expect(progress.last, bytes.length);
+      // Local endpoints never touch the channel pool (03 §4.3).
+      expect(connections.leaseCalls, 0);
+    });
 
-    test(
-      'falls back to the streamed pump when the platform mechanism '
-      'declines',
-      () async {
-        final bytes = List<int>.generate(64 * 1024, (i) => i & 0xFF);
-        writeLocal('fallback.bin', bytes);
-        // A declining pump (EXDEV/EOPNOTSUPP/ENOSYS at runtime) must not
-        // fail the copy — the streamed pump restarts over the truncated
-        // temp and lands the file.
-        var pumpCalls = 0;
-        localFs.localCopyPump =
-            (sourcePath, destinationPath, {
-              required length,
-              required cancellation,
-              required onBytes,
-            }) async {
-              pumpCalls++;
-              return false;
-            };
+    test('falls back to the streamed pump when the platform mechanism '
+        'declines', () async {
+      final bytes = List<int>.generate(64 * 1024, (i) => i & 0xFF);
+      writeLocal('fallback.bin', bytes);
+      // A declining pump (EXDEV/EOPNOTSUPP/ENOSYS at runtime) must not
+      // fail the copy — the streamed pump restarts over the truncated
+      // temp and lands the file.
+      var pumpCalls = 0;
+      localFs.localCopyPump =
+          (
+            sourcePath,
+            destinationPath, {
+            required length,
+            required cancellation,
+            required onBytes,
+          }) async {
+            pumpCalls++;
+            return false;
+          };
 
-        final task = queue.enqueue(
-          localSpec(
-            rootPaths: [p.join(localSrc.path, 'fallback.bin')],
-            destinationDir: localDst.path,
-          ),
-        );
-        await awaitTaskDone(task);
+      final task = queue.enqueue(
+        localSpec(
+          rootPaths: [p.join(localSrc.path, 'fallback.bin')],
+          destinationDir: localDst.path,
+        ),
+      );
+      await awaitTaskDone(task);
 
-        expect(task.state, TransferTaskState.completed);
-        expect(pumpCalls, 1);
-        // The fallback streamed inside copyLocalFile — pin that it never
-        // reroutes through the download/upload VFS pair (the pipe round
-        // trip the M9 fast path removed).
-        expect(localFs.downloadCalls, 0);
-        expect(localFs.uploadCalls, 0);
-        expect(dstFile('fallback.bin').readAsBytesSync(), bytes);
-        final progress = events
-            .whereType<TransferQueueProgressEvent>()
-            .map((event) => event.transferred)
-            .toList();
-        expect(progress, isNotEmpty);
-        expect(progress.last, bytes.length);
-      },
-    );
+      expect(task.state, TransferTaskState.completed);
+      expect(pumpCalls, 1);
+      // The fallback streamed inside copyLocalFile — pin that it never
+      // reroutes through the download/upload VFS pair (the pipe round
+      // trip the M9 fast path removed).
+      expect(localFs.downloadCalls, 0);
+      expect(localFs.uploadCalls, 0);
+      expect(dstFile('fallback.bin').readAsBytesSync(), bytes);
+      final progress = events
+          .whereType<TransferQueueProgressEvent>()
+          .map((event) => event.transferred)
+          .toList();
+      expect(progress, isNotEmpty);
+      expect(progress.last, bytes.length);
+    });
 
     test('preserves mtime (and mode) on the destination', () async {
       final file = writeLocal('meta.txt', 'meta'.codeUnits);
@@ -218,10 +214,7 @@ void main() {
       }
 
       final task = queue.enqueue(
-        localSpec(
-          rootPaths: [file.path],
-          destinationDir: localDst.path,
-        ),
+        localSpec(rootPaths: [file.path], destinationDir: localDst.path),
       );
       await awaitTaskDone(task);
 
@@ -247,10 +240,7 @@ void main() {
         queue = newQueue();
 
         final task = queue.enqueue(
-          localSpec(
-            rootPaths: [file.path],
-            destinationDir: localDst.path,
-          ),
+          localSpec(rootPaths: [file.path], destinationDir: localDst.path),
         );
         await pumpUntil(() => localFs.downloadStarted.isCompleted);
         queue.cancelTask(task.id);
@@ -380,9 +370,9 @@ void main() {
         expect(dstFile('xdev.bin').readAsBytesSync(), bytes);
         expect(file.existsSync(), isFalse);
         expect(
-          FileStat.statSync(dstFile('xdev.bin').path).modified
-              .difference(mtime)
-              .abs(),
+          FileStat.statSync(
+            dstFile('xdev.bin').path,
+          ).modified.difference(mtime).abs(),
           lessThan(const Duration(seconds: 2)),
         );
         // The durability barrier ran before the source unlink (00 D26).
@@ -547,64 +537,63 @@ void main() {
     });
 
     test(
-      'a move onto itself completes in place — never self-overwrites', () async {
-      final file = writeLocal('self.txt', 'self'.codeUnits);
-
-      final task = queue.enqueue(
-        localSpec(
-          rootPaths: [file.path],
-          destinationDir: localSrc.path,
-          files: ConflictResolution.replace,
-          operation: TransferOperation.move,
-        ),
-      );
-      await awaitTaskDone(task);
-
-      expect(task.state, TransferTaskState.completed);
-      expect(task.items.single.state, TransferItemState.completed);
-      // The self-target short-circuit: no rename, no pipe, no unlink.
-      expect(localFs.renameCalls, 0);
-      expect(localFs.downloadCalls, 0);
-      expect(localFs.deleteCalls, 0);
-      expect(file.readAsStringSync(), 'self');
-    });
-
-    test(
-      'a destination appearing between decide and commit conflicts — '
-      'rename never silently clobbers it',
+      'a move onto itself completes in place — never self-overwrites',
       () async {
-        final file = writeLocal('late.txt', 'mine'.codeUnits);
-        final dstPath = p.join(localDst.path, 'late.txt');
-        var statCalls = 0;
-        localFs.onStat = (path) {
-          // The occupant lands in the decide→commit window: the scan
-          // phase stats the destination once (call 0), the run-time
-          // decide stats it again (call 1) — inject after that, so the
-          // commit-time re-verification is the first check to see it.
-          if (path == dstPath && statCalls++ == 1) {
-            File(dstPath).writeAsStringSync('late arrival');
-          }
-        };
+        final file = writeLocal('self.txt', 'self'.codeUnits);
 
         final task = queue.enqueue(
           localSpec(
             rootPaths: [file.path],
-            destinationDir: localDst.path,
+            destinationDir: localSrc.path,
+            files: ConflictResolution.replace,
             operation: TransferOperation.move,
           ),
         );
         await awaitTaskDone(task);
 
-        // The commit-time conflict re-decided on fresh reality: the
-        // skip policy wins, the late occupant and the source both
-        // survive, and no rename ever ran.
-        expect(task.state, TransferTaskState.completed, reason: task.error);
-        expect(task.items.single.state, TransferItemState.skipped);
-        expect(File(dstPath).readAsStringSync(), 'late arrival');
-        expect(file.readAsStringSync(), 'mine');
+        expect(task.state, TransferTaskState.completed);
+        expect(task.items.single.state, TransferItemState.completed);
+        // The self-target short-circuit: no rename, no pipe, no unlink.
         expect(localFs.renameCalls, 0);
+        expect(localFs.downloadCalls, 0);
+        expect(localFs.deleteCalls, 0);
+        expect(file.readAsStringSync(), 'self');
       },
     );
+
+    test('a destination appearing between decide and commit conflicts — '
+        'rename never silently clobbers it', () async {
+      final file = writeLocal('late.txt', 'mine'.codeUnits);
+      final dstPath = p.join(localDst.path, 'late.txt');
+      var statCalls = 0;
+      localFs.onStat = (path) {
+        // The occupant lands in the decide→commit window: the scan
+        // phase stats the destination once (call 0), the run-time
+        // decide stats it again (call 1) — inject after that, so the
+        // commit-time re-verification is the first check to see it.
+        if (path == dstPath && statCalls++ == 1) {
+          File(dstPath).writeAsStringSync('late arrival');
+        }
+      };
+
+      final task = queue.enqueue(
+        localSpec(
+          rootPaths: [file.path],
+          destinationDir: localDst.path,
+          operation: TransferOperation.move,
+        ),
+      );
+      await awaitTaskDone(task);
+
+      // The commit-time conflict re-decided on fresh reality: the
+      // skip policy wins, the late occupant and the source both
+      // survive, and no rename ever ran.
+      expect(task.state, TransferTaskState.completed, reason: task.error);
+      expect(task.items.single.state, TransferItemState.skipped);
+      expect(File(dstPath).readAsStringSync(), 'late arrival');
+      expect(file.readAsStringSync(), 'mine');
+      expect(localFs.renameCalls, 0);
+    });
 
     test(
       'a copy onto itself with keepBoth produces a numbered duplicate',
@@ -638,14 +627,8 @@ void main() {
         final local = FakeTreeFileSystem();
         local.addDirectory(localDst.path);
         local.addDirectory(p.join(localSrc.path, 'sub'));
-        local.addFile(
-          p.join(localSrc.path, 'sub', 'a.txt'),
-          'a'.codeUnits,
-        );
-        local.addFile(
-          p.join(localSrc.path, 'sub', 'b.txt'),
-          'bb'.codeUnits,
-        );
+        local.addFile(p.join(localSrc.path, 'sub', 'a.txt'), 'a'.codeUnits);
+        local.addFile(p.join(localSrc.path, 'sub', 'b.txt'), 'bb'.codeUnits);
         queue = newQueue(
           localFileSystem: local,
           // The fake tree has no host directories for the real fsync seam.
@@ -766,10 +749,7 @@ void main() {
       () async {
         final local = FakeTreeFileSystem()..caseInsensitive = true;
         local.addDirectory(localSrc.path);
-        local.addFile(
-          p.join(localSrc.path, 'stay.txt'),
-          'stay'.codeUnits,
-        );
+        local.addFile(p.join(localSrc.path, 'stay.txt'), 'stay'.codeUnits);
         queue = newQueue(
           localFileSystem: local,
           isCaseInsensitiveDestination: (_) => true,
@@ -788,51 +768,38 @@ void main() {
         expect(task.state, TransferTaskState.completed);
         expect(local.renameCalls, 0);
         expect(local.deleteCalls, 0);
-        expect(
-          local.entryAt(p.join(localSrc.path, 'stay.txt'))!.size,
-          4,
-        );
+        expect(local.entryAt(p.join(localSrc.path, 'stay.txt'))!.size, 4);
       },
       skip: posixOnly['skip'],
     );
 
-    test(
-      'move onto a folded-spelling parent is still a self-move',
-      () async {
-        final local = FakeTreeFileSystem()..caseInsensitive = true;
-        local.addDirectory(localSrc.path);
-        local.addFile(
-          p.join(localSrc.path, 'stay.txt'),
-          'stay'.codeUnits,
-        );
-        // A destDir that differs only by case: on a folding volume it
-        // resolves to the source's own parent.
-        final foldedDest = p.join(tempDir.path, 'SRC');
-        queue = newQueue(
-          localFileSystem: local,
-          isCaseInsensitiveDestination: (_) => true,
-        );
+    test('move onto a folded-spelling parent is still a self-move', () async {
+      final local = FakeTreeFileSystem()..caseInsensitive = true;
+      local.addDirectory(localSrc.path);
+      local.addFile(p.join(localSrc.path, 'stay.txt'), 'stay'.codeUnits);
+      // A destDir that differs only by case: on a folding volume it
+      // resolves to the source's own parent.
+      final foldedDest = p.join(tempDir.path, 'SRC');
+      queue = newQueue(
+        localFileSystem: local,
+        isCaseInsensitiveDestination: (_) => true,
+      );
 
-        final task = queue.enqueue(
-          localSpec(
-            rootPaths: [p.join(localSrc.path, 'stay.txt')],
-            destinationDir: foldedDest,
-            files: ConflictResolution.replace,
-            operation: TransferOperation.move,
-          ),
-        );
-        await awaitTaskDone(task);
+      final task = queue.enqueue(
+        localSpec(
+          rootPaths: [p.join(localSrc.path, 'stay.txt')],
+          destinationDir: foldedDest,
+          files: ConflictResolution.replace,
+          operation: TransferOperation.move,
+        ),
+      );
+      await awaitTaskDone(task);
 
-        expect(task.state, TransferTaskState.completed);
-        expect(local.renameCalls, 0);
-        expect(local.deleteCalls, 0);
-        expect(
-          local.entryAt(p.join(localSrc.path, 'stay.txt')),
-          isNotNull,
-        );
-      },
-      skip: posixOnly['skip'],
-    );
+      expect(task.state, TransferTaskState.completed);
+      expect(local.renameCalls, 0);
+      expect(local.deleteCalls, 0);
+      expect(local.entryAt(p.join(localSrc.path, 'stay.txt')), isNotNull);
+    }, skip: posixOnly['skip']);
 
     test(
       'a case-only occupant on a folding volume follows the conflict model',
@@ -840,14 +807,8 @@ void main() {
         final local = FakeTreeFileSystem()..caseInsensitive = true;
         local.addDirectory(localSrc.path);
         local.addDirectory(localDst.path);
-        local.addFile(
-          p.join(localSrc.path, 'foo.txt'),
-          'source'.codeUnits,
-        );
-        local.addFile(
-          p.join(localDst.path, 'FOO.TXT'),
-          'occupant'.codeUnits,
-        );
+        local.addFile(p.join(localSrc.path, 'foo.txt'), 'source'.codeUnits);
+        local.addFile(p.join(localDst.path, 'FOO.TXT'), 'occupant'.codeUnits);
         queue = newQueue(
           localFileSystem: local,
           isCaseInsensitiveDestination: (_) => true,
@@ -862,18 +823,9 @@ void main() {
         );
         await awaitTaskDone(skipped);
         expect(skipped.state, TransferTaskState.completed);
-        expect(
-          skipped.items.single.state,
-          TransferItemState.skipped,
-        );
-        expect(
-          local.entryAt(p.join(localDst.path, 'FOO.TXT'))!.size,
-          8,
-        );
-        expect(
-          local.entryAt(p.join(localSrc.path, 'foo.txt')),
-          isNotNull,
-        );
+        expect(skipped.items.single.state, TransferItemState.skipped);
+        expect(local.entryAt(p.join(localDst.path, 'FOO.TXT'))!.size, 8);
+        expect(local.entryAt(p.join(localSrc.path, 'foo.txt')), isNotNull);
 
         // keepBoth → the source lands under a numbered name; the
         // occupant is untouched.
@@ -887,18 +839,9 @@ void main() {
         );
         await awaitTaskDone(kept);
         expect(kept.state, TransferTaskState.completed);
-        expect(
-          local.entryAt(p.join(localDst.path, 'FOO.TXT'))!.size,
-          8,
-        );
-        expect(
-          local.entryAt(p.join(localDst.path, 'foo (2).txt'))!.size,
-          6,
-        );
-        expect(
-          local.entryAt(p.join(localSrc.path, 'foo.txt')),
-          isNull,
-        );
+        expect(local.entryAt(p.join(localDst.path, 'FOO.TXT'))!.size, 8);
+        expect(local.entryAt(p.join(localDst.path, 'foo (2).txt'))!.size, 6);
+        expect(local.entryAt(p.join(localSrc.path, 'foo.txt')), isNull);
       },
       skip: posixOnly['skip'],
     );
@@ -909,14 +852,8 @@ void main() {
         final local = FakeTreeFileSystem();
         local.addDirectory(localSrc.path);
         local.addDirectory(localDst.path);
-        local.addFile(
-          p.join(localSrc.path, 'foo.txt'),
-          'source'.codeUnits,
-        );
-        local.addFile(
-          p.join(localDst.path, 'FOO.TXT'),
-          'occupant'.codeUnits,
-        );
+        local.addFile(p.join(localSrc.path, 'foo.txt'), 'source'.codeUnits);
+        local.addFile(p.join(localDst.path, 'FOO.TXT'), 'occupant'.codeUnits);
         queue = newQueue(
           localFileSystem: local,
           isCaseInsensitiveDestination: (_) => false,
@@ -1019,7 +956,6 @@ class InstrumentedLocalFs extends LocalFileSystem {
   static const int scriptedChunkStep = 256;
   final Completer<void> downloadStarted = Completer<void>();
 
-
   /// Operation log shared with the queue's flush seam so ordering tests
   /// can assert "flush before unlink" in one sequence.
   final List<String> operationLog = [];
@@ -1037,10 +973,7 @@ class InstrumentedLocalFs extends LocalFileSystem {
   }) {
     renameCalls++;
     if (renameCrossDevice) {
-      throw LocalCrossDeviceRenameException(
-        path: oldPath,
-        newPath: newPath,
-      );
+      throw LocalCrossDeviceRenameException(path: oldPath, newPath: newPath);
     }
     return super.rename(oldPath, newPath, overwrite: overwrite);
   }
@@ -1083,8 +1016,7 @@ class InstrumentedLocalFs extends LocalFileSystem {
             message: 'Transfer cancelled.',
           );
         }
-        if (downloadFailAfterBytes != null &&
-            sent >= downloadFailAfterBytes!) {
+        if (downloadFailAfterBytes != null && sent >= downloadFailAfterBytes!) {
           throw RemoteFileException(
             kind: RemoteFileErrorKind.other,
             operation: 'copy',
@@ -1107,8 +1039,7 @@ class InstrumentedLocalFs extends LocalFileSystem {
             );
           }
         }
-        final end =
-            offset + step > bytes.length ? bytes.length : offset + step;
+        final end = offset + step > bytes.length ? bytes.length : offset + step;
         final chunk = bytes.sublist(offset, end);
         sink.add(chunk);
         await sink.flush();
@@ -1189,11 +1120,6 @@ class InstrumentedLocalFs extends LocalFileSystem {
     DateTime? modifiedAt,
   }) {
     setTimesCalls++;
-    return super.setTimes(
-      path,
-      accessedAt: accessedAt,
-      modifiedAt: modifiedAt,
-    );
+    return super.setTimes(path, accessedAt: accessedAt, modifiedAt: modifiedAt);
   }
 }
-

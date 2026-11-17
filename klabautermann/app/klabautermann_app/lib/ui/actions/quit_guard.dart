@@ -88,7 +88,10 @@ Future<bool> confirmQuitWhileRunning(
 }) async {
   final unsaved = operations.unsavedEdits;
   final running = operations.runningDetachedCount;
-  final liveShells = [for (final shell in shells) if (shell.isLive) shell];
+  final liveShells = [
+    for (final shell in shells)
+      if (shell.isLive) shell,
+  ];
   if (unsaved.isEmpty && running == 0 && liveShells.isEmpty) return true;
   final context = contextOf();
   if (context == null) return true;
@@ -104,9 +107,7 @@ Future<bool> confirmQuitWhileRunning(
       quit: l10n.quitWithUnsavedEditsQuit,
       cancel: materialL10n.cancelButtonLabel,
     );
-    if (!discard ||
-        (running == 0 && liveShells.isEmpty) ||
-        !context.mounted) {
+    if (!discard || (running == 0 && liveShells.isEmpty) || !context.mounted) {
       return discard;
     }
   }

@@ -6,10 +6,8 @@ import 'package:seance_core/seance_core.dart';
 /// [bytes] is the chunk's size; [cancellation] is the sink's gate token
 /// — cancelled on abort or attempt teardown so a parked wait unwinds
 /// promptly instead of holding the pipe open until the next grant.
-typedef TransferChunkGate = Future<void> Function(
-  int bytes,
-  RemoteTransferCancellation cancellation,
-);
+typedef TransferChunkGate =
+    Future<void> Function(int bytes, RemoteTransferCancellation cancellation);
 
 /// A `StreamSink<List<int>>` that bridges a VFS `download` into a VFS
 /// `upload` with bounded in-memory buffering (03 §4.5's "small buffer"
@@ -126,10 +124,7 @@ class BoundedTransferSink implements StreamSink<List<int>> {
   }
 
   @override
-  Future<void> addStream(
-    Stream<List<int>> stream, {
-    bool? cancelOnError,
-  }) {
+  Future<void> addStream(Stream<List<int>> stream, {bool? cancelOnError}) {
     final done = Completer<void>();
     if (_closed) {
       done.completeError(StateError('transfer sink already closed'));
@@ -160,9 +155,7 @@ class BoundedTransferSink implements StreamSink<List<int>> {
         _sourceError ??= error;
         _subscriptions.remove(subscription);
         _pendingAddStreams.remove(done);
-        unawaited(
-          subscription.cancel().then<void>((_) {}, onError: (_) {}),
-        );
+        unawaited(subscription.cancel().then<void>((_) {}, onError: (_) {}));
         _controller.addError(error, stackTrace);
         if (!done.isCompleted) done.completeError(error);
       },
@@ -200,9 +193,7 @@ class BoundedTransferSink implements StreamSink<List<int>> {
       _controller.addError(error);
       _subscriptions.remove(subscription);
       _pendingAddStreams.remove(done);
-      unawaited(
-        subscription.cancel().then<void>((_) {}, onError: (_) {}),
-      );
+      unawaited(subscription.cancel().then<void>((_) {}, onError: (_) {}));
       if (!done.isCompleted) done.completeError(error);
     }
   }
@@ -228,9 +219,7 @@ class BoundedTransferSink implements StreamSink<List<int>> {
       // A source parked mid-chunk surfaces its cancellation error through
       // the cancel future — swallow it; the pending addStream already
       // carries the abort reason.
-      unawaited(
-        subscription.cancel().then<void>((_) {}, onError: (_) {}),
-      );
+      unawaited(subscription.cancel().then<void>((_) {}, onError: (_) {}));
     }
     for (final pending in _pendingAddStreams) {
       if (!pending.isCompleted) pending.completeError(failure);
@@ -249,9 +238,7 @@ class BoundedTransferSink implements StreamSink<List<int>> {
     if (_closed) return Future<void>.value();
     _closed = true;
     for (final subscription in _subscriptions) {
-      unawaited(
-        subscription.cancel().then<void>((_) {}, onError: (_) {}),
-      );
+      unawaited(subscription.cancel().then<void>((_) {}, onError: (_) {}));
     }
     for (final pending in _pendingAddStreams) {
       // Closing while a source stream is still producing is a truncated

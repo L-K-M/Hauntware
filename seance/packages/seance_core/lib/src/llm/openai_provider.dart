@@ -58,9 +58,9 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
   Uri get _endpoint => Uri.parse('$baseUrl/chat/completions');
 
   Map<String, String> get _headers => {
-        'content-type': 'application/json',
-        if (apiKey.isNotEmpty) 'authorization': 'Bearer $apiKey',
-      };
+    'content-type': 'application/json',
+    if (apiKey.isNotEmpty) 'authorization': 'Bearer $apiKey',
+  };
 
   Map<String, dynamic> buildBody({
     required List<LlmMessage> messages,
@@ -74,14 +74,16 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
           .toList(),
       if (tools.isNotEmpty)
         'tools': tools
-            .map((t) => {
-                  'type': 'function',
-                  'function': {
-                    'name': t.name,
-                    'description': t.description,
-                    'parameters': t.inputSchema,
-                  },
-                })
+            .map(
+              (t) => {
+                'type': 'function',
+                'function': {
+                  'name': t.name,
+                  'description': t.description,
+                  'parameters': t.inputSchema,
+                },
+              },
+            )
             .toList(),
       if (stream) 'stream': true,
     };
@@ -91,7 +93,8 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
     final choices = (json['choices'] as List?) ?? const [];
     if (choices.isEmpty) return const ChatTurn(text: '');
     final message =
-        (choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>;
+        (choices.first as Map<String, dynamic>)['message']
+            as Map<String, dynamic>;
     final text = message['content'] as String? ?? '';
     final calls = <ToolCall>[];
     for (final tc in (message['tool_calls'] as List?) ?? const []) {
@@ -108,11 +111,13 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
       } else {
         args = {};
       }
-      calls.add(ToolCall(
-        id: m['id'] as String? ?? '',
-        name: fn['name'] as String? ?? '',
-        arguments: args,
-      ));
+      calls.add(
+        ToolCall(
+          id: m['id'] as String? ?? '',
+          name: fn['name'] as String? ?? '',
+          arguments: args,
+        ),
+      );
     }
     return ChatTurn(text: text, toolCalls: calls);
   }
@@ -150,10 +155,12 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
     required String prompt,
     HostContext context = HostContext.unknown,
   }) async {
-    final turn = await chat(messages: [
-      const LlmMessage.system(kCommandSystemPrompt),
-      LlmMessage.user('${context.toPromptBlock()}\nRequest: $prompt'),
-    ]);
+    final turn = await chat(
+      messages: [
+        const LlmMessage.system(kCommandSystemPrompt),
+        LlmMessage.user('${context.toPromptBlock()}\nRequest: $prompt'),
+      ],
+    );
     return parseCommandJson(turn.text);
   }
 
@@ -190,7 +197,8 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
       final choices = event['choices'] as List?;
       if (choices == null || choices.isEmpty) continue;
       final delta =
-          (choices.first as Map<String, dynamic>)['delta'] as Map<String, dynamic>?;
+          (choices.first as Map<String, dynamic>)['delta']
+              as Map<String, dynamic>?;
       final text = delta?['content'] as String?;
       if (text != null && text.isNotEmpty) yield text;
     }

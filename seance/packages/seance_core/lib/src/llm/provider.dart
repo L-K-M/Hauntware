@@ -91,8 +91,11 @@ class ToolCall {
   final String id;
   final String name;
   final Map<String, dynamic> arguments;
-  const ToolCall(
-      {required this.id, required this.name, required this.arguments});
+  const ToolCall({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
 }
 
 /// The result of one chat turn: assistant [text] plus any [toolCalls] the model
@@ -181,8 +184,10 @@ DangerSeverity? _dangerFromName(String? name) {
 }
 
 String _extractJsonObject(String text) {
-  final fenced =
-      RegExp(r'```(?:json)?\s*([\s\S]*?)```', multiLine: true).firstMatch(text);
+  final fenced = RegExp(
+    r'```(?:json)?\s*([\s\S]*?)```',
+    multiLine: true,
+  ).firstMatch(text);
   final candidate = fenced != null ? fenced.group(1)! : text;
   final start = candidate.indexOf('{');
   final end = candidate.lastIndexOf('}');

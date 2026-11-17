@@ -31,8 +31,11 @@ void main() {
         time,
         harness.manager.leaseTransferChannel('s1'),
       );
-      expect(harness.opener.transports, hasLength(2),
-          reason: 'Browse + transfer lease each need their own transport.');
+      expect(
+        harness.opener.transports,
+        hasLength(2),
+        reason: 'Browse + transfer lease each need their own transport.',
+      );
       final extra = harness.opener.transports.last;
       final retiring = extra.channels.single;
       final closeGate = retiring.closeGate = Completer<void>();
@@ -48,8 +51,11 @@ void main() {
       // settles the freed MaxSessions slot must not be handed out, nor
       // may the pool attempt an open the server would refuse.
       expect(retiring.closeCompleted, isFalse);
-      expect(extra.openCalls, 1,
-          reason: 'The closing channel still occupies MaxSessions.');
+      expect(
+        extra.openCalls,
+        1,
+        reason: 'The closing channel still occupies MaxSessions.',
+      );
       expect(granted, isNull);
 
       closeGate.complete();
@@ -74,8 +80,7 @@ void main() {
   // that somehow rides a timer must still complete within the probe.
   const closeCapProbe = Duration(seconds: 4);
 
-  test('a failed waiter does not deadlock the pump on its opened channel',
-      () {
+  test('a failed waiter does not deadlock the pump on its opened channel', () {
     fakeAsync((time) {
       final harness = PoolHarness(
         policy: _policy,
@@ -84,18 +89,19 @@ void main() {
       final pane = browsePane(time, harness, 'first');
       // Deliberately never released: the lease pins the extra transport's
       // only channel so the fresh lease below can only queue.
-      completeWithoutTimers(
-        time,
-        harness.manager.leaseTransferChannel('s1'),
-      );
+      completeWithoutTimers(time, harness.manager.leaseTransferChannel('s1'));
       final primary = harness.opener.transports.first;
 
       // Both transports hold their single channel and the pool is at its
       // transport cap: a fresh lease can only queue.
       final queued = harness.manager.leaseTransferChannel('s1');
       Object? queuedError;
-      unawaited(queued.then<void>((_) {},
-          onError: (Object error) => queuedError = error));
+      unawaited(
+        queued.then<void>(
+          (_) {},
+          onError: (Object error) => queuedError = error,
+        ),
+      );
       time.flushMicrotasks();
       expect(queuedError, isNull);
 
@@ -105,15 +111,21 @@ void main() {
       var paneClosed = false;
       unawaited(pane.close().then<void>((_) => paneClosed = true));
       time.flushMicrotasks();
-      expect(primary.openCalls, 2,
-          reason: 'The pump must open on the freed primary budget for the '
-              'queued lease (plus the pane\'s original browse open).');
+      expect(
+        primary.openCalls,
+        2,
+        reason:
+            'The pump must open on the freed primary budget for the '
+            'queued lease (plus the pane\'s original browse open).',
+      );
 
       // The disconnect fails the queued lease while its open is parked.
       var disconnected = false;
-      unawaited(harness.manager
-          .disconnectServer('s1')
-          .then<void>((_) => disconnected = true));
+      unawaited(
+        harness.manager
+            .disconnectServer('s1')
+            .then<void>((_) => disconnected = true),
+      );
       time.flushMicrotasks();
       expect(queuedError, isA<RemoteFileException>());
 
@@ -124,11 +136,18 @@ void main() {
       time.flushMicrotasks();
       time.elapse(closeCapProbe);
       time.flushMicrotasks();
-      expect(paneClosed, isTrue,
-          reason: 'The pane close must settle once the parked open '
-              'returns.');
-      expect(disconnected, isTrue,
-          reason: 'The disconnect must complete once the pump drains.');
+      expect(
+        paneClosed,
+        isTrue,
+        reason:
+            'The pane close must settle once the parked open '
+            'returns.',
+      );
+      expect(
+        disconnected,
+        isTrue,
+        reason: 'The disconnect must complete once the pump drains.',
+      );
       expect(time.pendingTimers, isEmpty);
     });
   });

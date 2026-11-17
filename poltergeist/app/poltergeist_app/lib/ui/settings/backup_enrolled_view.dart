@@ -74,8 +74,9 @@ final class BackupEnrolledView extends StatelessWidget {
   /// reachable — the durable state is unchanged, so the section simply
   /// re-renders its previous truth.
   static void _reportError(BuildContext context, Object error) {
-    ScaffoldMessenger.maybeOf(context)
-        ?.showSnackBar(SnackBar(content: Text('$error')));
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text('$error')));
   }
 
   Future<void> _resolvePin(
@@ -237,8 +238,7 @@ final class BackupEnrolledView extends StatelessWidget {
             ),
             TextButton(
               key: const ValueKey('backup.enrolled.signOut'),
-              onPressed:
-                  service.syncing ? null : () => _signOut(context),
+              onPressed: service.syncing ? null : () => _signOut(context),
               child: Text(l10n.backupSignOut),
             ),
             // §4.2: a shared account carries the user's Séance data — no
@@ -308,8 +308,8 @@ final class _BackupStatusLine extends StatelessWidget {
       final at = service.lastSyncAt;
       text = at == null ? l10n.backupNeverSynced : _ago(l10n, at);
     }
-    final attention = service.passphraseUnverified ||
-        (error != null && !service.syncing);
+    final attention =
+        service.passphraseUnverified || (error != null && !service.syncing);
     return Text(
       text,
       key: const ValueKey('backup.enrolled.status'),
@@ -322,7 +322,9 @@ final class _BackupStatusLine extends StatelessWidget {
   static String _ago(AppLocalizations l10n, DateTime at) {
     final delta = DateTime.now().difference(at);
     if (delta.inMinutes < 1) return l10n.backupLastSyncedJustNow;
-    if (delta.inHours < 1) return l10n.backupLastSyncedMinutesAgo(delta.inMinutes);
+    if (delta.inHours < 1) {
+      return l10n.backupLastSyncedMinutesAgo(delta.inMinutes);
+    }
     if (delta.inDays < 1) return l10n.backupLastSyncedHoursAgo(delta.inHours);
     return l10n.backupLastSyncedDaysAgo(delta.inDays);
   }
@@ -339,10 +341,9 @@ final class _NoticeText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: Theme.of(context)
-          .textTheme
-          .bodySmall
-          ?.copyWith(color: Theme.of(context).colorScheme.error),
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Theme.of(context).colorScheme.error,
+      ),
     );
   }
 }
@@ -489,10 +490,10 @@ class _DeleteRetainedAccountDialogState
   }
 
   Future<void> _confirmRetained() => _run(
-        () => widget.service.deleteRetainedSeparateAccount(
-          confirmedName: _field.text.trim(),
-        ),
-      );
+    () => widget.service.deleteRetainedSeparateAccount(
+      confirmedName: _field.text.trim(),
+    ),
+  );
 
   /// Return in the confirm field confirms, under the same gate as the
   /// button.
@@ -511,9 +512,7 @@ class _DeleteRetainedAccountDialogState
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = l10n.backupDeleteSeparateFailed('$error'),
-        );
+        setState(() => _error = l10n.backupDeleteSeparateFailed('$error'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -541,10 +540,7 @@ class _DeleteRetainedAccountDialogState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            l10n.backupDeleteSeparateBody(
-              retained.username,
-              retained.baseUrl,
-            ),
+            l10n.backupDeleteSeparateBody(retained.username, retained.baseUrl),
           ),
           const SizedBox(height: 12),
           Text(l10n.backupDeleteConfirmHint(retained.username)),

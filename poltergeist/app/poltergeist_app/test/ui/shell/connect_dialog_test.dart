@@ -207,10 +207,7 @@ void main() {
     expect(find.text('demo@demo.example.com:2222'), findsOneWidget);
     // The row sits above the Quick Connect field, which keeps focus.
     final field = find.byKey(const ValueKey('quickConnect.field'));
-    expect(
-      tester.getTopLeft(row).dy,
-      lessThan(tester.getTopLeft(field).dy),
-    );
+    expect(tester.getTopLeft(row).dy, lessThan(tester.getTopLeft(field).dy));
     expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
 
     // ↓ highlights the row; Return opens it.

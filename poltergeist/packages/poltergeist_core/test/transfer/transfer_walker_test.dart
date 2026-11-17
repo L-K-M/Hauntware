@@ -28,9 +28,7 @@ void main() {
 
   final createdQueues = <TransferQueue>[];
 
-  TransferQueue newQueue({
-    bool Function(RemoteFileEntry)? isFlaggedEntry,
-  }) {
+  TransferQueue newQueue({bool Function(RemoteFileEntry)? isFlaggedEntry}) {
     final created = TransferQueue(
       connections: connections,
       isFlaggedEntry: isFlaggedEntry,
@@ -90,65 +88,75 @@ void main() {
   }
 
   group('walker-driven scan', () {
-    test('upload direction: a local tree walks into remote work items',
-        () async {
-      writeLocal('tree/sub/deep.bin', [1, 2, 3]);
-      writeLocal('tree/top.txt', 'top'.codeUnits);
+    test(
+      'upload direction: a local tree walks into remote work items',
+      () async {
+        writeLocal('tree/sub/deep.bin', [1, 2, 3]);
+        writeLocal('tree/top.txt', 'top'.codeUnits);
 
-      final task = queue.enqueue(
-        copySpec(
-          source: const LocalFsLocation(),
-          destination: const ServerFsLocation('s1'),
-          rootPaths: ['${localSrc.path}/tree'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
+        final task = queue.enqueue(
+          copySpec(
+            source: const LocalFsLocation(),
+            destination: const ServerFsLocation('s1'),
+            rootPaths: ['${localSrc.path}/tree'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
 
-      expect(task.state, TransferTaskState.completed);
-      expect(s1.fileBytes['/dst/tree/top.txt'], 'top'.codeUnits);
-      expect(s1.fileBytes['/dst/tree/sub/deep.bin'], [1, 2, 3]);
-      expect(task.totalFiles, 2);
-      expect(task.totalDirectories, 2); // tree + tree/sub
-      expect(task.totalBytes, 6);
-      expect(task.scanComplete, isTrue);
-      // The public event stream carries the same aggregate totals.
-      final progress = events
-          .whereType<TransferQueueProgressEvent>()
-          .lastWhere((e) => e.taskId == task.id,
+        expect(task.state, TransferTaskState.completed);
+        expect(s1.fileBytes['/dst/tree/top.txt'], 'top'.codeUnits);
+        expect(s1.fileBytes['/dst/tree/sub/deep.bin'], [1, 2, 3]);
+        expect(task.totalFiles, 2);
+        expect(task.totalDirectories, 2); // tree + tree/sub
+        expect(task.totalBytes, 6);
+        expect(task.scanComplete, isTrue);
+        // The public event stream carries the same aggregate totals.
+        final progress = events
+            .whereType<TransferQueueProgressEvent>()
+            .lastWhere(
+              (e) => e.taskId == task.id,
               orElse: () =>
-                  fail('no TransferQueueProgressEvent emitted for task'));
-      expect(progress.taskTotalFiles, 2);
-      expect(progress.taskTotalDirectories, 2);
-      expect(progress.taskTotalBytes, 6);
-      expect(progress.scanComplete, isTrue);
-    });
+                  fail('no TransferQueueProgressEvent emitted for task'),
+            );
+        expect(progress.taskTotalFiles, 2);
+        expect(progress.taskTotalDirectories, 2);
+        expect(progress.taskTotalBytes, 6);
+        expect(progress.scanComplete, isTrue);
+      },
+    );
 
-    test('download direction: a remote tree walks into local work items',
-        () async {
-      s1.addDirectory('/src/dir/sub');
-      s1.addFile('/src/dir/a.txt', 'a'.codeUnits);
-      s1.addFile('/src/dir/sub/b.txt', 'bb'.codeUnits);
-      final localDest = Directory('${tempDir.path}/dest')..createSync();
+    test(
+      'download direction: a remote tree walks into local work items',
+      () async {
+        s1.addDirectory('/src/dir/sub');
+        s1.addFile('/src/dir/a.txt', 'a'.codeUnits);
+        s1.addFile('/src/dir/sub/b.txt', 'bb'.codeUnits);
+        final localDest = Directory('${tempDir.path}/dest')..createSync();
 
-      final task = queue.enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const LocalFsLocation(),
-          rootPaths: ['/src/dir'],
-          destinationDir: localDest.path,
-        ),
-      );
-      await awaitTaskDone(task);
+        final task = queue.enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const LocalFsLocation(),
+            rootPaths: ['/src/dir'],
+            destinationDir: localDest.path,
+          ),
+        );
+        await awaitTaskDone(task);
 
-      expect(task.state, TransferTaskState.completed);
-      expect(File('${localDest.path}/dir/a.txt').readAsBytesSync(),
-          'a'.codeUnits);
-      expect(File('${localDest.path}/dir/sub/b.txt').readAsBytesSync(),
-          'bb'.codeUnits);
-      expect(task.totalFiles, 2);
-      expect(task.completedFiles, 2);
-    });
+        expect(task.state, TransferTaskState.completed);
+        expect(
+          File('${localDest.path}/dir/a.txt').readAsBytesSync(),
+          'a'.codeUnits,
+        );
+        expect(
+          File('${localDest.path}/dir/sub/b.txt').readAsBytesSync(),
+          'bb'.codeUnits,
+        );
+        expect(task.totalFiles, 2);
+        expect(task.completedFiles, 2);
+      },
+    );
 
     test('walker output still drives the per-item conflict check '
         '(ask parks a scan-discovered file)', () async {
@@ -216,49 +224,48 @@ void main() {
         expect(item.error, contains('not a safe local file name'));
       }
       // The clean sibling still landed.
-      expect(File('${localDest.path}/src/ok.txt').readAsBytesSync(),
-          'ok'.codeUnits);
+      expect(
+        File('${localDest.path}/src/ok.txt').readAsBytesSync(),
+        'ok'.codeUnits,
+      );
       expect(task.completedFiles, 1);
     });
 
-    test('a listed entry escaping the walk root fails the task loudly',
-        () async {
-      s1.addDirectory('/src/dir');
-      s1.directories['/src/dir']!.add(
-        const RemoteFileEntry(
-          path: '/outside/evil.txt',
-          name: 'evil.txt',
-          type: RemoteFileType.file,
-          size: 4,
-        ),
-      );
+    test(
+      'a listed entry escaping the walk root fails the task loudly',
+      () async {
+        s1.addDirectory('/src/dir');
+        s1.directories['/src/dir']!.add(
+          const RemoteFileEntry(
+            path: '/outside/evil.txt',
+            name: 'evil.txt',
+            type: RemoteFileType.file,
+            size: 4,
+          ),
+        );
 
-      final task = queue.enqueue(
-        copySpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: ['/src/dir'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
+        final task = queue.enqueue(
+          copySpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: ['/src/dir'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
 
-      expect(task.state, TransferTaskState.failed);
-      expect(task.error, contains('outside the walk root'));
-      // Nothing ever dispatched toward the escaping path.
-      expect(
-        s2.calls.where((c) => c.contains('outside')),
-        isEmpty,
-      );
-    });
+        expect(task.state, TransferTaskState.failed);
+        expect(task.error, contains('outside the walk root'));
+        // Nothing ever dispatched toward the escaping path.
+        expect(s2.calls.where((c) => c.contains('outside')), isEmpty);
+      },
+    );
 
     test('a flagged (undecodable) name becomes a terminal skipped row, '
         'never silently dropped', () async {
       // Injected §13 detector — production wiring waits on the upstream
       // raw-name metadata (STATUS item 13); the test flags by name.
-      queue = newQueue(
-        isFlaggedEntry: (entry) => entry.name == 'bad.txt',
-      );
+      queue = newQueue(isFlaggedEntry: (entry) => entry.name == 'bad.txt');
       events = [];
       queue.events.listen(events.add);
 
@@ -287,28 +294,28 @@ void main() {
       expect(s2.fileBytes['/dst/src/good.txt'], 'g'.codeUnits);
       // No upload ever carried the lossy name.
       expect(
-        s1.calls.where((c) => c.contains('bad.txt') && c.startsWith('download')),
+        s1.calls.where(
+          (c) => c.contains('bad.txt') && c.startsWith('download'),
+        ),
         isEmpty,
       );
     });
 
     test('a transient mid-scan disconnect rides the re-lease seam — '
-        'the directory lists on retry, never a per-item failure',
-        () async {
+        'the directory lists on retry, never a per-item failure', () async {
       s1.addDirectory('/src/broken');
       s1.addFile('/src/broken/deep.txt', 'd'.codeUnits);
       s1.addFile('/src/ok.txt', 'o'.codeUnits);
       // One drop, then the reconnect succeeds — the walk must retry
       // through _scanOp rather than record a failed directory row.
       var brokenListings = 0;
-      s1.listFailure = (path) =>
-          path == '/src/broken' && brokenListings++ == 0
-              ? const RemoteFileException(
-                  kind: RemoteFileErrorKind.disconnected,
-                  operation: 'list',
-                  message: 'connection dropped',
-                )
-              : null;
+      s1.listFailure = (path) => path == '/src/broken' && brokenListings++ == 0
+          ? const RemoteFileException(
+              kind: RemoteFileErrorKind.disconnected,
+              operation: 'list',
+              message: 'connection dropped',
+            )
+          : null;
 
       final task = queue.enqueue(
         copySpec(

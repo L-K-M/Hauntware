@@ -23,10 +23,7 @@ class _Outcome {
 
   void watch(Future<void> future) {
     unawaited(
-      future.then(
-        (_) => done = true,
-        onError: (Object e) => error = e,
-      ),
+      future.then((_) => done = true, onError: (Object e) => error = e),
     );
   }
 }
@@ -127,9 +124,7 @@ void main() {
         var granted = 0;
         // Steady demand: more queued work than any window can grant.
         for (var i = 0; i < 200; i++) {
-          unawaited(
-            limiter.acquire(10).then((_) => granted += 10),
-          );
+          unawaited(limiter.acquire(10).then((_) => granted += 10));
         }
         time.flushMicrotasks();
         // W = 2 s: at most L·(1 + 2) bytes may be granted.
@@ -147,15 +142,11 @@ void main() {
   });
 
   group('capacity splitting', () {
-    test('an acquire larger than capacity drains in capacity-sized grants',
-        () {
+    test('an acquire larger than capacity drains in capacity-sized grants', () {
       fakeAsync((time) {
         // capacity = max(10, 4) = 10; a 40-byte request must drain
         // 10/10/10/10 across four grant ticks without deadlocking.
-        final limiter = BandwidthLimiter(
-          maxChunkBytes: 4,
-          bytesPerSecond: 10,
-        );
+        final limiter = BandwidthLimiter(maxChunkBytes: 4, bytesPerSecond: 10);
         final outcome = _Outcome()..watch(limiter.acquire(40));
         time.flushMicrotasks();
         expect(outcome.done, isFalse);
@@ -174,10 +165,7 @@ void main() {
         // rate 1 B/s with 64-byte chunks: capacity = 64 — a 128-byte
         // request drains its second grant after 64 s rather than
         // awaiting tokens the bucket could never hold.
-        final limiter = BandwidthLimiter(
-          maxChunkBytes: 64,
-          bytesPerSecond: 1,
-        );
+        final limiter = BandwidthLimiter(maxChunkBytes: 64, bytesPerSecond: 1);
         final outcome = _Outcome()..watch(limiter.acquire(128));
         time.flushMicrotasks();
         time.elapse(const Duration(seconds: 63));
@@ -219,10 +207,7 @@ void main() {
 
     test('setting the rate to unlimited releases every parked acquire', () {
       fakeAsync((time) {
-        final limiter = BandwidthLimiter(
-          maxChunkBytes: 64,
-          bytesPerSecond: 10,
-        );
+        final limiter = BandwidthLimiter(maxChunkBytes: 64, bytesPerSecond: 10);
         unawaited(limiter.acquire(10));
         final first = _Outcome()..watch(limiter.acquire(100));
         final second = _Outcome()..watch(limiter.acquire(50));
@@ -239,10 +224,7 @@ void main() {
 
     test('a parked acquire cancels cleanly through the attempt token', () {
       fakeAsync((time) {
-        final limiter = BandwidthLimiter(
-          maxChunkBytes: 64,
-          bytesPerSecond: 10,
-        );
+        final limiter = BandwidthLimiter(maxChunkBytes: 64, bytesPerSecond: 10);
         unawaited(limiter.acquire(10));
         final token = RemoteTransferCancellation();
         final outcome = _Outcome()

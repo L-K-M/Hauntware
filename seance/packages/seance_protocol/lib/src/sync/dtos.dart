@@ -24,13 +24,13 @@ class RegisterRequest {
   });
 
   Map<String, dynamic> toJson() => {
-        'protocolVersion': protocolVersion,
-        'username': username,
-        'authVerifier': authVerifier,
-        'argonSalt': argonSalt,
-        'argonParams': argonParams.toJson(),
-        'vaultKeyCheck': vaultKeyCheck,
-      };
+    'protocolVersion': protocolVersion,
+    'username': username,
+    'authVerifier': authVerifier,
+    'argonSalt': argonSalt,
+    'argonParams': argonParams.toJson(),
+    'vaultKeyCheck': vaultKeyCheck,
+  };
 
   factory RegisterRequest.fromJson(Map<String, dynamic> json) =>
       RegisterRequest(
@@ -39,8 +39,7 @@ class RegisterRequest {
         username: json['username'] as String,
         authVerifier: json['authVerifier'] as String,
         argonSalt: json['argonSalt'] as String,
-        argonParams:
-            Argon2Params.fromJson((json['argonParams'] as Map).cast()),
+        argonParams: Argon2Params.fromJson((json['argonParams'] as Map).cast()),
         vaultKeyCheck: json['vaultKeyCheck'] as String? ?? '',
       );
 }
@@ -54,14 +53,15 @@ class PreloginResponse {
 
   const PreloginResponse({required this.argonSalt, required this.argonParams});
 
-  Map<String, dynamic> toJson() =>
-      {'argonSalt': argonSalt, 'argonParams': argonParams.toJson()};
+  Map<String, dynamic> toJson() => {
+    'argonSalt': argonSalt,
+    'argonParams': argonParams.toJson(),
+  };
 
   factory PreloginResponse.fromJson(Map<String, dynamic> json) =>
       PreloginResponse(
         argonSalt: json['argonSalt'] as String,
-        argonParams:
-            Argon2Params.fromJson((json['argonParams'] as Map).cast()),
+        argonParams: Argon2Params.fromJson((json['argonParams'] as Map).cast()),
       );
 }
 
@@ -78,17 +78,17 @@ class LoginRequest {
   });
 
   Map<String, dynamic> toJson() => {
-        'protocolVersion': protocolVersion,
-        'username': username,
-        'authVerifier': authVerifier,
-      };
+    'protocolVersion': protocolVersion,
+    'username': username,
+    'authVerifier': authVerifier,
+  };
 
   factory LoginRequest.fromJson(Map<String, dynamic> json) => LoginRequest(
-        protocolVersion:
-            (json['protocolVersion'] as num?)?.toInt() ?? kProtocolVersion,
-        username: json['username'] as String,
-        authVerifier: json['authVerifier'] as String,
-      );
+    protocolVersion:
+        (json['protocolVersion'] as num?)?.toInt() ?? kProtocolVersion,
+    username: json['username'] as String,
+    authVerifier: json['authVerifier'] as String,
+  );
 }
 
 class LoginResponse {
@@ -103,18 +103,17 @@ class LoginResponse {
   });
 
   Map<String, dynamic> toJson() => {
-        'token': token,
-        if (vaultKeyCheck != null) 'vaultKeyCheck': vaultKeyCheck,
-        'recordEnvelopeFloor': recordEnvelopeFloor,
-      };
-  factory LoginResponse.fromJson(Map<String, dynamic> json) =>
-      LoginResponse(
-        token: json['token'] as String,
-        vaultKeyCheck: json['vaultKeyCheck'] as String?,
-        recordEnvelopeFloor:
-            (json['recordEnvelopeFloor'] as num?)?.toInt() ??
-                kLegacyRecordEnvelopeVersion,
-      );
+    'token': token,
+    if (vaultKeyCheck != null) 'vaultKeyCheck': vaultKeyCheck,
+    'recordEnvelopeFloor': recordEnvelopeFloor,
+  };
+  factory LoginResponse.fromJson(Map<String, dynamic> json) => LoginResponse(
+    token: json['token'] as String,
+    vaultKeyCheck: json['vaultKeyCheck'] as String?,
+    recordEnvelopeFloor:
+        (json['recordEnvelopeFloor'] as num?)?.toInt() ??
+        kLegacyRecordEnvelopeVersion,
+  );
 }
 
 /// Public metadata for one sync bearer session. The token hash is intentionally
@@ -141,15 +140,15 @@ class SyncSessionInfo {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        if (deviceId != null) 'deviceId': deviceId,
-        'deviceName': deviceName,
-        'createdAt': createdAt,
-        'expiresAt': expiresAt,
-        'lastUsedAt': lastUsedAt,
-        'legacy': legacy,
-        'current': current,
-      };
+    'id': id,
+    if (deviceId != null) 'deviceId': deviceId,
+    'deviceName': deviceName,
+    'createdAt': createdAt,
+    'expiresAt': expiresAt,
+    'lastUsedAt': lastUsedAt,
+    'legacy': legacy,
+    'current': current,
+  };
 
   factory SyncSessionInfo.fromJson(Map<String, dynamic> json) =>
       SyncSessionInfo(
@@ -170,8 +169,8 @@ class SyncSessionsResponse {
   const SyncSessionsResponse({required this.sessions});
 
   Map<String, dynamic> toJson() => {
-        'sessions': [for (final session in sessions) session.toJson()],
-      };
+    'sessions': [for (final session in sessions) session.toJson()],
+  };
 
   factory SyncSessionsResponse.fromJson(Map<String, dynamic> json) =>
       SyncSessionsResponse(
@@ -235,10 +234,10 @@ class PushLimits {
   });
 
   Map<String, dynamic> toJson() => {
-        'maxBodyBytes': maxBodyBytes,
-        'maxRecordsPerPush': maxRecordsPerPush,
-        'maxBlobBytes': maxBlobBytes,
-      };
+    'maxBodyBytes': maxBodyBytes,
+    'maxRecordsPerPush': maxRecordsPerPush,
+    'maxBlobBytes': maxBlobBytes,
+  };
 
   /// Exact UTF-8 byte length of [toJson] after `jsonEncode`.
   int encodedJsonBytes() =>
@@ -254,13 +253,14 @@ class PushLimits {
   /// not a number throws. Decode a *server's* advertisement with [tryFromJson],
   /// which answers null instead of taking the response down with it.
   factory PushLimits.fromJson(Map<String, dynamic> json) => PushLimits(
-        maxBodyBytes:
-            (json['maxBodyBytes'] as num?)?.toInt() ?? kDefaultMaxPushBodyBytes,
-        maxRecordsPerPush: (json['maxRecordsPerPush'] as num?)?.toInt() ??
-            kDefaultMaxRecordsPerPush,
-        maxBlobBytes:
-            (json['maxBlobBytes'] as num?)?.toInt() ?? kDefaultMaxBlobBytes,
-      );
+    maxBodyBytes:
+        (json['maxBodyBytes'] as num?)?.toInt() ?? kDefaultMaxPushBodyBytes,
+    maxRecordsPerPush:
+        (json['maxRecordsPerPush'] as num?)?.toInt() ??
+        kDefaultMaxRecordsPerPush,
+    maxBlobBytes:
+        (json['maxBlobBytes'] as num?)?.toInt() ?? kDefaultMaxBlobBytes,
+  );
 
   /// The largest integer a JSON number is still exact at. `jsonDecode` returns
   /// a double for any number too large to hold as an int, and past 2^53 a
@@ -357,28 +357,27 @@ class PullResponse {
   });
 
   Map<String, dynamic> toJson() => {
-        'records': records.map((r) => r.toJson()).toList(),
-        'latestSeq': latestSeq,
-        'recordEnvelopeFloor': recordEnvelopeFloor,
-        if (limits != null) 'limits': limits!.toJson(),
-        if (throughSeq != null) ...{
-          'throughSeq': throughSeq,
-          'hasMore': hasMore,
-        },
-      };
+    'records': records.map((r) => r.toJson()).toList(),
+    'latestSeq': latestSeq,
+    'recordEnvelopeFloor': recordEnvelopeFloor,
+    if (limits != null) 'limits': limits!.toJson(),
+    if (throughSeq != null) ...{'throughSeq': throughSeq, 'hasMore': hasMore},
+  };
 
   /// Exact UTF-8 byte length of [toJson], without making a second base64 copy
   /// of every record blob.
   int encodedSizeBytes() => bodyBytesFor(
-        recordCount: records.length,
-        recordBytes:
-            records.fold(0, (sum, record) => sum + record.encodedJsonBytes()),
-        latestSeq: latestSeq,
-        recordEnvelopeFloor: recordEnvelopeFloor,
-        throughSeq: throughSeq,
-        hasMore: hasMore,
-        limits: limits,
-      );
+    recordCount: records.length,
+    recordBytes: records.fold(
+      0,
+      (sum, record) => sum + record.encodedJsonBytes(),
+    ),
+    latestSeq: latestSeq,
+    recordEnvelopeFloor: recordEnvelopeFloor,
+    throughSeq: throughSeq,
+    hasMore: hasMore,
+    limits: limits,
+  );
 
   /// Exact encoded size when the records' encoded sizes are already known.
   static int bodyBytesFor({
@@ -390,8 +389,7 @@ class PullResponse {
     required bool hasMore,
     PushLimits? limits,
   }) {
-    final entries =
-        3 + (limits == null ? 0 : 1) + (throughSeq == null ? 0 : 2);
+    final entries = 3 + (limits == null ? 0 : 1) + (throughSeq == null ? 0 : 2);
     return jsonObjectFramingBytes(entries) +
         jsonKeyBytes('records') +
         jsonArrayFramingBytes(recordCount) +
@@ -406,27 +404,27 @@ class PullResponse {
         (throughSeq == null
             ? 0
             : jsonKeyBytes('throughSeq') +
-                jsonIntBytes(throughSeq) +
-                jsonKeyBytes('hasMore') +
-                jsonBoolBytes(hasMore));
+                  jsonIntBytes(throughSeq) +
+                  jsonKeyBytes('hasMore') +
+                  jsonBoolBytes(hasMore));
   }
 
   factory PullResponse.fromJson(Map<String, dynamic> json) => PullResponse(
-        records: (json['records'] as List)
-            .map((e) => EncryptedRecord.fromJson((e as Map).cast()))
-            .toList(),
-        latestSeq: (json['latestSeq'] as num).toInt(),
-        recordEnvelopeFloor:
-            (json['recordEnvelopeFloor'] as num?)?.toInt() ??
-                kLegacyRecordEnvelopeVersion,
-        // Anything that is not a well-formed advertisement counts as "not
-        // advertised": the field is advisory and has a documented fallback, so
-        // a mangled value must not take the records and watermark down with
-        // it. The required fields above stay strict on purpose.
-        limits: PushLimits.tryFromJson(json['limits']),
-        throughSeq: (json['throughSeq'] as num?)?.toInt(),
-        hasMore: json['hasMore'] as bool? ?? false,
-      );
+    records: (json['records'] as List)
+        .map((e) => EncryptedRecord.fromJson((e as Map).cast()))
+        .toList(),
+    latestSeq: (json['latestSeq'] as num).toInt(),
+    recordEnvelopeFloor:
+        (json['recordEnvelopeFloor'] as num?)?.toInt() ??
+        kLegacyRecordEnvelopeVersion,
+    // Anything that is not a well-formed advertisement counts as "not
+    // advertised": the field is advisory and has a documented fallback, so
+    // a mangled value must not take the records and watermark down with
+    // it. The required fields above stay strict on purpose.
+    limits: PushLimits.tryFromJson(json['limits']),
+    throughSeq: (json['throughSeq'] as num?)?.toInt(),
+    hasMore: json['hasMore'] as bool? ?? false,
+  );
 }
 
 /// One bounded page of legacy v1 records, ordered by plaintext record id.
@@ -447,20 +445,22 @@ class LegacyRecordPage {
   });
 
   Map<String, dynamic> toJson() => {
-        'records': records.map((record) => record.toJson()).toList(),
-        if (nextId != null) 'nextId': nextId,
-        'hasMore': hasMore,
-        'recordEnvelopeFloor': recordEnvelopeFloor,
-      };
+    'records': records.map((record) => record.toJson()).toList(),
+    if (nextId != null) 'nextId': nextId,
+    'hasMore': hasMore,
+    'recordEnvelopeFloor': recordEnvelopeFloor,
+  };
 
   int encodedSizeBytes() => bodyBytesFor(
-        recordCount: records.length,
-        recordBytes:
-            records.fold(0, (sum, record) => sum + record.encodedJsonBytes()),
-        nextId: nextId,
-        hasMore: hasMore,
-        recordEnvelopeFloor: recordEnvelopeFloor,
-      );
+    recordCount: records.length,
+    recordBytes: records.fold(
+      0,
+      (sum, record) => sum + record.encodedJsonBytes(),
+    ),
+    nextId: nextId,
+    hasMore: hasMore,
+    recordEnvelopeFloor: recordEnvelopeFloor,
+  );
 
   static int bodyBytesFor({
     required int recordCount,
@@ -486,13 +486,11 @@ class LegacyRecordPage {
   factory LegacyRecordPage.fromJson(Map<String, dynamic> json) =>
       LegacyRecordPage(
         records: (json['records'] as List)
-            .map((entry) =>
-                EncryptedRecord.fromJson((entry as Map).cast()))
+            .map((entry) => EncryptedRecord.fromJson((entry as Map).cast()))
             .toList(),
         nextId: json['nextId'] as String?,
         hasMore: json['hasMore'] as bool? ?? false,
-        recordEnvelopeFloor:
-            (json['recordEnvelopeFloor'] as num).toInt(),
+        recordEnvelopeFloor: (json['recordEnvelopeFloor'] as num).toInt(),
       );
 }
 
@@ -511,15 +509,13 @@ class LegacyRecordMigration {
   });
 
   Map<String, dynamic> toJson() => {
-        'expected': expected.toJson(),
-        'replacement': replacement.toJson(),
-      };
+    'expected': expected.toJson(),
+    'replacement': replacement.toJson(),
+  };
 
   factory LegacyRecordMigration.fromJson(Map<String, dynamic> json) =>
       LegacyRecordMigration(
-        expected: EncryptedRecord.fromJson(
-          (json['expected'] as Map).cast(),
-        ),
+        expected: EncryptedRecord.fromJson((json['expected'] as Map).cast()),
         replacement: EncryptedRecord.fromJson(
           (json['replacement'] as Map).cast(),
         ),
@@ -539,19 +535,19 @@ class LegacyMigrationRequest {
   });
 
   Map<String, dynamic> toJson() => {
-        'protocolVersion': protocolVersion,
-        'migrations':
-            migrations.map((migration) => migration.toJson()).toList(),
-        'finalize': finalize,
-      };
+    'protocolVersion': protocolVersion,
+    'migrations': migrations.map((migration) => migration.toJson()).toList(),
+    'finalize': finalize,
+  };
 
   factory LegacyMigrationRequest.fromJson(Map<String, dynamic> json) =>
       LegacyMigrationRequest(
         protocolVersion:
             (json['protocolVersion'] as num?)?.toInt() ?? kProtocolVersion,
         migrations: (json['migrations'] as List)
-            .map((entry) =>
-                LegacyRecordMigration.fromJson((entry as Map).cast()))
+            .map(
+              (entry) => LegacyRecordMigration.fromJson((entry as Map).cast()),
+            )
             .toList(),
         finalize: json['finalize'] as bool? ?? false,
       );
@@ -572,19 +568,18 @@ class LegacyMigrationResponse {
   });
 
   Map<String, dynamic> toJson() => {
-        'migrated': migrated,
-        'stale': stale,
-        'latestSeq': latestSeq,
-        'recordEnvelopeFloor': recordEnvelopeFloor,
-      };
+    'migrated': migrated,
+    'stale': stale,
+    'latestSeq': latestSeq,
+    'recordEnvelopeFloor': recordEnvelopeFloor,
+  };
 
   factory LegacyMigrationResponse.fromJson(Map<String, dynamic> json) =>
       LegacyMigrationResponse(
         migrated: (json['migrated'] as num).toInt(),
         stale: (json['stale'] as num).toInt(),
         latestSeq: (json['latestSeq'] as num).toInt(),
-        recordEnvelopeFloor:
-            (json['recordEnvelopeFloor'] as num).toInt(),
+        recordEnvelopeFloor: (json['recordEnvelopeFloor'] as num).toInt(),
       );
 }
 
@@ -626,19 +621,19 @@ class PushRequest {
   /// Keep [bodyBytesFor] in step with this map — see
   /// [EncryptedRecord.toJson] for why.
   Map<String, dynamic> toJson() => {
-        'protocolVersion': protocolVersion,
-        'records': records.map((r) => r.toJson()).toList(),
-        if (refusalScope != PushRefusalScope.batch)
-          PushRefusalScope._wireKey: refusalScope.name,
-      };
+    'protocolVersion': protocolVersion,
+    'records': records.map((r) => r.toJson()).toList(),
+    if (refusalScope != PushRefusalScope.batch)
+      PushRefusalScope._wireKey: refusalScope.name,
+  };
 
   /// Byte length of the body [toJson] encodes to, without building it.
   int encodedSizeBytes() => bodyBytesFor(
-        recordCount: records.length,
-        recordBytes: records.fold(0, (sum, r) => sum + r.encodedJsonBytes()),
-        protocolVersion: protocolVersion,
-        refusalScope: refusalScope,
-      );
+    recordCount: records.length,
+    recordBytes: records.fold(0, (sum, r) => sum + r.encodedJsonBytes()),
+    protocolVersion: protocolVersion,
+    refusalScope: refusalScope,
+  );
 
   /// Byte length of a push body holding [recordCount] records whose encoded
   /// sizes sum to [recordBytes].
@@ -661,19 +656,18 @@ class PushRequest {
         recordBytes +
         (scoped
             ? jsonKeyBytes(PushRefusalScope._wireKey) +
-                jsonStringBytes(refusalScope.name)
+                  jsonStringBytes(refusalScope.name)
             : 0);
   }
 
   factory PushRequest.fromJson(Map<String, dynamic> json) => PushRequest(
-        protocolVersion:
-            (json['protocolVersion'] as num?)?.toInt() ?? kProtocolVersion,
-        records: (json['records'] as List)
-            .map((e) => EncryptedRecord.fromJson((e as Map).cast()))
-            .toList(),
-        refusalScope:
-            PushRefusalScope._fromWire(json[PushRefusalScope._wireKey]),
-      );
+    protocolVersion:
+        (json['protocolVersion'] as num?)?.toInt() ?? kProtocolVersion,
+    records: (json['records'] as List)
+        .map((e) => EncryptedRecord.fromJson((e as Map).cast()))
+        .toList(),
+    refusalScope: PushRefusalScope._fromWire(json[PushRefusalScope._wireKey]),
+  );
 }
 
 /// Result of a push: the sequence number the server assigned each accepted
@@ -690,14 +684,13 @@ class PushResult {
     required this.accepted,
   });
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'seq': seq, 'accepted': accepted};
+  Map<String, dynamic> toJson() => {'id': id, 'seq': seq, 'accepted': accepted};
 
   factory PushResult.fromJson(Map<String, dynamic> json) => PushResult(
-        id: json['id'] as String,
-        seq: (json['seq'] as num).toInt(),
-        accepted: json['accepted'] as bool? ?? true,
-      );
+    id: json['id'] as String,
+    seq: (json['seq'] as num).toInt(),
+    accepted: json['accepted'] as bool? ?? true,
+  );
 }
 
 /// Why the server did not store one record of a [PushRefusalScope.record]
@@ -734,9 +727,9 @@ class PushRefusal {
   Map<String, dynamic> toJson() => {'id': id, 'reason': reason.wire};
 
   factory PushRefusal.fromJson(Map<String, dynamic> json) => PushRefusal(
-        id: json['id'] as String,
-        reason: PushRefusalReason._fromWire(json['reason']),
-      );
+    id: json['id'] as String,
+    reason: PushRefusalReason._fromWire(json['reason']),
+  );
 }
 
 class PushResponse {
@@ -756,22 +749,21 @@ class PushResponse {
   });
 
   Map<String, dynamic> toJson() => {
-        'results': results.map((r) => r.toJson()).toList(),
-        if (refused.isNotEmpty)
-          'refused': refused.map((r) => r.toJson()).toList(),
-        'latestSeq': latestSeq,
-      };
+    'results': results.map((r) => r.toJson()).toList(),
+    if (refused.isNotEmpty) 'refused': refused.map((r) => r.toJson()).toList(),
+    'latestSeq': latestSeq,
+  };
 
   factory PushResponse.fromJson(Map<String, dynamic> json) => PushResponse(
-        results: (json['results'] as List)
-            .map((e) => PushResult.fromJson((e as Map).cast()))
-            .toList(),
-        refused: [
-          for (final e in json['refused'] as List? ?? const [])
-            PushRefusal.fromJson((e as Map).cast()),
-        ],
-        latestSeq: (json['latestSeq'] as num).toInt(),
-      );
+    results: (json['results'] as List)
+        .map((e) => PushResult.fromJson((e as Map).cast()))
+        .toList(),
+    refused: [
+      for (final e in json['refused'] as List? ?? const [])
+        PushRefusal.fromJson((e as Map).cast()),
+    ],
+    latestSeq: (json['latestSeq'] as num).toInt(),
+  );
 }
 
 /// Uniform error body returned by the server for non-2xx responses.
@@ -784,9 +776,9 @@ class ApiError implements Exception {
   Map<String, dynamic> toJson() => {'error': code, 'message': message};
 
   factory ApiError.fromJson(Map<String, dynamic> json) => ApiError(
-        code: json['error'] as String? ?? 'unknown',
-        message: json['message'] as String? ?? '',
-      );
+    code: json['error'] as String? ?? 'unknown',
+    message: json['message'] as String? ?? '',
+  );
 
   @override
   String toString() => 'ApiError($code): $message';

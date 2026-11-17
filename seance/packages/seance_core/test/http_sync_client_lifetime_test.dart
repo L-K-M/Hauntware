@@ -20,7 +20,9 @@ void main() {
   test('internally created transport closes exactly once', () {
     final transport = _TrackedClient();
     final sync = http.runWithClient(
-        () => HttpSyncClient(baseUrl: 'https://sync.test'), () => transport);
+      () => HttpSyncClient(baseUrl: 'https://sync.test'),
+      () => transport,
+    );
     sync.close();
     sync.close();
     expect(transport.closes, 1);
@@ -29,12 +31,17 @@ void main() {
   test('borrowed transport survives wrapper disposal', () async {
     final transport = _TrackedClient();
     addTearDown(transport.close);
-    final sync = HttpSyncClient(baseUrl: 'https://sync.test', client: transport);
+    final sync = HttpSyncClient(
+      baseUrl: 'https://sync.test',
+      client: transport,
+    );
     sync.close();
     sync.close();
     expect(transport.closes, 0);
-    expect((await transport.get(Uri.parse('https://other.test'))).statusCode,
-        HttpStatus.ok);
+    expect(
+      (await transport.get(Uri.parse('https://other.test'))).statusCode,
+      HttpStatus.ok,
+    );
     await expectLater(sync.pull(since: 0), throwsStateError);
   });
 }

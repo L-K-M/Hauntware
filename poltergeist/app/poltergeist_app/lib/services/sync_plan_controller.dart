@@ -203,6 +203,7 @@ final class _SyncTrashTargetState {
   final SyncTrashLocation location;
   final Set<SyncSide> sides = <SyncSide>{};
   Set<String> activeRunIds = const <String>{};
+
   /// Set once the side's file system answered; inspection and purge
   /// obtain verified file systems of their own.
   SyncEndpoint? endpoint;
@@ -542,8 +543,7 @@ final class SyncPlanController extends ChangeNotifier {
   Map<SyncSide, RemoteFileException> _trashLocationFailures = {};
 
   /// Whether a side's trash root failed to resolve on the last scan.
-  bool get _trashLocationResolutionFailed =>
-      _trashLocationFailures.isNotEmpty;
+  bool get _trashLocationResolutionFailed => _trashLocationFailures.isNotEmpty;
 
   Future<void>? _trashInventoryRefresh;
   RemoteTransferCancellation? _trashPurgeCancellation;

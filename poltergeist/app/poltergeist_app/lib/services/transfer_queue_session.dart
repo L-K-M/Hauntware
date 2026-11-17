@@ -16,13 +16,12 @@ import 'application_error_reporter.dart';
 RemoteFileException _remoteEndpointsUnavailable() => RemoteFileException(
   kind: RemoteFileErrorKind.unsupported,
   operation: 'transfer channel',
-  message:
-      lookupAppLocalizations(
-        basicLocaleListResolution(
-          PlatformDispatcher.instance.locales,
-          AppLocalizations.supportedLocales,
-        ),
-      ).activityTaskRemoteUnavailable,
+  message: lookupAppLocalizations(
+    basicLocaleListResolution(
+      PlatformDispatcher.instance.locales,
+      AppLocalizations.supportedLocales,
+    ),
+  ).activityTaskRemoteUnavailable,
 );
 
 /// The engine-failed fallback's connection seam — honest absence, not
@@ -48,17 +47,15 @@ final class _LocalOnlyConnectionManager implements ConnectionManager {
   Future<PaneChannel> openBrowseChannel(
     String serverId, {
     required String paneTabId,
-  }) =>
-      Future.error(_remoteEndpointsUnavailable());
+  }) => Future.error(_remoteEndpointsUnavailable());
 
   // Stream.multi, the same mechanism PooledConnectionManager uses:
   // every listener gets the disconnected status and a close — a
   // Stream.value/async* stream would throw on a second listen.
   @override
   Stream<ServerStatus> watchServer(String serverId) => Stream.multi(
-    (listener) => listener.add(
-      const ServerStatus(ServerConnectionState.disconnected),
-    ),
+    (listener) =>
+        listener.add(const ServerStatus(ServerConnectionState.disconnected)),
   );
 
   @override

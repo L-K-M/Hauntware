@@ -157,8 +157,7 @@ Future<StagedScript> stageProposalScript(
   await fs.setMode(path, _kScriptMode);
 
   final quoted = quoteShellWord(path);
-  final commandLine =
-      proposal.script.startsWith('#!') ? quoted : 'sh $quoted';
+  final commandLine = proposal.script.startsWith('#!') ? quoted : 'sh $quoted';
   return StagedScript(path: path, commandLine: commandLine, sha256Hex: digest);
 }
 

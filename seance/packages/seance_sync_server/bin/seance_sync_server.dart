@@ -7,10 +7,15 @@ Future<void> main(List<String> argv) async {
   final parser = ArgParser()
     ..addOption('bind', help: 'Address to bind', defaultsTo: null)
     ..addOption('port', abbr: 'p', help: 'Port to listen on')
-    ..addOption('db',
-        help: 'SQLite database path (omit for in-memory / ephemeral)')
-    ..addFlag('open-registration',
-        help: 'Allow new accounts via /v1/register', defaultsTo: null)
+    ..addOption(
+      'db',
+      help: 'SQLite database path (omit for in-memory / ephemeral)',
+    )
+    ..addFlag(
+      'open-registration',
+      help: 'Allow new accounts via /v1/register',
+      defaultsTo: null,
+    )
     ..addFlag('help', abbr: 'h', negatable: false);
 
   final args = parser.parse(argv);
@@ -35,8 +40,10 @@ Future<void> main(List<String> argv) async {
   final server = SyncServer(storage: storage, settings: settings);
   final running = await server.start();
 
-  stdout.writeln('Séance sync server listening on '
-      'http://${running.host}:${running.port}');
+  stdout.writeln(
+    'Séance sync server listening on '
+    'http://${running.host}:${running.port}',
+  );
   stdout.writeln('  open registration: ${settings.openRegistration}');
   stdout.writeln('  storage: ${settings.dbPath ?? 'in-memory (ephemeral)'}');
   stdout.writeln('Run behind a TLS-terminating reverse proxy in production.');

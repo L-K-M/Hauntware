@@ -23,19 +23,13 @@ const _localRight = ResolvedLocalEndpoint(
   path: '/srv/site',
   os: SyncEndpointOs.posix,
 );
-const _localPair = ResolvedSyncEndpoints(
-  left: _localLeft,
-  right: _localRight,
-);
+const _localPair = ResolvedSyncEndpoints(left: _localLeft, right: _localRight);
 const _remote = ResolvedRemoteEndpoint(
   user: 'deploy',
   host: 'example.com',
   path: '/var/www/site',
 );
-const _localRemote = ResolvedSyncEndpoints(
-  left: _localLeft,
-  right: _remote,
-);
+const _localRemote = ResolvedSyncEndpoints(left: _localLeft, right: _remote);
 
 typedef _Fixture = ({
   String name,
@@ -65,10 +59,7 @@ _Fixture _f(
 final _fixtures = <_Fixture>[
   // The three modes (05 §6's direction × deletions projection).
   _f('update_local'),
-  _f(
-    'mirror_trash',
-    rules: const SyncRuleSet(deletions: DeletionPolicy.trash),
-  ),
+  _f('mirror_trash', rules: const SyncRuleSet(deletions: DeletionPolicy.trash)),
   _f(
     'additive_two_way',
     rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
@@ -102,10 +93,7 @@ final _fixtures = <_Fixture>[
   ),
   _f(
     'mirror_maxdelete_12',
-    rules: const SyncRuleSet(
-      deletions: DeletionPolicy.trash,
-      maxDelete: 12,
-    ),
+    rules: const SyncRuleSet(deletions: DeletionPolicy.trash, maxDelete: 12),
   ),
   // Connection shapes — the interim D6 ruling's flagged notes.
   _f('remote_plain', endpoints: _localRemote),
@@ -162,10 +150,7 @@ final _fixtures = <_Fixture>[
   ),
   _f(
     'remote_source',
-    endpoints: const ResolvedSyncEndpoints(
-      left: _remote,
-      right: _localRight,
-    ),
+    endpoints: const ResolvedSyncEndpoints(left: _remote, right: _localRight),
   ),
   _f(
     'remote_both_sides',
@@ -259,10 +244,7 @@ final _fixtures = <_Fixture>[
     ),
   ),
   // Hidden-file filter + the Windows-attribute approximation note.
-  _f(
-    'hidden_excluded',
-    rules: const SyncRuleSet(includeHidden: false),
-  ),
+  _f('hidden_excluded', rules: const SyncRuleSet(includeHidden: false)),
   _f(
     'hidden_excluded_windows_remote',
     endpoints: const ResolvedSyncEndpoints(
@@ -318,10 +300,7 @@ final _fixtures = <_Fixture>[
   // its place, with a note.
   _f(
     'trash_unsafe_pull',
-    endpoints: const ResolvedSyncEndpoints(
-      left: _remote,
-      right: _localRight,
-    ),
+    endpoints: const ResolvedSyncEndpoints(left: _remote, right: _localRight),
     rules: const SyncRuleSet(
       deletions: DeletionPolicy.trash,
       trashPathRight: '/srv/old files',
@@ -337,15 +316,10 @@ final _fixtures = <_Fixture>[
   ),
   // Overrides, engine skips, filters.
   _f('manual_overrides', manualOverrides: 3),
-  _f(
-    'engine_skips',
-    engineSkipPaths: const ['locked', 'tools/link'],
-  ),
+  _f('engine_skips', engineSkipPaths: const ['locked', 'tools/link']),
   _f(
     'exclude_globs',
-    rules: const SyncRuleSet(
-      excludeGlobs: ['*.log', '!keep.log', 'build/'],
-    ),
+    rules: const SyncRuleSet(excludeGlobs: ['*.log', '!keep.log', 'build/']),
   ),
   _f(
     'exclude_glob_divergence',
@@ -393,10 +367,7 @@ final _fixtures = <_Fixture>[
     'comparison_size_only',
     rules: const SyncRuleSet(comparison: ComparisonMode.sizeOnly),
   ),
-  _f(
-    'preserve_mtime_off',
-    rules: const SyncRuleSet(preserveMtime: false),
-  ),
+  _f('preserve_mtime_off', rules: const SyncRuleSet(preserveMtime: false)),
   // The caller-side §4 mtimeUnreliable downgrade: the ruleset arrives
   // already sizeOnly, the flag keeps the divergence note honest.
   _f(
@@ -404,18 +375,12 @@ final _fixtures = <_Fixture>[
     rules: const SyncRuleSet(comparison: ComparisonMode.sizeOnly),
     mtimesUntrusted: true,
   ),
-  _f(
-    'mtime_tolerance_30',
-    rules: const SyncRuleSet(mtimeToleranceSecs: 30),
-  ),
+  _f('mtime_tolerance_30', rules: const SyncRuleSet(mtimeToleranceSecs: 30)),
   _f(
     'accepted_time_shifts',
     rules: const SyncRuleSet(acceptedTimeShifts: [3600, 7200]),
   ),
-  _f(
-    'single_stream',
-    rules: const SyncRuleSet(transferConcurrency: 1),
-  ),
+  _f('single_stream', rules: const SyncRuleSet(transferConcurrency: 1)),
 ];
 
 Future<Directory> _goldenDir() async {
@@ -604,10 +569,7 @@ void main() {
     test('an empty path renders empty — never the filesystem root', () {
       final out = buildRsyncCommand(
         const ResolvedSyncEndpoints(
-          left: ResolvedLocalEndpoint(
-            path: '',
-            os: SyncEndpointOs.posix,
-          ),
+          left: ResolvedLocalEndpoint(path: '', os: SyncEndpointOs.posix),
           right: _localRight,
         ),
         const SyncRuleSet(),
@@ -648,9 +610,7 @@ void main() {
         now: _now,
       );
       final lines = out.split('\n');
-      final preview = lines.firstWhere(
-        (l) => l.startsWith('# Preview first'),
-      );
+      final preview = lines.firstWhere((l) => l.startsWith('# Preview first'));
       // Comment lines scrubbed — the newline became a space.
       expect(preview, contains('/srv/si te'));
       expect(out, contains("# note: pattern 'a[  b'"));
@@ -730,9 +690,7 @@ void main() {
       // escaped, the local receiver would use a backslashed name.
       expect(
         out,
-        contains(
-          "--backup-dir='.poltergeist-trash/rsync-20260922-150407'",
-        ),
+        contains("--backup-dir='.poltergeist-trash/rsync-20260922-150407'"),
       );
       expect(out, isNot(contains("--backup-dir='/srv/old")));
       expect(
@@ -759,12 +717,8 @@ void main() {
         now: _now,
       );
       final lines = out.split('\n');
-      final preview = lines.singleWhere(
-        (l) => l.startsWith('# Preview first'),
-      );
-      final live = lines.singleWhere(
-        (l) => l.isNotEmpty && !l.startsWith('#'),
-      );
+      final preview = lines.singleWhere((l) => l.startsWith('# Preview first'));
+      final live = lines.singleWhere((l) => l.isNotEmpty && !l.startsWith('#'));
       // rsync 3.2.4+ escapes remote args itself, which would double
       // the allowlist escape below; RSYNC_OLD_ARGS=2 turns that off,
       // RSYNC_PROTECT_ARGS=0 keeps a 3.1-era -s default from sending
@@ -774,9 +728,7 @@ void main() {
       expect(live, startsWith('${env}rsync '));
       expect(
         live,
-        endsWith(
-          r"'deploy@example.com:/var/www/a\ b\'\''c\$HOME\`id\`'",
-        ),
+        endsWith(r"'deploy@example.com:/var/www/a\ b\'\''c\$HOME\`id\`'"),
       );
       expect(out, contains('# note: RSYNC_OLD_ARGS=2'));
     });
@@ -832,25 +784,27 @@ void main() {
   });
 
   group('rsyncEngineSkipPaths', () {
-    SyncPlan plan({List<ScanWarning> warnings = const [], List<SyncItem> items = const []}) =>
-        SyncPlan(
-          pair: SyncPair(
-            id: 'p',
-            name: 'p',
-            left: const LocalEndpoint('/l'),
-            right: const LocalEndpoint('/r'),
-            rules: const SyncRuleSet(),
-          ),
-          scannedAt: _now,
-          items: items,
-          warnings: warnings,
-          totals: const PlanTotals(
-            counts: {},
-            bytes: {},
-            replacedFiles: 0,
-            replacedBytes: 0,
-          ),
-        );
+    SyncPlan plan({
+      List<ScanWarning> warnings = const [],
+      List<SyncItem> items = const [],
+    }) => SyncPlan(
+      pair: SyncPair(
+        id: 'p',
+        name: 'p',
+        left: const LocalEndpoint('/l'),
+        right: const LocalEndpoint('/r'),
+        rules: const SyncRuleSet(),
+      ),
+      scannedAt: _now,
+      items: items,
+      warnings: warnings,
+      totals: const PlanTotals(
+        counts: {},
+        bytes: {},
+        replacedFiles: 0,
+        replacedBytes: 0,
+      ),
+    );
 
     test('empty plan yields no skip paths', () {
       expect(rsyncEngineSkipPaths(plan()), isEmpty);

@@ -111,11 +111,7 @@ void main() {
     // own channel, so the open needs one scripted channel per pane —
     // plus a second '/srv/archive' channel for the sidebar-driven open
     // of 'Archive' (its sole tab rebinds on activation).
-    for (final path in [
-      '/home/tester/work',
-      '/srv/archive',
-      '/srv/archive',
-    ]) {
+    for (final path in ['/home/tester/work', '/srv/archive', '/srv/archive']) {
       engine.localChannels.add(
         session_test.FakeAppBrowseChannel(homePath: '/home/tester')
           ..listings[path] = [
@@ -254,10 +250,7 @@ void main() {
       // delay (a fixed sleep flakes when the suite runs under load).
       for (var i = 0; i < 40; i++) {
         await tester.pump();
-        if (find
-            .text('Workspace "Client X" opened')
-            .evaluate()
-            .isNotEmpty) {
+        if (find.text('Workspace "Client X" opened').evaluate().isNotEmpty) {
           break;
         }
         await Future<void>.delayed(const Duration(milliseconds: 50));

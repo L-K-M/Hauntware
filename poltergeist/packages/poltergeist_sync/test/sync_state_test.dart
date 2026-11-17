@@ -37,19 +37,14 @@ void main() {
         ],
       );
 
-      final decoded = syncPairStateFromJsonText(
-        syncPairStateToJsonText(state),
-      );
+      final decoded = syncPairStateFromJsonText(syncPairStateToJsonText(state));
       expect(decoded.mtimeUnreliableLeft, isTrue);
       expect(decoded.mtimeUnreliableRight, isFalse);
       expect(decoded.caseSensitiveOverrideRight, isFalse);
       expect(decoded.caseSensitiveOverrideLeft, isNull);
       expect(decoded.caseProbe['/data']?.caseSensitive, isTrue);
       expect(decoded.caseProbe['/data']?.volumeIdentity, 'vol-9');
-      expect(
-        decoded.caseProbe['/data']?.normalizationInsensitive,
-        isTrue,
-      );
+      expect(decoded.caseProbe['/data']?.normalizationInsensitive, isTrue);
       expect(decoded.trashCacheRight?.runs, hasLength(2));
       expect(decoded.trashCacheRight?.runs[0].fileCount, 7);
       expect(decoded.trashCacheRight?.runs[1].fileCount, isNull);
@@ -90,12 +85,7 @@ void main() {
 
   group('validateSyncPairId', () {
     test('accepts a sha256-shaped id', () {
-      expect(
-        () => validateSyncPairId(
-          'a' * 64,
-        ),
-        returnsNormally,
-      );
+      expect(() => validateSyncPairId('a' * 64), returnsNormally);
     });
 
     test('rejects path-shaped keys', () {

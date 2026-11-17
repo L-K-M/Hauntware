@@ -187,10 +187,7 @@ void main() {
 
     test('a POSIX colon-named directory is not a volume boundary', () {
       expect(
-        verb(
-          sourceRoots: const ['/home/x'],
-          destinationDir: '/:notes/sub',
-        ),
+        verb(sourceRoots: const ['/home/x'], destinationDir: '/:notes/sub'),
         TransferOperation.move,
       );
     });
@@ -257,10 +254,7 @@ void main() {
     test('modifiers force the verb, move winning the race', () {
       expect(verb(copy: true), TransferOperation.copy);
       expect(
-        verb(
-          move: true,
-          destination: const ServerFsLocation('srv-1'),
-        ),
+        verb(move: true, destination: const ServerFsLocation('srv-1')),
         TransferOperation.move,
       );
       expect(verb(copy: true, move: true), TransferOperation.move);
@@ -296,10 +290,7 @@ void main() {
       );
       // A sibling name sharing the prefix is NOT inside the subtree.
       expect(
-        allowed(
-          roots: const ['/home/tester/docs'],
-          dir: '/home/tester/docs2',
-        ),
+        allowed(roots: const ['/home/tester/docs'], dir: '/home/tester/docs2'),
         isTrue,
       );
     });
@@ -361,10 +352,7 @@ void main() {
 
     test('a trailing-separator destination spelling still refuses', () {
       expect(
-        allowed(
-          roots: const ['/home/tester/docs'],
-          dir: '/home/tester/docs/',
-        ),
+        allowed(roots: const ['/home/tester/docs'], dir: '/home/tester/docs/'),
         isFalse,
       );
     });
@@ -372,24 +360,12 @@ void main() {
     test('Windows containment folds case — a respelled subtree refuses', () {
       // NTFS is case-insensitive: 'c:\stuff\Backup' IS inside 'C:\Stuff'.
       expect(
-        allowed(
-          roots: const [r'C:\Stuff'],
-          dir: r'c:\stuff\Backup',
-        ),
+        allowed(roots: const [r'C:\Stuff'], dir: r'c:\stuff\Backup'),
         isFalse,
       );
-      expect(
-        allowed(roots: const [r'C:\Stuff'], dir: r'C:\STUFF'),
-        isFalse,
-      );
+      expect(allowed(roots: const [r'C:\Stuff'], dir: r'C:\STUFF'), isFalse);
       // The move-to-own-parent no-op holds across case too.
-      expect(
-        allowed(
-          roots: const [r'C:\Stuff\x'],
-          dir: r'c:\stuff',
-        ),
-        isFalse,
-      );
+      expect(allowed(roots: const [r'C:\Stuff\x'], dir: r'c:\stuff'), isFalse);
     });
   });
 
@@ -402,10 +378,7 @@ void main() {
       );
       roots.add('/home/tester/evil.txt');
       expect(drag.rootPaths, ['/home/tester/a.txt']);
-      expect(
-        () => drag.rootPaths.add('/x'),
-        throwsUnsupportedError,
-      );
+      expect(() => drag.rootPaths.add('/x'), throwsUnsupportedError);
     });
 
     group('OS drag-out hold', () {
@@ -506,11 +479,7 @@ void main() {
       expect(spec.source, isA<LocalFsLocation>());
       expect(
         spec.destination,
-        isA<ServerFsLocation>().having(
-          (s) => s.serverId,
-          'serverId',
-          'srv-1',
-        ),
+        isA<ServerFsLocation>().having((s) => s.serverId, 'serverId', 'srv-1'),
       );
       expect(spec.rootPaths, ['/home/tester/a.txt', '/home/tester/b.txt']);
       expect(spec.destinationDir, '/srv/www');
@@ -572,18 +541,9 @@ void main() {
         destinationDir: '/data',
         operation: TransferOperation.copy,
       );
-      expect(
-        queue.enqueuedSpecs[0].policy.files,
-        ConflictResolution.replace,
-      );
-      expect(
-        queue.enqueuedSpecs[1].policy.files,
-        ConflictResolution.skip,
-      );
-      expect(
-        queue.enqueuedSpecs[2].policy.files,
-        ConflictResolution.keepBoth,
-      );
+      expect(queue.enqueuedSpecs[0].policy.files, ConflictResolution.replace);
+      expect(queue.enqueuedSpecs[1].policy.files, ConflictResolution.skip);
+      expect(queue.enqueuedSpecs[2].policy.files, ConflictResolution.keepBoth);
       expect(
         queue.enqueuedSpecs[3].policy.files,
         ConflictResolution.replaceIfNewer,
@@ -599,10 +559,7 @@ void main() {
         destinationDir: '/srv/www',
         operation: TransferOperation.copy,
       );
-      expect(
-        queue.enqueuedSpecs.single.policy.files,
-        ConflictResolution.ask,
-      );
+      expect(queue.enqueuedSpecs.single.policy.files, ConflictResolution.ask);
     });
   });
 }

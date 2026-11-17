@@ -79,7 +79,9 @@ void main() {
     test('carries the tab object — and every per-tab state — across', () async {
       final channel = FakePaneChannel('/home/tester')
         ..listings['/home/tester'] = [_entry('a.txt'), _entry('b.txt')]
-        ..listings['/home/tester/sub'] = [_entry('c.txt', parent: '/home/tester/sub')];
+        ..listings['/home/tester/sub'] = [
+          _entry('c.txt', parent: '/home/tester/sub'),
+        ];
       lanes.nextLocalChannel = channel;
       final tab = left.newTab(target: NewTabTarget.home);
       await settle();
@@ -118,46 +120,52 @@ void main() {
       expect(leftNotifies, 0);
     });
 
-    test('a remote tab keeps its browse channel — no close, no reopen',
-        () async {
-      final channel = FakePaneChannel('/srv/home')
-        ..listings['/srv/home'] = [_entry('r.txt', parent: '/srv/home')];
-      lanes.nextRemoteChannel = channel;
-      final tab = left.newTab(target: NewTabTarget.launcher);
-      await tab.controller.connectRemote(_bookmark('srv-1'));
-      await settle();
-      final opens =
-          lanes.calls.where((c) => c.startsWith('openBrowse')).length;
+    test(
+      'a remote tab keeps its browse channel — no close, no reopen',
+      () async {
+        final channel = FakePaneChannel('/srv/home')
+          ..listings['/srv/home'] = [_entry('r.txt', parent: '/srv/home')];
+        lanes.nextRemoteChannel = channel;
+        final tab = left.newTab(target: NewTabTarget.launcher);
+        await tab.controller.connectRemote(_bookmark('srv-1'));
+        await settle();
+        final opens = lanes.calls
+            .where((c) => c.startsWith('openBrowse'))
+            .length;
 
-      expect(workspace.moveTabToPane(tab, right), isTrue);
+        expect(workspace.moveTabToPane(tab, right), isTrue);
 
-      expect(
-        lanes.calls.where((c) => c.startsWith('openBrowse')).length,
-        opens,
-        reason: 'the channel moves with the tab — the engine never '
-            'tears it down and reopens it (03 §3.2)',
-      );
-      expect(channel.closeCalls, 0);
-      expect(lanes.disconnects, isEmpty);
-      expect(tab.controller.remoteBookmark?.id, 'srv-1');
-      expect(
-        tab.controller.location,
-        const RemotePaneLocation('srv-1', '/srv/home'),
-      );
-    });
+        expect(
+          lanes.calls.where((c) => c.startsWith('openBrowse')).length,
+          opens,
+          reason:
+              'the channel moves with the tab — the engine never '
+              'tears it down and reopens it (03 §3.2)',
+        );
+        expect(channel.closeCalls, 0);
+        expect(lanes.disconnects, isEmpty);
+        expect(tab.controller.remoteBookmark?.id, 'srv-1');
+        expect(
+          tab.controller.location,
+          const RemotePaneLocation('srv-1', '/srv/home'),
+        );
+      },
+    );
 
-    test('the dropped tab lands at the requested index and activates',
-        () async {
-      final moved = left.newTab(target: NewTabTarget.launcher);
-      final r1 = right.newTab(target: NewTabTarget.launcher);
-      final r2 = right.newTab(target: NewTabTarget.launcher);
+    test(
+      'the dropped tab lands at the requested index and activates',
+      () async {
+        final moved = left.newTab(target: NewTabTarget.launcher);
+        final r1 = right.newTab(target: NewTabTarget.launcher);
+        final r2 = right.newTab(target: NewTabTarget.launcher);
 
-      workspace.moveTabToPane(moved, right, index: 1);
+        workspace.moveTabToPane(moved, right, index: 1);
 
-      expect(right.tabs, [r1, moved, r2]);
-      expect(right.activeTab, same(moved));
-      expect(workspace.activePane, same(right));
-    });
+        expect(right.tabs, [r1, moved, r2]);
+        expect(right.activeTab, same(moved));
+        expect(workspace.activePane, same(right));
+      },
+    );
 
     test('a null index appends; out-of-range indexes clamp', () async {
       final a = left.newTab(target: NewTabTarget.launcher);
@@ -175,18 +183,30 @@ void main() {
       expect(right.tabs.first, same(c));
     });
 
-    test('dragging the last tab away leaves the source on the launcher',
-        () async {
-      final tab = await openLeftTab();
+    test(
+      'dragging the last tab away leaves the source on the launcher',
+      () async {
+        final tab = await openLeftTab();
 
-      expect(workspace.moveTabToPane(tab, right), isTrue);
+        expect(workspace.moveTabToPane(tab, right), isTrue);
 
-      expect(left.tabs, isEmpty);
-      expect(left.activeTab, isNull, reason: 'the launcher state — never '
-          'blank, never an auto-opened replacement (02 §2.7/§3)');
-      expect(left.canReopen, isFalse, reason: 'a moved tab is not a '
-          'closed tab — no ghost to reopen');
-    });
+        expect(left.tabs, isEmpty);
+        expect(
+          left.activeTab,
+          isNull,
+          reason:
+              'the launcher state — never '
+              'blank, never an auto-opened replacement (02 §2.7/§3)',
+        );
+        expect(
+          left.canReopen,
+          isFalse,
+          reason:
+              'a moved tab is not a '
+              'closed tab — no ghost to reopen',
+        );
+      },
+    );
 
     test('the close guard is not consulted — in-flight work never blocks '
         'the drag', () async {
@@ -240,8 +260,7 @@ void main() {
       );
     });
 
-    test('an in-flight navigation settles on the destination pane',
-        () async {
+    test('an in-flight navigation settles on the destination pane', () async {
       final channel = FakePaneChannel('/home/tester')
         ..listings['/home/tester'] = [_entry('a.txt')]
         ..listings['/home/tester/sub'] = [
@@ -258,8 +277,13 @@ void main() {
       expect(tab.controller.loading, isTrue);
 
       workspace.moveTabToPane(tab, right);
-      expect(tab.controller.loading, isTrue, reason: 'the move never '
-          'cancels the outstanding listing');
+      expect(
+        tab.controller.loading,
+        isTrue,
+        reason:
+            'the move never '
+            'cancels the outstanding listing',
+      );
 
       hold.complete();
       await settle();
@@ -272,33 +296,34 @@ void main() {
       expect(identical(right.activeTab, tab), isTrue);
     });
 
-    test('an in-flight rename commit completes on the destination pane',
-        () async {
-      final channel = FakePaneChannel('/home/tester')
-        ..listings['/home/tester'] = [_entry('a.txt')];
-      lanes.nextLocalChannel = channel;
-      final tab = left.newTab(target: NewTabTarget.home);
-      await settle();
+    test(
+      'an in-flight rename commit completes on the destination pane',
+      () async {
+        final channel = FakePaneChannel('/home/tester')
+          ..listings['/home/tester'] = [_entry('a.txt')];
+        lanes.nextLocalChannel = channel;
+        final tab = left.newTab(target: NewTabTarget.home);
+        await settle();
 
-      tab.controller.setCursorIndex(0);
-      tab.controller.startRename();
-      final held = Completer<void>();
-      channel.heldRename = held;
-      unawaited(tab.controller.submitRename('renamed.txt'));
-      await settle();
-      expect(tab.controller.inlineRenameActive, isTrue);
+        tab.controller.setCursorIndex(0);
+        tab.controller.startRename();
+        final held = Completer<void>();
+        channel.heldRename = held;
+        unawaited(tab.controller.submitRename('renamed.txt'));
+        await settle();
+        expect(tab.controller.inlineRenameActive, isTrue);
 
-      workspace.moveTabToPane(tab, right);
-      held.complete();
-      await settle();
+        workspace.moveTabToPane(tab, right);
+        held.complete();
+        await settle();
 
-      expect(
-        channel.renameCalls,
-        [('/home/tester/a.txt', '/home/tester/renamed.txt')],
-      );
-      expect(tab.controller.inlineRenameActive, isFalse);
-      expect(identical(right.activeTab, tab), isTrue);
-    });
+        expect(channel.renameCalls, [
+          ('/home/tester/a.txt', '/home/tester/renamed.txt'),
+        ]);
+        expect(tab.controller.inlineRenameActive, isFalse);
+        expect(identical(right.activeTab, tab), isTrue);
+      },
+    );
   });
 
   group('no-op drops (02 §3)', () {
@@ -313,10 +338,7 @@ void main() {
     });
 
     test('a foreign tab moves nowhere', () async {
-      final otherStrip = PaneTabsController(
-        paneId: 'pane.other',
-        lanes: lanes,
-      );
+      final otherStrip = PaneTabsController(paneId: 'pane.other', lanes: lanes);
       addTearDown(otherStrip.dispose);
       final outsider = otherStrip.newTab(target: NewTabTarget.launcher);
 
@@ -347,8 +369,13 @@ void main() {
       right.dispose();
 
       expect(workspace.moveTabToPane(tab, right), isFalse);
-      expect(left.tabs, contains(tab), reason: 'the move reports '
-          'failure and the tab lands back on its own strip');
+      expect(
+        left.tabs,
+        contains(tab),
+        reason:
+            'the move reports '
+            'failure and the tab lands back on its own strip',
+      );
       expect(identical(left.activeTab, tab), isTrue);
       expect(
         tab.controller.location,
@@ -382,18 +409,14 @@ void main() {
     /// their visible tabs.
     Future<({PaneTab leftTab, PaneTab rightTab})> linkedPair() async {
       lanes.nextLocalChannel = FakePaneChannel('/left/home')
-        ..listings['/left/home'] = [
-          _entry('l.txt', parent: '/left/home'),
-        ];
+        ..listings['/left/home'] = [_entry('l.txt', parent: '/left/home')];
       // nextLocalChannel is consumed inside the async channel open, so
       // each scripted channel must be armed AFTER the previous tab's
       // open has run — not merely after newTab returns.
       final leftTab = left.newTab(target: NewTabTarget.home);
       await settle();
       lanes.nextLocalChannel = FakePaneChannel('/right/home')
-        ..listings['/right/home'] = [
-          _entry('r.txt', parent: '/right/home'),
-        ];
+        ..listings['/right/home'] = [_entry('r.txt', parent: '/right/home')];
       final rightTab = right.newTab(target: NewTabTarget.home);
       await settle();
       expect(workspace.syncBrowsing.canLink, isTrue);

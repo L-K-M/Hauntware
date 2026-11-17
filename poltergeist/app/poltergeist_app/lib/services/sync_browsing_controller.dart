@@ -34,11 +34,7 @@ enum SyncBrowseSuspension {
 /// [SyncBrowseSuspension.mirrorMissing], the missing mirror directory's
 /// display name and which pane lacks it.
 final class SyncBrowseCause {
-  const SyncBrowseCause(
-    this.kind, {
-    this.missingName,
-    this.missingOnLeftPane,
-  });
+  const SyncBrowseCause(this.kind, {this.missingName, this.missingOnLeftPane});
 
   final SyncBrowseSuspension kind;
 
@@ -267,9 +263,7 @@ class SyncBrowsingController extends ChangeNotifier {
     // at the same relative path inside their anchored subtrees —
     // existence on both sides is inherent, since only accepted listings
     // commit. No snap-into-place: resume changes only the link state.
-    if (leftRel != null &&
-        rightRel != null &&
-        listEquals(leftRel, rightRel)) {
+    if (leftRel != null && rightRel != null && listEquals(leftRel, rightRel)) {
       _resume();
       return;
     }
@@ -333,10 +327,7 @@ class SyncBrowsingController extends ChangeNotifier {
       // and leaves it where it stands — never an optimistic error move
       // onto a nonexistent location.
       final probe = await other.probeMirrorDirectory(mirrorPath);
-      if (_disposed ||
-          serial != _replaySerial ||
-          !enabled ||
-          _cause != null) {
+      if (_disposed || serial != _replaySerial || !enabled || _cause != null) {
         return;
       }
       // The origin must still stand at the commit that asked for this
@@ -381,13 +372,11 @@ class SyncBrowsingController extends ChangeNotifier {
   /// The anchor's endpoint identity: the local volume, or a remote's
   /// serverId. A committed location on another endpoint is 02 §7's
   /// "tab changing server" — the link drops.
-  static bool _sameEndpoint(PaneLocation a, PaneLocation b) =>
-      switch ((a, b)) {
-        (RemotePaneLocation a, RemotePaneLocation b) =>
-          a.serverId == b.serverId,
-        (LocalPaneLocation(), LocalPaneLocation()) => true,
-        _ => false,
-      };
+  static bool _sameEndpoint(PaneLocation a, PaneLocation b) => switch ((a, b)) {
+    (RemotePaneLocation a, RemotePaneLocation b) => a.serverId == b.serverId,
+    (LocalPaneLocation(), LocalPaneLocation()) => true,
+    _ => false,
+  };
 
   /// [path]'s segments below [anchor], or null when [path] is not inside
   /// the anchored subtree — the anchor itself is the empty relative path.

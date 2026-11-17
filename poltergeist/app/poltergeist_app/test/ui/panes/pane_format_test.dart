@@ -42,30 +42,15 @@ void main() {
 
   group('formatPaneSize', () {
     test('bytes render bare, mantissas trim their trailing zero', () {
-      expect(
-        formatPaneSize(512, platform: TargetPlatform.linux),
-        '512 B',
-      );
-      expect(
-        formatPaneSize(2048, platform: TargetPlatform.linux),
-        '2 KB',
-      );
-      expect(
-        formatPaneSize(1500, platform: TargetPlatform.linux),
-        '1.5 KB',
-      );
+      expect(formatPaneSize(512, platform: TargetPlatform.linux), '512 B');
+      expect(formatPaneSize(2048, platform: TargetPlatform.linux), '2 KB');
+      expect(formatPaneSize(1500, platform: TargetPlatform.linux), '1.5 KB');
     });
 
     test('decimal units on macOS/Linux, binary on Windows', () {
-      expect(
-        formatPaneSize(1 << 20, platform: TargetPlatform.linux),
-        '1 MB',
-      );
+      expect(formatPaneSize(1 << 20, platform: TargetPlatform.linux), '1 MB');
       // 1 MiB is 1.048576 MB decimal — still "1 MB" at one decimal.
-      expect(
-        formatPaneSize(1 << 20, platform: TargetPlatform.windows),
-        '1 MB',
-      );
+      expect(formatPaneSize(1 << 20, platform: TargetPlatform.windows), '1 MB');
       expect(
         formatPaneSize(10 * 1000 * 1000, platform: TargetPlatform.macOS),
         '10 MB',
@@ -79,15 +64,9 @@ void main() {
     test('rounding never renders the divisor as a mantissa', () {
       // 999999 B decimal is 999.999 KB — rounds to the next unit, so it
       // must read "1 MB", never "1000 KB".
-      expect(
-        formatPaneSize(999999, platform: TargetPlatform.macOS),
-        '1 MB',
-      );
+      expect(formatPaneSize(999999, platform: TargetPlatform.macOS), '1 MB');
       // 1048575 B binary is 1023.999 KiB — likewise.
-      expect(
-        formatPaneSize(1048575, platform: TargetPlatform.windows),
-        '1 MB',
-      );
+      expect(formatPaneSize(1048575, platform: TargetPlatform.windows), '1 MB');
     });
 
     test('null renders the unevaluated dash', () {
@@ -160,18 +139,8 @@ void main() {
           '9/10/2026 2:32\u202fPM',
           '9/16/2026 2:32\u202fPM',
         ],
-        'de': [
-          'T(14:32)',
-          'Y(23:00)',
-          '10.9.2026 14:32',
-          '16.9.2026 14:32',
-        ],
-        'fr': [
-          'T(14:32)',
-          'Y(23:00)',
-          '10/09/2026 14:32',
-          '16/09/2026 14:32',
-        ],
+        'de': ['T(14:32)', 'Y(23:00)', '10.9.2026 14:32', '16.9.2026 14:32'],
+        'fr': ['T(14:32)', 'Y(23:00)', '10/09/2026 14:32', '16/09/2026 14:32'],
       };
       for (final locale in ['en', 'de', 'fr', 'en']) {
         Intl.defaultLocale = locale == 'en' ? 'fr' : 'en';

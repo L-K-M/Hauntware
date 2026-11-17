@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 
-
 import '../../l10n/app_localizations.dart';
 import '../../services/registered_command.dart';
 import '../../theme/app_theme.dart';
@@ -95,18 +94,19 @@ class HeaderToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = PoltergeistChrome.of(context, poltergeistThemeStyle);
-    final placed = [
-      for (final command in commands)
-        if (command.toolbarPlacement != null) command,
-    ]..sort((a, b) {
-        final pa = a.toolbarPlacement!;
-        final pb = b.toolbarPlacement!;
-        final bySlot = pa.slot.index.compareTo(pb.slot.index);
-        if (bySlot != 0) return bySlot;
-        final byGroup = pa.group.compareTo(pb.group);
-        if (byGroup != 0) return byGroup;
-        return pa.order.compareTo(pb.order);
-      });
+    final placed =
+        [
+          for (final command in commands)
+            if (command.toolbarPlacement != null) command,
+        ]..sort((a, b) {
+          final pa = a.toolbarPlacement!;
+          final pb = b.toolbarPlacement!;
+          final bySlot = pa.slot.index.compareTo(pb.slot.index);
+          if (bySlot != 0) return bySlot;
+          final byGroup = pa.group.compareTo(pb.group);
+          if (byGroup != 0) return byGroup;
+          return pa.order.compareTo(pb.order);
+        });
     List<RegisteredCommand> slot(ToolbarSlot s) => [
       for (final command in placed)
         if (command.toolbarPlacement!.slot == s) command,
@@ -144,9 +144,7 @@ class HeaderToolbar extends StatelessWidget {
                         labelled: fold.index < _Fold.primaryLabels.index,
                       )) +
                 _groupsExtent(context, status) +
-                (filterField == null
-                    ? 0
-                    : _filterGap + _filterWidthFor(fold)) +
+                (filterField == null ? 0 : _filterGap + _filterWidthFor(fold)) +
                 (menuButton == null ? 0 : _menuGap + _iconButtonExtent);
           }
 
@@ -268,22 +266,23 @@ class HeaderToolbar extends StatelessWidget {
       for (final members in groups)
         Padding(
           padding: const EdgeInsetsDirectional.only(start: _groupGap),
-          child: pass(_Capsule(
-            children: [
-              for (final command in members)
-                _decorated(
-                  context,
-                  command,
-                  _ToolbarButton(
-                    command: command,
-                    onRun: onRun,
-                    labelled:
-                        labelled && command.toolbarPlacement!.labelled,
-                    badge: badges[command.id],
+          child: pass(
+            _Capsule(
+              children: [
+                for (final command in members)
+                  _decorated(
+                    context,
+                    command,
+                    _ToolbarButton(
+                      command: command,
+                      onRun: onRun,
+                      labelled: labelled && command.toolbarPlacement!.labelled,
+                      badge: badges[command.id],
+                    ),
                   ),
-                ),
-            ],
-          )),
+              ],
+            ),
+          ),
         ),
     ];
   }

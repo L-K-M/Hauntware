@@ -121,27 +121,25 @@ class PaneEntryDrag {
 
 /// The pane location's transfer endpoint (03 §4.1): a local pane is the
 /// local filesystem; a remote pane is its bound server id.
-FsLocation fsLocationForLocation(PaneLocation location) =>
-    switch (location) {
-      LocalPaneLocation() => const LocalFsLocation(),
-      RemotePaneLocation(:final serverId) => ServerFsLocation(serverId),
-    };
+FsLocation fsLocationForLocation(PaneLocation location) => switch (location) {
+  LocalPaneLocation() => const LocalFsLocation(),
+  RemotePaneLocation(:final serverId) => ServerFsLocation(serverId),
+};
 
 /// Whether two endpoints share one filesystem for 02 §5.1's verb
 /// default: local↔local is one namespace (volumes checked separately by
 /// [paneDropVerb]); two remote panes share one only on the same server
 /// id — same-server moves can execute server-side, cross-server work is
 /// always a piped copy.
-bool paneDropSameFilesystem(FsLocation a, FsLocation b) =>
-    switch ((a, b)) {
-      (LocalFsLocation(), LocalFsLocation()) => true,
-      (
-        ServerFsLocation(serverId: final aId),
-        ServerFsLocation(serverId: final bId),
-      ) =>
-        aId == bId,
-      _ => false,
-    };
+bool paneDropSameFilesystem(FsLocation a, FsLocation b) => switch ((a, b)) {
+  (LocalFsLocation(), LocalFsLocation()) => true,
+  (
+    ServerFsLocation(serverId: final aId),
+    ServerFsLocation(serverId: final bId),
+  ) =>
+    aId == bId,
+  _ => false,
+};
 
 /// The volume a local path lives on, so a same-"local" drop across
 /// volumes still defaults to copy: a Windows drive letter's `C:` or a
@@ -156,8 +154,7 @@ String? localVolumeOf(String path) {
     final shareEnd = path.indexOf(r'\', 2);
     if (shareEnd < 0) return path.toLowerCase(); // '\\server' alone
     final shareTail = path.indexOf(r'\', shareEnd + 1);
-    return (shareTail < 0 ? path : path.substring(0, shareTail))
-        .toLowerCase();
+    return (shareTail < 0 ? path : path.substring(0, shareTail)).toLowerCase();
   }
   return posixVolumeOf(path);
 }

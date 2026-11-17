@@ -29,8 +29,7 @@ BackgroundKeepAlive _keepAlive(_RecordingBackend backend) =>
     );
 
 void main() {
-  test('anchors on every non-terminal row, sync and archive splices too',
-      () {
+  test('anchors on every non-terminal row, sync and archive splices too', () {
     fakeAsync((async) {
       final queue = FakeAppTransferQueue();
       final backend = _RecordingBackend();
@@ -112,13 +111,19 @@ void main() {
     // and Séance keeps its own channel.
     expect(strings.channelId, 'poltergeist.keepalive');
     expect(strings.channelName, 'Transfer keep-alive');
-    expect(strings.channelDescription,
-        'Shown while transfers are kept alive in the background.');
+    expect(
+      strings.channelDescription,
+      'Shown while transfers are kept alive in the background.',
+    );
     expect(strings.notificationTitle, 'Poltergeist');
-    expect(strings.notificationText(1),
-        'Keeping 1 transfer alive in the background.');
-    expect(strings.notificationText(2),
-        'Keeping 2 transfers alive in the background.');
+    expect(
+      strings.notificationText(1),
+      'Keeping 1 transfer alive in the background.',
+    );
+    expect(
+      strings.notificationText(2),
+      'Keeping 2 transfers alive in the background.',
+    );
     expect(strings.smallIconResourceName, 'ic_stat_transfer_keep_alive');
   });
 }

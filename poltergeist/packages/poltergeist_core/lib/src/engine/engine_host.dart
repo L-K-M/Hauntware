@@ -673,9 +673,7 @@ class EngineHost {
   /// closes keep sharing it until it settles — then, and only then (or
   /// when the shutdown drain abandons it as the isolate dies), does
   /// closing the id become the idempotent ack.
-  Future<EngineResult> _closeChannel(
-    CloseBrowseChannelRequest request,
-  ) async {
+  Future<EngineResult> _closeChannel(CloseBrowseChannelRequest request) async {
     final channelId = request.channelId;
     final channel = _channels.remove(channelId);
     if (channel == null) {
@@ -713,7 +711,8 @@ class EngineHost {
       onTimeout: () => throw RemoteFileException(
         kind: RemoteFileErrorKind.other,
         operation: 'close',
-        message: 'The backend release for channel $channelId did not '
+        message:
+            'The backend release for channel $channelId did not '
             'settle within its bound; the resource remains live and the '
             'retirement stays tracked until it settles.',
       ),
@@ -839,7 +838,8 @@ class EngineHost {
       throw const RemoteFileException(
         kind: RemoteFileErrorKind.unsupported,
         operation: 'open',
-        message: 'Opening files in the default application is available '
+        message:
+            'Opening files in the default application is available '
             'on local channels only.',
       );
     }
@@ -1192,7 +1192,8 @@ final class _LocalPaneChannel implements PaneChannel {
       throw const RemoteFileException(
         kind: RemoteFileErrorKind.cancelled,
         operation: 'watch',
-        message: 'The watch request was superseded by a later watch or '
+        message:
+            'The watch request was superseded by a later watch or '
             'unwatch on this channel.',
       );
     }
@@ -1495,11 +1496,8 @@ class _CatalogRoute {
   final _CatalogRouteFailure? failure;
   final String? failureId;
 
-  _CatalogRoute(
-    List<ServerConfig> configs, {
-    this.failure,
-    this.failureId,
-  }) : configs = List.unmodifiable(configs);
+  _CatalogRoute(List<ServerConfig> configs, {this.failure, this.failureId})
+    : configs = List.unmodifiable(configs);
 }
 
 /// [environment] with [fallbackHome] as `HOME` when it names no home of

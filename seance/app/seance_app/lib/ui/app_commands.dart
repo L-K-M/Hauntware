@@ -457,8 +457,7 @@ class SeanceMenuButton extends StatelessWidget {
           ),
           menuChildren: ghostMenuBarChildren(
             seanceMenus(commands),
-            activate: (spec) =>
-                (spec.tag as SeanceCommand).run(context, state),
+            activate: (spec) => (spec.tag as SeanceCommand).run(context, state),
             trailingFor: (spec) => spec.activators.isEmpty
                 ? null
                 : GhostShortcutHint(

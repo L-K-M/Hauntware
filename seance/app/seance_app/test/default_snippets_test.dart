@@ -17,8 +17,10 @@ void main() {
     final ids = defaults.map((s) => s.id).toSet();
     expect(ids.length, defaults.length);
     // Fixed timestamps so re-seeding on another device merges by id.
-    expect(defaults.every((s) => s.updatedAt == defaults.first.updatedAt),
-        isTrue);
+    expect(
+      defaults.every((s) => s.updatedAt == defaults.first.updatedAt),
+      isTrue,
+    );
   });
 
   test('placeholders parse as expected', () {

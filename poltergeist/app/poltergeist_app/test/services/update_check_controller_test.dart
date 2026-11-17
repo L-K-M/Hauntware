@@ -26,10 +26,7 @@ void main() {
   http.Client clientWith(Object? body, {int status = 200}) =>
       http_testing.MockClient((request) async {
         requests.add(request);
-        return http.Response(
-          body is String ? body : jsonEncode(body),
-          status,
-        );
+        return http.Response(body is String ? body : jsonEncode(body), status);
       });
 
   http.Client failingClient() => http_testing.MockClient((request) async {
@@ -142,24 +139,26 @@ void main() {
       expect(rateLimited.update, isNull);
     });
 
-    test('opting out while the launch check runs keeps its answer away',
-        () async {
-      final release = Completer<http.Response>();
-      final controller = UpdateCheckController(
-        androidReleaseAsset: poltergeistAndroidReleaseAsset,
-        checker: UpdateChecker(
-          repo: poltergeistUpdateRepo,
-          client: http_testing.MockClient((request) => release.future),
-        ),
-      );
+    test(
+      'opting out while the launch check runs keeps its answer away',
+      () async {
+        final release = Completer<http.Response>();
+        final controller = UpdateCheckController(
+          androidReleaseAsset: poltergeistAndroidReleaseAsset,
+          checker: UpdateChecker(
+            repo: poltergeistUpdateRepo,
+            client: http_testing.MockClient((request) => release.future),
+          ),
+        );
 
-      final check = controller.checkForUpdate('0.2.0');
-      await controller.setEnabled(false);
-      release.complete(http.Response(jsonEncode(releaseJson('v9.9.9')), 200));
-      await check;
+        final check = controller.checkForUpdate('0.2.0');
+        await controller.setEnabled(false);
+        release.complete(http.Response(jsonEncode(releaseJson('v9.9.9')), 200));
+        await check;
 
-      expect(controller.update, isNull);
-    });
+        expect(controller.update, isNull);
+      },
+    );
 
     test('disabled at boot: no request ever leaves', () async {
       final controller = UpdateCheckController(
@@ -197,32 +196,29 @@ void main() {
       expect(notified, 1);
     });
 
-    test(
-      'setEnabled(false) persists, clears a live banner, and skips '
-      'later checks',
-      () async {
-        final saved = <bool>[];
-        final controller = UpdateCheckController(
-          androidReleaseAsset: poltergeistAndroidReleaseAsset,
-          checker: UpdateChecker(
-            repo: poltergeistUpdateRepo,
-            client: clientWith(releaseJson('v9.9.9')),
-          ),
-          onEnabledChanged: (value) async => saved.add(value),
-        );
-        await controller.checkForUpdate('0.2.0');
-        expect(controller.update, isNotNull);
+    test('setEnabled(false) persists, clears a live banner, and skips '
+        'later checks', () async {
+      final saved = <bool>[];
+      final controller = UpdateCheckController(
+        androidReleaseAsset: poltergeistAndroidReleaseAsset,
+        checker: UpdateChecker(
+          repo: poltergeistUpdateRepo,
+          client: clientWith(releaseJson('v9.9.9')),
+        ),
+        onEnabledChanged: (value) async => saved.add(value),
+      );
+      await controller.checkForUpdate('0.2.0');
+      expect(controller.update, isNotNull);
 
-        await controller.setEnabled(false);
-        expect(saved, [false]);
-        expect(controller.enabled, isFalse);
-        expect(controller.update, isNull);
+      await controller.setEnabled(false);
+      expect(saved, [false]);
+      expect(controller.enabled, isFalse);
+      expect(controller.update, isNull);
 
-        requests.clear();
-        await controller.checkForUpdate('0.2.0');
-        expect(requests, isEmpty);
-      },
-    );
+      requests.clear();
+      await controller.checkForUpdate('0.2.0');
+      expect(requests, isEmpty);
+    });
 
     test('a failed persist reverts the toggle and rethrows', () async {
       final controller = UpdateCheckController(

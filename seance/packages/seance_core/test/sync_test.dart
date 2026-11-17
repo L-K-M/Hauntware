@@ -30,12 +30,13 @@ class FakeServer implements SyncApi {
 
   @override
   Future<PullResponse> pull({required int since}) async {
-    final records = _store.values
-        .where((r) => (r.seq ?? 0) > since)
-        .toList()
+    final records = _store.values.where((r) => (r.seq ?? 0) > since).toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
     return PullResponse(
-        records: records, latestSeq: _seq, limits: advertisedLimits);
+      records: records,
+      latestSeq: _seq,
+      limits: advertisedLimits,
+    );
   }
 
   @override
@@ -43,42 +44,51 @@ class FakeServer implements SyncApi {
     pushedBatchSizes.add(records.length);
     if (records.length > _enforced.maxRecordsPerPush) {
       throw ApiError(
-          code: 'payload_too_large',
-          message: 'Too many records in one push '
-              '(max ${_enforced.maxRecordsPerPush})');
+        code: 'payload_too_large',
+        message:
+            'Too many records in one push '
+            '(max ${_enforced.maxRecordsPerPush})',
+      );
     }
     // Measured the way the server measures it — the bytes of the encoded body
     // — not with the arithmetic the batcher uses, so a batch sized by a wrong
     // count is rejected here just as it would be over HTTP.
-    final bodyBytes =
-        utf8.encode(jsonEncode(PushRequest(records: records).toJson())).length;
+    final bodyBytes = utf8
+        .encode(jsonEncode(PushRequest(records: records).toJson()))
+        .length;
     if (bodyBytes > _enforced.maxBodyBytes) {
       throw ApiError(
-          code: 'payload_too_large',
-          message: 'Request body too large ($bodyBytes bytes)');
+        code: 'payload_too_large',
+        message: 'Request body too large ($bodyBytes bytes)',
+      );
     }
     for (final incoming in records) {
       if (incoming.blob.length > _enforced.maxBlobBytes) {
         throw ApiError(
-            code: 'payload_too_large',
-            message: 'A record blob exceeds the '
-                '${_enforced.maxBlobBytes}-byte limit');
+          code: 'payload_too_large',
+          message:
+              'A record blob exceeds the '
+              '${_enforced.maxBlobBytes}-byte limit',
+        );
       }
     }
     final results = <PushResult>[];
     for (final incoming in records) {
       final existing = _store[incoming.id];
-      final winner =
-          existing == null ? incoming : Lww.resolve(existing, incoming);
+      final winner = existing == null
+          ? incoming
+          : Lww.resolve(existing, incoming);
       final incomingWon = identical(winner, incoming) || existing == null;
       if (incomingWon) {
         final assigned = incoming.withSeq(++_seq);
         _store[incoming.id] = assigned;
         results.add(
-            PushResult(id: incoming.id, seq: assigned.seq!, accepted: true));
+          PushResult(id: incoming.id, seq: assigned.seq!, accepted: true),
+        );
       } else {
-        results.add(PushResult(
-            id: incoming.id, seq: existing.seq ?? 0, accepted: false));
+        results.add(
+          PushResult(id: incoming.id, seq: existing.seq ?? 0, accepted: false),
+        );
       }
     }
     return PushResponse(results: results, latestSeq: _seq);
@@ -127,8 +137,13 @@ class QuotaServer extends FakeServer {
       for (final incoming in pending) {
         final existing = _store[incoming.id];
         if (!_wins(existing, incoming)) {
-          results.add(PushResult(
-              id: incoming.id, seq: existing!.seq ?? 0, accepted: false));
+          results.add(
+            PushResult(
+              id: incoming.id,
+              seq: existing!.seq ?? 0,
+              accepted: false,
+            ),
+          );
           continue;
         }
         final grows =
@@ -286,20 +301,16 @@ class InvalidWinnerRaceApi implements SyncApi {
 
   @override
   Future<PullResponse> pull({required int since}) async => PullResponse(
-        records: since < invalidWinner.seq! ? [invalidWinner] : const [],
-        latestSeq: invalidWinner.seq!,
-      );
+    records: since < invalidWinner.seq! ? [invalidWinner] : const [],
+    latestSeq: invalidWinner.seq!,
+  );
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async =>
       PushResponse(
         results: [
           for (final record in records)
-            PushResult(
-              id: record.id,
-              seq: invalidWinner.seq!,
-              accepted: false,
-            ),
+            PushResult(id: record.id, seq: invalidWinner.seq!, accepted: false),
         ],
         latestSeq: invalidWinner.seq!,
       );
@@ -338,7 +349,9 @@ class RefuseAsTooLargeApi implements SyncApi {
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async =>
       throw const ApiError(
-          code: 'payload_too_large', message: 'Request body too large');
+        code: 'payload_too_large',
+        message: 'Request body too large',
+      );
 }
 
 /// Lands another device's copy of [newer]'s record on [server] the first time
@@ -410,10 +423,12 @@ class PagedFakeApi implements SyncApi, PagedSyncApi {
       failRequest = null;
       throw const ApiError(code: 'storage_busy', message: 'retry');
     }
-    final through = throughSeq ?? records.fold<int>(0, (value, record) {
-      final seq = record.seq ?? 0;
-      return seq > value ? seq : value;
-    });
+    final through =
+        throughSeq ??
+        records.fold<int>(0, (value, record) {
+          final seq = record.seq ?? 0;
+          return seq > value ? seq : value;
+        });
     final remaining = [
       for (final record in records)
         if (record.seq! > since && record.seq! <= through) record,
@@ -466,8 +481,11 @@ class GuardedLocalStore
   final InMemoryLocalRecordStore inner;
   final bool Function() localHeld;
 
-  void _check() => expect(localHeld(), isTrue,
-      reason: 'local record access must run inside the local phase');
+  void _check() => expect(
+    localHeld(),
+    isTrue,
+    reason: 'local record access must run inside the local phase',
+  );
 
   @override
   Future<List<EncryptedRecord>> allRecords() {
@@ -536,10 +554,7 @@ class GuardedLocalStore
   }
 
   @override
-  Future<EncryptedRecord?> settlePush(
-    EncryptedRecord sent,
-    PushResult result,
-  ) {
+  Future<EncryptedRecord?> settlePush(EncryptedRecord sent, PushResult result) {
     _check();
     return inner.settlePush(sent, result);
   }
@@ -552,91 +567,99 @@ class GuardedSyncApi extends FakeServer {
 
   @override
   Future<PullResponse> pull({required int since}) {
-    expect(localHeld(), isFalse,
-        reason: 'pull must not hold the local phase');
+    expect(localHeld(), isFalse, reason: 'pull must not hold the local phase');
     return super.pull(since: since);
   }
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) {
-    expect(localHeld(), isFalse,
-        reason: 'push must not hold the local phase');
+    expect(localHeld(), isFalse, reason: 'push must not hold the local phase');
     return super.push(records);
   }
 }
 
-EncryptedRecord rec(String id, int updatedAt, String device,
-        {bool deleted = false, int tag = 0}) =>
-    EncryptedRecord(
-      id: id,
-      updatedAt: updatedAt,
-      deviceId: device,
-      deleted: deleted,
-      seq: null,
-      blob: Uint8List.fromList([tag]),
-    );
+EncryptedRecord rec(
+  String id,
+  int updatedAt,
+  String device, {
+  bool deleted = false,
+  int tag = 0,
+}) => EncryptedRecord(
+  id: id,
+  updatedAt: updatedAt,
+  deviceId: device,
+  deleted: deleted,
+  seq: null,
+  blob: Uint8List.fromList([tag]),
+);
 
 void main() {
   group('SyncEngine', () {
-    test('keeps all mirror access local and all network access outside',
-        () async {
-      var localHeld = false;
-      final inner = InMemoryLocalRecordStore();
-      await inner.putLocal(rec('local', 20, 'A'));
-      final store = GuardedLocalStore(inner, () => localHeld);
-      final api = GuardedSyncApi(() => localHeld);
-      await api.push([rec('remote', 10, 'B')]);
+    test(
+      'keeps all mirror access local and all network access outside',
+      () async {
+        var localHeld = false;
+        final inner = InMemoryLocalRecordStore();
+        await inner.putLocal(rec('local', 20, 'A'));
+        final store = GuardedLocalStore(inner, () => localHeld);
+        final api = GuardedSyncApi(() => localHeld);
+        await api.push([rec('remote', 10, 'B')]);
 
-      Future<T> runLocal<T>(Future<T> Function() action) async {
-        expect(localHeld, isFalse);
-        localHeld = true;
-        try {
-          return await action();
-        } finally {
-          localHeld = false;
+        Future<T> runLocal<T>(Future<T> Function() action) async {
+          expect(localHeld, isFalse);
+          localHeld = true;
+          try {
+            return await action();
+          } finally {
+            localHeld = false;
+          }
         }
-      }
 
-      await SyncEngine(store).sync(
-        api,
-        runLocal: runLocal,
-        refreshLocal: (_) async => expect(localHeld, isTrue),
-      );
+        await SyncEngine(store).sync(
+          api,
+          runLocal: runLocal,
+          refreshLocal: (_) async => expect(localHeld, isTrue),
+        );
 
-      expect((await inner.allRecords()).map((record) => record.id).toSet(),
-          {'local', 'remote'});
-      expect(await inner.dirtyRecords(), isEmpty);
-    });
+        expect((await inner.allRecords()).map((record) => record.id).toSet(), {
+          'local',
+          'remote',
+        });
+        expect(await inner.dirtyRecords(), isEmpty);
+      },
+    );
 
-    test('keeps cursor recovery and its callbacks in one local phase',
-        () async {
-      var localHeld = false;
-      final inner = InMemoryLocalRecordStore();
-      await inner.putRemote(rec('lost-history', 10, 'B').withSeq(42));
-      await inner.setHighWaterSeq(42);
-      final store = GuardedLocalStore(inner, () => localHeld);
-      final api = RejectCursorOnceApi();
+    test(
+      'keeps cursor recovery and its callbacks in one local phase',
+      () async {
+        var localHeld = false;
+        final inner = InMemoryLocalRecordStore();
+        await inner.putRemote(rec('lost-history', 10, 'B').withSeq(42));
+        await inner.setHighWaterSeq(42);
+        final store = GuardedLocalStore(inner, () => localHeld);
+        final api = RejectCursorOnceApi();
 
-      Future<T> runLocal<T>(Future<T> Function() action) async {
-        expect(localHeld, isFalse);
-        localHeld = true;
-        try {
-          return await action();
-        } finally {
-          localHeld = false;
+        Future<T> runLocal<T>(Future<T> Function() action) async {
+          expect(localHeld, isFalse);
+          localHeld = true;
+          try {
+            return await action();
+          } finally {
+            localHeld = false;
+          }
         }
-      }
 
-      await SyncEngine(store).sync(
-        api,
-        runLocal: runLocal,
-        beforeCursorRecoveryPull: () async => expect(localHeld, isTrue),
-        afterCursorRecovery: () async => expect(localHeld, isTrue),
-      );
+        await SyncEngine(store).sync(
+          api,
+          runLocal: runLocal,
+          beforeCursorRecoveryPull: () async => expect(localHeld, isTrue),
+          afterCursorRecovery: () async => expect(localHeld, isTrue),
+        );
 
-      expect(api.requestedSince.take(2), [42, 0]);
-      expect(await inner.cursorRecoveryPending(), isFalse);
-    });
+        expect(api.requestedSince.take(2), [42, 0]);
+        expect(await inner.cursorRecoveryPending(), isFalse);
+      },
+    );
 
     test('pushes local records to an empty server', () async {
       final server = FakeServer();
@@ -669,43 +692,47 @@ void main() {
       expect(await store.highWaterSeq(), 2);
     });
 
-    test('an accepted push never clears a newer in-flight local edit',
-        () async {
-      final store = InMemoryLocalRecordStore();
-      await store.putLocal(rec('shared', 10, 'A', tag: 1));
-      final api = LocalEditDuringPushApi(
-        store,
-        rec('shared', 20, 'A', tag: 2),
-      );
+    test(
+      'an accepted push never clears a newer in-flight local edit',
+      () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putLocal(rec('shared', 10, 'A', tag: 1));
+        final api = LocalEditDuringPushApi(
+          store,
+          rec('shared', 20, 'A', tag: 2),
+        );
 
-      await SyncEngine(store).sync(api);
+        await SyncEngine(store).sync(api);
 
-      expect(api.sentTags, [1, 2]);
-      expect((await store.getRecord('shared'))!.updatedAt, 20);
-      expect(await store.dirtyRecords(), isEmpty);
-    });
+        expect(api.sentTags, [1, 2]);
+        expect((await store.getRecord('shared'))!.updatedAt, 20);
+        expect(await store.dirtyRecords(), isEmpty);
+      },
+    );
 
-    test('rejected push adopts lexicographically larger device ID on a tie',
-        () async {
-      final store = InMemoryLocalRecordStore();
-      await store.putLocal(rec('shared', 10, 'A', tag: 1));
-      final api = PushRaceApi(
-        FakeServer(),
-        rec('shared', 10, 'B', tag: 2),
-        concurrentFirst: true,
-      );
+    test(
+      'rejected push adopts lexicographically larger device ID on a tie',
+      () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putLocal(rec('shared', 10, 'A', tag: 1));
+        final api = PushRaceApi(
+          FakeServer(),
+          rec('shared', 10, 'B', tag: 2),
+          concurrentFirst: true,
+        );
 
-      final outcome = await SyncEngine(store).sync(api);
+        final outcome = await SyncEngine(store).sync(api);
 
-      final adopted = await store.getRecord('shared');
-      expect(outcome.pulled, 1);
-      expect(outcome.pushed, 0);
-      expect(adopted!.updatedAt, 10);
-      expect(adopted.deviceId, 'B');
-      expect(adopted.blob, equals(Uint8List.fromList([2])));
-      expect(await store.dirtyRecords(), isEmpty);
-      expect(await store.highWaterSeq(), 1);
-    });
+        final adopted = await store.getRecord('shared');
+        expect(outcome.pulled, 1);
+        expect(outcome.pushed, 0);
+        expect(adopted!.updatedAt, 10);
+        expect(adopted.deviceId, 'B');
+        expect(adopted.blob, equals(Uint8List.fromList([2])));
+        expect(await store.dirtyRecords(), isEmpty);
+        expect(await store.highWaterSeq(), 1);
+      },
+    );
 
     test('rejected equal-metadata payload adopts the sequenced blob', () async {
       final store = InMemoryLocalRecordStore();
@@ -724,32 +751,33 @@ void main() {
       expect(await store.dirtyRecords(), isEmpty);
     });
 
-    test('an invalid future record cannot displace a dirty local edit',
-        () async {
-      final server = FakeServer();
-      await server.push([rec('shared', 1 << 50, 'forged', tag: 9)]);
-      final store = InMemoryLocalRecordStore();
-      await store.putLocal(rec('shared', 10, 'A', tag: 1));
-      var validated = 0;
+    test(
+      'an invalid future record cannot displace a dirty local edit',
+      () async {
+        final server = FakeServer();
+        await server.push([rec('shared', 1 << 50, 'forged', tag: 9)]);
+        final store = InMemoryLocalRecordStore();
+        await store.putLocal(rec('shared', 10, 'A', tag: 1));
+        var validated = 0;
 
-      await SyncEngine(
-        store,
-        remoteValidator: (record) async {
-          validated++;
-          return false;
-        },
-      ).sync(server);
+        await SyncEngine(
+          store,
+          remoteValidator: (record) async {
+            validated++;
+            return false;
+          },
+        ).sync(server);
 
-      final local = await store.getRecord('shared');
-      expect(validated, 1);
-      expect(local!.updatedAt, 10);
-      expect(local.blob, equals(Uint8List.fromList([1])));
-      expect(await store.dirtyRecords(), [same(local)]);
-      expect(await store.highWaterSeq(), 1);
-    });
+        final local = await store.getRecord('shared');
+        expect(validated, 1);
+        expect(local!.updatedAt, 10);
+        expect(local.blob, equals(Uint8List.fromList([1])));
+        expect(await store.dirtyRecords(), [same(local)]);
+        expect(await store.highWaterSeq(), 1);
+      },
+    );
 
-    test('a rejected push cannot restore an older displaced winner',
-        () async {
+    test('a rejected push cannot restore an older displaced winner', () async {
       final store = InMemoryLocalRecordStore();
       await store.putRemote(rec('shared', 20, 'remote', tag: 2).withSeq(5));
       await store.putLocal(rec('shared', 30, 'local', tag: 3));
@@ -786,72 +814,77 @@ void main() {
 
         await engine.sync(api);
 
-        expect(
-          api.requestedSince.take(2),
-          [0, 0],
-          reason: 'an unobserved latestSeq must not advance the next pull',
-        );
+        expect(api.requestedSince.take(2), [
+          0,
+          0,
+        ], reason: 'an unobserved latestSeq must not advance the next pull');
         expect(await store.getRecord('remote'), isNotNull);
         expect(await store.highWaterSeq(), 2);
       },
     );
 
-    test('a rejected cursor re-queues mirror and re-sources domain data',
-        () async {
-      final store = InMemoryLocalRecordStore();
-      await store.putRemote(rec('lost-history', 10, 'peer').withSeq(42));
-      await store.setHighWaterSeq(42);
-      final api = RejectCursorOnceApi();
-      var recoveryCalls = 0;
+    test(
+      'a rejected cursor re-queues mirror and re-sources domain data',
+      () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putRemote(rec('lost-history', 10, 'peer').withSeq(42));
+        await store.setHighWaterSeq(42);
+        final api = RejectCursorOnceApi();
+        var recoveryCalls = 0;
 
-      await SyncEngine(store).sync(
-        api,
-        afterCursorRecovery: () async {
-          recoveryCalls++;
-          await store.putLocal(rec('current-domain-row', 20, 'local'));
-        },
-      );
-
-      expect(api.requestedSince, [42, 0]);
-      expect(recoveryCalls, 1);
-      expect((await store.getRecord('lost-history'))!.seq, isNotNull);
-      expect((await store.getRecord('current-domain-row'))!.seq, isNotNull);
-      expect(api.pushed.map((record) => record.id).toSet(),
-          {'lost-history', 'current-domain-row'});
-      expect(await store.dirtyRecords(), isEmpty);
-      expect(await store.highWaterSeq(), 0);
-      expect(await store.cursorRecoveryPending(), isFalse);
-    });
-
-    test('a failed recovery callback leaves the phase pending and pushes none',
-        () async {
-      final store = InMemoryLocalRecordStore();
-      await store.putRemote(rec('mirror-only', 10, 'peer').withSeq(42));
-      await store.setHighWaterSeq(42);
-      final api = RejectCursorOnceApi();
-      final engine = SyncEngine(store);
-
-      await expectLater(
-        engine.sync(
+        await SyncEngine(store).sync(
           api,
           afterCursorRecovery: () async {
-            throw const FileSystemException('domain store unavailable');
+            recoveryCalls++;
+            await store.putLocal(rec('current-domain-row', 20, 'local'));
           },
-        ),
-        throwsA(isA<FileSystemException>()),
-      );
+        );
 
-      expect(api.requestedSince, [42, 0]);
-      expect(api.pushed, isEmpty);
-      expect(await store.cursorRecoveryPending(), isTrue);
-      expect((await store.getRecord('mirror-only'))!.seq, isNull);
+        expect(api.requestedSince, [42, 0]);
+        expect(recoveryCalls, 1);
+        expect((await store.getRecord('lost-history'))!.seq, isNotNull);
+        expect((await store.getRecord('current-domain-row'))!.seq, isNotNull);
+        expect(api.pushed.map((record) => record.id).toSet(), {
+          'lost-history',
+          'current-domain-row',
+        });
+        expect(await store.dirtyRecords(), isEmpty);
+        expect(await store.highWaterSeq(), 0);
+        expect(await store.cursorRecoveryPending(), isFalse);
+      },
+    );
 
-      await engine.sync(api, afterCursorRecovery: () async {});
+    test(
+      'a failed recovery callback leaves the phase pending and pushes none',
+      () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putRemote(rec('mirror-only', 10, 'peer').withSeq(42));
+        await store.setHighWaterSeq(42);
+        final api = RejectCursorOnceApi();
+        final engine = SyncEngine(store);
 
-      expect(api.pushed.map((record) => record.id), ['mirror-only']);
-      expect(await store.cursorRecoveryPending(), isFalse);
-      expect(await store.dirtyRecords(), isEmpty);
-    });
+        await expectLater(
+          engine.sync(
+            api,
+            afterCursorRecovery: () async {
+              throw const FileSystemException('domain store unavailable');
+            },
+          ),
+          throwsA(isA<FileSystemException>()),
+        );
+
+        expect(api.requestedSince, [42, 0]);
+        expect(api.pushed, isEmpty);
+        expect(await store.cursorRecoveryPending(), isTrue);
+        expect((await store.getRecord('mirror-only'))!.seq, isNull);
+
+        await engine.sync(api, afterCursorRecovery: () async {});
+
+        expect(api.pushed.map((record) => record.id), ['mirror-only']);
+        expect(await store.cursorRecoveryPending(), isFalse);
+        expect(await store.dirtyRecords(), isEmpty);
+      },
+    );
 
     test('cursor recovery republishes a confirmed tombstone', () async {
       final store = InMemoryLocalRecordStore();
@@ -892,32 +925,37 @@ void main() {
 
       await SyncEngine(store).sync(api);
 
-      expect(api.pushed, isEmpty,
-          reason: 'the server already has the confirmed deletion');
+      expect(
+        api.pushed,
+        isEmpty,
+        reason: 'the server already has the confirmed deletion',
+      );
       expect((await store.getRecord('deleted-server'))!.seq, 42);
       expect(await store.dirtyRecords(), isEmpty);
     });
 
-    test('cursor recovery preserves a peer-authored equal-stamp winner',
-        () async {
-      final store = InMemoryLocalRecordStore();
-      final winner = rec('shared', 100, 'Z', tag: 9).withSeq(42);
-      await store.putRemote(winner);
-      await store.setHighWaterSeq(42);
-      final api = RejectCursorOnceApi(
-        recordsAfterReset: [rec('shared', 100, 'M', tag: 1).withSeq(1)],
-      );
+    test(
+      'cursor recovery preserves a peer-authored equal-stamp winner',
+      () async {
+        final store = InMemoryLocalRecordStore();
+        final winner = rec('shared', 100, 'Z', tag: 9).withSeq(42);
+        await store.putRemote(winner);
+        await store.setHighWaterSeq(42);
+        final api = RejectCursorOnceApi(
+          recordsAfterReset: [rec('shared', 100, 'M', tag: 1).withSeq(1)],
+        );
 
-      await SyncEngine(store).sync(api);
+        await SyncEngine(store).sync(api);
 
-      expect(api.pushed, hasLength(1));
-      expect(api.pushed.single.deviceId, 'Z');
-      expect(api.pushed.single.blob, orderedEquals([9]));
-      final recovered = await store.getRecord('shared');
-      expect(recovered!.deviceId, 'Z');
-      expect(recovered.blob, orderedEquals([9]));
-      expect(await store.dirtyRecords(), isEmpty);
-    });
+        expect(api.pushed, hasLength(1));
+        expect(api.pushed.single.deviceId, 'Z');
+        expect(api.pushed.single.blob, orderedEquals([9]));
+        final recovered = await store.getRecord('shared');
+        expect(recovered!.deviceId, 'Z');
+        expect(recovered.blob, orderedEquals([9]));
+        expect(await store.dirtyRecords(), isEmpty);
+      },
+    );
 
     test('a server that rejects zero does not start a reset loop', () async {
       final store = InMemoryLocalRecordStore();
@@ -933,85 +971,92 @@ void main() {
       expect(await store.cursorRecoveryPending(), isTrue);
     });
 
-    test('recovery waits for every pull page and resumes partial progress',
-        () async {
-      final store = InMemoryLocalRecordStore();
-      await store.putLocal(rec('local', 10, 'A'));
-      await store.setHighWaterSeq(42);
-      final api = PagedFakeApi(
-        [
+    test(
+      'recovery waits for every pull page and resumes partial progress',
+      () async {
+        final store = InMemoryLocalRecordStore();
+        await store.putLocal(rec('local', 10, 'A'));
+        await store.setHighWaterSeq(42);
+        final api = PagedFakeApi(
+          [rec('one', 1, 'B').withSeq(1), rec('two', 2, 'B').withSeq(2)],
+          rejectRequest: 1,
+          failRequest: 3,
+        );
+        var recoveryCalls = 0;
+
+        await expectLater(
+          SyncEngine(
+            store,
+          ).sync(api, afterCursorRecovery: () async => recoveryCalls++),
+          throwsA(isA<ApiError>()),
+        );
+
+        expect(api.requests, [(42, null), (0, null), (1, 2)]);
+        expect(await store.highWaterSeq(), 1);
+        expect(await store.cursorRecoveryPending(), isTrue);
+        expect(recoveryCalls, 0);
+        expect(api.pushes, isEmpty);
+
+        await SyncEngine(store).sync(
+          api,
+          afterCursorRecovery: () async {
+            recoveryCalls++;
+            expect(
+              (await store.allRecords()).map((record) => record.id),
+              containsAll(['one', 'two']),
+            );
+            expect(
+              api.pushes,
+              isEmpty,
+              reason: 'the recovery callback must precede every push',
+            );
+          },
+        );
+
+        expect(api.requests[3], (1, null));
+        expect(recoveryCalls, 1);
+        expect(await store.cursorRecoveryPending(), isFalse);
+        expect(api.pushes, hasLength(1));
+        expect(api.pushes.single.map((record) => record.id), ['local']);
+      },
+    );
+
+    test(
+      'bounded pages share a watermark and advance by observed seq',
+      () async {
+        final api = PagedFakeApi([
           rec('one', 1, 'B').withSeq(1),
           rec('two', 2, 'B').withSeq(2),
-        ],
-        rejectRequest: 1,
-        failRequest: 3,
-      );
-      var recoveryCalls = 0;
+        ]);
+        final store = InMemoryLocalRecordStore();
 
-      await expectLater(
-        SyncEngine(store).sync(
-          api,
-          afterCursorRecovery: () async => recoveryCalls++,
-        ),
-        throwsA(isA<ApiError>()),
-      );
+        await SyncEngine(store).sync(api);
 
-      expect(api.requests, [(42, null), (0, null), (1, 2)]);
-      expect(await store.highWaterSeq(), 1);
-      expect(await store.cursorRecoveryPending(), isTrue);
-      expect(recoveryCalls, 0);
-      expect(api.pushes, isEmpty);
+        expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
+        expect(await store.highWaterSeq(), 2);
+        expect(api.requests.take(2), [(0, null), (1, 2)]);
+      },
+    );
 
-      await SyncEngine(store).sync(
-        api,
-        afterCursorRecovery: () async {
-          recoveryCalls++;
-          expect((await store.allRecords()).map((record) => record.id),
-              containsAll(['one', 'two']));
-          expect(api.pushes, isEmpty,
-              reason: 'the recovery callback must precede every push');
-        },
-      );
+    test(
+      'a later page failure persists only completed page progress',
+      () async {
+        final api = PagedFakeApi([
+          rec('one', 1, 'B').withSeq(1),
+          rec('two', 2, 'B').withSeq(2),
+        ], failRequest: 2);
+        final store = InMemoryLocalRecordStore();
+        final engine = SyncEngine(store);
 
-      expect(api.requests[3], (1, null));
-      expect(recoveryCalls, 1);
-      expect(await store.cursorRecoveryPending(), isFalse);
-      expect(api.pushes, hasLength(1));
-      expect(api.pushes.single.map((record) => record.id), ['local']);
-    });
+        await expectLater(engine.sync(api), throwsA(isA<ApiError>()));
+        expect(await store.highWaterSeq(), 1);
 
-    test('bounded pages share a watermark and advance by observed seq',
-        () async {
-      final api = PagedFakeApi([
-        rec('one', 1, 'B').withSeq(1),
-        rec('two', 2, 'B').withSeq(2),
-      ]);
-      final store = InMemoryLocalRecordStore();
-
-      await SyncEngine(store).sync(api);
-
-      expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
-      expect(await store.highWaterSeq(), 2);
-      expect(api.requests.take(2), [(0, null), (1, 2)]);
-    });
-
-    test('a later page failure persists only completed page progress',
-        () async {
-      final api = PagedFakeApi([
-        rec('one', 1, 'B').withSeq(1),
-        rec('two', 2, 'B').withSeq(2),
-      ], failRequest: 2);
-      final store = InMemoryLocalRecordStore();
-      final engine = SyncEngine(store);
-
-      await expectLater(engine.sync(api), throwsA(isA<ApiError>()));
-      expect(await store.highWaterSeq(), 1);
-
-      await engine.sync(api);
-      expect(api.requests[2].$1, 1);
-      expect(await store.highWaterSeq(), 2);
-      expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
-    });
+        await engine.sync(api);
+        expect(api.requests[2].$1, 1);
+        expect(await store.highWaterSeq(), 2);
+        expect((await store.allRecords()).map((r) => r.id), ['one', 'two']);
+      },
+    );
 
     test('a non-progressing page fails before moving the cursor', () async {
       final store = InMemoryLocalRecordStore();
@@ -1081,13 +1126,13 @@ void main() {
     group('push batching', () {
       /// A record of roughly [blobBytes] sealed bytes.
       EncryptedRecord bulky(String id, int blobBytes) => EncryptedRecord(
-            id: id,
-            updatedAt: 10,
-            deviceId: 'A',
-            deleted: false,
-            seq: null,
-            blob: Uint8List(blobBytes),
-          );
+        id: id,
+        updatedAt: 10,
+        deviceId: 'A',
+        deleted: false,
+        seq: null,
+        blob: Uint8List(blobBytes),
+      );
 
       test('splits a dirty set too large for one body', () async {
         const limits = PushLimits(maxBodyBytes: 8 * 1024);
@@ -1103,42 +1148,53 @@ void main() {
 
         expect(outcome.pushed, 20);
         expect(await store.dirtyRecords(), isEmpty);
-        expect(server.pushedBatchSizes.length, greaterThan(1),
-            reason: 'the dirty set cannot fit in one body');
+        expect(
+          server.pushedBatchSizes.length,
+          greaterThan(1),
+          reason: 'the dirty set cannot fit in one body',
+        );
         expect((await server.pull(since: 0)).records, hasLength(20));
       });
 
-      test('splits a dirty set with more records than one push allows',
-          () async {
-        const limits = PushLimits(maxRecordsPerPush: 3);
-        final server = FakeServer(advertisedLimits: limits);
-        final store = InMemoryLocalRecordStore();
-        for (var i = 0; i < 10; i++) {
-          await store.putLocal(rec('r$i', 10, 'A'));
-        }
+      test(
+        'splits a dirty set with more records than one push allows',
+        () async {
+          const limits = PushLimits(maxRecordsPerPush: 3);
+          final server = FakeServer(advertisedLimits: limits);
+          final store = InMemoryLocalRecordStore();
+          for (var i = 0; i < 10; i++) {
+            await store.putLocal(rec('r$i', 10, 'A'));
+          }
 
-        final outcome = await SyncEngine(store).sync(server);
+          final outcome = await SyncEngine(store).sync(server);
 
-        expect(outcome.pushed, 10);
-        expect(await store.dirtyRecords(), isEmpty);
-        expect(server.pushedBatchSizes, [3, 3, 3, 1]);
-      });
+          expect(outcome.pushed, 10);
+          expect(await store.dirtyRecords(), isEmpty);
+          expect(server.pushedBatchSizes, [3, 3, 3, 1]);
+        },
+      );
 
-      test('falls back to the shipped limits when none are advertised',
-          () async {
-        final server = FakeServer();
-        final store = InMemoryLocalRecordStore();
-        for (var i = 0; i < kDefaultMaxRecordsPerPush + 1; i++) {
-          await store.putLocal(rec('r$i', 10, 'A'));
-        }
+      test(
+        'falls back to the shipped limits when none are advertised',
+        () async {
+          final server = FakeServer();
+          final store = InMemoryLocalRecordStore();
+          for (var i = 0; i < kDefaultMaxRecordsPerPush + 1; i++) {
+            await store.putLocal(rec('r$i', 10, 'A'));
+          }
 
-        final outcome = await SyncEngine(store).sync(server);
+          final outcome = await SyncEngine(store).sync(server);
 
-        expect(outcome.pushed, kDefaultMaxRecordsPerPush + 1);
-        expect(server.pushedBatchSizes, [kDefaultMaxRecordsPerPush, 1],
-            reason: 'an unadvertised server still enforces what it shipped '
-                'with, so the fallback has to match it');
-      });
+          expect(outcome.pushed, kDefaultMaxRecordsPerPush + 1);
+          expect(
+            server.pushedBatchSizes,
+            [kDefaultMaxRecordsPerPush, 1],
+            reason:
+                'an unadvertised server still enforces what it shipped '
+                'with, so the fallback has to match it',
+          );
+        },
+      );
 
       test('a failing batch keeps the earlier batches marked synced', () async {
         const limits = PushLimits(maxRecordsPerPush: 2);
@@ -1149,103 +1205,130 @@ void main() {
           await store.putLocal(rec('r$i', 10, 'A'));
         }
 
-        await expectLater(SyncEngine(store).sync(api), throwsA(isA<ApiError>()));
+        await expectLater(
+          SyncEngine(store).sync(api),
+          throwsA(isA<ApiError>()),
+        );
 
         // The first batch was accepted and recorded before the second left, so
         // its records are clean and the retry only carries what is still owed.
-        final stillDirty =
-            (await store.dirtyRecords()).map((r) => r.id).toSet();
+        final stillDirty = (await store.dirtyRecords())
+            .map((r) => r.id)
+            .toSet();
         expect(stillDirty, hasLength(4));
         expect((await server.pull(since: 0)).records, hasLength(2));
       });
 
-      test('an advertisement does not outlive the server that made it',
-          () async {
-        final tight = FakeServer(
-            advertisedLimits: const PushLimits(maxRecordsPerPush: 2));
-        final store = InMemoryLocalRecordStore();
-        for (var i = 0; i < 5; i++) {
-          await store.putLocal(rec('r$i', 10, 'A'));
-        }
-        final engine = SyncEngine(store);
-        await engine.sync(tight);
-        expect(tight.pushedBatchSizes, [2, 2, 1]);
+      test(
+        'an advertisement does not outlive the server that made it',
+        () async {
+          final tight = FakeServer(
+            advertisedLimits: const PushLimits(maxRecordsPerPush: 2),
+          );
+          final store = InMemoryLocalRecordStore();
+          for (var i = 0; i < 5; i++) {
+            await store.putLocal(rec('r$i', 10, 'A'));
+          }
+          final engine = SyncEngine(store);
+          await engine.sync(tight);
+          expect(tight.pushedBatchSizes, [2, 2, 1]);
 
-        // The same engine, now pointed at a server that advertises nothing:
-        // it enforces the shipped defaults, so sizing to what the previous
-        // deployment allowed would batch for the wrong server.
-        final silent = FakeServer();
-        for (var i = 0; i < 5; i++) {
-          await store.putLocal(rec('s$i', 20, 'A'));
-        }
-        await engine.sync(silent);
+          // The same engine, now pointed at a server that advertises nothing:
+          // it enforces the shipped defaults, so sizing to what the previous
+          // deployment allowed would batch for the wrong server.
+          final silent = FakeServer();
+          for (var i = 0; i < 5; i++) {
+            await store.putLocal(rec('s$i', 20, 'A'));
+          }
+          await engine.sync(silent);
 
-        expect(silent.pushedBatchSizes, [5]);
-      });
+          expect(silent.pushedBatchSizes, [5]);
+        },
+      );
 
-      test('a record no single body can carry surfaces the server error',
-          () async {
-        const limits = PushLimits(maxBodyBytes: 2048);
-        final server = FakeServer(advertisedLimits: limits);
-        final store = InMemoryLocalRecordStore();
-        // Put the unbatchable record first, so its move to the back of the
-        // queue is what lets the record behind it through.
-        await store.putLocal(bulky('huge', 8192));
-        await store.putLocal(bulky('small', 100));
+      test(
+        'a record no single body can carry surfaces the server error',
+        () async {
+          const limits = PushLimits(maxBodyBytes: 2048);
+          final server = FakeServer(advertisedLimits: limits);
+          final store = InMemoryLocalRecordStore();
+          // Put the unbatchable record first, so its move to the back of the
+          // queue is what lets the record behind it through.
+          await store.putLocal(bulky('huge', 8192));
+          await store.putLocal(bulky('small', 100));
 
-        await expectLater(
-          SyncEngine(store).sync(server),
-          throwsA(isA<SyncRecordsRefused>()
-              .having((e) => e.recordIds, 'recordIds', ['huge'])
-              .having((e) => e.code, 'code', 'payload_too_large')),
-        );
+          await expectLater(
+            SyncEngine(store).sync(server),
+            throwsA(
+              isA<SyncRecordsRefused>()
+                  .having((e) => e.recordIds, 'recordIds', ['huge'])
+                  .having((e) => e.code, 'code', 'payload_too_large'),
+            ),
+          );
 
-        // The refusal is reported rather than counted as a benign rejection:
-        // nothing local can make this record fit, so a sync that returned
-        // normally would claim success while the record never leaves. What
-        // did fit is already pushed and clean, so the error costs only itself.
-        expect((await server.pull(since: 0)).records.map((r) => r.id),
-            ['small']);
-        expect((await store.dirtyRecords()).map((r) => r.id), ['huge']);
-        expect(server.pushedBatchSizes, [1, 1]);
-      });
+          // The refusal is reported rather than counted as a benign rejection:
+          // nothing local can make this record fit, so a sync that returned
+          // normally would claim success while the record never leaves. What
+          // did fit is already pushed and clean, so the error costs only itself.
+          expect((await server.pull(since: 0)).records.map((r) => r.id), [
+            'small',
+          ]);
+          expect((await store.dirtyRecords()).map((r) => r.id), ['huge']);
+          expect(server.pushedBatchSizes, [1, 1]);
+        },
+      );
 
-      test('records refused as too large are each reported once, at the end',
-          () async {
-        const limits = PushLimits(maxBlobBytes: 1024);
-        final server = FakeServer(advertisedLimits: limits);
-        final other = InMemoryLocalRecordStore();
-        await other.putLocal(rec('theirs', 5, 'B'));
-        await SyncEngine(other).sync(server);
-        server.pushedBatchSizes.clear();
-        final store = InMemoryLocalRecordStore();
-        await store.putLocal(bulky('fat-1', 4096));
-        await store.putLocal(bulky('fat-2', 4096));
-        await store.putLocal(rec('mine', 10, 'A'));
+      test(
+        'records refused as too large are each reported once, at the end',
+        () async {
+          const limits = PushLimits(maxBlobBytes: 1024);
+          final server = FakeServer(advertisedLimits: limits);
+          final other = InMemoryLocalRecordStore();
+          await other.putLocal(rec('theirs', 5, 'B'));
+          await SyncEngine(other).sync(server);
+          server.pushedBatchSizes.clear();
+          final store = InMemoryLocalRecordStore();
+          await store.putLocal(bulky('fat-1', 4096));
+          await store.putLocal(bulky('fat-2', 4096));
+          await store.putLocal(rec('mine', 10, 'A'));
 
-        await expectLater(
-          SyncEngine(store).sync(server),
-          throwsA(isA<SyncRecordsRefused>()
-              .having((e) => e.recordIds, 'recordIds',
-                  unorderedEquals(['fat-1', 'fat-2']))
-              .having((e) => e.outcome.pushed, 'pushed', 1)
-              .having((e) => e.outcome.rounds, 'rounds', greaterThan(1))),
-        );
+          await expectLater(
+            SyncEngine(store).sync(server),
+            throwsA(
+              isA<SyncRecordsRefused>()
+                  .having(
+                    (e) => e.recordIds,
+                    'recordIds',
+                    unorderedEquals(['fat-1', 'fat-2']),
+                  )
+                  .having((e) => e.outcome.pushed, 'pushed', 1)
+                  .having((e) => e.outcome.rounds, 'rounds', greaterThan(1)),
+            ),
+          );
 
-        // The first refusal used to end the run: the second record past the
-        // cap was never tried, and the rounds after it never ran.
-        expect(await store.getRecord('theirs'), isNotNull);
-        expect(
+          // The first refusal used to end the run: the second record past the
+          // cap was never tried, and the rounds after it never ran.
+          expect(await store.getRecord('theirs'), isNotNull);
+          expect(
             (await server.pull(since: 0)).records.map((r) => r.id).toSet(),
-            {'theirs', 'mine'});
-        expect((await store.dirtyRecords()).map((r) => r.id).toSet(),
+            {'theirs', 'mine'},
+          );
+          expect(
+            (await store.dirtyRecords()).map((r) => r.id).toSet(),
             {'fat-1', 'fat-2'},
-            reason: 'a refused record stays dirty, so a later run retries it '
-                'in case it shrank or the limit was raised');
-        expect(server.pushedBatchSizes, [1, 1, 1],
-            reason: 'each refused record is sent once per run, not once per '
-                'round: nothing between rounds can make it fit');
-      });
+            reason:
+                'a refused record stays dirty, so a later run retries it '
+                'in case it shrank or the limit was raised',
+          );
+          expect(
+            server.pushedBatchSizes,
+            [1, 1, 1],
+            reason:
+                'each refused record is sent once per run, not once per '
+                'round: nothing between rounds can make it fit',
+          );
+        },
+      );
 
       test('a refused record a pulled copy settles is not reported', () async {
         const limits = PushLimits(maxBlobBytes: 1024);
@@ -1268,22 +1351,33 @@ void main() {
         final blank = SyncRecordsRefused([
           const RefusedRecord('snippet:x', kind: RecordKind.snippet, name: ' '),
         ], outcome: outcome);
-        expect(blank.toString(), startsWith('Snippet (snippet:x) is too large'),
-            reason: 'a blank title falls back to the id, not to ""');
+        expect(
+          blank.toString(),
+          startsWith('Snippet (snippet:x) is too large'),
+          reason: 'a blank title falls back to the id, not to ""',
+        );
 
         final two = SyncRecordsRefused([
-          const RefusedRecord('s1', kind: RecordKind.serverConfig, name: 'prod'),
+          const RefusedRecord(
+            's1',
+            kind: RecordKind.serverConfig,
+            name: 'prod',
+          ),
           const RefusedRecord('secret:k'),
         ], outcome: outcome);
         expect(two.toString(), startsWith('2 records are too large'));
         expect(two.toString(), contains(': server "prod", record (secret:k).'));
 
         final setting = SyncRecordsRefused([
-          const RefusedRecord('klabautermann:pref:p',
-              kind: RecordKind.klabautermann),
+          const RefusedRecord(
+            'klabautermann:pref:p',
+            kind: RecordKind.klabautermann,
+          ),
         ], outcome: outcome);
-        expect(setting.toString(),
-            startsWith('Klabautermann setting (klabautermann:pref:p) is too'));
+        expect(
+          setting.toString(),
+          startsWith('Klabautermann setting (klabautermann:pref:p) is too'),
+        );
       });
 
       test('a batch refused whole still ends the run', () async {
@@ -1293,35 +1387,43 @@ void main() {
 
         await expectLater(
           SyncEngine(store).sync(RefuseAsTooLargeApi()),
-          throwsA(isA<ApiError>()
-              .having((e) => e.code, 'code', 'payload_too_large')
-              .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
-          reason: 'a refused batch of several names no culprit, so it is not '
+          throwsA(
+            isA<ApiError>()
+                .having((e) => e.code, 'code', 'payload_too_large')
+                .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>())),
+          ),
+          reason:
+              'a refused batch of several names no culprit, so it is not '
               'set aside as one record\'s failure',
         );
         expect(await store.dirtyRecords(), hasLength(2));
       });
 
-      test('any other failure of a one-record push still ends the run',
-          () async {
-        const limits = PushLimits(maxRecordsPerPush: 1);
-        final server = FakeServer(advertisedLimits: limits);
-        final api = FailingBatchApi(server, failFromPush: 2);
-        final store = InMemoryLocalRecordStore();
-        for (var i = 0; i < 3; i++) {
-          await store.putLocal(rec('r$i', 10, 'A'));
-        }
+      test(
+        'any other failure of a one-record push still ends the run',
+        () async {
+          const limits = PushLimits(maxRecordsPerPush: 1);
+          final server = FakeServer(advertisedLimits: limits);
+          final api = FailingBatchApi(server, failFromPush: 2);
+          final store = InMemoryLocalRecordStore();
+          for (var i = 0; i < 3; i++) {
+            await store.putLocal(rec('r$i', 10, 'A'));
+          }
 
-        await expectLater(
-          SyncEngine(store).sync(api),
-          throwsA(isA<ApiError>()
-              .having((e) => e.code, 'code', 'storage_busy')
-              .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
-        );
-        expect(server.pushedBatchSizes, [1],
-            reason: 'nothing is pushed after the failure');
-        expect(await store.dirtyRecords(), hasLength(2));
-      });
+          await expectLater(
+            SyncEngine(store).sync(api),
+            throwsA(
+              isA<ApiError>()
+                  .having((e) => e.code, 'code', 'storage_busy')
+                  .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>())),
+            ),
+          );
+          expect(server.pushedBatchSizes, [
+            1,
+          ], reason: 'nothing is pushed after the failure');
+          expect(await store.dirtyRecords(), hasLength(2));
+        },
+      );
 
       test('a server that rejects every batch still terminates', () async {
         final api = RejectEverythingApi();
@@ -1364,45 +1466,62 @@ void main() {
 
         await expectLater(
           SyncEngine(store).sync(server),
-          throwsA(isA<SyncRecordsRefused>()
-              .having((e) => e.code, 'code', 'account_quota_exceeded')
-              .having((e) => e.recordIds, 'too large', isEmpty)
-              .having((e) => e.awaitingSpaceIds, 'awaiting space',
-                  unorderedEquals(['c', 'd']))
-              .having((e) => e.outcome.pushed, 'pushed', 1)
-              .having(
+          throwsA(
+            isA<SyncRecordsRefused>()
+                .having((e) => e.code, 'code', 'account_quota_exceeded')
+                .having((e) => e.recordIds, 'too large', isEmpty)
+                .having(
+                  (e) => e.awaitingSpaceIds,
+                  'awaiting space',
+                  unorderedEquals(['c', 'd']),
+                )
+                .having((e) => e.outcome.pushed, 'pushed', 1)
+                .having(
                   (e) => e.toString(),
                   'message',
-                  startsWith(
-                      '2 records wait for space on the sync server.'))),
+                  startsWith('2 records wait for space on the sync server.'),
+                ),
+          ),
         );
 
-        expect((await server.pull(since: 0)).records
-            .firstWhere((r) => r.id == 'a').updatedAt, 20,
-            reason: 'the edit to a record the server holds is stored');
-        expect((await store.getRecord('a'))!.seq, isNotNull,
-            reason: 'and marked synced');
-        expect((await store.dirtyRecords()).map((r) => r.id).toSet(),
-            {'c', 'd'},
-            reason: 'the new records stay queued, not lost');
-        expect(server.pushedIds.where((id) => id == 'c'), hasLength(1),
-            reason: 'a waiting record is sent once per run, not every round');
+        expect(
+          (await server.pull(
+            since: 0,
+          )).records.firstWhere((r) => r.id == 'a').updatedAt,
+          20,
+          reason: 'the edit to a record the server holds is stored',
+        );
+        expect(
+          (await store.getRecord('a'))!.seq,
+          isNotNull,
+          reason: 'and marked synced',
+        );
+        expect((await store.dirtyRecords()).map((r) => r.id).toSet(), {
+          'c',
+          'd',
+        }, reason: 'the new records stay queued, not lost');
+        expect(
+          server.pushedIds.where((id) => id == 'c'),
+          hasLength(1),
+          reason: 'a waiting record is sent once per run, not every round',
+        );
 
         // Deleting a record frees a slot, and the next run fills it.
         await store.putLocal(rec('b', 30, 'A', deleted: true));
         final retry = SyncEngine(store).sync(server);
         await expectLater(
           retry,
-          throwsA(isA<SyncRecordsRefused>().having(
+          throwsA(
+            isA<SyncRecordsRefused>().having(
               (e) => e.toString(),
               'message',
-              startsWith('1 record waits for space on the sync server.'))),
+              startsWith('1 record waits for space on the sync server.'),
+            ),
+          ),
         );
-        final live = (await server.pull(since: 0))
-            .records
-            .where((r) => !r.deleted)
-            .map((r) => r.id)
-            .toSet();
+        final live = (await server.pull(
+          since: 0,
+        )).records.where((r) => !r.deleted).map((r) => r.id).toSet();
         expect(live, hasLength(2));
         expect(live, contains('a'));
         expect(await store.dirtyRecords(), hasLength(1));
@@ -1414,14 +1533,23 @@ void main() {
 
         await expectLater(
           SyncEngine(store).sync(server),
-          throwsA(isA<ApiError>()
-              .having((e) => e.code, 'code', 'account_quota_exceeded')
-              .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
+          throwsA(
+            isA<ApiError>()
+                .having((e) => e.code, 'code', 'account_quota_exceeded')
+                .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>())),
+          ),
         );
-        expect((await server.pull(since: 0)).records
-            .firstWhere((r) => r.id == 'a').updatedAt, 1);
-        expect((await store.dirtyRecords()).map((r) => r.id).toSet(),
-            {'a', 'c', 'd'});
+        expect(
+          (await server.pull(
+            since: 0,
+          )).records.firstWhere((r) => r.id == 'a').updatedAt,
+          1,
+        );
+        expect((await store.dirtyRecords()).map((r) => r.id).toSet(), {
+          'a',
+          'c',
+          'd',
+        });
       });
 
       test('both kinds of refusal read as one status', () {

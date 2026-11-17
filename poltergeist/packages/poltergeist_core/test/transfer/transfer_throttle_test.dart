@@ -209,71 +209,72 @@ void main() {
       );
       await awaitTaskDone(task);
       expect(task.state, TransferTaskState.completed);
-      expect(
-        File('${localDst.path}/down.bin').lengthSync(),
-        40 * 1024,
-      );
+      expect(File('${localDst.path}/down.bin').lengthSync(), 40 * 1024);
       expect(downloads.requests, [16 * 1024, 16 * 1024, 8 * 1024]);
       expect(uploads.requests, isEmpty);
     });
 
-    test('local→local rides the no-op limiter — neither bucket charged',
-        () async {
-      final file = File('${localSrc.path}/same.bin')
-        ..writeAsBytesSync(List.filled(8 * 1024, 5));
-      final downloads = RecordingLimiter();
-      final uploads = RecordingLimiter();
-      useQueue(newQueue(downloadLimiter: downloads, uploadLimiter: uploads));
+    test(
+      'local→local rides the no-op limiter — neither bucket charged',
+      () async {
+        final file = File('${localSrc.path}/same.bin')
+          ..writeAsBytesSync(List.filled(8 * 1024, 5));
+        final downloads = RecordingLimiter();
+        final uploads = RecordingLimiter();
+        useQueue(newQueue(downloadLimiter: downloads, uploadLimiter: uploads));
 
-      final task = queue.enqueue(
-        pipeSpec(
-          source: const LocalFsLocation(),
-          destination: const LocalFsLocation(),
-          rootPaths: [file.path],
-          destinationDir: localDst.path,
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(File('${localDst.path}/same.bin').lengthSync(), 8 * 1024);
-      expect(downloads.requests, isEmpty);
-      expect(uploads.requests, isEmpty);
-    });
+        final task = queue.enqueue(
+          pipeSpec(
+            source: const LocalFsLocation(),
+            destination: const LocalFsLocation(),
+            rootPaths: [file.path],
+            destinationDir: localDst.path,
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(File('${localDst.path}/same.bin').lengthSync(), 8 * 1024);
+        expect(downloads.requests, isEmpty);
+        expect(uploads.requests, isEmpty);
+      },
+    );
 
-    test('a parked acquire stalls the pipe; releasing it resumes flow',
-        () async {
-      s1.addFile('/src/f.bin', List.filled(64 * 1024, 2));
-      s1.downloadChunkSize = 16 * 1024;
-      final release = Completer<void>();
-      final downloads = RecordingLimiter()
-        ..freeAcquisitions = 1
-        ..release = release;
-      useQueue(newQueue(downloadLimiter: downloads));
+    test(
+      'a parked acquire stalls the pipe; releasing it resumes flow',
+      () async {
+        s1.addFile('/src/f.bin', List.filled(64 * 1024, 2));
+        s1.downloadChunkSize = 16 * 1024;
+        final release = Completer<void>();
+        final downloads = RecordingLimiter()
+          ..freeAcquisitions = 1
+          ..release = release;
+        useQueue(newQueue(downloadLimiter: downloads));
 
-      final task = queue.enqueue(
-        pipeSpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: const ['/src/f.bin'],
-          destinationDir: '/dst',
-        ),
-      );
-      // First chunk grants, the second acquire parks — the download is
-      // live but the pipe cannot advance.
-      await pumpUntil(
-        () => downloads.requests.length >= 2 && s1.activeDownloads == 1,
-        reason: 'throttle never parked',
-      );
-      await pump(8);
-      expect(downloads.requests, hasLength(2));
-      expect(s2.fileBytes.containsKey('/dst/f.bin'), isFalse);
+        final task = queue.enqueue(
+          pipeSpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: const ['/src/f.bin'],
+            destinationDir: '/dst',
+          ),
+        );
+        // First chunk grants, the second acquire parks — the download is
+        // live but the pipe cannot advance.
+        await pumpUntil(
+          () => downloads.requests.length >= 2 && s1.activeDownloads == 1,
+          reason: 'throttle never parked',
+        );
+        await pump(8);
+        expect(downloads.requests, hasLength(2));
+        expect(s2.fileBytes.containsKey('/dst/f.bin'), isFalse);
 
-      release.complete();
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/f.bin'], hasLength(64 * 1024));
-      expect(downloads.requests, hasLength(4));
-    });
+        release.complete();
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/f.bin'], hasLength(64 * 1024));
+        expect(downloads.requests, hasLength(4));
+      },
+    );
 
     test('task pause evicts a parked acquire; resume re-acquires', () async {
       s1.addFile('/src/f.bin', List.filled(64 * 1024, 4));
@@ -323,48 +324,50 @@ void main() {
   });
 
   group('remote→remote piping', () {
-    test('streams with bounded in-flight bytes, never the whole file',
-        () async {
-      s1.addFile('/src/big.bin', List.filled(256 * 1024, 3));
-      s1.downloadChunkSize = 16 * 1024;
-      final probe = PipeProbe();
-      s1.pipeProbe = probe;
-      s2.pipeProbe = probe;
-      final gate = Completer<void>();
-      s2.uploadGate = (_) => gate;
-      useQueue(newQueue(pipeBufferBytes: 32 * 1024));
+    test(
+      'streams with bounded in-flight bytes, never the whole file',
+      () async {
+        s1.addFile('/src/big.bin', List.filled(256 * 1024, 3));
+        s1.downloadChunkSize = 16 * 1024;
+        final probe = PipeProbe();
+        s1.pipeProbe = probe;
+        s2.pipeProbe = probe;
+        final gate = Completer<void>();
+        s2.uploadGate = (_) => gate;
+        useQueue(newQueue(pipeBufferBytes: 32 * 1024));
 
-      final task = queue.enqueue(
-        pipeSpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: const ['/src/big.bin'],
-          destinationDir: '/dst',
-        ),
-      );
-      await pumpUntil(
-        () => probe.inFlight > 0,
-        reason: 'source never produced',
-      );
-      // Let the producer settle against the buffer bound while the
-      // upload waits on its gate.
-      await pump(24);
-      expect(
-        probe.peak,
-        lessThanOrEqualTo(32 * 1024 + 2 * s1.downloadChunkSize),
-        reason: 'the pipe buffered ${probe.peak} bytes of a 256 KiB file',
-      );
+        final task = queue.enqueue(
+          pipeSpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: const ['/src/big.bin'],
+            destinationDir: '/dst',
+          ),
+        );
+        await pumpUntil(
+          () => probe.inFlight > 0,
+          reason: 'source never produced',
+        );
+        // Let the producer settle against the buffer bound while the
+        // upload waits on its gate.
+        await pump(24);
+        expect(
+          probe.peak,
+          lessThanOrEqualTo(32 * 1024 + 2 * s1.downloadChunkSize),
+          reason: 'the pipe buffered ${probe.peak} bytes of a 256 KiB file',
+        );
 
-      gate.complete();
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(probe.inFlight, 0);
-      expect(s2.fileBytes['/dst/big.bin'], hasLength(256 * 1024));
-      expect(
-        probe.peak,
-        lessThanOrEqualTo(32 * 1024 + 2 * s1.downloadChunkSize),
-      );
-    });
+        gate.complete();
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(probe.inFlight, 0);
+        expect(s2.fileBytes['/dst/big.bin'], hasLength(256 * 1024));
+        expect(
+          probe.peak,
+          lessThanOrEqualTo(32 * 1024 + 2 * s1.downloadChunkSize),
+        );
+      },
+    );
 
     test('both sides report progress; bytes are counted once', () async {
       s1.addFile('/src/f.bin', List.filled(48 * 1024, 6));
@@ -396,72 +399,73 @@ void main() {
       expect(progress.last, 48 * 1024);
     });
 
-    test('a silent source still progresses through the upload reports',
-        () async {
-      s1.addFile('/src/f.bin', List.filled(32 * 1024, 8));
-      s1.downloadChunkSize = 16 * 1024;
-      s1.downloadReportsProgress = false;
-      useQueue(newQueue());
+    test(
+      'a silent source still progresses through the upload reports',
+      () async {
+        s1.addFile('/src/f.bin', List.filled(32 * 1024, 8));
+        s1.downloadChunkSize = 16 * 1024;
+        s1.downloadReportsProgress = false;
+        useQueue(newQueue());
 
-      final task = queue.enqueue(
-        pipeSpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: const ['/src/f.bin'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(task.transferredBytes, 32 * 1024);
-      expect(
-        events.whereType<TransferQueueProgressEvent>(),
-        isNotEmpty,
-      );
-    });
+        final task = queue.enqueue(
+          pipeSpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: const ['/src/f.bin'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(task.transferredBytes, 32 * 1024);
+        expect(events.whereType<TransferQueueProgressEvent>(), isNotEmpty);
+      },
+    );
 
-    test('a source failure names the source side and unwinds the upload',
-        () async {
-      s1.addFile('/src/f.bin', List.filled(64 * 1024, 1));
-      s1.downloadChunkSize = 16 * 1024;
-      var chunks = 0;
-      // Fail mid-stream, after the first chunk landed in the pipe.
-      s1.beforeDownloadChunk = (_) {
-        if (chunks++ == 1) {
-          throw const RemoteFileException(
-            kind: RemoteFileErrorKind.other,
-            operation: 'download',
-            message: 'net died mid-read',
-          );
-        }
-      };
-      useQueue(newQueue(taskRetryLimit: 0));
+    test(
+      'a source failure names the source side and unwinds the upload',
+      () async {
+        s1.addFile('/src/f.bin', List.filled(64 * 1024, 1));
+        s1.downloadChunkSize = 16 * 1024;
+        var chunks = 0;
+        // Fail mid-stream, after the first chunk landed in the pipe.
+        s1.beforeDownloadChunk = (_) {
+          if (chunks++ == 1) {
+            throw const RemoteFileException(
+              kind: RemoteFileErrorKind.other,
+              operation: 'download',
+              message: 'net died mid-read',
+            );
+          }
+        };
+        useQueue(newQueue(taskRetryLimit: 0));
 
-      final task = queue.enqueue(
-        pipeSpec(
-          source: const ServerFsLocation('s1'),
-          destination: const ServerFsLocation('s2'),
-          rootPaths: const ['/src/f.bin'],
-          destinationDir: '/dst',
-        ),
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.failed);
-      final item = task.items.single;
-      expect(item.state, TransferItemState.failed);
-      expect(item.error, contains('source'));
-      expect(item.error, contains('net died mid-read'));
-      // No partial commit, both ends idle, both leases released.
-      expect(s2.fileBytes.containsKey('/dst/f.bin'), isFalse);
-      await pumpUntil(
-        () =>
-            connections.activeLeases('s1') == 0 &&
-            connections.activeLeases('s2') == 0,
-        reason: 'failed pipe held its leases',
-      );
-      expect(s1.activeDownloads, 0);
-      expect(s2.activeUploads, 0);
-    });
+        final task = queue.enqueue(
+          pipeSpec(
+            source: const ServerFsLocation('s1'),
+            destination: const ServerFsLocation('s2'),
+            rootPaths: const ['/src/f.bin'],
+            destinationDir: '/dst',
+          ),
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.failed);
+        final item = task.items.single;
+        expect(item.state, TransferItemState.failed);
+        expect(item.error, contains('source'));
+        expect(item.error, contains('net died mid-read'));
+        // No partial commit, both ends idle, both leases released.
+        expect(s2.fileBytes.containsKey('/dst/f.bin'), isFalse);
+        await pumpUntil(
+          () =>
+              connections.activeLeases('s1') == 0 &&
+              connections.activeLeases('s2') == 0,
+          reason: 'failed pipe held its leases',
+        );
+        expect(s1.activeDownloads, 0);
+        expect(s2.activeUploads, 0);
+      },
+    );
 
     test('a destination failure names the destination and aborts the '
         'source read', () async {
@@ -558,10 +562,7 @@ void main() {
 
       final journal = recording.journal;
       expect(journal.first, isA<TaskEnqueuedRecord>());
-      expect(
-        journal.indexWhere((r) => r is PlanEntryRecord),
-        greaterThan(0),
-      );
+      expect(journal.indexWhere((r) => r is PlanEntryRecord), greaterThan(0));
       final scanIndex = journal.indexWhere((r) => r is ScanCompleteRecord);
       final fileIndex = journal.indexWhere((r) => r is FileCompletedRecord);
       expect(scanIndex, greaterThan(-1));

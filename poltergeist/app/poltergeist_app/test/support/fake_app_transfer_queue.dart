@@ -246,8 +246,7 @@ class FakeAppTransferQueue implements AppTransferQueue {
   /// A content-free nudge — queue-level state (pause, limits) carries
   /// no event type, so the fake refreshes mirrors with an order event
   /// keyed on a never-matching task id.
-  void emitRefresh() =>
-      _events.add(const TransferQueueOrderEvent('queue'));
+  void emitRefresh() => _events.add(const TransferQueueOrderEvent('queue'));
 
   // ── AppTransferQueue ────────────────────────────────────────────────
 
@@ -289,8 +288,7 @@ class FakeAppTransferQueue implements AppTransferQueue {
   }
 
   @override
-  List<TransferHistoryEntry> get history =>
-      List.unmodifiable(historyEntries);
+  List<TransferHistoryEntry> get history => List.unmodifiable(historyEntries);
 
   @override
   void pauseQueue() {
@@ -333,9 +331,8 @@ class FakeAppTransferQueue implements AppTransferQueue {
     // The real queue's cancel sweep clears the task's parked
     // conflicts — same teardown here so the conflict surface cannot
     // outlive the cancelled task.
-    for (final conflict in pendingConflictList
-        .where((c) => c.taskId == taskId)
-        .toList()) {
+    for (final conflict
+        in pendingConflictList.where((c) => c.taskId == taskId).toList()) {
       pendingConflictList.remove(conflict);
       emit(
         TransferQueueConflictEvent(
@@ -461,9 +458,7 @@ class FakeAppTransferQueue implements AppTransferQueue {
     if (conflict == null) return false;
     resolveConflictCalls.add((taskId, itemId, verb, scope));
     final targets = scope == ConflictResolutionScope.task
-        ? pendingConflictList
-            .where((c) => c.taskId == taskId)
-            .toList()
+        ? pendingConflictList.where((c) => c.taskId == taskId).toList()
         : [conflict];
     for (final target in targets) {
       pendingConflictList.remove(target);

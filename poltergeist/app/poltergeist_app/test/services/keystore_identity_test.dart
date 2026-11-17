@@ -124,9 +124,17 @@ Future<(String, List<String>)> _scenario(TargetPlatform platform) async {
       minted = base64.encode(key);
       return '<minted ${key.length} bytes>';
     });
-    await step('probe, existing', keys, () => keys.probeKeystore(hasExistingVault: false));
+    await step(
+      'probe, existing',
+      keys,
+      () => keys.probeKeystore(hasExistingVault: false),
+    );
     await step('setKeystoreKey', keys, () => keys.setKeystoreKey(_fixedKey));
-    await step('probe after set', keys, () => keys.probeKeystore(hasExistingVault: false));
+    await step(
+      'probe after set',
+      keys,
+      () => keys.probeKeystore(hasExistingVault: false),
+    );
     await step('writeToken', keys, () => creds.writeToken('token-live'));
     await step('readToken', keys, creds.readToken);
     await step('retained write', keys, () => retained.write('token-old'));
@@ -149,7 +157,11 @@ Future<(String, List<String>)> _scenario(TargetPlatform platform) async {
       fail: PlatformException(code: 'KeyringLocked', message: 'is locked'),
     )..install();
     final lockedKeys = poltergeistMasterKeyManager();
-    await step('locked probe', lockedKeys, () => lockedKeys.probeKeystore(hasExistingVault: false));
+    await step(
+      'locked probe',
+      lockedKeys,
+      () => lockedKeys.probeKeystore(hasExistingVault: false),
+    );
     await step(
       'locked getApiKey',
       lockedKeys,
@@ -176,7 +188,11 @@ Future<(String, List<String>)> _scenario(TargetPlatform platform) async {
       initial: {'poltergeist.vault.masterKey.v1': 'not base64!'},
     )..install();
     final corruptKeys = poltergeistMasterKeyManager();
-    await step('corrupt probe', corruptKeys, () => corruptKeys.probeKeystore(hasExistingVault: false));
+    await step(
+      'corrupt probe',
+      corruptKeys,
+      () => corruptKeys.probeKeystore(hasExistingVault: false),
+    );
     flush(corrupt);
     lines.add('left ${jsonEncode(corrupt.data)}');
   } finally {

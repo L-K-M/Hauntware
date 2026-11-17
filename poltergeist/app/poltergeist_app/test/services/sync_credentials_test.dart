@@ -69,42 +69,47 @@ class _ToggleableKeystore extends FlutterSecureStorage {
 
 void main() {
   group('SecureSyncCredentialStore (04 §4.5)', () {
-    test('token write/read/delete round-trips under the §4.5 keystore name',
-        () async {
-      final keystore = _ToggleableKeystore();
-      final store = SecureSyncCredentialStore(
-          keys: poltergeistMasterKeyManager(keystore));
+    test(
+      'token write/read/delete round-trips under the §4.5 keystore name',
+      () async {
+        final keystore = _ToggleableKeystore();
+        final store = SecureSyncCredentialStore(
+          keys: poltergeistMasterKeyManager(keystore),
+        );
 
-      await store.writeToken('token-abc');
-      expect(keystore.map.keys,
-          contains('poltergeist.apikey.sync.token'));
-      expect(await store.readToken(), 'token-abc');
+        await store.writeToken('token-abc');
+        expect(keystore.map.keys, contains('poltergeist.apikey.sync.token'));
+        expect(await store.readToken(), 'token-abc');
 
-      await store.deleteToken();
-      expect(await store.readToken(), isNull);
-      expect(keystore.map, isNot(contains('poltergeist.apikey.sync.token')));
-    });
+        await store.deleteToken();
+        expect(await store.readToken(), isNull);
+        expect(keystore.map, isNot(contains('poltergeist.apikey.sync.token')));
+      },
+    );
 
-    test('a locked keystore fails writes loudly, reads and deletes tolerate',
-        () async {
-      final keystore = _ToggleableKeystore()..locked = true;
-      final keys = poltergeistMasterKeyManager(keystore);
-      final store = SecureSyncCredentialStore(keys: keys);
+    test(
+      'a locked keystore fails writes loudly, reads and deletes tolerate',
+      () async {
+        final keystore = _ToggleableKeystore()..locked = true;
+        final keys = poltergeistMasterKeyManager(keystore);
+        final store = SecureSyncCredentialStore(keys: keys);
 
-      // Enrollment must fail loudly rather than drop a live session.
-      await expectLater(
-        () => store.writeToken('token-abc'),
-        throwsA(isA<KeystoreException>()),
-      );
-      expect(await store.readToken(), isNull);
-      await store.deleteToken();
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-    });
+        // Enrollment must fail loudly rather than drop a live session.
+        await expectLater(
+          () => store.writeToken('token-abc'),
+          throwsA(isA<KeystoreException>()),
+        );
+        expect(await store.readToken(), isNull);
+        await store.deleteToken();
+        expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+      },
+    );
 
     test('writeVaultKey lands under the vault master-key entry', () async {
       final keystore = _ToggleableKeystore();
       final store = SecureSyncCredentialStore(
-          keys: poltergeistMasterKeyManager(keystore));
+        keys: poltergeistMasterKeyManager(keystore),
+      );
 
       await store.writeVaultKey(List.filled(32, 9));
       expect(keystore.map.keys, contains('poltergeist.vault.masterKey.v1'));
@@ -124,11 +129,12 @@ void main() {
       await dir.delete(recursive: true);
     });
 
-    SettingsSyncEnrollmentState newState() =>
-        SettingsSyncEnrollmentState(store: SettingsStore(
-          path: settingsFile.path,
-          now: () => DateTime.utc(2026, 9, 20, 12),
-        ));
+    SettingsSyncEnrollmentState newState() => SettingsSyncEnrollmentState(
+      store: SettingsStore(
+        path: settingsFile.path,
+        now: () => DateTime.utc(2026, 9, 20, 12),
+      ),
+    );
 
     test('the device id mints once and survives a fresh instance', () async {
       final first = await newState().deviceId();
@@ -165,32 +171,38 @@ void main() {
       expect(await state.passphraseUnverified(), isFalse);
       await state.setPassphraseUnverified(true);
       await state.setNotice(syncNoticePassphraseCheckFailed, true);
-      await state.setAccount(const SyncAccount(
-        baseUrl: 'https://sync.example.com',
-        username: 'ghost-a1b2c3d4',
-        mode: SyncAccountMode.separate,
-      ));
+      await state.setAccount(
+        const SyncAccount(
+          baseUrl: 'https://sync.example.com',
+          username: 'ghost-a1b2c3d4',
+          mode: SyncAccountMode.separate,
+        ),
+      );
 
       final reloaded = newState();
       expect(await reloaded.passphraseUnverified(), isTrue);
-      expect(await reloaded.notices(),
-          contains(syncNoticePassphraseCheckFailed));
+      expect(
+        await reloaded.notices(),
+        contains(syncNoticePassphraseCheckFailed),
+      );
       final account = await reloaded.account();
       expect(account!.username, 'ghost-a1b2c3d4');
       expect(account.mode, SyncAccountMode.separate);
 
       await reloaded.setNotice(syncNoticePassphraseCheckFailed, false);
       await reloaded.setAccount(null);
-      expect(await newState().notices(),
-          isNot(contains(syncNoticePassphraseCheckFailed)));
+      expect(
+        await newState().notices(),
+        isNot(contains(syncNoticePassphraseCheckFailed)),
+      );
       expect(await newState().account(), isNull);
     });
 
-    test('nothing persisted outside the keystore contains the token',
-        () async {
+    test('nothing persisted outside the keystore contains the token', () async {
       final keystore = _ToggleableKeystore();
       final credentials = SecureSyncCredentialStore(
-          keys: poltergeistMasterKeyManager(keystore));
+        keys: poltergeistMasterKeyManager(keystore),
+      );
       final state = newState();
       const token = 'bearer-9f8e7d6c';
 
@@ -198,11 +210,13 @@ void main() {
       await state.deviceId();
       await state.setPassphraseUnverified(true);
       await state.setNotice(syncNoticePassphraseCheckFailed, true);
-      await state.setAccount(const SyncAccount(
-        baseUrl: 'https://sync.example.com',
-        username: 'ghost-a1b2c3d4',
-        mode: SyncAccountMode.separate,
-      ));
+      await state.setAccount(
+        const SyncAccount(
+          baseUrl: 'https://sync.example.com',
+          username: 'ghost-a1b2c3d4',
+          mode: SyncAccountMode.separate,
+        ),
+      );
 
       expect(await settingsFile.readAsString(), isNot(contains(token)));
     });

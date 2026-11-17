@@ -26,10 +26,7 @@ void main() {
     // field the fixture sets. Pin that for the nullable one, which is the
     // field a serializer is most likely to omit.
     expect(original.toJson(), containsPair('keyPassphrase', 'phrase'));
-    expect(
-      original.toJson(),
-      containsPair('identityFilePath', '/keys/deploy'),
-    );
+    expect(original.toJson(), containsPair('identityFilePath', '/keys/deploy'));
     expect(
       original.toJson(),
       containsPair('identityFilePassphrase', 'file phrase'),
@@ -44,10 +41,7 @@ void main() {
     expect(rekeyed.value, original.value);
     expect(rekeyed.keyPassphrase, original.keyPassphrase);
     expect(rekeyed.identityFilePath, original.identityFilePath);
-    expect(
-      rekeyed.identityFilePassphrase,
-      original.identityFilePassphrase,
-    );
+    expect(rekeyed.identityFilePassphrase, original.identityFilePassphrase);
     expect(rekeyed.updatedAt, original.updatedAt);
     expect(Secret.fromJson(original.toJson()).updatedAt, 42);
     // And the other half of the contract: a parameter that is passed has to
@@ -59,15 +53,13 @@ void main() {
     // Every replaceable parameter, not just one: `kind: this.kind` would pass
     // a test that only exercises `value`, and duplication is not the last
     // caller this method will get.
-    final otherKind =
-        SecretKind.values.firstWhere((k) => k != original.kind);
+    final otherKind = SecretKind.values.firstWhere((k) => k != original.kind);
     expect(original.copyWith(kind: otherKind).kind, otherKind);
-    expect(original.copyWith(keyPassphrase: 'rekeyed').keyPassphrase,
-        'rekeyed');
     expect(
-      original.copyWith(clearKeyPassphrase: true).keyPassphrase,
-      isNull,
+      original.copyWith(keyPassphrase: 'rekeyed').keyPassphrase,
+      'rekeyed',
     );
+    expect(original.copyWith(clearKeyPassphrase: true).keyPassphrase, isNull);
     expect(
       original
           .copyWith(clearIdentityFilePassphrase: true)
@@ -160,7 +152,11 @@ void main() {
       );
       // Malformed, and the wrong type: neither throws out of fromJson, and
       // the named accent kept beside the custom colour is what remains.
-      for (final value in ['#12', 0x123456, ['#123456']]) {
+      for (final value in [
+        '#12',
+        0x123456,
+        ['#123456'],
+      ]) {
         final decoded = ServerConfig.fromJson({
           ...base.toJson(),
           'customColor': value,
@@ -192,8 +188,10 @@ void main() {
       // only ever being silent about it.
       expect(c.toJson()['excludeFromSync'], isTrue);
       expect(
-        ServerConfig.fromJson({...c.toJson(), 'excludeFromSync': false})
-            .toJson()['excludeFromSync'],
+        ServerConfig.fromJson({
+          ...c.toJson(),
+          'excludeFromSync': false,
+        }).toJson()['excludeFromSync'],
         isFalse,
       );
       // A config written before the field existed reads as "syncs", which is
@@ -203,11 +201,16 @@ void main() {
       // An explicit null reads like an absent key, and a legacy record writes
       // the explicit answer back out on its next save.
       expect(
-        ServerConfig.fromJson({...c.toJson(), 'excludeFromSync': null})
-            .excludeFromSync,
+        ServerConfig.fromJson({
+          ...c.toJson(),
+          'excludeFromSync': null,
+        }).excludeFromSync,
         isFalse,
       );
-      expect(ServerConfig.fromJson(legacy).toJson()['excludeFromSync'], isFalse);
+      expect(
+        ServerConfig.fromJson(legacy).toJson()['excludeFromSync'],
+        isFalse,
+      );
       // Including one built here rather than read back: if the field were
       // stored tri-state and only normalized on the way in, a record this app
       // wrote would still be silent about it.
@@ -248,9 +251,7 @@ void main() {
       // gives the user back the answer they picked rather than a silent no.
       expect(excluded.syncSecret, isTrue);
       expect(
-        excluded
-            .copyWith(excludeFromSync: false, updatedAt: 4)
-            .excludeFromSync,
+        excluded.copyWith(excludeFromSync: false, updatedAt: 4).excludeFromSync,
         isFalse,
       );
       // The pairing is enforced in every build, not merely documented: a
@@ -490,7 +491,11 @@ void main() {
         createdAt: 1,
         updatedAt: 2,
       );
-      for (final value in ['~bob', 42, ['/srv']]) {
+      for (final value in [
+        '~bob',
+        42,
+        ['/srv'],
+      ]) {
         final decoded = ServerConfig.fromJson({
           ...base.toJson(),
           'startDirectory': value,
@@ -527,17 +532,20 @@ void main() {
         pinnedAt: 1,
       );
       expect(k.fingerprintSha256, startsWith('SHA256:'));
-      expect(k.toKnownHostsLine(),
-          'h.example.com ssh-ed25519 ${k.publicKeyBase64}');
+      expect(
+        k.toKnownHostsLine(),
+        'h.example.com ssh-ed25519 ${k.publicKeyBase64}',
+      );
 
       // A fingerprint-only key (the shape the SSH library gives us at connect
       // time) has a different fingerprint and no expandable known_hosts line.
       final k2 = HostKey(
-          host: 'h.example.com',
-          port: 22,
-          type: 'ssh-ed25519',
-          fingerprintSha256: 'SHA256:completelyDifferentFingerprint',
-          pinnedAt: 2);
+        host: 'h.example.com',
+        port: 22,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:completelyDifferentFingerprint',
+        pinnedAt: 2,
+      );
       expect(k.conflictsWith(k2), isTrue);
       expect(k2.toKnownHostsLine(), isNull);
     });
@@ -698,8 +706,7 @@ void main() {
       );
     });
 
-    test('Klabautermann settings seal and open under their own kind',
-        () async {
+    test('Klabautermann settings seal and open under their own kind', () async {
       final codec = RecordCodec(secureRandomBytes(32));
       final enc = await codec.encrypt(
         const DecryptedRecord(
@@ -900,19 +907,23 @@ void main() {
       expect(payload['data'], {'id': 'b1'});
     });
 
-    test('a server holding the blob cannot read it without the vault key',
-        () async {
-      final codec = RecordCodec(secureRandomBytes(32));
-      final enc = await codec.encrypt(DecryptedRecord(
-        id: 'r1',
-        kind: RecordKind.secret,
-        updatedAt: 1,
-        deviceId: 'd',
-        data: {'value': 'top-secret'},
-      ));
-      // The wire form is just base64 of the sealed blob — no plaintext leaks.
-      expect(enc.toJson()['blob'], isNot(contains('top-secret')));
-    });
+    test(
+      'a server holding the blob cannot read it without the vault key',
+      () async {
+        final codec = RecordCodec(secureRandomBytes(32));
+        final enc = await codec.encrypt(
+          DecryptedRecord(
+            id: 'r1',
+            kind: RecordKind.secret,
+            updatedAt: 1,
+            deviceId: 'd',
+            data: {'value': 'top-secret'},
+          ),
+        );
+        // The wire form is just base64 of the sealed blob — no plaintext leaks.
+        expect(enc.toJson()['blob'], isNot(contains('top-secret')));
+      },
+    );
 
     test('a sealed tombstone round-trips through the wire form', () async {
       final codec = RecordCodec(secureRandomBytes(32));
@@ -977,12 +988,13 @@ void main() {
     test('a later delete beats an earlier edit', () {
       final edit = rec('x', 10, 'a');
       final del = EncryptedRecord(
-          id: 'x',
-          updatedAt: 11,
-          deviceId: 'b',
-          deleted: true,
-          seq: null,
-          blob: secureRandomBytes(0));
+        id: 'x',
+        updatedAt: 11,
+        deviceId: 'b',
+        deleted: true,
+        seq: null,
+        blob: secureRandomBytes(0),
+      );
       expect(Lww.resolve(edit, del).deleted, isTrue);
     });
   });
@@ -1188,10 +1200,7 @@ void main() {
     });
 
     test('RevokeSessionResponse round-trips', () {
-      final resp = const RevokeSessionResponse(
-        revoked: true,
-        current: false,
-      );
+      final resp = const RevokeSessionResponse(revoked: true, current: false);
       final back = RevokeSessionResponse.fromJson(resp.toJson());
       expect(back.revoked, isTrue);
       expect(back.current, isFalse);

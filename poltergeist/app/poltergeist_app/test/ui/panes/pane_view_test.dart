@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -88,7 +89,6 @@ void main() {
     rightNode.dispose();
   });
 
-
   Future<void> pumpShell(
     WidgetTester tester, {
     Size size = const Size(1400, 900),
@@ -170,11 +170,7 @@ void main() {
         type: RemoteFileType.directory,
         modified: DateTime(2026, 9, 10, 14, 32),
       ),
-      _entry(
-        'report.txt',
-        size: 2048,
-        modified: DateTime(2026, 9, 11, 9, 5),
-      ),
+      _entry('report.txt', size: 2048, modified: DateTime(2026, 9, 11, 9, 5)),
       _entry('link', type: RemoteFileType.symbolicLink),
     ];
     channel.listings['/home/tester/docs'] = [_entry('nested.txt', size: 3)];
@@ -182,35 +178,55 @@ void main() {
     return channel;
   }
 
-  testWidgets('loss owns the overlay until a healed listing succeeds', (tester) async {
+  testWidgets('loss owns the overlay until a healed listing succeeds', (
+    tester,
+  ) async {
     final channel = controller_test.FakePaneChannel('/srv/home');
     channel.listings['/srv/home'] = [_entry('cached.txt')];
     lanes.nextRemoteChannel = channel;
     await right.connectRemote(_bookmark('srv-1'));
     await pumpShell(tester);
-    lanes.emitState('srv-1', const ServerStatus(ServerConnectionState.reconnecting));
+    lanes.emitState(
+      'srv-1',
+      const ServerStatus(ServerConnectionState.reconnecting),
+    );
     await tester.pump();
     expect(find.text('cached.txt'), findsOneWidget);
     expect(find.byKey(const ValueKey('pane.banner')), findsOneWidget);
     expect(
       tester.getTopLeft(find.text('cached.txt')).dy,
-      greaterThanOrEqualTo(tester.getBottomLeft(find.byKey(const ValueKey('pane.banner'))).dy),
+      greaterThanOrEqualTo(
+        tester.getBottomLeft(find.byKey(const ValueKey('pane.banner'))).dy,
+      ),
       reason: 'the banner must not cover the cached first row',
     );
-    expect(find.byKey(const ValueKey('pane.error.retry')), findsNothing,
-        reason: 'the loss error is rendered as the banner, never another overlay');
+    expect(
+      find.byKey(const ValueKey('pane.error.retry')),
+      findsNothing,
+      reason: 'the loss error is rendered as the banner, never another overlay',
+    );
 
     final held = Completer<void>();
     channel.holdNext = held;
-    lanes.emitState('srv-1', const ServerStatus(ServerConnectionState.connected));
+    lanes.emitState(
+      'srv-1',
+      const ServerStatus(ServerConnectionState.connected),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-    final scrims = tester.widgetList<ColoredBox>(find.byType(ColoredBox))
+    final scrims = tester
+        .widgetList<ColoredBox>(find.byType(ColoredBox))
         .where((box) => box.color.a == 0.6);
-    expect(scrims, hasLength(1), reason: 'loss and loading must not stack dims');
+    expect(
+      scrims,
+      hasLength(1),
+      reason: 'loss and loading must not stack dims',
+    );
     expect(find.byKey(const ValueKey('pane.banner')), findsOneWidget);
     channel.listingFailure = const RemoteFileException(
-      kind: RemoteFileErrorKind.permissionDenied, operation: 'list', message: 'Denied',
+      kind: RemoteFileErrorKind.permissionDenied,
+      operation: 'list',
+      message: 'Denied',
     );
     held.complete();
     await tester.pumpAndSettle();
@@ -303,8 +319,9 @@ void main() {
     }
   });
 
-  testWidgets('rows render in natural name order, directories first',
-      (tester) async {
+  testWidgets('rows render in natural name order, directories first', (
+    tester,
+  ) async {
     final channel = localChannelWithEntries();
     channel.listings['/home/tester'] = [
       _entry('file10'),
@@ -348,8 +365,9 @@ void main() {
     expect(find.text('This folder is empty.'), findsOneWidget);
   });
 
-  testWidgets('taxonomy errors render inline with Retry over stale entries',
-      (tester) async {
+  testWidgets('taxonomy errors render inline with Retry over stale entries', (
+    tester,
+  ) async {
     final channel = localChannelWithEntries();
     await left.openLocalHome();
     await pumpShell(tester);
@@ -359,8 +377,10 @@ void main() {
 
     expect(find.textContaining('could not be found'), findsOneWidget);
     // The engine's diagnostic line rides under the ARB sentence.
-    expect(find.textContaining('Could not list "/home/tester/gone"'),
-        findsOneWidget);
+    expect(
+      find.textContaining('Could not list "/home/tester/gone"'),
+      findsOneWidget,
+    );
     // Cached data stays visible under the error.
     expect(find.text('report.txt'), findsOneWidget);
     expect(find.byKey(const ValueKey('pane.error.retry')), findsOneWidget);
@@ -457,7 +477,8 @@ void main() {
       expect(
         find.semantics.byLabel(RegExp(r'^report\.txt')),
         findsNothing,
-        reason: 'stale rows leave the semantics tree at issue, not when '
+        reason:
+            'stale rows leave the semantics tree at issue, not when '
             'the dim appears',
       );
 
@@ -472,11 +493,10 @@ void main() {
       expect(left.cursorIndex, isNull);
       expect(left.selectedCount, 0);
       expect(left.typeAheadActive, isFalse);
-      expect(
-        channel.listCalls,
-        ['/home/tester', '/elsewhere'],
-        reason: 'stale input must never issue another listing request',
-      );
+      expect(channel.listCalls, [
+        '/home/tester',
+        '/elsewhere',
+      ], reason: 'stale input must never issue another listing request');
       expect(left.location, const LocalPaneLocation('/elsewhere'));
 
       // A stale double-tap cannot hijack the pending navigation either
@@ -522,10 +542,7 @@ void main() {
       channel.holdNext = hold;
       left.navigate('/elsewhere');
       await tester.pump();
-      expect(
-        find.semantics.byLabel(RegExp(r'^Loading elsewhere')),
-        findsOne,
-      );
+      expect(find.semantics.byLabel(RegExp(r'^Loading elsewhere')), findsOne);
 
       // The navigation FAILS: the error card replaces the loading state.
       // The stale rows remain disowned (staleRows stays true) but the
@@ -544,7 +561,8 @@ void main() {
       expect(
         find.semantics.byLabel(RegExp(r'^Loading')),
         findsNothing,
-        reason: 'a failed navigation must not keep a "Loading" '
+        reason:
+            'a failed navigation must not keep a "Loading" '
             'announcement live under the error card',
       );
     } finally {
@@ -578,7 +596,8 @@ void main() {
       expect(
         left.staleRows,
         isTrue,
-        reason: 'the error path keeps the old rows disowned; the '
+        reason:
+            'the error path keeps the old rows disowned; the '
             'same-target retry below announces only because of this',
       );
       expect(find.semantics.byLabel(RegExp(r'^Loading')), findsNothing);
@@ -593,7 +612,8 @@ void main() {
       expect(
         find.semantics.byLabel(RegExp(r'^Loading another')),
         findsOne,
-        reason: 'a navigation issued from the error state clears the '
+        reason:
+            'a navigation issued from the error state clears the '
             'error at issue, so its announcement is not muted',
       );
       hold.complete();
@@ -624,7 +644,8 @@ void main() {
       expect(
         find.semantics.byLabel(RegExp(r'^Loading elsewhere')),
         findsOne,
-        reason: 'a same-target retry announces its load even though '
+        reason:
+            'a same-target retry announces its load even though '
             'the disown block is skipped',
       );
       hold.complete();
@@ -663,9 +684,7 @@ void main() {
     expect(find.text('report.txt'), findsOneWidget);
   });
 
-  testWidgets('Esc leaves a directory watch re-list running', (
-    tester,
-  ) async {
+  testWidgets('Esc leaves a directory watch re-list running', (tester) async {
     final channel = localChannelWithEntries();
     await left.openLocalHome();
     await pumpShell(tester);
@@ -1027,76 +1046,78 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
       expect(remoteChannel.listCalls, ['/srv/home']);
-      expect(
-        right.location,
-        const RemotePaneLocation('srv-1', '/srv/home'),
-      );
+      expect(right.location, const RemotePaneLocation('srv-1', '/srv/home'));
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
   });
 
-  testWidgets('owned keys and row semantics are inert under the error overlay', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-    final semantics = tester.ensureSemantics();
-    try {
-      localChannelWithEntries();
-      await left.openLocalHome();
-      await pumpShell(tester);
-      leftNode.requestFocus();
-      await tester.pump();
-      final rowSemantics = tester.getSemantics(
-        find.bySemanticsLabel(RegExp(r'^report\.txt, file,')),
-      );
-      final rowLabel = rowSemantics.getSemanticsData().label;
+  testWidgets(
+    'owned keys and row semantics are inert under the error overlay',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      final semantics = tester.ensureSemantics();
+      try {
+        localChannelWithEntries();
+        await left.openLocalHome();
+        await pumpShell(tester);
+        leftNode.requestFocus();
+        await tester.pump();
+        final rowSemantics = tester.getSemantics(
+          find.bySemanticsLabel(RegExp(r'^report\.txt, file,')),
+        );
+        final rowLabel = rowSemantics.getSemanticsData().label;
 
-      // A failing navigation shows the error overlay over the cached
-      // listing.
-      left.navigate('/home/tester/gone');
-      await tester.pumpAndSettle();
-      expect(left.error, isNotNull);
+        // A failing navigation shows the error overlay over the cached
+        // listing.
+        left.navigate('/home/tester/gone');
+        await tester.pumpAndSettle();
+        expect(left.error, isNotNull);
 
-      // Owned keys are consumed: no cursor move, no hidden navigation.
-      // Enter is the overlay's Retry: the folder still has no listing,
-      // so it fails again and never falls through to the stale rows.
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-      await tester.pumpAndSettle();
-      expect(left.cursorIndex, isNull);
-      expect(left.location, const LocalPaneLocation('/home/tester/gone'));
+        // Owned keys are consumed: no cursor move, no hidden navigation.
+        // Enter is the overlay's Retry: the folder still has no listing,
+        // so it fails again and never falls through to the stale rows.
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+        await tester.pumpAndSettle();
+        expect(left.cursorIndex, isNull);
+        expect(left.location, const LocalPaneLocation('/home/tester/gone'));
 
-      // The stale rows under the overlay leave the semantics tree.
-      // One extra frame: the semantics pipeline attaches to the next
-      // build after the excluding flip, not the one that flipped it.
-      await tester.pump();
-      // Label finders also see cached detached nodes. Check attachment to
-      // the published tree, not the shared row's text-leaf exclusions.
-      expect(
-        rowSemantics.attached,
-        isFalse,
-        reason: 'the error overlay must exclude row semantics',
-      );
+        // The stale rows under the overlay leave the semantics tree.
+        // One extra frame: the semantics pipeline attaches to the next
+        // build after the excluding flip, not the one that flipped it.
+        await tester.pump();
+        // Label finders also see cached detached nodes. Check attachment to
+        // the published tree, not the shared row's text-leaf exclusions.
+        expect(
+          rowSemantics.attached,
+          isFalse,
+          reason: 'the error overlay must exclude row semantics',
+        );
 
-      // Esc still reaches the overlay: it cancels back to the listing
-      // the rows belong to.
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-      expect(left.error, isNull, reason: 'Esc cancelled the failed navigation');
-      expect(left.location, const LocalPaneLocation('/home/tester'));
-      await tester.pump();
-      expect(
-        tester.getSemantics(find.bySemanticsLabel(rowLabel)).attached,
-        isTrue,
-        reason: 'the restored rows rejoin the semantics tree',
-      );
-    } finally {
-      semantics.dispose();
-      debugDefaultTargetPlatformOverride = null;
-    }
-  });
+        // Esc still reaches the overlay: it cancels back to the listing
+        // the rows belong to.
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(
+          left.error,
+          isNull,
+          reason: 'Esc cancelled the failed navigation',
+        );
+        expect(left.location, const LocalPaneLocation('/home/tester'));
+        await tester.pump();
+        expect(
+          tester.getSemantics(find.bySemanticsLabel(rowLabel)).attached,
+          isTrue,
+          reason: 'the restored rows rejoin the semantics tree',
+        );
+      } finally {
+        semantics.dispose();
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 
   testWidgets('plain Backspace falls through on macOS', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -1110,8 +1131,8 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: CallbackShortcuts(
             bindings: {
-              const SingleActivator(LogicalKeyboardKey.backspace):
-                  () => ancestorSawBackspace = true,
+              const SingleActivator(LogicalKeyboardKey.backspace): () =>
+                  ancestorSawBackspace = true,
             },
             child: Scaffold(
               body: Row(
@@ -1198,72 +1219,73 @@ void main() {
     expect(find.textContaining('fault:'), findsNothing);
   });
 
-  testWidgets('every fault variant renders its ARB sentence, never the sentinel', (
-    tester,
-  ) async {
-    // Drive each fault through its real path: a non-VFS remote open
-    // failure (connectionOpen) and a non-VFS listing failure
-    // (listFolder). The localOpen variant is covered above. A
-    // regression back to error.message would ship the sentinel with
-    // no test failing otherwise.
-    final lanes = controller_test.FakePaneLanes()
-      ..remoteOpenFailure = StateError('boom');
-    final controller = PaneController(
-      paneTabId: 'pane.left',
-      lanes: lanes,
-      onError: (_, _) {},
-    );
-    final otherPane = PaneController(paneTabId: 'pane.right', lanes: lanes);
-    final strip = testPaneStrip(controller);
-    final workspace = WorkspaceController(
-      left: strip,
-      right: testPaneStrip(otherPane),
-    );
-    addTearDown(workspace.dispose);
+  testWidgets(
+    'every fault variant renders its ARB sentence, never the sentinel',
+    (tester) async {
+      // Drive each fault through its real path: a non-VFS remote open
+      // failure (connectionOpen) and a non-VFS listing failure
+      // (listFolder). The localOpen variant is covered above. A
+      // regression back to error.message would ship the sentinel with
+      // no test failing otherwise.
+      final lanes = controller_test.FakePaneLanes()
+        ..remoteOpenFailure = StateError('boom');
+      final controller = PaneController(
+        paneTabId: 'pane.left',
+        lanes: lanes,
+        onError: (_, _) {},
+      );
+      final otherPane = PaneController(paneTabId: 'pane.right', lanes: lanes);
+      final strip = testPaneStrip(controller);
+      final workspace = WorkspaceController(
+        left: strip,
+        right: testPaneStrip(otherPane),
+      );
+      addTearDown(workspace.dispose);
 
-    Future<void> pumpPane() async {
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: PaneView(
-              controller: controller,
-              pane: strip,
-              workspace: workspace,
-              focusNode: leftNode,
-              onSwapFocus: () {},
-              onCancelRecovery: () {},
-              clock: clock,
+      Future<void> pumpPane() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: PaneView(
+                controller: controller,
+                pane: strip,
+                workspace: workspace,
+                focusNode: leftNode,
+                onSwapFocus: () {},
+                onCancelRecovery: () {},
+                clock: clock,
+              ),
             ),
           ),
-        ),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      await controller.connectRemote(_bookmark('srv-9'));
+      expect(controller.error, isA<PaneFaultException>());
+      await pumpPane();
+      expect(
+        find.text('The connection to this server could not be opened.'),
+        findsOneWidget,
       );
-      await tester.pump(const Duration(milliseconds: 200));
-    }
 
-    await controller.connectRemote(_bookmark('srv-9'));
-    expect(controller.error, isA<PaneFaultException>());
-    await pumpPane();
-    expect(
-      find.text('The connection to this server could not be opened.'),
-      findsOneWidget,
-    );
+      // listFolder: a successful bind, then a listing that throws a
+      // non-VFS error.
+      lanes.remoteOpenFailure = null;
+      final listing = controller_test.FakePaneChannel('/home/tester');
+      listing.listingFailure = StateError('io exploded');
+      lanes.nextLocalChannel = listing;
+      await controller.openLocalHome();
+      await tester.pump();
+      expect(controller.error, isA<PaneFaultException>());
+      await pumpPane();
+      expect(find.text('This folder could not be listed.'), findsOneWidget);
 
-    // listFolder: a successful bind, then a listing that throws a
-    // non-VFS error.
-    lanes.remoteOpenFailure = null;
-    final listing = controller_test.FakePaneChannel('/home/tester');
-    listing.listingFailure = StateError('io exploded');
-    lanes.nextLocalChannel = listing;
-    await controller.openLocalHome();
-    await tester.pump();
-    expect(controller.error, isA<PaneFaultException>());
-    await pumpPane();
-    expect(find.text('This folder could not be listed.'), findsOneWidget);
-
-    expect(find.textContaining('fault:'), findsNothing);
-  });
+      expect(find.textContaining('fault:'), findsNothing);
+    },
+  );
 
   testWidgets('a folder that cannot open in place names itself and the '
       'engine reason in the notice strip', (tester) async {
@@ -1329,8 +1351,9 @@ void main() {
     leftStrip = testPaneStrip(left);
     rightStrip = testPaneStrip(right);
     workspace = WorkspaceController(left: leftStrip, right: rightStrip);
-    localChannelWithEntries().listingFailures['/home/tester/docs'] =
-        StateError('io exploded');
+    localChannelWithEntries().listingFailures['/home/tester/docs'] = StateError(
+      'io exploded',
+    );
     await left.openLocalHome();
     await pumpShell(tester);
 
@@ -1561,7 +1584,10 @@ void main() {
     await right.connectRemote(_bookmark('srv-1'));
     await pumpShell(tester);
 
-    lanes.emitState('srv-1', const ServerStatus(ServerConnectionState.connected));
+    lanes.emitState(
+      'srv-1',
+      const ServerStatus(ServerConnectionState.connected),
+    );
     await tester.pump();
     expect(find.textContaining('lost'), findsNothing);
 
@@ -1619,9 +1645,9 @@ void main() {
       findsNothing,
     );
     expect(
-      tester.widget<Text>(
-        find.byKey(const ValueKey('pane.left.path.summary')),
-      ).data,
+      tester
+          .widget<Text>(find.byKey(const ValueKey('pane.left.path.summary')))
+          .data,
       '1 item',
     );
 
@@ -1816,9 +1842,7 @@ void main() {
 
   // P4-02: the climb lands on the folder the user came from, scrolled
   // into view, not on the parent's top with the row 80 folders down.
-  testWidgets('going up reveals the folder the user came from', (
-    tester,
-  ) async {
+  testWidgets('going up reveals the folder the user came from', (tester) async {
     final channel = controller_test.FakePaneChannel('/home/tester');
     channel.listings['/home/tester'] = [_entry('notes.txt')];
     channel.listings['/home'] = [
@@ -1943,11 +1967,7 @@ void main() {
           type: RemoteFileType.directory,
           modified: DateTime(2026, 9, 10, 14, 32),
         ),
-        _entry(
-          'report.txt',
-          size: 2048,
-          modified: DateTime(2026, 9, 11, 9, 5),
-        ),
+        _entry('report.txt', size: 2048, modified: DateTime(2026, 9, 11, 9, 5)),
         _entry('link', type: RemoteFileType.symbolicLink),
         _entry('socket', type: RemoteFileType.other),
       ];
@@ -1983,10 +2003,7 @@ void main() {
 
       // The merged label replaces the children: the name is announced
       // exactly once, on the row node itself.
-      expect(
-        find.bySemanticsLabel(RegExp(r'report\.txt')),
-        findsOneWidget,
-      );
+      expect(find.bySemanticsLabel(RegExp(r'report\.txt')), findsOneWidget);
     } finally {
       semantics.dispose();
     }
@@ -2048,18 +2065,13 @@ void main() {
       expect(
         tester.getTopLeft(field).dy,
         greaterThanOrEqualTo(
-          tester
-              .getBottomLeft(find.byKey(const ValueKey('pane.left.path')))
-              .dy,
+          tester.getBottomLeft(find.byKey(const ValueKey('pane.left.path'))).dy,
         ),
         reason: 'the field must sit below the path bar',
       );
 
       // The Add/Remove segmented toggle starts on Add.
-      expect(
-        find.byType(SegmentedButton<QuickSelectMode>),
-        findsOneWidget,
-      );
+      expect(find.byType(SegmentedButton<QuickSelectMode>), findsOneWidget);
       expect(find.text('Add'), findsOneWidget);
       expect(find.text('Remove'), findsOneWidget);
       expect(left.quickSelectMode, QuickSelectMode.add);
@@ -2142,8 +2154,7 @@ void main() {
       try {
         localChannelWithEntries();
         await left.openLocalHome();
-        final rightChannel =
-            controller_test.FakePaneChannel('/home/tester');
+        final rightChannel = controller_test.FakePaneChannel('/home/tester');
         rightChannel.listings['/home/tester'] = const [];
         lanes.nextLocalChannel = rightChannel;
         await right.openLocalHome();
@@ -2220,16 +2231,14 @@ void main() {
       expect(find.text('link'), findsNothing);
       // The location header counts the visible rows.
       expect(
-        tester.widget<Text>(
-          find.byKey(const ValueKey('pane.left.path.summary')),
-        ).data,
+        tester
+            .widget<Text>(find.byKey(const ValueKey('pane.left.path.summary')))
+            .data,
         '1 item',
       );
     });
 
-    testWidgets('Esc on the listing clears an active filter', (
-      tester,
-    ) async {
+    testWidgets('Esc on the listing clears an active filter', (tester) async {
       localChannelWithEntries();
       await left.openLocalHome();
       await pumpShell(tester);
@@ -2275,9 +2284,13 @@ void main() {
       await tester.pump();
 
       expect(left.loading, isFalse);
-      expect(left.filterActive, isTrue,
-          reason: 'the navigation tier owns this Esc — the filter tier '
-              'never sees it');
+      expect(
+        left.filterActive,
+        isTrue,
+        reason:
+            'the navigation tier owns this Esc — the filter tier '
+            'never sees it',
+      );
       expect(left.location, const LocalPaneLocation('/home/tester'));
       expect(left.entries.map((e) => e.name), ['report.txt']);
       hold.complete();
@@ -2307,8 +2320,11 @@ void main() {
         find.byKey(const ValueKey('pane.left.filter.emptyClear')),
         findsOneWidget,
       );
-      expect(find.text('This folder is empty.'), findsNothing,
-          reason: 'the listing is not empty — the FILTER is');
+      expect(
+        find.text('This folder is empty.'),
+        findsNothing,
+        reason: 'the listing is not empty — the FILTER is',
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('pane.left.filter.emptyClear')),

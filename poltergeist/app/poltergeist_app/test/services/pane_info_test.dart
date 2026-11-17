@@ -141,121 +141,127 @@ void main() {
       expect(settled?.bytes, 12);
       expect(settled?.entries, 1);
       expect(controller.folderSizeInFlight, isFalse);
-      expect(
-        channel.listCalls,
-        contains('/home/tester/docs'),
-      );
+      expect(channel.listCalls, contains('/home/tester/docs'));
     });
 
-    test('cancel clears the session so the panel offers Calculate again',
-        () async {
-      final (controller, channel) = await _browsedPane([
-        _entry('docs', type: RemoteFileType.directory),
-      ]);
-      addTearDown(controller.dispose);
-      // Hold the walk's first listing so the cancel lands mid-flight.
-      final held = Completer<void>();
-      channel.holdNext = held;
-      channel.listings['/home/tester/docs'] = const [];
+    test(
+      'cancel clears the session so the panel offers Calculate again',
+      () async {
+        final (controller, channel) = await _browsedPane([
+          _entry('docs', type: RemoteFileType.directory),
+        ]);
+        addTearDown(controller.dispose);
+        // Hold the walk's first listing so the cancel lands mid-flight.
+        final held = Completer<void>();
+        channel.holdNext = held;
+        channel.listings['/home/tester/docs'] = const [];
 
-      controller.setCursorIndex(0);
-      controller.startFolderSize();
-      expect(controller.folderSizeInFlight, isTrue);
+        controller.setCursorIndex(0);
+        controller.startFolderSize();
+        expect(controller.folderSizeInFlight, isTrue);
 
-      controller.cancelFolderSize();
-      expect(controller.folderSize, isNull);
-      expect(controller.folderSizeInFlight, isFalse);
+        controller.cancelFolderSize();
+        expect(controller.folderSize, isNull);
+        expect(controller.folderSizeInFlight, isFalse);
 
-      // Release the held answer — a real late result, not a vacuous
-      // settle — and give it a nonzero total so a resurrected session
-      // would be observable.
-      channel.listings['/home/tester/docs'] = [
-        RemoteFileEntry(
-          path: '/home/tester/docs/late.txt',
-          name: 'late.txt',
-          type: RemoteFileType.file,
-          size: 9,
-        ),
-      ];
-      held.complete();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.folderSize, isNull);
-    });
+        // Release the held answer — a real late result, not a vacuous
+        // settle — and give it a nonzero total so a resurrected session
+        // would be observable.
+        channel.listings['/home/tester/docs'] = [
+          RemoteFileEntry(
+            path: '/home/tester/docs/late.txt',
+            name: 'late.txt',
+            type: RemoteFileType.file,
+            size: 9,
+          ),
+        ];
+        held.complete();
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.folderSize, isNull);
+      },
+    );
 
-    test('a location-changing navigation ends the walk at issue time',
-        () async {
-      final (controller, channel) = await _browsedPane([
-        _entry('docs', type: RemoteFileType.directory),
-        _entry('other', type: RemoteFileType.directory),
-      ]);
-      addTearDown(controller.dispose);
-      channel.listings['/home/tester/docs'] = const [];
-      channel.listings['/home/tester/other'] = const [];
+    test(
+      'a location-changing navigation ends the walk at issue time',
+      () async {
+        final (controller, channel) = await _browsedPane([
+          _entry('docs', type: RemoteFileType.directory),
+          _entry('other', type: RemoteFileType.directory),
+        ]);
+        addTearDown(controller.dispose);
+        channel.listings['/home/tester/docs'] = const [];
+        channel.listings['/home/tester/other'] = const [];
 
-      controller.setCursorIndex(0);
-      controller.startFolderSize();
-      expect(controller.folderSizeInFlight, isTrue);
+        controller.setCursorIndex(0);
+        controller.startFolderSize();
+        expect(controller.folderSizeInFlight, isTrue);
 
-      // Navigate away mid-walk: the session dies with the location that
-      // spawned it.
-      controller.setCursorIndex(1);
-      unawaited(controller.openEntry(controller.entries[1]));
-      expect(controller.folderSizeInFlight, isFalse);
-      expect(controller.folderSize, isNull);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.folderSize, isNull);
-    });
+        // Navigate away mid-walk: the session dies with the location that
+        // spawned it.
+        controller.setCursorIndex(1);
+        unawaited(controller.openEntry(controller.entries[1]));
+        expect(controller.folderSizeInFlight, isFalse);
+        expect(controller.folderSize, isNull);
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.folderSize, isNull);
+      },
+    );
 
-    test('a restart retires the previous walk — the stale result drops',
-        () async {
-      final (controller, channel) = await _browsedPane([
-        _entry('docs', type: RemoteFileType.directory),
-      ]);
-      addTearDown(controller.dispose);
-      channel.listings['/home/tester/docs'] = [
-        RemoteFileEntry(
-          path: '/home/tester/docs/a.txt',
-          name: 'a.txt',
-          type: RemoteFileType.file,
-          size: 7,
-        ),
-      ];
-      controller.setCursorIndex(0);
+    test(
+      'a restart retires the previous walk — the stale result drops',
+      () async {
+        final (controller, channel) = await _browsedPane([
+          _entry('docs', type: RemoteFileType.directory),
+        ]);
+        addTearDown(controller.dispose);
+        channel.listings['/home/tester/docs'] = [
+          RemoteFileEntry(
+            path: '/home/tester/docs/a.txt',
+            name: 'a.txt',
+            type: RemoteFileType.file,
+            size: 7,
+          ),
+        ];
+        controller.setCursorIndex(0);
 
-      // First walk parks on a held listing; the restart supersedes it.
-      final held = Completer<void>();
-      channel.holdNext = held;
-      controller.startFolderSize();
-      final first = controller.folderSize;
-      expect(first?.status, FolderSizeStatus.running);
+        // First walk parks on a held listing; the restart supersedes it.
+        final held = Completer<void>();
+        channel.holdNext = held;
+        controller.startFolderSize();
+        final first = controller.folderSize;
+        expect(first?.status, FolderSizeStatus.running);
 
-      controller.startFolderSize();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+        controller.startFolderSize();
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
-      final settled = controller.folderSize;
-      expect(settled?.status, FolderSizeStatus.done);
-      expect(settled?.bytes, 7);
+        final settled = controller.folderSize;
+        expect(settled?.status, FolderSizeStatus.done);
+        expect(settled?.bytes, 7);
 
-      // Release the superseded walk's held listing with a DIFFERENT
-      // total — the channel reads listings after the hold, so the late
-      // answer is observably stale (99 B, not the fresh walk's 7 B).
-      channel.listings['/home/tester/docs'] = [
-        RemoteFileEntry(
-          path: '/home/tester/docs/a.txt',
-          name: 'a.txt',
-          type: RemoteFileType.file,
-          size: 99,
-        ),
-      ];
-      held.complete();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.folderSize?.bytes, 7,
-          reason: 'the superseded walk\'s late result must be dropped');
-    });
+        // Release the superseded walk's held listing with a DIFFERENT
+        // total — the channel reads listings after the hold, so the late
+        // answer is observably stale (99 B, not the fresh walk's 7 B).
+        channel.listings['/home/tester/docs'] = [
+          RemoteFileEntry(
+            path: '/home/tester/docs/a.txt',
+            name: 'a.txt',
+            type: RemoteFileType.file,
+            size: 99,
+          ),
+        ];
+        held.complete();
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          controller.folderSize?.bytes,
+          7,
+          reason: 'the superseded walk\'s late result must be dropped',
+        );
+      },
+    );
   });
 
   group('walk lifetime (02 §2.6)', () {

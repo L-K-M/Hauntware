@@ -35,20 +35,16 @@ String describeEnrollmentError(AppLocalizations l10n, Object error) =>
 String describeEnrollmentIssue(
   AppLocalizations l10n,
   SyncEnrollmentIssue issue,
-) =>
-    switch (issue) {
-      SyncEnrollmentIssue.invalidServerUrl => l10n.backupValidationUrl,
-      SyncEnrollmentIssue.credentialsInUrl =>
-        l10n.backupValidationUrlCredentials,
-      SyncEnrollmentIssue.missingUsername => l10n.backupValidationUsername,
-      SyncEnrollmentIssue.missingPassword => l10n.backupValidationPassword,
-      SyncEnrollmentIssue.missingEncryptionPassphrase =>
-        l10n.backupValidationPassphrase,
-      SyncEnrollmentIssue.missingConfirmation =>
-        l10n.backupValidationConfirm,
-      SyncEnrollmentIssue.confirmationMismatch =>
-        l10n.backupValidationMismatch,
-    };
+) => switch (issue) {
+  SyncEnrollmentIssue.invalidServerUrl => l10n.backupValidationUrl,
+  SyncEnrollmentIssue.credentialsInUrl => l10n.backupValidationUrlCredentials,
+  SyncEnrollmentIssue.missingUsername => l10n.backupValidationUsername,
+  SyncEnrollmentIssue.missingPassword => l10n.backupValidationPassword,
+  SyncEnrollmentIssue.missingEncryptionPassphrase =>
+    l10n.backupValidationPassphrase,
+  SyncEnrollmentIssue.missingConfirmation => l10n.backupValidationConfirm,
+  SyncEnrollmentIssue.confirmationMismatch => l10n.backupValidationMismatch,
+};
 
 /// The §4.3 enrollment form: mode choice, disclosures, fields, and the
 /// gated Continue. A successful enrollment notifies through the service
@@ -94,8 +90,7 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
   /// §4.1's username suggestion placeholder: a `ghost-<8 hex>` name, the
   /// eight-hex (32-bit) suffix so `ghost-*` accounts are not trivially
   /// enumerable — minted per form, never derived from any Séance name.
-  late final String _ghostHint =
-      'ghost-${uuidV4().substring(0, 8)}';
+  late final String _ghostHint = 'ghost-${uuidV4().substring(0, 8)}';
 
   @override
   void dispose() {
@@ -126,9 +121,7 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
     // Shared accounts exist already — the §4.5 login is their only path.
-    final action = _sharedSelected
-        ? SyncEnrollmentMode.login
-        : _action;
+    final action = _sharedSelected ? SyncEnrollmentMode.login : _action;
     // Validation and submission must see identical input — trimming only
     // the submitted half would let a padded URL fail validation or a
     // whitespace-only username slip past it.
@@ -198,10 +191,10 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
           onChanged: _busy
               ? (_) {}
               : (mode) => setState(() {
-                    if (mode == null) return;
-                    _mode = mode;
-                    _status = null;
-                  }),
+                  if (mode == null) return;
+                  _mode = mode;
+                  _status = null;
+                }),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -235,9 +228,8 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
                   controlAffinity: ListTileControlAffinity.leading,
                   enabled: !_busy,
                   value: _fleetConfirmed,
-                  onChanged: (value) => setState(
-                    () => _fleetConfirmed = value ?? false,
-                  ),
+                  onChanged: (value) =>
+                      setState(() => _fleetConfirmed = value ?? false),
                   title: Text(l10n.backupFleetCheckbox(sharedVersion)),
                   subtitle: Text(l10n.backupFleetHelper),
                 ),
@@ -281,9 +273,9 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
               onSelectionChanged: _busy
                   ? null
                   : (selection) => setState(() {
-                        _action = selection.first;
-                        _status = null;
-                      }),
+                      _action = selection.first;
+                      _status = null;
+                    }),
             ),
           ),
         const SizedBox(height: 8),
@@ -334,8 +326,8 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
           enableIMEPersonalizedLearning: false,
           enabled: !_busy,
           obscureText: true,
-          textInputAction: _sharedSelected ||
-                  _action == SyncEnrollmentMode.login
+          textInputAction:
+              _sharedSelected || _action == SyncEnrollmentMode.login
               ? TextInputAction.done
               : TextInputAction.next,
           onSubmitted: _sharedSelected || _action == SyncEnrollmentMode.login
@@ -403,11 +395,7 @@ class _BackupEnrollmentFormState extends State<BackupEnrollmentForm> {
 /// One §4.3 mode option: the radio leaf inside a tappable row so the
 /// paragraph copy itself selects.
 final class _BackupModeTile extends StatelessWidget {
-  const _BackupModeTile({
-    super.key,
-    required this.value,
-    required this.label,
-  });
+  const _BackupModeTile({super.key, required this.value, required this.label});
 
   final SyncAccountMode value;
   final String label;
@@ -418,8 +406,8 @@ final class _BackupModeTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: Radio<SyncAccountMode>(value: value),
       title: Text(label),
-      onTap: () => RadioGroup.maybeOf<SyncAccountMode>(context)
-          ?.onChanged(value),
+      onTap: () =>
+          RadioGroup.maybeOf<SyncAccountMode>(context)?.onChanged(value),
     );
   }
 }
@@ -435,10 +423,9 @@ final class _WarningText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: Theme.of(context)
-          .textTheme
-          .bodySmall
-          ?.copyWith(color: Theme.of(context).colorScheme.error),
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Theme.of(context).colorScheme.error,
+      ),
     );
   }
 }

@@ -42,10 +42,13 @@ final class _ScriptedVault extends SecretVault {
 }
 
 final class _RecordingIdentityReader extends IdentityFileReader {
-  _RecordingIdentityReader() : super(IdentityAuditLog(
+  _RecordingIdentityReader()
+    : super(
+        IdentityAuditLog(
           File('unused'),
           rewriteOwnerOnly: writeOwnerOnlyAtomically,
-        ));
+        ),
+      );
 
   final reads = <String>[];
 
@@ -66,7 +69,7 @@ final class _RecordingIdentityReader extends IdentityFileReader {
 
 final class _BackupHarness {
   _BackupHarness(List<ServerConfig> configs)
-      : servers = FakeSyncTrackingServerStore(configs);
+    : servers = FakeSyncTrackingServerStore(configs);
 
   final server = FakeSyncServer();
   final transports = <FakeSyncTransport>[];
@@ -113,15 +116,14 @@ ServerEditorBackend _backend(
   BookmarkBackupService backups,
   _ScriptedVault vault,
   _RecordingIdentityReader identityReader,
-) =>
-    ServerEditorBackend(
-      backups: backups,
-      vault: vault,
-      hostKeys: InMemoryHostKeyStore(),
-      identityReader: identityReader,
-      navigatorKey: GlobalKey<NavigatorState>(),
-      transferLimits: TransferLimitsController(),
-    );
+) => ServerEditorBackend(
+  backups: backups,
+  vault: vault,
+  hostKeys: InMemoryHostKeyStore(),
+  identityReader: identityReader,
+  navigatorKey: GlobalKey<NavigatorState>(),
+  transferLimits: TransferLimitsController(),
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -196,10 +198,7 @@ void main() {
     ).testConnection(target);
 
     expect(result.ok, isFalse);
-    expect(
-      result.summary,
-      'The jump-host route contains a cycle at “target”.',
-    );
+    expect(result.summary, 'The jump-host route contains a cycle at “target”.');
     expect(vault.reads, isEmpty);
   });
 

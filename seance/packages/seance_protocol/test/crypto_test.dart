@@ -8,53 +8,68 @@ import 'package:test/test.dart';
 
 void main() {
   group('VaultCrypto key derivation', () {
-    test('matches a fixed vector, so existing vaults keep their keys', () async {
-      // Pinned from the derivation before the HKDF step moved into a shared
-      // helper; any change to it would strand every vault on its old key.
-      final keys = await VaultCrypto.deriveKeys(
+    test(
+      'matches a fixed vector, so existing vaults keep their keys',
+      () async {
+        // Pinned from the derivation before the HKDF step moved into a shared
+        // helper; any change to it would strand every vault on its old key.
+        final keys = await VaultCrypto.deriveKeys(
           passphrase: 'correct horse battery staple',
           salt: utf8.encode('seance-kat-salt-0123456789abcdef'),
-          params: const Argon2Params.fast());
-      String hex(List<int> bytes) =>
-          bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+          params: const Argon2Params.fast(),
+        );
+        String hex(List<int> bytes) =>
+            bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
-      expect(hex(keys.vaultKey),
-          'eb2b830d10b439fb7cfb6a7f5f92042ffef49c48703d3321ff0d75919cc46d16');
-      expect(hex(keys.authVerifier),
-          '33e12ea3abfe49659732c8a4f4e535e0986d4b92893baf7f57628b0cc3e0cae0');
-    });
+        expect(
+          hex(keys.vaultKey),
+          'eb2b830d10b439fb7cfb6a7f5f92042ffef49c48703d3321ff0d75919cc46d16',
+        );
+        expect(
+          hex(keys.authVerifier),
+          '33e12ea3abfe49659732c8a4f4e535e0986d4b92893baf7f57628b0cc3e0cae0',
+        );
+      },
+    );
 
-    test('derives independent vault and auth keys, deterministically', () async {
-      final salt = secureRandomBytes(16);
-      final a = await VaultCrypto.deriveKeys(
+    test(
+      'derives independent vault and auth keys, deterministically',
+      () async {
+        final salt = secureRandomBytes(16);
+        final a = await VaultCrypto.deriveKeys(
           passphrase: 'correct horse battery staple',
           salt: salt,
-          params: const Argon2Params.fast());
-      final b = await VaultCrypto.deriveKeys(
+          params: const Argon2Params.fast(),
+        );
+        final b = await VaultCrypto.deriveKeys(
           passphrase: 'correct horse battery staple',
           salt: salt,
-          params: const Argon2Params.fast());
+          params: const Argon2Params.fast(),
+        );
 
-      // Deterministic: same passphrase + salt + params => same keys.
-      expect(a.vaultKey, equals(b.vaultKey));
-      expect(a.authVerifier, equals(b.authVerifier));
+        // Deterministic: same passphrase + salt + params => same keys.
+        expect(a.vaultKey, equals(b.vaultKey));
+        expect(a.authVerifier, equals(b.authVerifier));
 
-      // Domain separation: vault key and auth verifier must differ.
-      expect(a.vaultKey, isNot(equals(a.authVerifier)));
-      expect(a.vaultKey.length, 32);
-      expect(a.authVerifier.length, 32);
-    });
+        // Domain separation: vault key and auth verifier must differ.
+        expect(a.vaultKey, isNot(equals(a.authVerifier)));
+        expect(a.vaultKey.length, 32);
+        expect(a.authVerifier.length, 32);
+      },
+    );
 
     test('different passphrase yields different keys', () async {
       final salt = secureRandomBytes(16);
       final a = await VaultCrypto.deriveKeys(
-          passphrase: 'passphrase one',
-          salt: salt,
-          params: const Argon2Params.fast());
+        passphrase: 'passphrase one',
+        salt: salt,
+        params: const Argon2Params.fast(),
+      );
       final b = await VaultCrypto.deriveKeys(
-          passphrase: 'passphrase two',
-          salt: salt,
-          params: const Argon2Params.fast());
+        passphrase: 'passphrase two',
+        salt: salt,
+        params: const Argon2Params.fast(),
+      );
       expect(a.vaultKey, isNot(equals(b.vaultKey)));
     });
   });
@@ -123,14 +138,43 @@ void main() {
 
     test('matches a fixed known-answer vector', () {
       const key = <int>[
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-        0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+        0x00,
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0a,
+        0x0b,
+        0x0c,
+        0x0d,
+        0x0e,
+        0x0f,
+        0x10,
+        0x11,
+        0x12,
+        0x13,
+        0x14,
+        0x15,
+        0x16,
+        0x17,
+        0x18,
+        0x19,
+        0x1a,
+        0x1b,
+        0x1c,
+        0x1d,
+        0x1e,
+        0x1f,
       ];
       // Keep grouping in the literal so the vector locks the display format as
       // well as the Base32 body and checksum.
-      const code = '000G-40R4-0M30-E209-185G-R38E-1W81-'
+      const code =
+          '000G-40R4-0M30-E209-185G-R38E-1W81-'
           '24GK-2GAH-C5RR-34D1-P70X-3RFG-3D';
 
       expect(RecoveryKey.encode(key), code);
@@ -226,8 +270,10 @@ void main() {
       // recomputed checksum can never match — always caught.
       final last = chars.length - 1;
       chars[last] = chars[last] == '7' ? '8' : '7';
-      expect(() => RecoveryKey.decode(chars.join()),
-          throwsA(isA<FormatException>()));
+      expect(
+        () => RecoveryKey.decode(chars.join()),
+        throwsA(isA<FormatException>()),
+      );
     });
 
     test('catches essentially all single body-character typos', () {
@@ -256,14 +302,18 @@ void main() {
     test('the default meets the minimum; fast() does not', () {
       expect(const Argon2Params().meetsMinimum(Argon2Params.minimum), isTrue);
       expect(
-          const Argon2Params.fast().meetsMinimum(Argon2Params.minimum), isFalse);
+        const Argon2Params.fast().meetsMinimum(Argon2Params.minimum),
+        isFalse,
+      );
     });
 
-    test('a server-weakened memory factor fails the minimum (downgrade guard)',
-        () {
-      const weak = Argon2Params(memory: 512, iterations: 2, hashLength: 32);
-      expect(weak.meetsMinimum(Argon2Params.minimum), isFalse);
-    });
+    test(
+      'a server-weakened memory factor fails the minimum (downgrade guard)',
+      () {
+        const weak = Argon2Params(memory: 512, iterations: 2, hashLength: 32);
+        expect(weak.meetsMinimum(Argon2Params.minimum), isFalse);
+      },
+    );
 
     test('fromJson round-trips valid parameters', () {
       final p = Argon2Params.fromJson(const Argon2Params().toJson());
@@ -272,14 +322,24 @@ void main() {
     });
 
     test('fromJson rejects out-of-range parameters', () {
-      Map<String, dynamic> base() =>
-          {'memory': 19456, 'iterations': 2, 'parallelism': 1, 'hashLength': 32};
-      expect(() => Argon2Params.fromJson(base()..['memory'] = 0),
-          throwsFormatException);
-      expect(() => Argon2Params.fromJson(base()..['iterations'] = 0),
-          throwsFormatException);
-      expect(() => Argon2Params.fromJson(base()..['memory'] = 1 << 40),
-          throwsFormatException);
+      Map<String, dynamic> base() => {
+        'memory': 19456,
+        'iterations': 2,
+        'parallelism': 1,
+        'hashLength': 32,
+      };
+      expect(
+        () => Argon2Params.fromJson(base()..['memory'] = 0),
+        throwsFormatException,
+      );
+      expect(
+        () => Argon2Params.fromJson(base()..['iterations'] = 0),
+        throwsFormatException,
+      );
+      expect(
+        () => Argon2Params.fromJson(base()..['memory'] = 1 << 40),
+        throwsFormatException,
+      );
     });
   });
 }

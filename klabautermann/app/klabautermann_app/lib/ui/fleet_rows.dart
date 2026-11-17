@@ -312,7 +312,8 @@ class _FleetServerListState extends State<FleetServerList> {
       if (server.origin == FleetEntryOrigin.synced)
         SidebarMenuAction(
           label: pinned ? l10n.fleetRowUnpin : l10n.fleetRowPin,
-          onSelected: () => unawaited(pinServerUndoably(context, fleet, server)),
+          onSelected: () =>
+              unawaited(pinServerUndoably(context, fleet, server)),
         ),
       SidebarMenuAction(
         label: monitored ? l10n.fleetRowStopMonitoring : l10n.fleetRowMonitor,
@@ -363,9 +364,7 @@ class _FleetServerListState extends State<FleetServerList> {
             (!widget.fleet.faultsOnly || (_open[server.id] ?? 0) > 0))
           server,
     ];
-    return widget.fleet.attentionFirst
-        ? attentionFirst(kept, _open)
-        : kept;
+    return widget.fleet.attentionFirst ? attentionFirst(kept, _open) : kept;
   }
 
   /// Matches are recomputed here rather than captured from the last build:
@@ -492,7 +491,8 @@ class _FleetServerListState extends State<FleetServerList> {
           // room.
           final chipLabel = Theme.of(context).textTheme.labelMedium;
           const chipPadding = EdgeInsets.symmetric(horizontal: 4);
-          final triage = faulted > 0 ||
+          final triage =
+              faulted > 0 ||
                   widget.fleet.faultsOnly ||
                   widget.fleet.attentionFirst
               ? Padding(

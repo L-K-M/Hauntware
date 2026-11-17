@@ -353,29 +353,37 @@ void main() {
   );
 
   for (final presentation in SettingsPresentation.values) {
-    testWidgets('app lock ${presentation.name} authenticates through the backend', (tester) async {
-      backend.appLockAvailability = AppLockAvailability.available;
-      await pumpScreen(tester, presentation: presentation);
-      final row = find.widgetWithText(SwitchListTile, 'Require device authentication');
-      expect(tester.widget<SwitchListTile>(row).value, isFalse);
-      await tester.tap(row);
-      await tester.pumpAndSettle();
-      expect(backend.calls, ['setAppLock(on)']);
-      expect(tester.widget<SwitchListTile>(row).value, isTrue);
+    testWidgets(
+      'app lock ${presentation.name} authenticates through the backend',
+      (tester) async {
+        backend.appLockAvailability = AppLockAvailability.available;
+        await pumpScreen(tester, presentation: presentation);
+        final row = find.widgetWithText(
+          SwitchListTile,
+          'Require device authentication',
+        );
+        expect(tester.widget<SwitchListTile>(row).value, isFalse);
+        await tester.tap(row);
+        await tester.pumpAndSettle();
+        expect(backend.calls, ['setAppLock(on)']);
+        expect(tester.widget<SwitchListTile>(row).value, isTrue);
 
-      backend.failWrites = const AppLockException('Auth cancelled');
-      await tester.tap(row);
-      await tester.pumpAndSettle();
-      expect(tester.widget<SwitchListTile>(row).value, isTrue);
-      expect(find.text('Auth cancelled'), findsOneWidget);
-      backend.failWrites = null;
-      await tester.tap(row);
-      await tester.pumpAndSettle();
-      expect(tester.widget<SwitchListTile>(row).value, isFalse);
-    });
+        backend.failWrites = const AppLockException('Auth cancelled');
+        await tester.tap(row);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(row).value, isTrue);
+        expect(find.text('Auth cancelled'), findsOneWidget);
+        backend.failWrites = null;
+        await tester.tap(row);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(row).value, isFalse);
+      },
+    );
   }
 
-  testWidgets('app lock is hidden when device authentication is unavailable', (tester) async {
+  testWidgets('app lock is hidden when device authentication is unavailable', (
+    tester,
+  ) async {
     await pumpScreen(tester);
     expect(find.text('Require device authentication'), findsNothing);
   });
@@ -393,20 +401,30 @@ void main() {
   testWidgets('Files adds a per-extension default through the backend, '
       'and shows nothing a failed write did not store', (tester) async {
     await pumpScreen(tester, tab: SettingsTab.files);
-    expect(find.text('Every extension opens in the default editor.'), findsOneWidget);
+    expect(
+      find.text('Every extension opens in the default editor.'),
+      findsOneWidget,
+    );
 
     Future<void> addBinding(String extension) async {
-      await tester.ensureVisible(find.byKey(const ValueKey('editors.binding.add')));
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('editors.binding.add')),
+      );
       await tester.tap(find.byKey(const ValueKey('editors.binding.add')));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('editors.binding.extension')), extension);
+      await tester.enterText(
+        find.byKey(const ValueKey('editors.binding.extension')),
+        extension,
+      );
       await tester.tap(find.byKey(const ValueKey('editors.binding.save')));
       await tester.pumpAndSettle();
     }
 
     await addBinding('log');
     expect(backend.calls, ['setEditorRegistry']);
-    expect(backend.savedRegistry!.extensionDefaults, {'log': EditorRegistry.builtInId});
+    expect(backend.savedRegistry!.extensionDefaults, {
+      'log': EditorRegistry.builtInId,
+    });
     expect(find.byKey(const ValueKey('editors.binding.log')), findsOneWidget);
 
     backend.failWrites = StateError('disk full');
@@ -420,10 +438,15 @@ void main() {
     await pumpScreen(tester, tab: SettingsTab.files);
 
     Future<void> addBinding(String extension) async {
-      await tester.ensureVisible(find.byKey(const ValueKey('editors.binding.add')));
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('editors.binding.add')),
+      );
       await tester.tap(find.byKey(const ValueKey('editors.binding.add')));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('editors.binding.extension')), extension);
+      await tester.enterText(
+        find.byKey(const ValueKey('editors.binding.extension')),
+        extension,
+      );
       await tester.tap(find.byKey(const ValueKey('editors.binding.save')));
       await tester.pumpAndSettle();
     }
@@ -1138,24 +1161,38 @@ void main() {
       ]);
     });
 
-    testWidgets('the picker confirms font and ligatures together', (tester) async {
+    testWidgets('the picker confirms font and ligatures together', (
+      tester,
+    ) async {
       await pumpAppearance(tester);
       await tester.tap(find.byTooltip('Choose a font'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('font.search')), 'Geist Mono');
+      await tester.enterText(
+        find.byKey(const ValueKey('font.search')),
+        'Geist Mono',
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('font.choice.Geist Mono')));
       await tester.pumpAndSettle();
       expect(backend.calls, isEmpty);
 
       final samples = tester.widgetList<Text>(preview);
-      expect(samples.last.textSpan!.style!.fontFamily, BundledMonoFont.geistMono.family);
-      expect(samples.last.textSpan!.style!.fontFeatures, contains(const FontFeature('ss11')));
+      expect(
+        samples.last.textSpan!.style!.fontFamily,
+        BundledMonoFont.geistMono.family,
+      );
+      expect(
+        samples.last.textSpan!.style!.fontFeatures,
+        contains(const FontFeature('ss11')),
+      );
       await tester.tap(find.byKey(const ValueKey('font.ligatures')));
       await tester.tap(find.byKey(const ValueKey('font.apply')));
       await tester.pumpAndSettle();
 
-      expect(previewStyle(tester).fontFeatures, contains(const FontFeature.disable('ss11')));
+      expect(
+        previewStyle(tester).fontFeatures,
+        contains(const FontFeature.disable('ss11')),
+      );
       expect(backend.calls, [
         'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, Geist Mono, '
             '${TerminalPalette.followApp}, ${TerminalLigatures.off})',

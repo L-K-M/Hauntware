@@ -48,7 +48,7 @@ class LocalSettingsBackend implements SettingsBackend {
   final AppState _state;
   final SecretsExportFiles _exportFiles;
   final LlmProvider Function(ModelQuery query, String apiKey)
-      _modelProviderBuilder;
+  _modelProviderBuilder;
 
   AppSettings get _s => _state.services.settings;
 
@@ -144,7 +144,6 @@ class LocalSettingsBackend implements SettingsBackend {
     }
     _state.refreshSuggestions();
   }
-
 
   @override
   Future<void> setTerminalAppearance({

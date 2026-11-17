@@ -226,8 +226,9 @@ Future<String?> showOpenWithChooser(
               Navigator.of(dialogContext).pop(EditorRegistry.builtInId),
           child: Text(l10n.openWithBuiltInLabel),
         ),
-        for (final editor in registry?.compatibleEditors(path) ??
-            const <ExternalEditorDefinition>[])
+        for (final editor
+            in registry?.compatibleEditors(path) ??
+                const <ExternalEditorDefinition>[])
           SimpleDialogOption(
             key: ValueKey('openWith.${editor.id}'),
             onPressed: () => Navigator.of(dialogContext).pop(editor.id),
@@ -236,9 +237,8 @@ Future<String?> showOpenWithChooser(
         if (currentEditorHostPlatform != null)
           SimpleDialogOption(
             key: const ValueKey('openWith.system'),
-            onPressed: () => Navigator.of(
-              dialogContext,
-            ).pop(EditorRegistry.systemDefaultId),
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(EditorRegistry.systemDefaultId),
             child: Text(l10n.openWithSystemDefaultLabel),
           ),
         const Divider(),
@@ -265,11 +265,8 @@ Future<bool?> showRememberEditorChoice(
   required String extension,
 }) => showDialog<bool>(
   context: context,
-  builder: (dialogContext) => _RememberEditorDialog(
-    name: name,
-    editor: editor,
-    extension: extension,
-  ),
+  builder: (dialogContext) =>
+      _RememberEditorDialog(name: name, editor: editor, extension: extension),
 );
 
 class _RememberEditorDialog extends StatefulWidget {
@@ -300,10 +297,7 @@ class _RememberEditorDialogState extends State<_RememberEditorDialog> {
         contentPadding: EdgeInsets.zero,
         controlAffinity: ListTileControlAffinity.leading,
         title: Text(
-          l10n.openWithRememberForExtension(
-            widget.editor,
-            widget.extension,
-          ),
+          l10n.openWithRememberForExtension(widget.editor, widget.extension),
         ),
         value: _remember,
         onChanged: (value) => setState(() => _remember = value ?? false),

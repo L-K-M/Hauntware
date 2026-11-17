@@ -19,8 +19,7 @@ String syncActionGlyph(SyncActionType action) => switch (action) {
   SyncActionType.updateLeftToRight => '⇒',
   SyncActionType.copyRightToLeft => '←',
   SyncActionType.updateRightToLeft => '⇐',
-  SyncActionType.makeDirLeft ||
-  SyncActionType.makeDirRight => '⊞',
+  SyncActionType.makeDirLeft || SyncActionType.makeDirRight => '⊞',
   SyncActionType.deleteLeft || SyncActionType.deleteRight => '✕',
   SyncActionType.conflict => '↯',
   SyncActionType.skip => '–',
@@ -37,8 +36,8 @@ SyncActionTone syncActionTone(SyncActionType action) => switch (action) {
   SyncActionType.makeDirRight => SyncActionTone.create,
   SyncActionType.updateLeftToRight ||
   SyncActionType.updateRightToLeft => SyncActionTone.update,
-  SyncActionType.deleteLeft || SyncActionType.deleteRight =>
-    SyncActionTone.delete,
+  SyncActionType.deleteLeft ||
+  SyncActionType.deleteRight => SyncActionTone.delete,
   SyncActionType.conflict => SyncActionTone.conflict,
   SyncActionType.skip => SyncActionTone.skip,
 };
@@ -46,23 +45,18 @@ SyncActionTone syncActionTone(SyncActionType action) => switch (action) {
 /// The row's reason column — §7's verbatim reason strings. Symlink
 /// rows carry their own string: the engine skips them by policy and
 /// the reason enum has no symlink case.
-String syncReasonText(
-  AppLocalizations l10n,
-  SyncItem item, {
-  DateTime? now,
-}) {
+String syncReasonText(AppLocalizations l10n, SyncItem item, {DateTime? now}) {
   if (item.left?.kind == EntryKind.symlink ||
       item.right?.kind == EntryKind.symlink) {
     return l10n.syncReasonSymlink;
   }
   return switch (item.reason) {
-    SyncReason.onlyOnLeft || SyncReason.onlyOnRight =>
-      l10n.syncReasonOnlyHere,
-    SyncReason.newerOnLeft || SyncReason.newerOnRight =>
-      l10n.syncReasonNewerHere(
-        _ageLabel(item.left?.mtimeSecs, now),
-        _ageLabel(item.right?.mtimeSecs, now),
-      ),
+    SyncReason.onlyOnLeft || SyncReason.onlyOnRight => l10n.syncReasonOnlyHere,
+    SyncReason.newerOnLeft ||
+    SyncReason.newerOnRight => l10n.syncReasonNewerHere(
+      _ageLabel(item.left?.mtimeSecs, now),
+      _ageLabel(item.right?.mtimeSecs, now),
+    ),
     SyncReason.sizeDiffers => l10n.syncReasonSizesDiffer(
       formatSyncSize(item.left?.size),
       formatSyncSize(item.right?.size),
@@ -75,8 +69,7 @@ String syncReasonText(
     ),
     SyncReason.excluded => l10n.syncReasonExcluded,
     SyncReason.caseCollision => l10n.syncReasonCaseCollision,
-    SyncReason.normalizationCollision =>
-      l10n.syncReasonNormalizationCollision,
+    SyncReason.normalizationCollision => l10n.syncReasonNormalizationCollision,
     SyncReason.invalidNameOnDestination => l10n.syncReasonInvalidName,
     SyncReason.scanError => l10n.syncReasonScanError,
     SyncReason.equal => l10n.syncReasonEqual,
@@ -98,13 +91,12 @@ String _ageLabel(int? mtimeSecs, DateTime? now) {
 }
 
 /// The kind slot inside `type differs (file here, folder there)`.
-String syncKindLabel(AppLocalizations l10n, EntryKind? kind) =>
-    switch (kind) {
-      EntryKind.file => l10n.syncKindFile,
-      EntryKind.directory => l10n.syncKindFolder,
-      EntryKind.symlink => l10n.syncKindSymlink,
-      EntryKind.other || null => l10n.syncKindOther,
-    };
+String syncKindLabel(AppLocalizations l10n, EntryKind? kind) => switch (kind) {
+  EntryKind.file => l10n.syncKindFile,
+  EntryKind.directory => l10n.syncKindFolder,
+  EntryKind.symlink => l10n.syncKindSymlink,
+  EntryKind.other || null => l10n.syncKindOther,
+};
 
 /// Byte counts in the header/reason text — B/KB/MB/GB at one decimal
 /// above 1 KB (the pane format's own style, kept local so the sync
@@ -165,10 +157,7 @@ List<String> syncHeaderClauses(
     }
     final parts = <String>[
       if (newFiles > 0)
-        l10n.syncHeaderCopyNew(
-          newFiles,
-          formatSyncSize(newBytes),
-        ),
+        l10n.syncHeaderCopyNew(newFiles, formatSyncSize(newBytes)),
       if (folders > 0) l10n.syncHeaderCreateFolders(folders),
       if (updates > 0) l10n.syncHeaderUpdateFiles(updates),
     ];
@@ -286,10 +275,9 @@ String _endpointLabel(SyncPlanController controller, SyncSide side) {
 String syncEndpointLabel(
   SyncEndpoint endpoint, {
   bool shortenRemotePath = false,
-}) =>
-    switch (endpoint) {
-      LocalEndpoint(:final path) => paneLastSegment(path),
-      RemoteEndpoint(:final server, :final path) =>
-        '${server.identity?.host ?? server.serverConfigId ?? server.identity?.username ?? 'server'}:'
-            '${shortenRemotePath ? paneLastSegment(path) : path}',
-    };
+}) => switch (endpoint) {
+  LocalEndpoint(:final path) => paneLastSegment(path),
+  RemoteEndpoint(:final server, :final path) =>
+    '${server.identity?.host ?? server.serverConfigId ?? server.identity?.username ?? 'server'}:'
+        '${shortenRemotePath ? paneLastSegment(path) : path}',
+};

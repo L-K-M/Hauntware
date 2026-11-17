@@ -682,11 +682,8 @@ class EngineBrowseChannel {
   /// [RemoteFileException]s like any other engine error.
   Future<void> openInDefaultApp(String path) async {
     await _client._call(
-      (id) => OpenLocalFileRequest(
-        requestId: id,
-        channelId: channelId,
-        path: path,
-      ),
+      (id) =>
+          OpenLocalFileRequest(requestId: id, channelId: channelId, path: path),
     );
   }
 
@@ -791,7 +788,8 @@ final class EngineVfsStream {
   void credit(int bytes) {
     if (bytes <= 0) return;
     _client._fireAndForget(
-      (id) => StreamCreditRequest(requestId: id, streamId: streamId, bytes: bytes),
+      (id) =>
+          StreamCreditRequest(requestId: id, streamId: streamId, bytes: bytes),
     );
   }
 
@@ -816,7 +814,8 @@ final class EngineVfsStream {
   /// The upload's content failed with [error].
   void abort(EngineError error) {
     _client._fireAndForget(
-      (id) => UploadAbortRequest(requestId: id, streamId: streamId, error: error),
+      (id) =>
+          UploadAbortRequest(requestId: id, streamId: streamId, error: error),
     );
   }
 

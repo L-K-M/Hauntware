@@ -722,33 +722,35 @@ void main() {
         );
       });
 
-      test('fails honestly when the entry is gone but not in the trash',
-          () async {
-        final queue = newQueue(
-          remoteTrashEnabled: (_) => true,
-          remoteTrash: RemoteTrash(runIdMinter: () => 'run-7'),
-        );
-        remoteFs.addFile('/data/a.txt', [1]);
-        remoteFs.renameFailure = (oldPath, newPath) {
-          remoteFs.renameFailure = null;
-          unawaited(remoteFs.delete(remoteFs.entryAt(oldPath)!));
-          return dropped;
-        };
+      test(
+        'fails honestly when the entry is gone but not in the trash',
+        () async {
+          final queue = newQueue(
+            remoteTrashEnabled: (_) => true,
+            remoteTrash: RemoteTrash(runIdMinter: () => 'run-7'),
+          );
+          remoteFs.addFile('/data/a.txt', [1]);
+          remoteFs.renameFailure = (oldPath, newPath) {
+            remoteFs.renameFailure = null;
+            unawaited(remoteFs.delete(remoteFs.entryAt(oldPath)!));
+            return dropped;
+          };
 
-        final task = await queue.enqueueDelete(
-          const DeleteRequest(
-            source: ServerFsLocation('srv1'),
-            rootPaths: ['/data/a.txt'],
-            disposition: DeleteDisposition.trash,
-          ),
-        );
-        await awaitTaskDone(task);
+          final task = await queue.enqueueDelete(
+            const DeleteRequest(
+              source: ServerFsLocation('srv1'),
+              rootPaths: ['/data/a.txt'],
+              disposition: DeleteDisposition.trash,
+            ),
+          );
+          await awaitTaskDone(task);
 
-        final item = task.items.single;
-        expect(item.state, TransferItemState.failed);
-        expect(item.failureKind, RemoteFileErrorKind.notFound);
-        expect(item.error, contains('/data/.poltergeist-trash/run-7'));
-      });
+          final item = task.items.single;
+          expect(item.state, TransferItemState.failed);
+          expect(item.failureKind, RemoteFileErrorKind.notFound);
+          expect(item.error, contains('/data/.poltergeist-trash/run-7'));
+        },
+      );
     });
 
     test('local trash delivers through the backend; the VFS raw delete '
@@ -1247,17 +1249,14 @@ void main() {
     group('a 10k-entry delete tree', () {
       const scaleDirectories = 100;
       const scaleFilesPerDirectory = 100;
-      const scaleItems = 1 + scaleDirectories +
-          scaleDirectories * scaleFilesPerDirectory;
+      const scaleItems =
+          1 + scaleDirectories + scaleDirectories * scaleFilesPerDirectory;
 
       void buildTree(FakeTreeFileSystem fs, String root) {
         for (var d = 0; d < scaleDirectories; d++) {
           final dir = '$root/d${d.toString().padLeft(3, '0')}';
           for (var f = 0; f < scaleFilesPerDirectory; f++) {
-            fs.addFile(
-              '$dir/f${f.toString().padLeft(4, '0')}.txt',
-              const [1],
-            );
+            fs.addFile('$dir/f${f.toString().padLeft(4, '0')}.txt', const [1]);
           }
         }
       }
@@ -1266,15 +1265,14 @@ void main() {
         TransferQueue queue,
         FsLocation source,
         String root,
-      ) =>
-          queue.enqueueDelete(
-            DeleteRequest(
-              source: source,
-              rootPaths: [root],
-              disposition: DeleteDisposition.permanent,
-              confirmed: true,
-            ),
-          );
+      ) => queue.enqueueDelete(
+        DeleteRequest(
+          source: source,
+          rootPaths: [root],
+          disposition: DeleteDisposition.permanent,
+          confirmed: true,
+        ),
+      );
 
       // Holds the walk partway: the listing of d050 never returns until
       // [gate] completes, so d000–d049 have emitted (and executed) while
@@ -1327,7 +1325,8 @@ void main() {
             expect(
               task.completedFiles,
               greaterThan(0),
-              reason: 'delete dispatch never overlapped the scan'
+              reason:
+                  'delete dispatch never overlapped the scan'
                   ' (state ${task.state.name}, error ${task.error})',
             );
             expect(task.scanComplete, isFalse);
@@ -1337,9 +1336,9 @@ void main() {
               lessThan(scaleDirectories * scaleFilesPerDirectory),
             );
             expect(
-              events
-                  .whereType<TransferQueueProgressEvent>()
-                  .any((e) => !e.scanComplete && e.taskCompletedFiles > 0),
+              events.whereType<TransferQueueProgressEvent>().any(
+                (e) => !e.scanComplete && e.taskCompletedFiles > 0,
+              ),
               isTrue,
               reason: 'progress events must flow while the scan runs',
             );
@@ -1356,7 +1355,8 @@ void main() {
             expect(
               task.completedFiles,
               greaterThan(midScan),
-              reason: 'progress stalled after the walk released'
+              reason:
+                  'progress stalled after the walk released'
                   ' (state ${task.state.name}, error ${task.error})',
             );
 
@@ -1406,7 +1406,8 @@ void main() {
             expect(
               task.completedFiles,
               greaterThan(0),
-              reason: 'delete dispatch never overlapped the scan'
+              reason:
+                  'delete dispatch never overlapped the scan'
                   ' (state ${task.state.name}, error ${task.error})',
             );
             queue.cancelTask(task.id);

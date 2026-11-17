@@ -24,14 +24,13 @@ Future<void> showBackupSwitchDialog(
   BuildContext context, {
   required BackupSettingsModel service,
   SyncAccountGate gate = const SyncAccountGate.production(),
-}) =>
-    showDialog<void>(
-      context: context,
-      // No barrier dismissal: mid-flight phases have no actions, so a
-      // stray outside tap would strand the §4.4 flow with no re-entry.
-      barrierDismissible: false,
-      builder: (_) => BackupSwitchDialog(service: service, gate: gate),
-    );
+}) => showDialog<void>(
+  context: context,
+  // No barrier dismissal: mid-flight phases have no actions, so a
+  // stray outside tap would strand the §4.4 flow with no re-entry.
+  barrierDismissible: false,
+  builder: (_) => BackupSwitchDialog(service: service, gate: gate),
+);
 
 final class BackupSwitchDialog extends StatefulWidget {
   const BackupSwitchDialog({
@@ -178,8 +177,7 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
           child: SingleChildScrollView(
             child: switch (_phase) {
               _SwitchPhase.confirm => _buildConfirm(l10n, version),
-              _SwitchPhase.working =>
-                Text(l10n.backupSwitchWorking),
+              _SwitchPhase.working => Text(l10n.backupSwitchWorking),
               _SwitchPhase.conflicts => _buildConflicts(l10n),
               _SwitchPhase.done => _buildDone(l10n),
               _SwitchPhase.failed => _buildFailed(l10n),
@@ -188,26 +186,25 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
         ),
         actions: switch (_phase) {
           _SwitchPhase.confirm => [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(l10n.backupCancel),
-              ),
-              FilledButton(
-                key: const ValueKey('backup.switch.continue'),
-                onPressed:
-                    _fleetConfirmed && version != null ? _switch : null,
-                child: Text(l10n.backupContinue),
-              ),
-            ],
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.backupCancel),
+            ),
+            FilledButton(
+              key: const ValueKey('backup.switch.continue'),
+              onPressed: _fleetConfirmed && version != null ? _switch : null,
+              child: Text(l10n.backupContinue),
+            ),
+          ],
           _SwitchPhase.working => const [],
           _SwitchPhase.conflicts => const [],
           _SwitchPhase.done || _SwitchPhase.failed => [
-              FilledButton(
-                key: const ValueKey('backup.switch.close'),
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(l10n.backupClose),
-              ),
-            ],
+            FilledButton(
+              key: const ValueKey('backup.switch.close'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.backupClose),
+            ),
+          ],
         },
       ),
     );
@@ -239,8 +236,9 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               l10n.backupSharedPinDisclosure,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ),
         const SizedBox(height: 8),
@@ -289,8 +287,9 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
             child: Text(
               _error!,
               key: const ValueKey('backup.switch.error'),
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ),
       ],
@@ -305,10 +304,7 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
       key: const ValueKey('backup.switch.conflicts'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          l10n.backupSwitchConflictTitle,
-          style: theme.textTheme.titleSmall,
-        ),
+        Text(l10n.backupSwitchConflictTitle, style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         for (final conflict in widget.service.pinConflicts) ...[
           Text(
@@ -323,16 +319,12 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
             spacing: 8,
             children: [
               TextButton(
-                key: ValueKey(
-                  'backup.switch.adoptFleet.${conflict.locator}',
-                ),
+                key: ValueKey('backup.switch.adoptFleet.${conflict.locator}'),
                 onPressed: () => _resolve(conflict, false),
                 child: Text(l10n.backupSwitchAdoptFleet),
               ),
               TextButton(
-                key: ValueKey(
-                  'backup.switch.keepLocal.${conflict.locator}',
-                ),
+                key: ValueKey('backup.switch.keepLocal.${conflict.locator}'),
                 onPressed: () => _resolve(conflict, true),
                 child: Text(l10n.backupPinKeepLocal),
               ),
@@ -355,13 +347,11 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
           const SizedBox(height: 8),
           Text(
             l10n.backupPaused,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.error),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
           ),
-          Text(
-            l10n.backupPausedWayOutShared,
-            style: theme.textTheme.bodySmall,
-          ),
+          Text(l10n.backupPausedWayOutShared, style: theme.textTheme.bodySmall),
         ],
       ],
     );
@@ -371,10 +361,9 @@ class _BackupSwitchDialogState extends State<BackupSwitchDialog> {
     return Text(
       _error ?? '',
       key: const ValueKey('backup.switch.failed'),
-      style: Theme.of(context)
-          .textTheme
-          .bodySmall
-          ?.copyWith(color: Theme.of(context).colorScheme.error),
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Theme.of(context).colorScheme.error,
+      ),
     );
   }
 }

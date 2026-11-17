@@ -57,10 +57,10 @@ class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
   Uri get _endpoint => Uri.parse('$baseUrl/v1/messages');
 
   Map<String, String> get _headers => {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      };
+    'content-type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
 
   /// Split out for testing: build the request body for a set of messages.
   Map<String, dynamic> buildBody({
@@ -74,10 +74,12 @@ class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
         .join('\n\n');
     final turns = messages
         .where((m) => m.role != LlmRole.system)
-        .map((m) => {
-              'role': m.role == LlmRole.assistant ? 'assistant' : 'user',
-              'content': m.content,
-            })
+        .map(
+          (m) => {
+            'role': m.role == LlmRole.assistant ? 'assistant' : 'user',
+            'content': m.content,
+          },
+        )
         .toList();
     return {
       'model': model,
@@ -86,11 +88,13 @@ class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
       'messages': turns,
       if (tools.isNotEmpty)
         'tools': tools
-            .map((t) => {
-                  'name': t.name,
-                  'description': t.description,
-                  'input_schema': t.inputSchema,
-                })
+            .map(
+              (t) => {
+                'name': t.name,
+                'description': t.description,
+                'input_schema': t.inputSchema,
+              },
+            )
             .toList(),
       if (stream) 'stream': true,
     };
@@ -106,12 +110,14 @@ class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
         case 'text':
           textBuf.write(block['text'] as String? ?? '');
         case 'tool_use':
-          calls.add(ToolCall(
-            id: block['id'] as String? ?? '',
-            name: block['name'] as String? ?? '',
-            arguments:
-                ((block['input'] as Map?)?.cast<String, dynamic>()) ?? {},
-          ));
+          calls.add(
+            ToolCall(
+              id: block['id'] as String? ?? '',
+              name: block['name'] as String? ?? '',
+              arguments:
+                  ((block['input'] as Map?)?.cast<String, dynamic>()) ?? {},
+            ),
+          );
       }
     }
     return ChatTurn(text: textBuf.toString(), toolCalls: calls);
@@ -150,10 +156,12 @@ class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
     required String prompt,
     HostContext context = HostContext.unknown,
   }) async {
-    final turn = await chat(messages: [
-      const LlmMessage.system(kCommandSystemPrompt),
-      LlmMessage.user('${context.toPromptBlock()}\nRequest: $prompt'),
-    ]);
+    final turn = await chat(
+      messages: [
+        const LlmMessage.system(kCommandSystemPrompt),
+        LlmMessage.user('${context.toPromptBlock()}\nRequest: $prompt'),
+      ],
+    );
     return parseCommandJson(turn.text);
   }
 

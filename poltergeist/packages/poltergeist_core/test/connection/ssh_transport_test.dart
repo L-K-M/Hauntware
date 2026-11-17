@@ -47,20 +47,20 @@ List<List<String>>? _clientKexInitNameLists(List<int> written) {
 }
 
 void main() {
-  test('the host-key preflight proposes what the authenticated connect does',
-      () async {
-    // The preflight builds its own SSHClient ahead of seance_core's. Were it
-    // to propose dartssh2's bare defaults, a server offering only the legacy
-    // fallback would be turned away here and never reach the connect that
-    // accepts it. Read off the wire from a loopback listener, because the
-    // preflight dials its own socket.
-    final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-    addTearDown(listener.close);
-    final kexInit = Completer<List<List<String>>>();
-    listener.listen((connection) {
-      final written = <int>[];
-      connection.listen(
-        (bytes) {
+  test(
+    'the host-key preflight proposes what the authenticated connect does',
+    () async {
+      // The preflight builds its own SSHClient ahead of seance_core's. Were it
+      // to propose dartssh2's bare defaults, a server offering only the legacy
+      // fallback would be turned away here and never reach the connect that
+      // accepts it. Read off the wire from a loopback listener, because the
+      // preflight dials its own socket.
+      final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(listener.close);
+      final kexInit = Completer<List<List<String>>>();
+      listener.listen((connection) {
+        final written = <int>[];
+        connection.listen((bytes) {
           written.addAll(bytes);
           final lists = _clientKexInitNameLists(written);
           if (lists == null || kexInit.isCompleted) return;
@@ -69,67 +69,9 @@ void main() {
           // Hang up without a version line: nothing past the proposal is
           // under test, and no host key may reach the prompt.
           connection.destroy();
-        },
-        onError: (Object _) {},
-      );
-    });
+        }, onError: (Object _) {});
+      });
 
-    await expectLater(
-      preflightDartSshHostKey(
-        config: ServerConfig(
-          id: 's',
-          label: 's',
-          host: InternetAddress.loopbackIPv4.address,
-          port: listener.port,
-          username: 'me',
-          authMethod: AuthMethod.password,
-          createdAt: 0,
-          updatedAt: 0,
-        ),
-        tofu: TofuVerifier(InMemoryHostKeyStore()),
-        onHostKey: (_) async => fail('no host key was presented'),
-      ),
-      throwsA(isA<SshConnectException>()),
-    );
-
-    final lists = await kexInit.future.timeout(
-      const Duration(seconds: 10),
-      onTimeout: () => fail('The preflight never sent its KEXINIT.'),
-    );
-    final expected = suiteSshAlgorithms;
-    final kex = [for (final algorithm in expected.kex) algorithm.name];
-    final hostkey = [for (final algorithm in expected.hostkey) algorithm.name];
-    final cipher = [for (final algorithm in expected.cipher) algorithm.name];
-    final mac = [for (final algorithm in expected.mac) algorithm.name];
-    expect(lists, [
-      // dartssh2 appends the strict-kex (OpenSSH PROTOCOL) and RFC 8308
-      // ext-info markers to the first KEXINIT, after the real methods.
-      [...kex, 'kex-strict-c-v00@openssh.com', 'ext-info-c'],
-      hostkey,
-      cipher,
-      cipher,
-      mac,
-      mac,
-    ]);
-    // Spelled out once, so this file does not pass vacuously against an
-    // empty or bare-default definition: the legacy tail is on the wire.
-    expect(lists[0], contains('diffie-hellman-group14-sha1'));
-    expect(lists[1], contains('ssh-rsa'));
-    expect(lists[2], contains('aes128-cbc'));
-  });
-
-  test('a host that resets the host-key preflight leaves no uncaught error',
-      () async {
-    // dartssh2 closes its socket without awaiting the close when the peer
-    // hangs up. After a reset that close fails with a broken pipe, which
-    // would go uncaught and end the isolate; the test zone reports it, also
-    // during the trailing pause. The hook holds the client back until the
-    // reset has arrived, so its first write meets it.
-    final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-    addTearDown(listener.close);
-    listener.listen((connection) => connection.destroy());
-
-    for (var attempt = 0; attempt < 5; attempt++) {
       await expectLater(
         preflightDartSshHostKey(
           config: ServerConfig(
@@ -144,27 +86,90 @@ void main() {
           ),
           tofu: TofuVerifier(InMemoryHostKeyStore()),
           onHostKey: (_) async => fail('no host key was presented'),
-          onConnected: () =>
-              Future<void>.delayed(const Duration(milliseconds: 20)),
         ),
         throwsA(isA<SshConnectException>()),
       );
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-  });
 
-  test('a channel-open timeout classifies as disconnected, not unsupported',
-      () {
-    final error = classifySftpOpenFailure(
-      TimeoutException('SFTP open timed out', const Duration(seconds: 15)),
-      transportClosed: false,
-    );
+      final lists = await kexInit.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => fail('The preflight never sent its KEXINIT.'),
+      );
+      final expected = suiteSshAlgorithms;
+      final kex = [for (final algorithm in expected.kex) algorithm.name];
+      final hostkey = [
+        for (final algorithm in expected.hostkey) algorithm.name,
+      ];
+      final cipher = [for (final algorithm in expected.cipher) algorithm.name];
+      final mac = [for (final algorithm in expected.mac) algorithm.name];
+      expect(lists, [
+        // dartssh2 appends the strict-kex (OpenSSH PROTOCOL) and RFC 8308
+        // ext-info markers to the first KEXINIT, after the real methods.
+        [...kex, 'kex-strict-c-v00@openssh.com', 'ext-info-c'],
+        hostkey,
+        cipher,
+        cipher,
+        mac,
+        mac,
+      ]);
+      // Spelled out once, so this file does not pass vacuously against an
+      // empty or bare-default definition: the legacy tail is on the wire.
+      expect(lists[0], contains('diffie-hellman-group14-sha1'));
+      expect(lists[1], contains('ssh-rsa'));
+      expect(lists[2], contains('aes128-cbc'));
+    },
+  );
 
-    // Transient: the pool's fallbacks and (later) reconnect must treat it
-    // as retryable — `unsupported` means "this server cannot do SFTP".
-    expect(error.kind, RemoteFileErrorKind.disconnected);
-    expect(error.message, contains('timed out'));
-  });
+  test(
+    'a host that resets the host-key preflight leaves no uncaught error',
+    () async {
+      // dartssh2 closes its socket without awaiting the close when the peer
+      // hangs up. After a reset that close fails with a broken pipe, which
+      // would go uncaught and end the isolate; the test zone reports it, also
+      // during the trailing pause. The hook holds the client back until the
+      // reset has arrived, so its first write meets it.
+      final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(listener.close);
+      listener.listen((connection) => connection.destroy());
+
+      for (var attempt = 0; attempt < 5; attempt++) {
+        await expectLater(
+          preflightDartSshHostKey(
+            config: ServerConfig(
+              id: 's',
+              label: 's',
+              host: InternetAddress.loopbackIPv4.address,
+              port: listener.port,
+              username: 'me',
+              authMethod: AuthMethod.password,
+              createdAt: 0,
+              updatedAt: 0,
+            ),
+            tofu: TofuVerifier(InMemoryHostKeyStore()),
+            onHostKey: (_) async => fail('no host key was presented'),
+            onConnected: () =>
+                Future<void>.delayed(const Duration(milliseconds: 20)),
+          ),
+          throwsA(isA<SshConnectException>()),
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    },
+  );
+
+  test(
+    'a channel-open timeout classifies as disconnected, not unsupported',
+    () {
+      final error = classifySftpOpenFailure(
+        TimeoutException('SFTP open timed out', const Duration(seconds: 15)),
+        transportClosed: false,
+      );
+
+      // Transient: the pool's fallbacks and (later) reconnect must treat it
+      // as retryable — `unsupported` means "this server cannot do SFTP".
+      expect(error.kind, RemoteFileErrorKind.disconnected);
+      expect(error.message, contains('timed out'));
+    },
+  );
 
   test('a dead transport classifies as disconnected', () {
     final error = classifySftpOpenFailure(

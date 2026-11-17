@@ -194,6 +194,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
       if (mounted) widget.showToast(context, error.toString());
     }
   }
+
   // The shared controller owns the browser's open/close state; a locked
   // document may still browse (its rows refuse to run), matching the
   // package's own contract.

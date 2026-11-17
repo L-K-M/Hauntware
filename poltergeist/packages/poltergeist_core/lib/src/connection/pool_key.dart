@@ -43,12 +43,12 @@ class PoolKey {
 
   factory PoolKey.of(ServerConfig config, {String? routeContext}) =>
       PoolKey.normalize(
-    host: config.host,
-    port: config.port,
-    username: config.username,
-    jumpHostId: config.jumpHostId,
-    routeContext: routeContext,
-  );
+        host: config.host,
+        port: config.port,
+        username: config.username,
+        jumpHostId: config.jumpHostId,
+        routeContext: routeContext,
+      );
 
   /// The single normalization both config-derived keys and persisted
   /// incident records key under: any drift between them would silently
@@ -77,11 +77,6 @@ class PoolKey {
       other.routeContext == routeContext;
 
   @override
-  int get hashCode => Object.hash(
-    host,
-    port,
-    username,
-    jumpHostId,
-    routeContext,
-  );
+  int get hashCode =>
+      Object.hash(host, port, username, jumpHostId, routeContext);
 }

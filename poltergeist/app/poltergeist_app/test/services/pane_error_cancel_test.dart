@@ -131,8 +131,7 @@ void main() {
     },
   );
 
-  test('Cancel retires a navigation still in flight under the error',
-      () async {
+  test('Cancel retires a navigation still in flight under the error', () async {
     // Remote, so no directory watch re-lists over a wrongly accepted
     // answer and hides it.
     final channel = FakePaneChannel('/srv/home')

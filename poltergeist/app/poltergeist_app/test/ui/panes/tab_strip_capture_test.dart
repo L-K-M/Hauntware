@@ -37,7 +37,8 @@ Future<ByteData> _fontBytes(String path) async {
 }
 
 Future<void> _loadRealFonts() async {
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       '${Platform.environment['HOME']}/.local/share/fonts';
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -52,8 +53,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -125,17 +125,13 @@ void main() {
     ]) {
       engine.localChannels.add(
         session_test.FakeAppBrowseChannel(homePath: '/home/tester')
-          ..listings['/home/tester'] = [
-            for (final name in names) _entry(name),
-          ],
+          ..listings['/home/tester'] = [for (final name in names) _entry(name)],
       );
     }
     final held = _HeldListingChannel(homePath: '/srv/data');
     engine.localChannels.add(held);
     engine.channel = session_test.FakeAppBrowseChannel(homePath: '/srv/home')
-      ..listings['/srv/home'] = [
-        _entry('remote.txt', parent: '/srv/home'),
-      ];
+      ..listings['/srv/home'] = [_entry('remote.txt', parent: '/srv/home')];
 
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
@@ -158,8 +154,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme:
-          base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       // The boundary wraps the app, not the shell: the guarded-close
@@ -192,9 +187,7 @@ void main() {
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List();
         } finally {
           image.dispose();
@@ -210,10 +203,8 @@ void main() {
       file.writeAsBytesSync(bytes);
     }
 
-    PaneTabsController leftStrip() => tester
-        .widgetList<PaneTabsView>(find.byType(PaneTabsView))
-        .first
-        .tabs;
+    PaneTabsController leftStrip() =>
+        tester.widgetList<PaneTabsView>(find.byType(PaneTabsView)).first.tabs;
 
     // The initial left tab browsed home; grow the strip through the
     // production operations: ⌘T honors the duplicate default, then a
@@ -232,10 +223,7 @@ void main() {
 
     expect(strip.tabs.length, 5);
     expect(navigating.controller.loading, isTrue);
-    expect(
-      strip.closeTriggers(navigating),
-      [TabCloseTrigger.navigation],
-    );
+    expect(strip.closeTriggers(navigating), [TabCloseTrigger.navigation]);
 
     // Activate the remote tab for the strip capture: its chip carries
     // the teal badge and the connected dot beside the folder tabs.

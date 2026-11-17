@@ -34,13 +34,13 @@ void main() {
   });
 
   ServerConfig server(String id) => ServerConfig(
-        id: id,
-        label: id,
-        host: '$id.example.com',
-        username: 'deploy',
-        createdAt: 1,
-        updatedAt: 1,
-      );
+    id: id,
+    label: id,
+    host: '$id.example.com',
+    username: 'deploy',
+    createdAt: 1,
+    updatedAt: 1,
+  );
 
   test('deleting a server records a durable tombstone', () async {
     final services = await AppServices.initialize();
@@ -57,7 +57,11 @@ void main() {
     expect(pending, hasLength(1));
     expect(pending.single.id, 'a');
     expect(pending.single.deleted, isTrue);
-    expect(pending.single.blob, isEmpty, reason: 'a tombstone leaks no payload');
+    expect(
+      pending.single.blob,
+      isEmpty,
+      reason: 'a tombstone leaks no payload',
+    );
     expect(pending.single.deviceId, services.settings.deviceId);
     expect(await services.configStore.getServer('a'), isNull);
 
@@ -71,38 +75,41 @@ void main() {
     expect(stillPending.single.deleted, isTrue);
   });
 
-  test('deleting a server retracts the credential nothing else names', () async {
-    // Poltergeist and Klabautermann retract it through the shared
-    // CatalogWriter; Séance's own delete only dropped the local vault entry,
-    // so the credential's `secret:` record stayed live in the sync account
-    // for every new device to adopt.
-    final services = await AppServices.initialize();
-    final state = AppState(services);
-    addTearDown(() async {
-      state.dispose();
-      await services.probe.dispose();
-    });
-    const secret = Secret(
-      id: 'credential',
-      kind: SecretKind.password,
-      value: 'hunter2',
-    );
-    await state.saveServer(
-      server('a').copyWith(secretRef: secret.id, updatedAt: 10),
-      secret: secret,
-    );
+  test(
+    'deleting a server retracts the credential nothing else names',
+    () async {
+      // Poltergeist and Klabautermann retract it through the shared
+      // CatalogWriter; Séance's own delete only dropped the local vault entry,
+      // so the credential's `secret:` record stayed live in the sync account
+      // for every new device to adopt.
+      final services = await AppServices.initialize();
+      final state = AppState(services);
+      addTearDown(() async {
+        state.dispose();
+        await services.probe.dispose();
+      });
+      const secret = Secret(
+        id: 'credential',
+        kind: SecretKind.password,
+        value: 'hunter2',
+      );
+      await state.saveServer(
+        server('a').copyWith(secretRef: secret.id, updatedAt: 10),
+        secret: secret,
+      );
 
-    await state.deleteServer('a');
+      await state.deleteServer('a');
 
-    final pending = {
-      for (final tombstone in await services.tombstoneStore.all())
-        tombstone.id: tombstone,
-    };
-    expect(pending.keys, containsAll(['a', 'secret:credential']));
-    expect(pending['secret:credential']!.deleted, isTrue);
-    expect(pending['secret:credential']!.blob, isEmpty);
-    expect(await services.vault.getSecret(secret.id), isNull);
-  });
+      final pending = {
+        for (final tombstone in await services.tombstoneStore.all())
+          tombstone.id: tombstone,
+      };
+      expect(pending.keys, containsAll(['a', 'secret:credential']));
+      expect(pending['secret:credential']!.deleted, isTrue);
+      expect(pending['secret:credential']!.blob, isEmpty);
+      expect(await services.vault.getSecret(secret.id), isNull);
+    },
+  );
 
   test('deleting a server keeps a credential another server names', () async {
     final services = await AppServices.initialize();
@@ -144,20 +151,25 @@ void main() {
     });
 
     final future = DateTime.now().millisecondsSinceEpoch + 1000000;
-    await state.saveServer(ServerConfig(
-      id: 'a',
-      label: 'a',
-      host: 'a.example.com',
-      username: 'u',
-      createdAt: 1,
-      updatedAt: future,
-    ));
+    await state.saveServer(
+      ServerConfig(
+        id: 'a',
+        label: 'a',
+        host: 'a.example.com',
+        username: 'u',
+        createdAt: 1,
+        updatedAt: future,
+      ),
+    );
     await state.deleteServer('a');
 
     final tombstone = (await services.tombstoneStore.all()).single;
     expect(tombstone.id, 'a');
-    expect(tombstone.updatedAt, future + 1,
-        reason: 'the tombstone must outrank the record it deletes');
+    expect(
+      tombstone.updatedAt,
+      future + 1,
+      reason: 'the tombstone must outrank the record it deletes',
+    );
   });
 
   test('deleting a snippet records a snippet-scoped tombstone', () async {
@@ -168,19 +180,24 @@ void main() {
       await services.probe.dispose();
     });
 
-    await state.saveSnippet(const Snippet(
-      id: 's1',
-      title: 'list',
-      body: 'ls -la',
-      createdAt: 1,
-      updatedAt: 1,
-    ));
+    await state.saveSnippet(
+      const Snippet(
+        id: 's1',
+        title: 'list',
+        body: 'ls -la',
+        createdAt: 1,
+        updatedAt: 1,
+      ),
+    );
     await state.deleteSnippet('s1');
 
     final pending = await services.tombstoneStore.all();
     expect(pending, hasLength(1));
-    expect(pending.single.id, 'snippet:s1',
-        reason: 'the tombstone id must match the snippet record id');
+    expect(
+      pending.single.id,
+      'snippet:s1',
+      reason: 'the tombstone id must match the snippet record id',
+    );
     expect(pending.single.deleted, isTrue);
   });
 
@@ -197,8 +214,11 @@ void main() {
     expect(await services.tombstoneStore.all(), hasLength(1));
 
     await state.saveServer(server('a'));
-    expect(await services.tombstoneStore.all(), isEmpty,
-        reason: 're-saving an id clears its pending deletion');
+    expect(
+      await services.tombstoneStore.all(),
+      isEmpty,
+      reason: 're-saving an id clears its pending deletion',
+    );
     expect(await services.configStore.getServer('a'), isNotNull);
   });
 
@@ -211,21 +231,30 @@ void main() {
     });
 
     const snippet = Snippet(
-        id: 's1', title: 'list', body: 'ls -la', createdAt: 1, updatedAt: 1);
+      id: 's1',
+      title: 'list',
+      body: 'ls -la',
+      createdAt: 1,
+      updatedAt: 1,
+    );
     await state.saveSnippet(snippet);
     await state.deleteSnippet('s1');
     expect(await services.tombstoneStore.all(), hasLength(1));
 
     await state.saveSnippet(snippet);
-    expect(await services.tombstoneStore.all(), isEmpty,
-        reason: 're-saving a snippet clears its pending deletion');
+    expect(
+      await services.tombstoneStore.all(),
+      isEmpty,
+      reason: 're-saving a snippet clears its pending deletion',
+    );
   });
 
   test('FileTombstoneStore round-trips and tolerates a corrupt file', () async {
     final file = File('${directory.path}/deleted_records.json');
     final store = FileTombstoneStore(file);
     await store.add(
-        EncryptedRecord.tombstone(id: 'x', updatedAt: 42, deviceId: 'D'));
+      EncryptedRecord.tombstone(id: 'x', updatedAt: 42, deviceId: 'D'),
+    );
 
     final reloaded = await FileTombstoneStore(file).all();
     expect(reloaded, hasLength(1));
@@ -251,16 +280,25 @@ void main() {
     final file = File('${directory.path}/deleted_records.json');
     final store = FileTombstoneStore(file);
 
-    await store
-        .add(EncryptedRecord.tombstone(id: 'x', updatedAt: 2000, deviceId: 'D'));
-    await store
-        .add(EncryptedRecord.tombstone(id: 'x', updatedAt: 1000, deviceId: 'D'));
-    expect((await store.all()).single.updatedAt, 2000,
-        reason: 'an older stamp must not regress the pending tombstone');
+    await store.add(
+      EncryptedRecord.tombstone(id: 'x', updatedAt: 2000, deviceId: 'D'),
+    );
+    await store.add(
+      EncryptedRecord.tombstone(id: 'x', updatedAt: 1000, deviceId: 'D'),
+    );
+    expect(
+      (await store.all()).single.updatedAt,
+      2000,
+      reason: 'an older stamp must not regress the pending tombstone',
+    );
 
-    await store
-        .add(EncryptedRecord.tombstone(id: 'x', updatedAt: 3000, deviceId: 'D'));
-    expect((await store.all()).single.updatedAt, 3000,
-        reason: 'a newer stamp replaces it');
+    await store.add(
+      EncryptedRecord.tombstone(id: 'x', updatedAt: 3000, deviceId: 'D'),
+    );
+    expect(
+      (await store.all()).single.updatedAt,
+      3000,
+      reason: 'a newer stamp replaces it',
+    );
   });
 }

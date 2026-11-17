@@ -58,23 +58,30 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('bootstrap lifecycle drives the saved-credential timeout', (tester) async {
+  testWidgets('bootstrap lifecycle drives the saved-credential timeout', (
+    tester,
+  ) async {
     late Directory directory;
     late AppServices services;
     late AppState state;
     var elapsed = Duration.zero;
     await tester.runAsync(() async {
       directory = await Directory.systemTemp.createTemp('seance-boot-lock-');
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(_pathChannel, (_) async => directory.path);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_pathChannel, (_) async => directory.path);
       FlutterSecureStorage.setMockInitialValues({});
-      services = await AppServices.initialize(deviceAuthenticator: TestDeviceAuthenticator(), appLockElapsed: () => elapsed);
+      services = await AppServices.initialize(
+        deviceAuthenticator: TestDeviceAuthenticator(),
+        appLockElapsed: () => elapsed,
+      );
       state = AppState(services);
       await state.setAppLock(AppLockMode.on);
     });
     addTearDown(() async {
       state.dispose();
       await services.probe.dispose();
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(_pathChannel, null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_pathChannel, null);
       await directory.delete(recursive: true);
     });
     await tester.pumpWidget(SeanceApp(initOverride: () async => state));
@@ -93,8 +100,9 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('bootstrap phase changes stay inside one MaterialApp',
-      (tester) async {
+  testWidgets('bootstrap phase changes stay inside one MaterialApp', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       SeanceApp(initOverride: () async => throw StateError('boom')),
     );
@@ -107,8 +115,9 @@ void main() {
     expect(find.byType(MaterialApp), findsOneWidget);
   });
 
-  testWidgets('routes pushed on the root navigator can see AppScope',
-      (tester) async {
+  testWidgets('routes pushed on the root navigator can see AppScope', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       SeanceApp(initOverride: () async => throw StateError('boom')),
     );
@@ -128,8 +137,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final scope = routeContext.dependOnInheritedWidgetOfExactType<AppScope>();
-    expect(scope, isNotNull,
-        reason: 'AppScope must wrap the Navigator so pushed routes see it');
+    expect(
+      scope,
+      isNotNull,
+      reason: 'AppScope must wrap the Navigator so pushed routes see it',
+    );
   });
 
   testWidgets('recovered settings warning persists and opens Settings', (
@@ -214,8 +226,9 @@ void main() {
     expect(app(), same(before));
 
     await tester.runAsync(
-      () => LocalSettingsBackend(state)
-          .setAppearance(ThemePresets.solarized, ThemeModePreference.system),
+      () => LocalSettingsBackend(
+        state,
+      ).setAppearance(ThemePresets.solarized, ThemeModePreference.system),
     );
     await tester.pump();
     expect(app(), isNot(same(before)));

@@ -13,8 +13,7 @@ import 'access/access_panel.dart' show engineNameText;
 import 'actions/detached_operations.dart';
 import 'coverage.dart' show ServerCoverageChip;
 import 'docker/docker_endpoint.dart';
-import 'fleet_rail.dart'
-    show connectRetryFor, linkFailureText, linkStatusWord;
+import 'fleet_rail.dart' show connectRetryFor, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
 import 'hand_off_actions.dart';

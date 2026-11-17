@@ -20,40 +20,46 @@ void main() {
   tearDown(() => temp.deleteSync(recursive: true));
 
   group('SettingsPinVerdictStore', () {
-    test('negative pins add, read, remove — and persist across instances',
-        () async {
-      final store = SettingsPinVerdictStore(store: settings);
-      await store.addNegativePin('a.example:22');
-      await store.addNegativePin('b.example:22');
-      await store.addNegativePin('a.example:22'); // idempotent
-      expect(await store.negativePins(),
-          {'a.example:22', 'b.example:22'});
+    test(
+      'negative pins add, read, remove — and persist across instances',
+      () async {
+        final store = SettingsPinVerdictStore(store: settings);
+        await store.addNegativePin('a.example:22');
+        await store.addNegativePin('b.example:22');
+        await store.addNegativePin('a.example:22'); // idempotent
+        expect(await store.negativePins(), {'a.example:22', 'b.example:22'});
 
-      // A fresh instance over the same file sees the durable set.
-      final reopened = SettingsPinVerdictStore(store: settings);
-      expect(await reopened.negativePins(),
-          {'a.example:22', 'b.example:22'});
+        // A fresh instance over the same file sees the durable set.
+        final reopened = SettingsPinVerdictStore(store: settings);
+        expect(await reopened.negativePins(), {'a.example:22', 'b.example:22'});
 
-      await reopened.removeNegativePin('a.example:22');
-      expect(await reopened.negativePins(), {'b.example:22'});
-    });
+        await reopened.removeNegativePin('a.example:22');
+        expect(await reopened.negativePins(), {'b.example:22'});
+      },
+    );
 
     test('kept verdicts record the rejected fingerprint durably', () async {
       final store = SettingsPinVerdictStore(store: settings);
       await store.recordKeptVerdict('a.example:22', 'SHA256:rejected');
-      expect(await store.rejectedFingerprintFor('a.example:22'),
-          'SHA256:rejected');
+      expect(
+        await store.rejectedFingerprintFor('a.example:22'),
+        'SHA256:rejected',
+      );
       expect(await store.rejectedFingerprintFor('other:22'), isNull);
 
       final reopened = SettingsPinVerdictStore(store: settings);
-      expect(await reopened.rejectedFingerprintFor('a.example:22'),
-          'SHA256:rejected');
+      expect(
+        await reopened.rejectedFingerprintFor('a.example:22'),
+        'SHA256:rejected',
+      );
 
       // A new fingerprint for the same locator replaces the verdict —
       // the newer key must warn again.
       await reopened.recordKeptVerdict('a.example:22', 'SHA256:newer');
-      expect(await reopened.rejectedFingerprintFor('a.example:22'),
-          'SHA256:newer');
+      expect(
+        await reopened.rejectedFingerprintFor('a.example:22'),
+        'SHA256:newer',
+      );
     });
 
     test('forgetting a host drops its kept verdict', () async {
@@ -64,8 +70,7 @@ void main() {
       // warn on the same pulled fingerprint again.
       expect(await store.rejectedFingerprintFor('a.example:22'), isNull);
       final reopened = SettingsPinVerdictStore(store: settings);
-      expect(await reopened.rejectedFingerprintFor('a.example:22'),
-          isNull);
+      expect(await reopened.rejectedFingerprintFor('a.example:22'), isNull);
     });
 
     test('overlapping mutations serialize without loss', () async {
@@ -76,8 +81,7 @@ void main() {
         store.recordKeptVerdict('one:22', 'SHA256:x'),
         store.addNegativePin('three:22'),
       ]);
-      expect(await store.negativePins(),
-          {'one:22', 'two:22', 'three:22'});
+      expect(await store.negativePins(), {'one:22', 'two:22', 'three:22'});
       expect(await store.rejectedFingerprintFor('one:22'), 'SHA256:x');
     });
   });

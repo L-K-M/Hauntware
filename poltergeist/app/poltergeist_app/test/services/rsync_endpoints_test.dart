@@ -99,10 +99,7 @@ void main() {
     expect(remote.port, 2222);
     expect(remote.user, 'deploy');
     expect(remote.path, '/srv/site');
-    expect(
-      remote.connectionShape,
-      contains(SyncConnectionFlag.identityFile),
-    );
+    expect(remote.connectionShape, contains(SyncConnectionFlag.identityFile));
   });
 
   test('serverConfigId resolves through the injected catalog lookup', () {
@@ -184,9 +181,6 @@ void main() {
       isNull,
     );
     // No lookup bound at all — same refusal.
-    expect(
-      resolveRsyncEndpoints(pair, localOsName: 'linux'),
-      isNull,
-    );
+    expect(resolveRsyncEndpoints(pair, localOsName: 'linux'), isNull);
   });
 }

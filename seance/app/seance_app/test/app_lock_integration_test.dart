@@ -181,15 +181,20 @@ void main() {
 
     await state.saveServer(server(AuthMethod.password, ref: null));
 
-    expect(device.prompts, prompts,
-        reason: 'an unrelated save must not prompt to retry old cleanup');
+    expect(
+      device.prompts,
+      prompts,
+      reason: 'an unrelated save must not prompt to retry old cleanup',
+    );
     expect(state.services.settings.pendingCredentialCleanup, {'saved'});
     await state.services.appLock.requireUnlocked();
     await state.saveServer(state.servers.single.copyWith(updatedAt: 2));
     expect(state.services.settings.pendingCredentialCleanup, isEmpty);
     expect(await state.services.vault.getSecret('saved'), isNull);
-    expect((await state.services.tombstoneStore.all()).single.id,
-        'secret:saved');
+    expect(
+      (await state.services.tombstoneStore.all()).single.id,
+      'secret:saved',
+    );
   });
 
   test('app-lock changes and timeout preserve existing SSH sessions', () async {

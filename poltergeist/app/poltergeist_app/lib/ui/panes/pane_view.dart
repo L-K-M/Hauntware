@@ -250,6 +250,7 @@ class _PaneViewState extends State<PaneView> {
     final other = isLeft ? workspace.right : workspace.left;
     return other.activeTab?.controller.syncAnchorActive ?? false;
   }
+
   bool _disposed = false;
   bool _quickSelectWasActive = false;
   final _quickSelectFieldKey = GlobalKey();
@@ -1637,7 +1638,10 @@ class _PaneSurface extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final loadingVisible = graceVisible && !controller.connectionLost;
     return ColoredBox(
-      color: PoltergeistChrome.of(context, poltergeistThemeStyle).paneBackground,
+      color: PoltergeistChrome.of(
+        context,
+        poltergeistThemeStyle,
+      ).paneBackground,
       // One width measure for the column header and every row, so the
       // two can never disagree about which columns fit.
       child: LayoutBuilder(
@@ -1654,8 +1658,7 @@ class _PaneSurface extends StatelessWidget {
           // Below the scope, so the surface's own reads (the rename
           // editor's name-column bounds) see the width the rows use.
           child: Builder(
-            builder: (context) =>
-                _surfaceColumn(context, l10n, loadingVisible),
+            builder: (context) => _surfaceColumn(context, l10n, loadingVisible),
           ),
         ),
       ),
@@ -1807,11 +1810,11 @@ class _PaneSurface extends StatelessWidget {
       // desktop_drop's channels don't exist — exclude it explicitly.
       !kIsWeb &&
       switch (defaultTargetPlatform) {
-    TargetPlatform.macOS ||
-    TargetPlatform.linux ||
-    TargetPlatform.windows => true,
-    _ => false,
-  };
+        TargetPlatform.macOS ||
+        TargetPlatform.linux ||
+        TargetPlatform.windows => true,
+        _ => false,
+      };
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
     if (!controller.hasEngine) {
@@ -1834,7 +1837,8 @@ class _PaneSurface extends StatelessWidget {
         // Stack later stays clickable.
         Positioned.fill(
           child: IgnorePointer(
-            ignoring: (controller.error != null || controller.staleRows) &&
+            ignoring:
+                (controller.error != null || controller.staleRows) &&
                 !controller.connectionLost,
             child: ExcludeSemantics(
               excluding:
@@ -1848,8 +1852,8 @@ class _PaneSurface extends StatelessWidget {
                       PanePhase.unbound => _Centered(l10n.paneNoLocation),
                       PanePhase.openingLocal || PanePhase.connectingRemote =>
                         _connectingBody(context, l10n),
-                      PanePhase.browsing || PanePhase.restored =>
-                        _listing(context, l10n),
+                      PanePhase.browsing ||
+                      PanePhase.restored => _listing(context, l10n),
                     },
             ),
           ),
@@ -1864,7 +1868,8 @@ class _PaneSurface extends StatelessWidget {
         // 1x1 empty box keeps the node in the semantics tree (zero-size
         // nodes are culled) while staying invisible.
         Semantics(
-          label: controller.staleRows &&
+          label:
+              controller.staleRows &&
                   !controller.connectionLost &&
                   controller.error == null &&
                   controller.phase != PanePhase.restored
@@ -2030,7 +2035,10 @@ class _PaneSurface extends StatelessWidget {
                             ? l10n.paneDropHintRemote
                             : l10n.paneDropHintLocal,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
+                          color: PoltergeistChrome.of(
+                            context,
+                            poltergeistThemeStyle,
+                          ).secondaryText,
                         ),
                       ),
                     ),
@@ -2069,57 +2077,57 @@ class _PaneSurface extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) => Stack(
-      children: [
-        ListView.builder(
-          // The drop zone's hit-testing anchor (D14): row extents are
-          // fixed, so position math against this box's render size maps
-          // a drop onto the rendered rows — never an unrendered index.
-          // Zero padding keeps the box's origin coincident with row 0;
-          // the default MediaQuery padding would shift every index by
-          // padding/rowExtent.
-          padding: EdgeInsets.zero,
-          key: listAreaKey,
-          controller: scrollController,
-          itemExtent: extent,
-          // Keep the next row available to accessibility traversal without
-          // constructing a full offscreen band each time a desktop tab mounts.
-          // Touch scrolling retains Flutter's default cache.
-          scrollCacheExtent: isDesktopPlatform(Theme.of(context).platform)
-              ? ScrollCacheExtent.pixels(extent)
-              : null,
-          itemCount: controller.entries.length,
-          itemBuilder: (context, index) => _buildRow(context, index),
-        ),
-        // 02 §2.6's inline editor: it floats over the edited row at the
-        // row's scroll offset, so it rides the row through scrolling
-        // and a validation error extends below the row (the listing
-        // itself stays mounted underneath).
-        if (controller.renameTarget != null)
-          AnimatedBuilder(
-            animation: scrollController,
-            builder: (context, _) {
-              final index = controller.renameIndex;
-              final offset = scrollController.hasClients
-                  ? scrollController.offset
-                  : 0.0;
-              return PositionedDirectional(
-                start: renameStart,
-                // No clamp: a row scrolled above the viewport carries
-                // its editor off with it — the Stack clips the
-                // overflow, and clipped pixels never hit-test. A
-                // detached session (the row left the listing) anchors
-                // at the top so its fault stays visible.
-                top: index == null ? 0.0 : index * extent - offset,
-                child: _RenameEditor(
-                  key: renameEditorKey,
-                  controller: controller,
-                  rowExtent: extent,
-                  maxWidth: constraints.maxWidth - renameStart - renameEnd,
-                ),
-              );
-            },
+        children: [
+          ListView.builder(
+            // The drop zone's hit-testing anchor (D14): row extents are
+            // fixed, so position math against this box's render size maps
+            // a drop onto the rendered rows — never an unrendered index.
+            // Zero padding keeps the box's origin coincident with row 0;
+            // the default MediaQuery padding would shift every index by
+            // padding/rowExtent.
+            padding: EdgeInsets.zero,
+            key: listAreaKey,
+            controller: scrollController,
+            itemExtent: extent,
+            // Keep the next row available to accessibility traversal without
+            // constructing a full offscreen band each time a desktop tab mounts.
+            // Touch scrolling retains Flutter's default cache.
+            scrollCacheExtent: isDesktopPlatform(Theme.of(context).platform)
+                ? ScrollCacheExtent.pixels(extent)
+                : null,
+            itemCount: controller.entries.length,
+            itemBuilder: (context, index) => _buildRow(context, index),
           ),
-      ],
+          // 02 §2.6's inline editor: it floats over the edited row at the
+          // row's scroll offset, so it rides the row through scrolling
+          // and a validation error extends below the row (the listing
+          // itself stays mounted underneath).
+          if (controller.renameTarget != null)
+            AnimatedBuilder(
+              animation: scrollController,
+              builder: (context, _) {
+                final index = controller.renameIndex;
+                final offset = scrollController.hasClients
+                    ? scrollController.offset
+                    : 0.0;
+                return PositionedDirectional(
+                  start: renameStart,
+                  // No clamp: a row scrolled above the viewport carries
+                  // its editor off with it — the Stack clips the
+                  // overflow, and clipped pixels never hit-test. A
+                  // detached session (the row left the listing) anchors
+                  // at the top so its fault stays visible.
+                  top: index == null ? 0.0 : index * extent - offset,
+                  child: _RenameEditor(
+                    key: renameEditorKey,
+                    controller: controller,
+                    rowExtent: extent,
+                    maxWidth: constraints.maxWidth - renameStart - renameEnd,
+                  ),
+                );
+              },
+            ),
+        ],
       ),
     );
   }
@@ -2229,9 +2237,7 @@ class _PaneSurface extends StatelessWidget {
       // The Escape handlers belong to the gesture: an accepted drop
       // completes, anything else cancels. Unlike onDragEnd, both fire
       // even after a mid-drag rebuild unmounted this row.
-      onDraggableCanceled: onDragEnded == null
-          ? null
-          : (_, _) => onDragEnded(),
+      onDraggableCanceled: onDragEnded == null ? null : (_, _) => onDragEnded(),
       onDragCompleted: onDragEnded,
       onDragUpdate: gestures.onDragUpdate,
       // An Escape-cancelled drag paints no avatar: only the pointer
@@ -2404,8 +2410,10 @@ class _RenameEditorState extends State<_RenameEditor> {
     final lineHeight = painter.height;
     painter.dispose();
     final maxWidth = widget.maxWidth < 0 ? 0.0 : widget.maxWidth;
-    final boxWidth = (textWidth + 2 * _renameTextOffset + _renameSlack)
-        .clamp(0.0, maxWidth);
+    final boxWidth = (textWidth + 2 * _renameTextOffset + _renameSlack).clamp(
+      0.0,
+      maxWidth,
+    );
     // As tall as the row allows (22 px on desktop) and centered in it;
     // a touch row's 48 dp leaves the box at text height plus a margin.
     final boxHeight = math.min(widget.rowExtent, lineHeight + 6);
@@ -2559,9 +2567,9 @@ class _TypeAheadBadge extends StatelessWidget {
           ),
           child: Text(
             buffer,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colors.onInverseSurface,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: colors.onInverseSurface),
           ),
         ),
       ),
@@ -2750,9 +2758,7 @@ class _LocationTitle extends StatelessWidget {
     final name = path != null
         ? controller.pathLabel(path, l10n)
         : controller.remoteBookmark?.label ?? '';
-    final ancestors = path == null
-        ? const <String>[]
-        : _ancestorsOf(path);
+    final ancestors = path == null ? const <String>[] : _ancestorsOf(path);
     final editable = controller.acceptsPathInput;
 
     Widget title = Text(
@@ -3299,9 +3305,7 @@ class _QuickSelectFieldState extends State<_QuickSelectField> {
     // while the controller retains the query and its preview, so a
     // remount seeds from the session — a blank field over a live
     // preview would confirm an invisible query on Enter.
-    _query = TextEditingController(
-      text: widget.controller.quickSelectQuery,
-    );
+    _query = TextEditingController(text: widget.controller.quickSelectQuery);
     // autofocus alone cannot take focus from a listing that already
     // holds it — the field must claim primary focus explicitly on open.
     WidgetsBinding.instance.addPostFrameCallback((_) {

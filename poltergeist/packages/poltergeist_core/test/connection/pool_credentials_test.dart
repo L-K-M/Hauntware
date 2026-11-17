@@ -186,59 +186,60 @@ void main() {
     expect(harness.opener.calls.last.credentials.password, _replacementSecret);
   });
 
-  test(
-    'fresh resolution prevents growth with an evicted transport secret',
-    () {
-      fakeAsync((time) {
-        // Construct inside the fake zone so recovery owns no real timers.
-        final h = _CredentialHarness();
-        completeWithoutTimers(time,
-            h.manager.openBrowseChannel('s1', paneTabId: 'keep'));
-        final original = h.opener.transports.single;
-        final firstGate = original.openGate = Completer<void>();
-        final first = h.manager.openBrowseChannel('s1', paneTabId: 'a');
-        first.ignore();
-        time.flushMicrotasks();
-        final secondGate = original.openGate = Completer<void>();
-        final second = h.manager.openBrowseChannel('s1', paneTabId: 'b');
-        second.ignore();
-        time.flushMicrotasks();
+  test('fresh resolution prevents growth with an evicted transport secret', () {
+    fakeAsync((time) {
+      // Construct inside the fake zone so recovery owns no real timers.
+      final h = _CredentialHarness();
+      completeWithoutTimers(
+        time,
+        h.manager.openBrowseChannel('s1', paneTabId: 'keep'),
+      );
+      final original = h.opener.transports.single;
+      final firstGate = original.openGate = Completer<void>();
+      final first = h.manager.openBrowseChannel('s1', paneTabId: 'a');
+      first.ignore();
+      time.flushMicrotasks();
+      final secondGate = original.openGate = Completer<void>();
+      final second = h.manager.openBrowseChannel('s1', paneTabId: 'b');
+      second.ignore();
+      time.flushMicrotasks();
 
-        const disconnected = RemoteFileException(
-          kind: RemoteFileErrorKind.disconnected,
-          operation: 'open SFTP',
-          message: 'Transport died during channel open.',
-        );
-        original.die();
-        h.opener.connectFailure = const AuthChallengeRequiredError('Auth expired');
-        firstGate.completeError(disconnected);
-        time.flushMicrotasks();
-        time.elapse(const Duration(seconds: 1));
-        time.flushMicrotasks();
-        final callsBeforeResolution = h.opener.calls.length;
-        expect(callsBeforeResolution, 2);
+      const disconnected = RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'open SFTP',
+        message: 'Transport died during channel open.',
+      );
+      original.die();
+      h.opener.connectFailure = const AuthChallengeRequiredError(
+        'Auth expired',
+      );
+      firstGate.completeError(disconnected);
+      time.flushMicrotasks();
+      time.elapse(const Duration(seconds: 1));
+      time.flushMicrotasks();
+      final callsBeforeResolution = h.opener.calls.length;
+      expect(callsBeforeResolution, 2);
 
-        final resolveGate = h.resolveGate = Completer<void>();
-        h.secret = _replacementSecret;
-        h.opener.connectFailure = null;
-        final fresh = h.manager.openBrowseChannel('s2', paneTabId: 'fresh');
-        time.elapse(const Duration(seconds: 2));
-        time.flushMicrotasks();
-        expect(h.resolutions, 2);
+      final resolveGate = h.resolveGate = Completer<void>();
+      h.secret = _replacementSecret;
+      h.opener.connectFailure = null;
+      final fresh = h.manager.openBrowseChannel('s2', paneTabId: 'fresh');
+      time.elapse(const Duration(seconds: 2));
+      time.flushMicrotasks();
+      expect(h.resolutions, 2);
 
-        // A stale acquisition cannot borrow the rejected credential while
-        // the recovery loop awaits its replacement from the vault.
-        secondGate.completeError(disconnected);
-        time.flushMicrotasks();
-        final callsDuringResolution = h.opener.calls.length;
-        resolveGate.complete();
-        completeWithoutTimers(time, Future.wait([first, second, fresh]));
-        expect(callsDuringResolution, callsBeforeResolution);
-        expect(h.opener.calls.last.credentials.password, _replacementSecret);
-        completeWithoutTimers(time, h.close());
-      });
-    },
-  );
+      // A stale acquisition cannot borrow the rejected credential while
+      // the recovery loop awaits its replacement from the vault.
+      secondGate.completeError(disconnected);
+      time.flushMicrotasks();
+      final callsDuringResolution = h.opener.calls.length;
+      resolveGate.complete();
+      completeWithoutTimers(time, Future.wait([first, second, fresh]));
+      expect(callsDuringResolution, callsBeforeResolution);
+      expect(h.opener.calls.last.credentials.password, _replacementSecret);
+      completeWithoutTimers(time, h.close());
+    });
+  });
 
   test('failed credential resolution leaves the pool retryable', () async {
     final failure = StateError('vault locked');

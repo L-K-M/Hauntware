@@ -212,10 +212,13 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
         ?.cast<String, Object?>();
     _hasAppearance = appearance != null;
     _appearance._apply(
-      appearance == null ? poltergeistInitialAppearance : decodeAppearance(appearance),
+      appearance == null
+          ? poltergeistInitialAppearance
+          : decodeAppearance(appearance),
     );
 
-    final editorTextSize = snapshot[SettingsLinkKey.editorTextSize.name] as int?;
+    final editorTextSize =
+        snapshot[SettingsLinkKey.editorTextSize.name] as int?;
     _hasEditorTextSize = editorTextSize != null;
     if (editorTextSize != null) _editorTextSize._apply(editorTextSize);
 
@@ -224,7 +227,8 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     _hasEditorFont = editorFont != null;
     if (editorFont != null) _editorFont._apply(decodeEditorFont(editorFont));
 
-    final grouping = snapshot[SettingsLinkKey.directoryGrouping.name] as String?;
+    final grouping =
+        snapshot[SettingsLinkKey.directoryGrouping.name] as String?;
     _hasDirectoryGrouping = grouping != null;
     if (grouping != null) {
       _directoryGrouping._apply(DirectoryGrouping.values.byName(grouping));
@@ -643,9 +647,7 @@ final class RemoteRecovery extends ChangeNotifier
     });
     return json == null
         ? null
-        : SecretsRestoreSummary.fromJson(
-            (json as Map).cast<String, dynamic>(),
-          );
+        : SecretsRestoreSummary.fromJson((json as Map).cast<String, dynamic>());
   }
 }
 

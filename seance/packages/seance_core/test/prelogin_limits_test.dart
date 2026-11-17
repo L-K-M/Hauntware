@@ -10,10 +10,12 @@ void main() {
   test('default prelogin work factors are accepted', () async {
     const params = Argon2Params();
     final salt = base64Encode(List<int>.filled(16, 0));
-    final transport = MockClient((request) async => http.Response(
-          jsonEncode({'argonSalt': salt, 'argonParams': params.toJson()}),
-          HttpStatus.ok,
-        ));
+    final transport = MockClient(
+      (request) async => http.Response(
+        jsonEncode({'argonSalt': salt, 'argonParams': params.toJson()}),
+        HttpStatus.ok,
+      ),
+    );
     addTearDown(transport.close);
     final client = HttpSyncClient(
       baseUrl: 'https://sync.test',

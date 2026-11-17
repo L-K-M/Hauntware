@@ -1922,10 +1922,12 @@ class _ConnectionError extends StatelessWidget {
         return;
       }
       if (!context.mounted || !identical(state.tabById(tab.id), tab)) return;
-      unawaited(state.reconnect(
-        tab.id,
-        keyPassphrase: (serverId: current.id, passphrase: answer.passphrase),
-      ));
+      unawaited(
+        state.reconnect(
+          tab.id,
+          keyPassphrase: (serverId: current.id, passphrase: answer.passphrase),
+        ),
+      );
       if (answer.saveToVault && context.mounted) {
         await offerRecoveryCode(context, state);
       }

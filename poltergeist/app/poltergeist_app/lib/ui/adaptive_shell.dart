@@ -2,8 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
-import 'package:ghost_ui/ghost_ui.dart'
-    show GhostPaneEdge, GhostResizeHandle;
+import 'package:ghost_ui/ghost_ui.dart' show GhostPaneEdge, GhostResizeHandle;
 
 import 'layout/pane_allocation.dart';
 import 'shell/shell_splitter.dart';
@@ -146,11 +145,10 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
         minimumWidth: _displayedPrimaryWidth(allocation, 0),
         maximumWidth: _displayedPrimaryWidth(allocation, 1),
         edge: GhostPaneEdge.leading,
-        widthAfterStep: (delta) =>
-            _displayedPrimaryWidth(
-              allocation,
-              _ratioAfterLogicalDelta(allocation, delta),
-            ),
+        widthAfterStep: (delta) => _displayedPrimaryWidth(
+          allocation,
+          _ratioAfterLogicalDelta(allocation, delta),
+        ),
         onStep: _stepPaneRatio,
         // The shell tracks no drag state of its own.
         onStart: () {},

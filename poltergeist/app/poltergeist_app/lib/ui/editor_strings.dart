@@ -186,13 +186,11 @@ class PoltergeistEditorStrings extends EditorStrings {
   // The brace-bearing regex tokens ride as placeholders: gen-l10n's ICU
   // parser offers no escape for literal braces inside a message.
   @override
-  List<String> get grepCheatSheetDart => l10n
-      .editorGrepCheatSheetDart('{2,4}', '{1}', '{name}')
-      .split('\n');
+  List<String> get grepCheatSheetDart =>
+      l10n.editorGrepCheatSheetDart('{2,4}', '{1}', '{name}').split('\n');
   @override
-  List<String> get grepCheatSheetBBEdit => l10n
-      .editorGrepCheatSheetBBEdit('{NNNN}')
-      .split('\n');
+  List<String> get grepCheatSheetBBEdit =>
+      l10n.editorGrepCheatSheetBBEdit('{NNNN}').split('\n');
 
   // ── Text-tools browser ──
 
@@ -273,7 +271,8 @@ class PoltergeistEditorStrings extends EditorStrings {
     'normalizeLineEndings' => l10n.editorTextToolNameNormalizeLineEndings,
     'convertIndentationToSpaces' =>
       l10n.editorTextToolNameConvertIndentationToSpaces,
-    'convertIndentationToTabs' => l10n.editorTextToolNameConvertIndentationToTabs,
+    'convertIndentationToTabs' =>
+      l10n.editorTextToolNameConvertIndentationToTabs,
     'convertTabsToSpaces' => l10n.editorTextToolNameConvertTabsToSpaces,
     'hardWrap' => l10n.editorTextToolNameHardWrap,
     'straightenQuotes' => l10n.editorTextToolNameStraightenQuotes,
@@ -320,7 +319,8 @@ class PoltergeistEditorStrings extends EditorStrings {
     'sortLines' => l10n.editorTextToolDescriptionSortLines,
     'reverseLines' => l10n.editorTextToolDescriptionReverseLines,
     'shuffleLines' => l10n.editorTextToolDescriptionShuffleLines,
-    'removeDuplicateLines' => l10n.editorTextToolDescriptionRemoveDuplicateLines,
+    'removeDuplicateLines' =>
+      l10n.editorTextToolDescriptionRemoveDuplicateLines,
     'removeBlankLines' => l10n.editorTextToolDescriptionRemoveBlankLines,
     'collapseBlankLines' => l10n.editorTextToolDescriptionCollapseBlankLines,
     'uppercase' => l10n.editorTextToolDescriptionUppercase,
@@ -388,8 +388,7 @@ class PoltergeistEditorStrings extends EditorStrings {
       'sortLines' => l10n.editorTextToolKeywordsSortLines,
       'reverseLines' => l10n.editorTextToolKeywordsReverseLines,
       'shuffleLines' => l10n.editorTextToolKeywordsShuffleLines,
-      'removeDuplicateLines' =>
-        l10n.editorTextToolKeywordsRemoveDuplicateLines,
+      'removeDuplicateLines' => l10n.editorTextToolKeywordsRemoveDuplicateLines,
       'removeBlankLines' => l10n.editorTextToolKeywordsRemoveBlankLines,
       'collapseBlankLines' => l10n.editorTextToolKeywordsCollapseBlankLines,
       'uppercase' => l10n.editorTextToolKeywordsUppercase,
@@ -445,63 +444,63 @@ class PoltergeistEditorStrings extends EditorStrings {
   }
 
   @override
-  String textToolOptionName(String toolId, String optionId) =>
-      switch ((toolId, optionId)) {
-        ('sortLines', 'order') => l10n.editorTextToolOptionSortLinesOrder,
-        ('sortLines', 'ignoreCase') =>
-          l10n.editorTextToolOptionSortLinesIgnoreCase,
-        ('sortLines', 'numbersByValue') =>
-          l10n.editorTextToolOptionSortLinesNumbersByValue,
-        ('sortLines', 'byLength') => l10n.editorTextToolOptionSortLinesByLength,
-        ('sortLines', 'ignoreLeadingWhitespace') =>
-          l10n.editorTextToolOptionSortLinesIgnoreLeadingWhitespace,
-        ('sortLines', 'keepFirstLine') =>
-          l10n.editorTextToolOptionSortLinesKeepFirstLine,
-        ('removeDuplicateLines', 'adjacentOnly') =>
-          l10n.editorTextToolOptionRemoveDuplicateLinesAdjacentOnly,
-        ('removeDuplicateLines', 'ignoreCase') =>
-          l10n.editorTextToolOptionRemoveDuplicateLinesIgnoreCase,
-        ('removeDuplicateLines', 'ignoreSurroundingWhitespace') =>
-          l10n.editorTextToolOptionRemoveDuplicateLinesIgnoreSurroundingWhitespace,
-        ('removeDuplicateLines', 'keepBlankLines') =>
-          l10n.editorTextToolOptionRemoveDuplicateLinesKeepBlankLines,
-        ('removeDuplicateLines', 'removeEveryCopy') =>
-          l10n.editorTextToolOptionRemoveDuplicateLinesRemoveEveryCopy,
-        ('zapGremlins', 'controls') => l10n.editorTextToolOptionZapGremlinsControls,
-        ('zapGremlins', 'invisible') =>
-          l10n.editorTextToolOptionZapGremlinsInvisible,
-        ('zapGremlins', 'bidi') => l10n.editorTextToolOptionZapGremlinsBidi,
-        ('zapGremlins', 'damaged') => l10n.editorTextToolOptionZapGremlinsDamaged,
-        ('zapGremlins', 'nonAscii') =>
-          l10n.editorTextToolOptionZapGremlinsNonAscii,
-        ('zapGremlins', 'action') => l10n.editorTextToolOptionZapGremlinsAction,
-        ('zapGremlins', 'character') =>
-          l10n.editorTextToolOptionZapGremlinsCharacter,
-        ('prefixSuffixLines', 'mode') =>
-          l10n.editorTextToolOptionPrefixSuffixLinesMode,
-        ('prefixSuffixLines', 'where') =>
-          l10n.editorTextToolOptionPrefixSuffixLinesWhere,
-        ('prefixSuffixLines', 'text') =>
-          l10n.editorTextToolOptionPrefixSuffixLinesText,
-        ('prefixSuffixLines', 'skipBlankLines') =>
-          l10n.editorTextToolOptionPrefixSuffixLinesSkipBlankLines,
-        ('numberLines', 'mode') => l10n.editorTextToolOptionNumberLinesMode,
-        ('numberLines', 'start') => l10n.editorTextToolOptionNumberLinesStart,
-        ('numberLines', 'step') => l10n.editorTextToolOptionNumberLinesStep,
-        ('numberLines', 'separator') =>
-          l10n.editorTextToolOptionNumberLinesSeparator,
-        ('numberLines', 'padding') => l10n.editorTextToolOptionNumberLinesPadding,
-        ('joinLinesWith', 'separator') =>
-          l10n.editorTextToolOptionJoinLinesWithSeparator,
-        ('joinLinesWith', 'trim') => l10n.editorTextToolOptionJoinLinesWithTrim,
-        ('joinLinesWith', 'skipBlankLines') =>
-          l10n.editorTextToolOptionJoinLinesWithSkipBlankLines,
-        ('convertTabsToSpaces', 'width') =>
-          l10n.editorTextToolOptionConvertTabsToSpacesWidth,
-        ('hardWrap', 'width') => l10n.editorTextToolOptionHardWrapWidth,
-        ('hardWrap', 'fill') => l10n.editorTextToolOptionHardWrapFill,
-        _ => super.textToolOptionName(toolId, optionId),
-      };
+  String textToolOptionName(String toolId, String optionId) => switch ((
+    toolId,
+    optionId,
+  )) {
+    ('sortLines', 'order') => l10n.editorTextToolOptionSortLinesOrder,
+    ('sortLines', 'ignoreCase') => l10n.editorTextToolOptionSortLinesIgnoreCase,
+    ('sortLines', 'numbersByValue') =>
+      l10n.editorTextToolOptionSortLinesNumbersByValue,
+    ('sortLines', 'byLength') => l10n.editorTextToolOptionSortLinesByLength,
+    ('sortLines', 'ignoreLeadingWhitespace') =>
+      l10n.editorTextToolOptionSortLinesIgnoreLeadingWhitespace,
+    ('sortLines', 'keepFirstLine') =>
+      l10n.editorTextToolOptionSortLinesKeepFirstLine,
+    ('removeDuplicateLines', 'adjacentOnly') =>
+      l10n.editorTextToolOptionRemoveDuplicateLinesAdjacentOnly,
+    ('removeDuplicateLines', 'ignoreCase') =>
+      l10n.editorTextToolOptionRemoveDuplicateLinesIgnoreCase,
+    ('removeDuplicateLines', 'ignoreSurroundingWhitespace') =>
+      l10n.editorTextToolOptionRemoveDuplicateLinesIgnoreSurroundingWhitespace,
+    ('removeDuplicateLines', 'keepBlankLines') =>
+      l10n.editorTextToolOptionRemoveDuplicateLinesKeepBlankLines,
+    ('removeDuplicateLines', 'removeEveryCopy') =>
+      l10n.editorTextToolOptionRemoveDuplicateLinesRemoveEveryCopy,
+    ('zapGremlins', 'controls') => l10n.editorTextToolOptionZapGremlinsControls,
+    ('zapGremlins', 'invisible') =>
+      l10n.editorTextToolOptionZapGremlinsInvisible,
+    ('zapGremlins', 'bidi') => l10n.editorTextToolOptionZapGremlinsBidi,
+    ('zapGremlins', 'damaged') => l10n.editorTextToolOptionZapGremlinsDamaged,
+    ('zapGremlins', 'nonAscii') => l10n.editorTextToolOptionZapGremlinsNonAscii,
+    ('zapGremlins', 'action') => l10n.editorTextToolOptionZapGremlinsAction,
+    ('zapGremlins', 'character') =>
+      l10n.editorTextToolOptionZapGremlinsCharacter,
+    ('prefixSuffixLines', 'mode') =>
+      l10n.editorTextToolOptionPrefixSuffixLinesMode,
+    ('prefixSuffixLines', 'where') =>
+      l10n.editorTextToolOptionPrefixSuffixLinesWhere,
+    ('prefixSuffixLines', 'text') =>
+      l10n.editorTextToolOptionPrefixSuffixLinesText,
+    ('prefixSuffixLines', 'skipBlankLines') =>
+      l10n.editorTextToolOptionPrefixSuffixLinesSkipBlankLines,
+    ('numberLines', 'mode') => l10n.editorTextToolOptionNumberLinesMode,
+    ('numberLines', 'start') => l10n.editorTextToolOptionNumberLinesStart,
+    ('numberLines', 'step') => l10n.editorTextToolOptionNumberLinesStep,
+    ('numberLines', 'separator') =>
+      l10n.editorTextToolOptionNumberLinesSeparator,
+    ('numberLines', 'padding') => l10n.editorTextToolOptionNumberLinesPadding,
+    ('joinLinesWith', 'separator') =>
+      l10n.editorTextToolOptionJoinLinesWithSeparator,
+    ('joinLinesWith', 'trim') => l10n.editorTextToolOptionJoinLinesWithTrim,
+    ('joinLinesWith', 'skipBlankLines') =>
+      l10n.editorTextToolOptionJoinLinesWithSkipBlankLines,
+    ('convertTabsToSpaces', 'width') =>
+      l10n.editorTextToolOptionConvertTabsToSpacesWidth,
+    ('hardWrap', 'width') => l10n.editorTextToolOptionHardWrapWidth,
+    ('hardWrap', 'fill') => l10n.editorTextToolOptionHardWrapFill,
+    _ => super.textToolOptionName(toolId, optionId),
+  };
 
   @override
   String textToolChoiceName(String choiceId) => switch (choiceId) {
@@ -527,9 +526,7 @@ class PoltergeistEditorStrings extends EditorStrings {
 
   @override
   String textToolDisabledToggleName(String toolId, String optionId) =>
-      l10n.editorTextToolDisabledToggle(
-        textToolOptionName(toolId, optionId),
-      );
+      l10n.editorTextToolDisabledToggle(textToolOptionName(toolId, optionId));
 
   @override
   String textToolOptionsSummary(TextToolRunRecord record) {
@@ -587,18 +584,18 @@ class PoltergeistEditorStrings extends EditorStrings {
     final name = textToolName(report.tool.id);
     final where = _wherePhrase(report.ranOn);
     return switch (report.outcome) {
-      TextToolRefused(:final reason, :final detail) => l10n
-          .editorTextToolNoticeRefused(name, _refusalText(reason, detail)),
-      TextToolUnchanged(:final scope, :final detail) => l10n
-          .editorTextToolNoticeSentence(
-            name,
-            _unchangedSentence(report.tool.id, scope, where, detail),
-          ),
-      TextToolChanged(:final changed, :final scope, :final detail) => l10n
-          .editorTextToolNoticeSentence(
-            name,
-            _changedSentence(report.tool.id, changed, scope, where, detail),
-          ),
+      TextToolRefused(:final reason, :final detail) =>
+        l10n.editorTextToolNoticeRefused(name, _refusalText(reason, detail)),
+      TextToolUnchanged(:final scope, :final detail) =>
+        l10n.editorTextToolNoticeSentence(
+          name,
+          _unchangedSentence(report.tool.id, scope, where, detail),
+        ),
+      TextToolChanged(:final changed, :final scope, :final detail) =>
+        l10n.editorTextToolNoticeSentence(
+          name,
+          _changedSentence(report.tool.id, changed, scope, where, detail),
+        ),
     };
   }
 
@@ -610,26 +607,27 @@ class PoltergeistEditorStrings extends EditorStrings {
     TextToolRanOn.caret => l10n.editorTextToolWhereCaret,
   };
 
-  String _refusalText(TextToolRefusal reason, String? detail) =>
-      switch (reason) {
-        TextToolRefusal.nothingSelected =>
-          l10n.editorTextToolRefusalNothingSelected,
-        TextToolRefusal.noWordAtCaret => l10n.editorTextToolRefusalNoWordAtCaret,
-        TextToolRefusal.resultNotText => l10n.editorTextToolRefusalResultNotText,
-        TextToolRefusal.tooLarge => l10n.editorTextToolRefusalTooLarge,
-        TextToolRefusal.requiresTabs => l10n.editorTextToolRefusalRequiresTabs,
-        TextToolRefusal.requiresNormalizedLineEndings =>
-          l10n.editorTextToolRefusalRequiresNormalizedLineEndings,
-        TextToolRefusal.noPattern => l10n.editorTextToolRefusalNoPattern,
-        TextToolRefusal.invalidPattern =>
-          l10n.editorTextToolRefusalInvalidPattern,
-        TextToolRefusal.patternFailed => l10n.editorTextToolRefusalPatternFailed,
-        TextToolRefusal.unavailable => l10n.editorTextToolRefusalUnavailable,
-        TextToolRefusal.invalidJson =>
-          detail == null
+  String _refusalText(
+    TextToolRefusal reason,
+    String? detail,
+  ) => switch (reason) {
+    TextToolRefusal.nothingSelected =>
+      l10n.editorTextToolRefusalNothingSelected,
+    TextToolRefusal.noWordAtCaret => l10n.editorTextToolRefusalNoWordAtCaret,
+    TextToolRefusal.resultNotText => l10n.editorTextToolRefusalResultNotText,
+    TextToolRefusal.tooLarge => l10n.editorTextToolRefusalTooLarge,
+    TextToolRefusal.requiresTabs => l10n.editorTextToolRefusalRequiresTabs,
+    TextToolRefusal.requiresNormalizedLineEndings =>
+      l10n.editorTextToolRefusalRequiresNormalizedLineEndings,
+    TextToolRefusal.noPattern => l10n.editorTextToolRefusalNoPattern,
+    TextToolRefusal.invalidPattern => l10n.editorTextToolRefusalInvalidPattern,
+    TextToolRefusal.patternFailed => l10n.editorTextToolRefusalPatternFailed,
+    TextToolRefusal.unavailable => l10n.editorTextToolRefusalUnavailable,
+    TextToolRefusal.invalidJson =>
+      detail == null
           ? l10n.editorTextToolRefusalInvalidJson
           : l10n.editorTextToolRefusalInvalidJsonAt(detail),
-      };
+  };
 
   String _changedSentence(
     String id,
@@ -641,9 +639,7 @@ class PoltergeistEditorStrings extends EditorStrings {
     'sortLines' => l10n.editorTextToolChangedSortLines(changed, scope, where),
     'reverseLines' => l10n.editorTextToolChangedReverseLines(scope, where),
     'shuffleLines' => l10n.editorTextToolChangedShuffleLines(scope, where),
-    'removeDuplicateLines' ||
-    'keepLinesMatching' ||
-    'deleteLinesMatching' =>
+    'removeDuplicateLines' || 'keepLinesMatching' || 'deleteLinesMatching' =>
       l10n.editorTextToolChangedRemovedOfScope(changed, scope, where),
     'removeBlankLines' => l10n.editorTextToolChangedRemoveBlankLines(
       changed,
@@ -653,8 +649,7 @@ class PoltergeistEditorStrings extends EditorStrings {
       changed,
       where,
     ),
-    'trimLeadingWhitespace' ||
-    'trimTrailingWhitespace' =>
+    'trimLeadingWhitespace' || 'trimTrailingWhitespace' =>
       l10n.editorTextToolChangedTrimmedWhitespaceOn(changed, scope, where),
     'normalizeSpaces' => l10n.editorTextToolChangedNormalizedSpaces(
       changed,
@@ -676,8 +671,7 @@ class PoltergeistEditorStrings extends EditorStrings {
     'pascalCase' ||
     'snakeCase' ||
     'kebabCase' ||
-    'constantCase' =>
-      l10n.editorTextToolChangedChangedCase(changed, where),
+    'constantCase' => l10n.editorTextToolChangedChangedCase(changed, where),
     'convertIndentationToSpaces' =>
       l10n.editorTextToolChangedConvertedIndentationToSpaces(
         changed,
@@ -718,25 +712,14 @@ class PoltergeistEditorStrings extends EditorStrings {
       changed,
       where,
     ),
-    'unwrapParagraphs' => l10n.editorTextToolChangedUnwrapped(
-      changed,
-      where,
-    ),
-    'prefixSuffixLines' ||
-    'numberLines' => l10n.editorTextToolChangedChangedOfScope(
-      changed,
-      scope,
-      where,
-    ),
+    'unwrapParagraphs' => l10n.editorTextToolChangedUnwrapped(changed, where),
+    'prefixSuffixLines' || 'numberLines' =>
+      l10n.editorTextToolChangedChangedOfScope(changed, scope, where),
     'joinLinesWith' => l10n.editorTextToolChangedJoined(changed, where),
-    'urlEncode' || 'base64Encode' => l10n.editorTextToolChangedEncoded(
-      changed,
-      where,
-    ),
-    'urlDecode' || 'base64Decode' => l10n.editorTextToolChangedDecoded(
-      changed,
-      where,
-    ),
+    'urlEncode' ||
+    'base64Encode' => l10n.editorTextToolChangedEncoded(changed, where),
+    'urlDecode' ||
+    'base64Decode' => l10n.editorTextToolChangedDecoded(changed, where),
     'htmlEntityEncode' => l10n.editorTextToolChangedEncodedAsEntities(
       changed,
       where,
@@ -763,11 +746,7 @@ class PoltergeistEditorStrings extends EditorStrings {
   String _asciiChangedSentence(int changed, String where, String? detail) {
     final left = _unmappedCount(detail);
     return left > 0
-        ? l10n.editorTextToolChangedConvertToAsciiWithLeft(
-            changed,
-            where,
-            left,
-          )
+        ? l10n.editorTextToolChangedConvertToAsciiWithLeft(changed, where, left)
         : l10n.editorTextToolChangedConvertToAscii(changed, where);
   }
 
@@ -777,15 +756,18 @@ class PoltergeistEditorStrings extends EditorStrings {
     final parts = detail?.split(':') ?? const [];
     final lines = parts.lastOrNull == 'lines';
     return switch (parts.firstOrNull) {
-      'clipboard' => lines
-          ? l10n.editorTextToolChangedExtractCopiedLines(count)
-          : l10n.editorTextToolChangedExtractCopiedMatches(count),
-      'newDocument' => lines
-          ? l10n.editorTextToolChangedExtractOpenedLines(count)
-          : l10n.editorTextToolChangedExtractOpenedMatches(count),
-      _ => lines
-          ? l10n.editorTextToolChangedExtractedLines(count, where)
-          : l10n.editorTextToolChangedExtractedMatches(count, where),
+      'clipboard' =>
+        lines
+            ? l10n.editorTextToolChangedExtractCopiedLines(count)
+            : l10n.editorTextToolChangedExtractCopiedMatches(count),
+      'newDocument' =>
+        lines
+            ? l10n.editorTextToolChangedExtractOpenedLines(count)
+            : l10n.editorTextToolChangedExtractOpenedMatches(count),
+      _ =>
+        lines
+            ? l10n.editorTextToolChangedExtractedLines(count, where)
+            : l10n.editorTextToolChangedExtractedMatches(count, where),
     };
   }
 
@@ -795,15 +777,13 @@ class PoltergeistEditorStrings extends EditorStrings {
     String where,
     String? detail,
   ) => switch (id) {
-    'extractMatches' => detail == null
-        ? l10n.editorTextToolUnchangedNoMatches(where)
-        : _extractSentence(scope, where, detail),
+    'extractMatches' =>
+      detail == null
+          ? l10n.editorTextToolUnchangedNoMatches(where)
+          : _extractSentence(scope, where, detail),
     'sortLines' => l10n.editorTextToolUnchangedAlreadyInOrder(scope, where),
-    'reverseLines' ||
-    'shuffleLines' => l10n.editorTextToolUnchangedNothingToChangeScope(
-      scope,
-      where,
-    ),
+    'reverseLines' || 'shuffleLines' =>
+      l10n.editorTextToolUnchangedNothingToChangeScope(scope, where),
     'removeDuplicateLines' => l10n.editorTextToolUnchangedNoDuplicateLines(
       where,
     ),
@@ -817,10 +797,8 @@ class PoltergeistEditorStrings extends EditorStrings {
     'normalizeLineEndings' => l10n.editorTextToolUnchangedEndingsConsistent(
       where,
     ),
-    'convertIndentationToSpaces' ||
-    'convertIndentationToTabs' => l10n.editorTextToolUnchangedNothingToConvert(
-      where,
-    ),
+    'convertIndentationToSpaces' || 'convertIndentationToTabs' =>
+      l10n.editorTextToolUnchangedNothingToConvert(where),
     'uppercase' ||
     'lowercase' ||
     'titleCase' ||
@@ -843,9 +821,8 @@ class PoltergeistEditorStrings extends EditorStrings {
     'removeAnsiEscapes' => l10n.editorTextToolUnchangedNoEscapeSequences(where),
     'unwrapParagraphs' => l10n.editorTextToolUnchangedNothingToUnwrap(where),
     'joinLinesWith' => l10n.editorTextToolUnchangedNothingToJoin(where),
-    'urlDecode' || 'base64Decode' => l10n.editorTextToolUnchangedNothingToDecode(
-      where,
-    ),
+    'urlDecode' ||
+    'base64Decode' => l10n.editorTextToolUnchangedNothingToDecode(where),
     'htmlEntityDecode' => l10n.editorTextToolUnchangedNoEntities(where),
     'unescapeBackslashSequences' => l10n.editorTextToolUnchangedNoEscapes(
       where,
@@ -902,8 +879,8 @@ class PoltergeistEditorStrings extends EditorStrings {
       changed,
       scope,
     ),
-    TextToolRefused(:final reason, :final detail) => l10n
-        .editorTextToolPreviewRefused(_refusalText(reason, detail)),
+    TextToolRefused(:final reason, :final detail) =>
+      l10n.editorTextToolPreviewRefused(_refusalText(reason, detail)),
     TextToolUnchanged() => l10n.editorTextToolPreviewNothing,
   };
 
@@ -922,11 +899,9 @@ class PoltergeistEditorStrings extends EditorStrings {
     ),
     'removeBlankLines' => l10n.editorTextToolPreviewWillRemoveLines(changed),
     'collapseBlankLines' => l10n.editorTextToolPreviewWillCollapse(changed),
-    'trimLeadingWhitespace' ||
-    'trimTrailingWhitespace' => l10n.editorTextToolPreviewWillTrimLines(changed),
-    'normalizeSpaces' => l10n.editorTextToolPreviewWillNormalizeSpaces(
-      changed,
-    ),
+    'trimLeadingWhitespace' || 'trimTrailingWhitespace' =>
+      l10n.editorTextToolPreviewWillTrimLines(changed),
+    'normalizeSpaces' => l10n.editorTextToolPreviewWillNormalizeSpaces(changed),
     'uppercase' => l10n.editorTextToolPreviewWillUppercase(changed),
     'lowercase' => l10n.editorTextToolPreviewWillLowercase(changed),
     'removeAnsiEscapes' => l10n.editorTextToolPreviewWillRemoveEscapeSequences(

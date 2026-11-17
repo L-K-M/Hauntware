@@ -47,17 +47,27 @@ void main() {
     final channel = await harness.openLocal(root.path);
 
     // Both requests enter before validation resumes; the later stop must win.
-    final watching = harness.call((id) => WatchLocalDirectoryRequest(
-      requestId: id, channelId: channel.channelId, path: root.path,
-    ));
-    final stopping = harness.call((id) => UnwatchLocalDirectoryRequest(
-      requestId: id, channelId: channel.channelId,
-    ));
+    final watching = harness.call(
+      (id) => WatchLocalDirectoryRequest(
+        requestId: id,
+        channelId: channel.channelId,
+        path: root.path,
+      ),
+    );
+    final stopping = harness.call(
+      (id) => UnwatchLocalDirectoryRequest(
+        requestId: id,
+        channelId: channel.channelId,
+      ),
+    );
     await stopping;
     await watching;
 
-    expect(backend.controllers.values.any((c) => c.hasListener), isFalse,
-      reason: 'an acknowledged unwatch must not be undone by older validation');
+    expect(
+      backend.controllers.values.any((c) => c.hasListener),
+      isFalse,
+      reason: 'an acknowledged unwatch must not be undone by older validation',
+    );
   });
 
   test('a superseded watch answers the typed cancelled refusal', () async {
@@ -128,28 +138,30 @@ void main() {
     expect(backend.controllers.keys, [subCanonical]);
   });
 
-  test('shutdown superseding a validating watch answers disconnected',
-      () async {
-    final root = _fixture('watch-shutdown-race-');
-    final backend = FakeWatchBackend();
-    final harness = HostHarness(localWatch: backend);
-    addTearDown(harness.dispose);
-    final channel = await harness.openLocal(root.path);
+  test(
+    'shutdown superseding a validating watch answers disconnected',
+    () async {
+      final root = _fixture('watch-shutdown-race-');
+      final backend = FakeWatchBackend();
+      final harness = HostHarness(localWatch: backend);
+      addTearDown(harness.dispose);
+      final channel = await harness.openLocal(root.path);
 
-    final watching = harness.call(
-      (id) => WatchLocalDirectoryRequest(
-        requestId: id,
-        channelId: channel.channelId,
-        path: channel.homePath,
-      ),
-    );
-    await harness.call((id) => ShutdownRequest(requestId: id));
+      final watching = harness.call(
+        (id) => WatchLocalDirectoryRequest(
+          requestId: id,
+          channelId: channel.channelId,
+          path: channel.homePath,
+        ),
+      );
+      await harness.call((id) => ShutdownRequest(requestId: id));
 
-    final result = await watching;
-    expect(result, isA<EngineError>());
-    expect((result as EngineError).kind, RemoteFileErrorKind.disconnected);
-    expect(backend.controllers, isEmpty);
-  });
+      final result = await watching;
+      expect(result, isA<EngineError>());
+      expect((result as EngineError).kind, RemoteFileErrorKind.disconnected);
+      expect(backend.controllers, isEmpty);
+    },
+  );
 
   test('an unwatch ack means the backend cancellation completed', () async {
     final root = _fixture('watch-gated-unwatch-');
@@ -186,8 +198,11 @@ void main() {
     // Deterministic: a wrongly-immediate ack completes within the pumped
     // event-loop turns; no wall-clock sleep.
     await pumpEventQueue();
-    expect(acknowledged, isFalse,
-        reason: 'the unwatch ack must wait out the backend cancellation');
+    expect(
+      acknowledged,
+      isFalse,
+      reason: 'the unwatch ack must wait out the backend cancellation',
+    );
     expect(backend.cancelled, [channel.homePath]);
 
     gate.complete();

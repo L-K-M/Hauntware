@@ -51,10 +51,14 @@ Future<void> _pumpShell(
 }
 
 Future<void> _focusSplitter(WidgetTester tester) async {
-  Focus.of(tester.element(find.descendant(
-    of: find.byKey(AdaptiveShell.splitterKey),
-    matching: find.byType(MouseRegion),
-  ))).requestFocus();
+  Focus.of(
+    tester.element(
+      find.descendant(
+        of: find.byKey(AdaptiveShell.splitterKey),
+        matching: find.byType(MouseRegion),
+      ),
+    ),
+  ).requestFocus();
   await tester.pump();
 }
 
@@ -102,19 +106,18 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    Future<void> pump({required SecondPaneIntent intent}) =>
-        tester.pumpWidget(
-          MaterialApp(
-            home: AdaptiveShell(
-              resizeLabel: 'Resize panes',
-              formatRatio: (ratio) => '${(ratio * 100).round()}%',
-              secondPaneIntent: intent,
-              onSecondPaneVisibilityChanged: reports.add,
-              primary: _pane('A'),
-              secondary: _pane('B'),
-            ),
-          ),
-        );
+    Future<void> pump({required SecondPaneIntent intent}) => tester.pumpWidget(
+      MaterialApp(
+        home: AdaptiveShell(
+          resizeLabel: 'Resize panes',
+          formatRatio: (ratio) => '${(ratio * 100).round()}%',
+          secondPaneIntent: intent,
+          onSecondPaneVisibilityChanged: reports.add,
+          primary: _pane('A'),
+          secondary: _pane('B'),
+        ),
+      ),
+    );
 
     // The stage-2 auto-hide reports through the same channel a user
     // hide does — one mechanism, two intents (02 §1/§3).
@@ -164,10 +167,13 @@ void main() {
     ).colorScheme.primary;
     final outline = find.descendant(
       of: find.byKey(AdaptiveShell.splitterKey),
-      matching: find.byWidgetPredicate((widget) => widget is Container &&
-          widget.color == primary &&
-          widget.constraints?.minWidth == 3 &&
-          widget.constraints?.maxWidth == 3),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.color == primary &&
+            widget.constraints?.minWidth == 3 &&
+            widget.constraints?.maxWidth == 3,
+      ),
     );
     expect(outline, findsOneWidget);
   });
@@ -289,21 +295,24 @@ void main() {
     expect(after - before, closeTo(32, 0.000001));
   });
 
-  testWidgets('keeps cumulative drag deltas when direction reverses before a frame', (tester) async {
-    await _pumpShell(tester);
-    final pane = find.byKey(AdaptiveShell.primaryPaneKey);
-    final before = tester.getSize(pane).width;
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byKey(AdaptiveShell.splitterKey)),
-    );
-    await gesture.moveBy(const Offset(20, 0));
-    await gesture.moveBy(const Offset(12, 0));
-    await gesture.moveBy(const Offset(-5, 0));
-    await gesture.up();
-    await tester.pump();
+  testWidgets(
+    'keeps cumulative drag deltas when direction reverses before a frame',
+    (tester) async {
+      await _pumpShell(tester);
+      final pane = find.byKey(AdaptiveShell.primaryPaneKey);
+      final before = tester.getSize(pane).width;
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(AdaptiveShell.splitterKey)),
+      );
+      await gesture.moveBy(const Offset(20, 0));
+      await gesture.moveBy(const Offset(12, 0));
+      await gesture.moveBy(const Offset(-5, 0));
+      await gesture.up();
+      await tester.pump();
 
-    expect(tester.getSize(pane).width - before, closeTo(27, 0.000001));
-  });
+      expect(tester.getSize(pane).width - before, closeTo(27, 0.000001));
+    },
+  );
 
   testWidgets('persists one final ratio after a drag', (tester) async {
     final savedRatios = <double>[];
@@ -347,7 +356,9 @@ void main() {
     expect(savedRatios, hasLength(3));
   });
 
-  testWidgets('does not persist a keyboard step twice when focus leaves', (tester) async {
+  testWidgets('does not persist a keyboard step twice when focus leaves', (
+    tester,
+  ) async {
     final savedRatios = <double>[];
     await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
 

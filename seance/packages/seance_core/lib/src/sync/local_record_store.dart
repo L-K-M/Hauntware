@@ -63,10 +63,7 @@ abstract interface class RecordEnvelopeFloorStore implements LocalRecordStore {
 /// server's reported winner; otherwise the local edit remains dirty for a
 /// later pull to reconcile.
 abstract interface class PushSettlingRecordStore implements LocalRecordStore {
-  Future<EncryptedRecord?> settlePush(
-    EncryptedRecord sent,
-    PushResult result,
-  );
+  Future<EncryptedRecord?> settlePush(EncryptedRecord sent, PushResult result);
 }
 
 /// A durable mirror that can withdraw an unsent local publication.

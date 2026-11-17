@@ -14,9 +14,11 @@ import 'package:poltergeist_app/theme/theme_presets.dart';
 /// decode a hand-edited settings file gets, and the preset identity that
 /// names a palette.
 void main() {
-  ThemePalette roundTrip(ThemePalette palette) => poltergeistThemeCodec.fromJson(
-    (jsonDecode(jsonEncode(palette.toJson())) as Map).cast<String, Object?>(),
-  );
+  ThemePalette roundTrip(ThemePalette palette) =>
+      poltergeistThemeCodec.fromJson(
+        (jsonDecode(jsonEncode(palette.toJson())) as Map)
+            .cast<String, Object?>(),
+      );
 
   group('colour text', () {
     test('reads every CSS hex form, with or without a prefix', () {
@@ -161,15 +163,23 @@ void main() {
 
     test('a terminal block alone is not a theme', () {
       expect(
-        poltergeistThemeCodec.tryParse('{"terminal": {"background": "#000000"}}'),
+        poltergeistThemeCodec.tryParse(
+          '{"terminal": {"background": "#000000"}}',
+        ),
         isNull,
       );
     });
 
     test('names are trimmed and a blank one names what it matches', () {
-      expect(poltergeistThemeCodec.fromJson(const {'name': '  Ocean  '}).name, 'Ocean');
       expect(
-        poltergeistThemeCodec.fromJson(const {'name': '   ', 'accent': '#123456'}).name,
+        poltergeistThemeCodec.fromJson(const {'name': '  Ocean  '}).name,
+        'Ocean',
+      );
+      expect(
+        poltergeistThemeCodec.fromJson(const {
+          'name': '   ',
+          'accent': '#123456',
+        }).name,
         ThemePalette.customName,
       );
       expect(

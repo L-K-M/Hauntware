@@ -246,9 +246,9 @@ void main() {
       final chrome = theme.extension<PoltergeistChrome>()!;
       expect(
         chrome.statusUnknown,
-        buildPoltergeistTheme(Brightness.light)
-            .extension<PoltergeistChrome>()!
-            .statusUnknown,
+        buildPoltergeistTheme(
+          Brightness.light,
+        ).extension<PoltergeistChrome>()!.statusUnknown,
       );
       expect(
         contrastRatio(chrome.statusUnknown, scheme.surface),

@@ -202,7 +202,16 @@ void main() {
     expect(window.appLockAvailability, AppLockAvailability.available);
     expect(window.settings.appLock, AppLockMode.off);
     device.reject();
-    await expectLater(window.setAppLock(AppLockMode.on), throwsA(isA<SettingsBackendException>().having((e) => e.message, 'message', 'Auth cancelled')));
+    await expectLater(
+      window.setAppLock(AppLockMode.on),
+      throwsA(
+        isA<SettingsBackendException>().having(
+          (e) => e.message,
+          'message',
+          'Auth cancelled',
+        ),
+      ),
+    );
     expect(window.settings.appLock, AppLockMode.off);
     expect((await services.settingsStore.load()).appLock, AppLockMode.off);
 
@@ -212,7 +221,16 @@ void main() {
     expect(window.settings.appLock, AppLockMode.on);
     expect((await services.settingsStore.load()).appLock, AppLockMode.on);
     device.reject();
-    await expectLater(window.setAppLock(AppLockMode.off), throwsA(isA<SettingsBackendException>().having((e) => e.message, 'message', 'Auth cancelled')));
+    await expectLater(
+      window.setAppLock(AppLockMode.off),
+      throwsA(
+        isA<SettingsBackendException>().having(
+          (e) => e.message,
+          'message',
+          'Auth cancelled',
+        ),
+      ),
+    );
     expect(window.settings.appLock, AppLockMode.on);
     device.onAuthenticate = null;
     await window.setAppLock(AppLockMode.off);
@@ -221,16 +239,22 @@ void main() {
     expect(device.prompts, 4);
   });
 
-  test('unsupported host refuses app-lock calls from the settings window', () async {
-    device.supported = AppLockAvailability.unavailable;
-    await services.appLock.refreshAvailability();
-    final window = await openWindow();
-    addTearDown(window.dispose);
-    expect(window.appLockAvailability, AppLockAvailability.unavailable);
-    await expectLater(window.setAppLock(AppLockMode.on), throwsA(isA<SettingsBackendException>()));
-    expect(services.settings.appLock, AppLockMode.off);
-    expect(device.prompts, 0);
-  });
+  test(
+    'unsupported host refuses app-lock calls from the settings window',
+    () async {
+      device.supported = AppLockAvailability.unavailable;
+      await services.appLock.refreshAvailability();
+      final window = await openWindow();
+      addTearDown(window.dispose);
+      expect(window.appLockAvailability, AppLockAvailability.unavailable);
+      await expectLater(
+        window.setAppLock(AppLockMode.on),
+        throwsA(isA<SettingsBackendException>()),
+      );
+      expect(services.settings.appLock, AppLockMode.off);
+      expect(device.prompts, 0);
+    },
+  );
 
   test('a write from the window lands in the app and on disk', () async {
     final window = await openWindow();
@@ -251,19 +275,22 @@ void main() {
     expect(reread.terminalLigatures, TerminalLigatures.off);
   });
 
-  test('an editor text size set in the window resizes the app\'s editors', () async {
-    final window = await openWindow();
-    addTearDown(window.dispose);
-    var notified = 0;
-    state.addListener(() => notified++);
+  test(
+    'an editor text size set in the window resizes the app\'s editors',
+    () async {
+      final window = await openWindow();
+      addTearDown(window.dispose);
+      var notified = 0;
+      state.addListener(() => notified++);
 
-    await window.setEditorFontSize(28);
+      await window.setEditorFontSize(28);
 
-    expect(services.settings.editorFontSize, 28);
-    expect(notified, greaterThan(0));
-    final reread = await services.settingsStore.load();
-    expect(reread.editorFontSize, 28);
-  });
+      expect(services.settings.editorFontSize, 28);
+      expect(notified, greaterThan(0));
+      final reread = await services.settingsStore.load();
+      expect(reread.editorFontSize, 28);
+    },
+  );
 
   test('an editor font set in the window redraws the app\'s editors', () async {
     final window = await openWindow();
@@ -337,14 +364,16 @@ void main() {
   });
 
   test('the inbox crosses the link both ways', () async {
-    await state.saveServer(ServerConfig(
-      id: 's1',
-      label: 'prod-db-1',
-      host: 'db.example.com',
-      username: 'u',
-      createdAt: 1,
-      updatedAt: 1,
-    ));
+    await state.saveServer(
+      ServerConfig(
+        id: 's1',
+        label: 'prod-db-1',
+        host: 'db.example.com',
+        username: 'u',
+        createdAt: 1,
+        updatedAt: 1,
+      ),
+    );
     final window = await openWindow(SettingsTab.inbox);
     addTearDown(window.dispose);
 

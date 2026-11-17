@@ -19,8 +19,7 @@ MockClient _currentServerClient(
   Future<http.Response> Function(http.Request) handler,
 ) {
   return MockClient((request) async {
-    if (request.method == 'GET' &&
-        request.url.path == '/v1/records/legacy') {
+    if (request.method == 'GET' && request.url.path == '/v1/records/legacy') {
       return http.Response(
         jsonEncode(
           const LegacyRecordPage(
@@ -197,13 +196,15 @@ void main() {
           }
           final since = int.parse(request.url.queryParameters['since']!);
           return http.Response(
-            jsonEncode(PullResponse(
-              records: [
-                for (final record in remote)
-                  if (record.seq! > since) record,
-              ],
-              latestSeq: sequence,
-            ).toJson()),
+            jsonEncode(
+              PullResponse(
+                records: [
+                  for (final record in remote)
+                    if (record.seq! > since) record,
+                ],
+                latestSeq: sequence,
+              ).toJson(),
+            ),
             HttpStatus.ok,
           );
         }
@@ -219,10 +220,9 @@ void main() {
           );
         }
         return http.Response(
-          jsonEncode(PushResponse(
-            results: results,
-            latestSeq: sequence,
-          ).toJson()),
+          jsonEncode(
+            PushResponse(results: results, latestSeq: sequence).toJson(),
+          ),
           HttpStatus.ok,
         );
       });

@@ -426,16 +426,15 @@ final class _StagedFileVaultRekey implements StagedVaultRekey {
   bool get _owned => identical(_store._ownedRekey, this);
 
   @override
-  Future<VaultRekeyOutcome> settle(List<int> key) => _store._serialize(
-    () async {
-      if (!_owned) {
-        throw StateError('This vault re-key is no longer staged.');
-      }
-      final outcome = await _store._settle(key);
-      _store._ownedRekey = null;
-      return outcome;
-    },
-  );
+  Future<VaultRekeyOutcome> settle(List<int> key) =>
+      _store._serialize(() async {
+        if (!_owned) {
+          throw StateError('This vault re-key is no longer staged.');
+        }
+        final outcome = await _store._settle(key);
+        _store._ownedRekey = null;
+        return outcome;
+      });
 
   @override
   void release() {

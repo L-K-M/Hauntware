@@ -264,7 +264,13 @@ _DropPlan? _regroupPlan(
   return _DropPlan(
     SidebarDropIndicator.into,
     () => unawaited(
-      _dropBookmark(view, data, group, name: l10n.sidebarMoveToGroup, l10n: l10n),
+      _dropBookmark(
+        view,
+        data,
+        group,
+        name: l10n.sidebarMoveToGroup,
+        l10n: l10n,
+      ),
     ),
   );
 }

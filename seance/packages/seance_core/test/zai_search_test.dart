@@ -119,13 +119,13 @@ class FakeMcpServer {
     this.sessionId = 'session-1',
     this.streamCase = false,
   }) : assert(
-          !noise || sse || streamCase,
-          // `noise` is only read inside `_asSse`, which only runs for an SSE
-          // reply — so on its own it produces a fake identical to the default
-          // one, and a test written to prove the reader walks past a heartbeat
-          // would pass having sent none.
-          'noise only shapes SSE replies: pass sse or streamCase with it',
-        );
+         !noise || sse || streamCase,
+         // `noise` is only read inside `_asSse`, which only runs for an SSE
+         // reply — so on its own it produces a fake identical to the default
+         // one, and a test written to prove the reader walks past a heartbeat
+         // would pass having sent none.
+         'noise only shapes SSE replies: pass sse or streamCase with it',
+       );
 
   /// Answer every reply as SSE typed `Text/Event-Stream`, which is the same
   /// media type spelled the way RFC 9110 allows and this client once misread.
@@ -137,96 +137,97 @@ class FakeMcpServer {
   // today; the contract "server.client is *the* client talking to this fake"
   // is worth being true rather than observed.
   late final http.Client client = MockClient.streaming((request, body) async {
-        // Kept for this request rather than read back as `headers.last`
-        // below: the body read that follows is an await, and a concurrent
-        // request can append its own headers before this one resumes. The
-        // three records are appended together after that await, so
-        // `methods`, `headers` and `requests` share one ordering.
-        final sent = <String, String>{
-          // Lowercased: HTTP header names are case-insensitive, so a client
-          // that capitalized one would otherwise fail as a null deep inside
-          // this fake rather than as the expectation that meant to catch it.
-          for (final entry in request.headers.entries)
-            entry.key.toLowerCase(): entry.value,
-        };
-        final Object? decoded;
-        try {
-          decoded = jsonDecode(await body.bytesToString());
-        } on FormatException {
-          // Like the lowercased headers and the null-aware params below: a
-          // client bug should fail as an expectation, not as a crash deep
-          // inside this fake.
-          throw StateError('ZaiSearch sent a non-JSON body to ${request.url}');
-        }
-        if (decoded is! Map<String, dynamic>) {
-          throw StateError('ZaiSearch sent a non-object body: $decoded');
-        }
-        final payload = decoded;
-        final Object? named = payload['method'];
-        if (named is! String) {
-          // Named like the guards above: a client bug should fail as an
-          // expectation, not as a cast error deep inside this fake.
-          throw StateError(
-              'ZaiSearch sent a JSON-RPC message with no method to '
-              '${request.url}');
-        }
-        final method = named;
-        requests.add(request);
-        headers.add(sent);
-        methods.add(method);
+    // Kept for this request rather than read back as `headers.last`
+    // below: the body read that follows is an await, and a concurrent
+    // request can append its own headers before this one resumes. The
+    // three records are appended together after that await, so
+    // `methods`, `headers` and `requests` share one ordering.
+    final sent = <String, String>{
+      // Lowercased: HTTP header names are case-insensitive, so a client
+      // that capitalized one would otherwise fail as a null deep inside
+      // this fake rather than as the expectation that meant to catch it.
+      for (final entry in request.headers.entries)
+        entry.key.toLowerCase(): entry.value,
+    };
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(await body.bytesToString());
+    } on FormatException {
+      // Like the lowercased headers and the null-aware params below: a
+      // client bug should fail as an expectation, not as a crash deep
+      // inside this fake.
+      throw StateError('ZaiSearch sent a non-JSON body to ${request.url}');
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw StateError('ZaiSearch sent a non-object body: $decoded');
+    }
+    final payload = decoded;
+    final Object? named = payload['method'];
+    if (named is! String) {
+      // Named like the guards above: a client bug should fail as an
+      // expectation, not as a cast error deep inside this fake.
+      throw StateError(
+        'ZaiSearch sent a JSON-RPC message with no method to '
+        '${request.url}',
+      );
+    }
+    final method = named;
+    requests.add(request);
+    headers.add(sent);
+    methods.add(method);
 
-        if (method == 'initialize') {
-          _handshakes++;
-          // A fresh session lists from page one again, as the gateway does.
-          // Left running, a re-handshake's `tools/list` would land straight on
-          // the final page, and any test combining an expiry with paging
-          // could not tell a client that re-paginates from one that skips.
-          _toolPagesServed = 0;
-          // And the one field MCP requires the *client* to propose. The
-          // guards above fail a malformed request as an expectation rather
-          // than as a mysterious result; this is the same, for the handshake
-          // the real gateway would reject. Nothing else in this file checks
-          // it — the version every later request sends is echoed from the
-          // server's reply, so a client that proposed none would pass.
-          final initParams = payload['params'];
-          if (initParams is! Map || initParams['protocolVersion'] is! String) {
-            throw StateError(
-                'initialize proposed no protocolVersion to ${request.url}');
-          }
-        }
+    if (method == 'initialize') {
+      _handshakes++;
+      // A fresh session lists from page one again, as the gateway does.
+      // Left running, a re-handshake's `tools/list` would land straight on
+      // the final page, and any test combining an expiry with paging
+      // could not tell a client that re-paginates from one that skips.
+      _toolPagesServed = 0;
+      // And the one field MCP requires the *client* to propose. The
+      // guards above fail a malformed request as an expectation rather
+      // than as a mysterious result; this is the same, for the handshake
+      // the real gateway would reject. Nothing else in this file checks
+      // it — the version every later request sends is echoed from the
+      // server's reply, so a client that proposed none would pass.
+      final initParams = payload['params'];
+      if (initParams is! Map || initParams['protocolVersion'] is! String) {
+        throw StateError(
+          'initialize proposed no protocolVersion to ${request.url}',
+        );
+      }
+    }
 
-        if (expireSession > 0 && method == 'tools/call') {
-          _retiredId ??= _issuedSessionId;
-          expireSession--;
-          return _stream(404, '');
-        }
-        // Dead for good, not for the length of the countdown: see [_retiredId].
-        if (method != 'initialize' &&
-            _retiredId != null &&
-            sent['mcp-session-id'] == _retiredId) {
-          return _stream(404, '');
-        }
-        // A retired id answers 404, like the gateway does — so a client that
-        // re-handshakes but keeps sending the old id fails here rather than
-        // silently passing.
-        // Every request after the handshake, as the gateway does: a client
-        // that re-initializes but keeps the retired id on its notification or
-        // listing would otherwise pass half the re-handshake conversation.
-        if (method != 'initialize' &&
-            sent['mcp-session-id'] != _issuedSessionId) {
-          return _stream(404, '');
-        }
+    if (expireSession > 0 && method == 'tools/call') {
+      _retiredId ??= _issuedSessionId;
+      expireSession--;
+      return _stream(404, '');
+    }
+    // Dead for good, not for the length of the countdown: see [_retiredId].
+    if (method != 'initialize' &&
+        _retiredId != null &&
+        sent['mcp-session-id'] == _retiredId) {
+      return _stream(404, '');
+    }
+    // A retired id answers 404, like the gateway does — so a client that
+    // re-handshakes but keeps sending the old id fails here rather than
+    // silently passing.
+    // Every request after the handshake, as the gateway does: a client
+    // that re-initializes but keeps the retired id on its notification or
+    // listing would otherwise pass half the re-handshake conversation.
+    if (method != 'initialize' && sent['mcp-session-id'] != _issuedSessionId) {
+      return _stream(404, '');
+    }
 
-        // A notification carries no id and gets no body back.
-        if (!payload.containsKey('id')) return _stream(202, '');
+    // A notification carries no id and gets no body back.
+    if (!payload.containsKey('id')) return _stream(202, '');
 
-        final id = payload['id'];
-        final override = overrides[method];
-        final message = override != null
-            ? {...override, if (!override.containsKey('id')) 'id': id}
-            : {'jsonrpc': '2.0', 'id': id, 'result': _result(method, payload)};
-        return _stream(200, jsonEncode(message));
-      });
+    final id = payload['id'];
+    final override = overrides[method];
+    final message = override != null
+        ? {...override, if (!override.containsKey('id')) 'id': id}
+        : {'jsonrpc': '2.0', 'id': id, 'result': _result(method, payload)};
+    return _stream(200, jsonEncode(message));
+  });
 
   Map<String, dynamic> _result(String method, Map<String, dynamic> payload) {
     switch (method) {
@@ -304,8 +305,8 @@ class FakeMcpServer {
           // drain-deadline tests this flag exists to drive.
           ? Stream<List<int>>.fromFuture(Completer<List<int>>().future)
           : status >= 400 && resetErrorBodies
-              ? Stream<List<int>>.error(http.ClientException('reset'))
-              : Stream.value(utf8.encode(text)),
+          ? Stream<List<int>>.error(http.ClientException('reset'))
+          : Stream.value(utf8.encode(text)),
       status,
       headers: {
         'content-type': streaming
@@ -328,13 +329,13 @@ class FakeMcpServer {
     final data = pretty.split('\n').map((line) => 'data: $line').join('\n');
     final heartbeat = noise
         ? ': keep-alive\n'
-            '\n'
-            'event: message\n'
-            'data: ping\n'
-            '\n'
-            'event: message\n'
-            'data:\n'
-            '\n'
+              '\n'
+              'event: message\n'
+              'data: ping\n'
+              '\n'
+              'event: message\n'
+              'data:\n'
+              '\n'
         : '';
     return '$heartbeat'
         'event: message\n'
@@ -377,18 +378,16 @@ void main() {
       // POST independently, and the header is built by spreading `...headers`
       // over a literal, so a session map that ever gained an `authorization`
       // key would silently override the bearer token.
-      expect(
-        server.headers.map((h) => h['authorization']).toSet(),
-        {'Bearer zai-key'},
-      );
+      expect(server.headers.map((h) => h['authorization']).toSet(), {
+        'Bearer zai-key',
+      });
       // Every MCP message is a POST to the one endpoint. Without this, a
       // refactor that changed either would surface as an opaque crash inside
       // the fake rather than as a failed expectation.
       expect(server.requests.map((r) => r.method).toSet(), {'POST'});
-      expect(
-        server.requests.map((r) => r.url.toString()).toSet(),
-        {ZaiSearch.defaultEndpoint},
-      );
+      expect(server.requests.map((r) => r.url.toString()).toSet(), {
+        ZaiSearch.defaultEndpoint,
+      });
       expect(
         // Every request, not just the handshake's: the fake does not check
         // it, so a regression that sent `text/plain` on `tools/call` would
@@ -417,8 +416,10 @@ void main() {
 
     test('sends the arguments the advertised schema asks for', () async {
       final server = FakeMcpServer();
-      await ZaiSearch(apiKey: 'k', client: server.client)
-          .search('dart records', limit: 3);
+      await ZaiSearch(
+        apiKey: 'k',
+        client: server.client,
+      ).search('dart records', limit: 3);
 
       expect(server.lastArguments, {
         'search_query': 'dart records',
@@ -457,27 +458,29 @@ void main() {
       expect(server.methods.last, 'tools/call');
     });
 
-    test('a session that keeps dropping fails readably, not privately',
-        () async {
-      // Retrying forever would spend the user's quota on a wall, and the
-      // internal marker must never reach a caller.
-      final server = FakeMcpServer()..expireSession = 5;
-      await expectLater(
-        ZaiSearch(apiKey: 'k', client: server.client)
-            .search('dart')
-            // Test-side only, like the racing tests': a retry loop that spun
-            // would stall the suite rather than fail this expectation.
-            .timeout(const Duration(seconds: 5)),
-        throwsA(
-          isA<http.ClientException>().having(
-            (e) => e.message,
-            'message',
-            contains('dropping the search session'),
+    test(
+      'a session that keeps dropping fails readably, not privately',
+      () async {
+        // Retrying forever would spend the user's quota on a wall, and the
+        // internal marker must never reach a caller.
+        final server = FakeMcpServer()..expireSession = 5;
+        await expectLater(
+          ZaiSearch(apiKey: 'k', client: server.client)
+              .search('dart')
+              // Test-side only, like the racing tests': a retry loop that spun
+              // would stall the suite rather than fail this expectation.
+              .timeout(const Duration(seconds: 5)),
+          throwsA(
+            isA<http.ClientException>().having(
+              (e) => e.message,
+              'message',
+              contains('dropping the search session'),
+            ),
           ),
-        ),
-      );
-      expect(server.methods.where((m) => m == 'initialize').length, 2);
-    });
+        );
+        expect(server.methods.where((m) => m == 'initialize').length, 2);
+      },
+    );
 
     test('two searches racing the first handshake share it', () async {
       // `_ensureHandshake` caches the *Future*, not its result, so a second
@@ -490,9 +493,9 @@ void main() {
       final results = await Future.wait([
         search.search('dart'),
         search.search('flutter'),
-      // Test-side only, like the drain tests': a cache that ended up awaiting
-      // itself would otherwise hang here until the runner's own timeout,
-      // reported as a generic 30-second stall rather than this deadlock.
+        // Test-side only, like the drain tests': a cache that ended up awaiting
+        // itself would otherwise hang here until the runner's own timeout,
+        // reported as a generic 30-second stall rather than this deadlock.
       ]).timeout(const Duration(seconds: 5));
 
       expect(results, everyElement(isNotEmpty));
@@ -503,8 +506,7 @@ void main() {
       // each caller's links carry the query it asked.
       expect(server.methods.where((m) => m == 'tools/call').length, 2);
       expect(results[0].map((r) => r.url), everyElement(contains('q=dart')));
-      expect(
-          results[1].map((r) => r.url), everyElement(contains('q=flutter')));
+      expect(results[1].map((r) => r.url), everyElement(contains('q=flutter')));
     });
 
     test('a burst of expiries costs one re-handshake, not one each', () async {
@@ -541,27 +543,31 @@ void main() {
       expect(server.methods.where((m) => m == 'tools/call').length, 6);
     });
 
-    test('a cursor of the wrong type is a malformed reply, not an ending',
-        () async {
-      // Read as "no more pages", a wrong-typed cursor ended the walk with the
-      // listing truncated — and left no cursor for the pagination guard to
-      // trip, so the search tool went missing and the user was told to check
-      // their Coding Plan. That is the plan accusation for a transport fault
-      // that the guard beside it exists to prevent.
-      final server = FakeMcpServer()..malformedCursor = 3;
+    test(
+      'a cursor of the wrong type is a malformed reply, not an ending',
+      () async {
+        // Read as "no more pages", a wrong-typed cursor ended the walk with the
+        // listing truncated — and left no cursor for the pagination guard to
+        // trip, so the search tool went missing and the user was told to check
+        // their Coding Plan. That is the plan accusation for a transport fault
+        // that the guard beside it exists to prevent.
+        final server = FakeMcpServer()..malformedCursor = 3;
 
-      await expectLater(
-        ZaiSearch(apiKey: 'k', client: server.client).search('dart'),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          allOf(
-            contains('unexpected search reply'),
-            isNot(contains('Coding Plan')),
+        await expectLater(
+          ZaiSearch(apiKey: 'k', client: server.client).search('dart'),
+          throwsA(
+            isA<http.ClientException>().having(
+              (e) => e.message,
+              'message',
+              allOf(
+                contains('unexpected search reply'),
+                isNot(contains('Coding Plan')),
+              ),
+            ),
           ),
-        )),
-      );
-    });
+        );
+      },
+    );
 
     test('a listing that never stops paginating says so', () async {
       // Searching the truncated list instead would report "no search tool…
@@ -615,38 +621,43 @@ void main() {
       }
     });
 
-    test('a quota phrasing without a quota word is not blamed on the key',
-        () async {
-      // "tokens exhausted" carries "token" and none of quota/limit/balance/
-      // insufficient, so the auth branch claimed it: someone with a working
-      // key sent to rotate it, which is the confusion the quota test in front
-      // of that branch exists to prevent.
-      for (final msg in [
-        'Tokens exhausted',
-        'Token budget depleted',
-        'Token budget exceeded',
-      ]) {
-        final server = FakeMcpServer();
-        server.overrides['initialize'] = {
-          'success': false,
-          'code': 1113,
-          'msg': msg,
-        };
+    test(
+      'a quota phrasing without a quota word is not blamed on the key',
+      () async {
+        // "tokens exhausted" carries "token" and none of quota/limit/balance/
+        // insufficient, so the auth branch claimed it: someone with a working
+        // key sent to rotate it, which is the confusion the quota test in front
+        // of that branch exists to prevent.
+        for (final msg in [
+          'Tokens exhausted',
+          'Token budget depleted',
+          'Token budget exceeded',
+        ]) {
+          final server = FakeMcpServer();
+          server.overrides['initialize'] = {
+            'success': false,
+            'code': 1113,
+            'msg': msg,
+          };
 
-        await expectLater(
-          ZaiSearch(apiKey: 'good', client: server.client).search('dart'),
-          throwsA(
-            isA<http.ClientException>()
-                .having((e) => e.message, 'message',
-                    isNot(contains('rejected the search API key')))
-                // The generic message, which names all three possibilities
-                // rather than picking the wrong one.
-                .having((e) => e.message, 'message', contains('quota')),
-          ),
-          reason: '"$msg" is a quota failure, not a key failure',
-        );
-      }
-    });
+          await expectLater(
+            ZaiSearch(apiKey: 'good', client: server.client).search('dart'),
+            throwsA(
+              isA<http.ClientException>()
+                  .having(
+                    (e) => e.message,
+                    'message',
+                    isNot(contains('rejected the search API key')),
+                  )
+                  // The generic message, which names all three possibilities
+                  // rather than picking the wrong one.
+                  .having((e) => e.message, 'message', contains('quota')),
+            ),
+            reason: '"$msg" is a quota failure, not a key failure',
+          );
+        }
+      },
+    );
 
     test('a redirect is a status, not a reply to parse', () async {
       // `send` does not follow a redirect on a POST, so a 3xx arrives whole.
@@ -664,16 +675,18 @@ void main() {
 
       await expectLater(
         ZaiSearch(apiKey: 'k', client: client).search('dart'),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          allOf(
-            contains('HTTP 302'),
-            // Not the body-parsing path's wording, which is what it used to
-            // reach.
-            isNot(contains('unexpected')),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              contains('HTTP 302'),
+              // Not the body-parsing path's wording, which is what it used to
+              // reach.
+              isNot(contains('unexpected')),
+            ),
           ),
-        )),
+        ),
       );
     });
 
@@ -683,21 +696,25 @@ void main() {
       // front of it. It used to fall into the catch-all and read "Z.AI
       // search error HTTP 429", which says nothing about a failure that
       // clears itself.
-      final client = MockClient.streaming((request, body) async =>
-          http.StreamedResponse(Stream.value(utf8.encode('slow down')), 429));
+      final client = MockClient.streaming(
+        (request, body) async =>
+            http.StreamedResponse(Stream.value(utf8.encode('slow down')), 429),
+      );
 
       await expectLater(
         ZaiSearch(apiKey: 'k', client: client).search('dart'),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          allOf(
-            contains('try the search again'),
-            isNot(contains('HTTP 429')),
-            // And not the body, like every other status branch here.
-            isNot(contains('slow down')),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              contains('try the search again'),
+              isNot(contains('HTTP 429')),
+              // And not the body, like every other status branch here.
+              isNot(contains('slow down')),
+            ),
           ),
-        )),
+        ),
       );
     });
 
@@ -742,8 +759,7 @@ void main() {
       );
     });
 
-    test('an untrimmed key still redacts itself out of a tool error',
-        () async {
+    test('an untrimmed key still redacts itself out of a tool error', () async {
       // The reason the constructor trims, and it is not cosmetic. A key
       // pasted with the newline its password manager appended went into the
       // `Authorization` header verbatim *and* became the needle the
@@ -763,11 +779,13 @@ void main() {
       };
       await expectLater(
         ZaiSearch(apiKey: 'sk-secret\n', client: server.client).search('dart'),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          allOf(contains('[redacted]'), isNot(contains('sk-secret'))),
-        )),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('[redacted]'), isNot(contains('sk-secret'))),
+          ),
+        ),
       );
     });
 
@@ -807,52 +825,54 @@ void main() {
       }
     });
 
-    test('a transient failure is blamed on neither the key nor the plan',
-        () async {
-      // gRPC-shaped gateways say "deadline exceeded" and "timeout" for a
-      // failure a retry fixes. The first two carry an auth word beside the
-      // transient one and the third carries `token`, so without the veto each
-      // reaches "rejected the search API key" and sends a user with a working
-      // key to Settings for a wall that would have cleared itself.
-      //
-      // `exceeded` is not what this pins: a message that reads as quota
-      // already lands on the generic text, so vetoing the quota reading —
-      // where this veto first went — was a no-op there and reopened the key
-      // message here.
-      for (final msg in [
-        'Auth deadline exceeded',
-        'Unauthorized: upstream timeout',
-        'Token validation timeout',
-      ]) {
-        final server = FakeMcpServer();
-        server.overrides['initialize'] = {
-          'success': false,
-          'code': 1002,
-          'msg': msg,
-        };
+    test(
+      'a transient failure is blamed on neither the key nor the plan',
+      () async {
+        // gRPC-shaped gateways say "deadline exceeded" and "timeout" for a
+        // failure a retry fixes. The first two carry an auth word beside the
+        // transient one and the third carries `token`, so without the veto each
+        // reaches "rejected the search API key" and sends a user with a working
+        // key to Settings for a wall that would have cleared itself.
+        //
+        // `exceeded` is not what this pins: a message that reads as quota
+        // already lands on the generic text, so vetoing the quota reading —
+        // where this veto first went — was a no-op there and reopened the key
+        // message here.
+        for (final msg in [
+          'Auth deadline exceeded',
+          'Unauthorized: upstream timeout',
+          'Token validation timeout',
+        ]) {
+          final server = FakeMcpServer();
+          server.overrides['initialize'] = {
+            'success': false,
+            'code': 1002,
+            'msg': msg,
+          };
 
-        await expectLater(
-          ZaiSearch(apiKey: 'good', client: server.client).search('dart'),
-          throwsA(
-            isA<http.ClientException>().having(
-              (e) => e.message,
-              'message',
-              // Both halves. Pinned only on the absence, a regression that
-              // moved these into the generic "check the key, Coding Plan
-              // access, and quota" bucket — which still lists the key first —
-              // would pass while giving the same wrong advice by another
-              // route.
-              allOf(
-                isNot(contains('rejected the search API key')),
-                isNot(contains('Coding Plan')),
-                contains('try the search again'),
+          await expectLater(
+            ZaiSearch(apiKey: 'good', client: server.client).search('dart'),
+            throwsA(
+              isA<http.ClientException>().having(
+                (e) => e.message,
+                'message',
+                // Both halves. Pinned only on the absence, a regression that
+                // moved these into the generic "check the key, Coding Plan
+                // access, and quota" bucket — which still lists the key first —
+                // would pass while giving the same wrong advice by another
+                // route.
+                allOf(
+                  isNot(contains('rejected the search API key')),
+                  isNot(contains('Coding Plan')),
+                  contains('try the search again'),
+                ),
               ),
             ),
-          ),
-          reason: '"$msg" is a timeout, not a rejected key',
-        );
-      }
-    });
+            reason: '"$msg" is a timeout, not a rejected key',
+          );
+        }
+      },
+    );
 
     test('a failed handshake is retried rather than cached', () async {
       // Caching the failed future would leave the instance permanently broken
@@ -875,11 +895,12 @@ void main() {
     test('an HTTP failure never quotes the body back', () async {
       // The gateway can echo the request — Authorization header included — in
       // an error page, and this string reaches the UI.
-      final client = MockClient.streaming((request, body) async =>
-          http.StreamedResponse(
-            Stream.value(utf8.encode('Bearer zai-secret was rejected')),
-            502,
-          ));
+      final client = MockClient.streaming(
+        (request, body) async => http.StreamedResponse(
+          Stream.value(utf8.encode('Bearer zai-secret was rejected')),
+          502,
+        ),
+      );
       await expectLater(
         ZaiSearch(apiKey: 'zai-secret', client: client).search('dart'),
         throwsA(
@@ -894,55 +915,68 @@ void main() {
       ).timeout(const Duration(seconds: 5));
     });
 
-    test('a rejected key is named as such whatever shape the refusal takes',
-        () async {
-      // The gateway's own rejection is a 200 carrying `{"success": false}`,
-      // which `readRpcResult` names. A plain 401 or 403 — anything else in
-      // front of the endpoint — is the same failure, and "HTTP 401" leaves
-      // the user with nothing to act on.
-      //
-      // The two do not say the same thing, though: a 403 from this gateway is
-      // as often a valid key without Web Search Prime, and re-checking a
-      // working key is advice that cannot help. What both must do is name
-      // something actionable and never echo the request.
-      for (final status in [401, 403]) {
-        final actionable = status == 401 ? 'Check the key' : 'Coding Plan';
-        final client = MockClient.streaming((request, body) async =>
-            http.StreamedResponse(
+    test(
+      'a rejected key is named as such whatever shape the refusal takes',
+      () async {
+        // The gateway's own rejection is a 200 carrying `{"success": false}`,
+        // which `readRpcResult` names. A plain 401 or 403 — anything else in
+        // front of the endpoint — is the same failure, and "HTTP 401" leaves
+        // the user with nothing to act on.
+        //
+        // The two do not say the same thing, though: a 403 from this gateway is
+        // as often a valid key without Web Search Prime, and re-checking a
+        // working key is advice that cannot help. What both must do is name
+        // something actionable and never echo the request.
+        for (final status in [401, 403]) {
+          final actionable = status == 401 ? 'Check the key' : 'Coding Plan';
+          final client = MockClient.streaming(
+            (request, body) async => http.StreamedResponse(
               Stream.value(utf8.encode('Bearer zai-secret was rejected')),
               status,
-            ));
-        await expectLater(
-          ZaiSearch(apiKey: 'zai-secret', client: client).search('dart'),
-          throwsA(
-            isA<http.ClientException>()
-                .having((e) => e.message, 'message', contains(actionable))
-                .having((e) => e.message, 'message', isNot(contains('secret'))),
             ),
-          reason: 'HTTP $status should name "$actionable"',
-          // The same guard the stall tests carry: this drives the same
-          // non-2xx body drain, so a regressed deadline would hang the loop
-          // rather than fail it.
-        ).timeout(const Duration(seconds: 5));
-      }
-    });
+          );
+          await expectLater(
+            ZaiSearch(apiKey: 'zai-secret', client: client).search('dart'),
+            throwsA(
+              isA<http.ClientException>()
+                  .having((e) => e.message, 'message', contains(actionable))
+                  .having(
+                    (e) => e.message,
+                    'message',
+                    isNot(contains('secret')),
+                  ),
+            ),
+            reason: 'HTTP $status should name "$actionable"',
+            // The same guard the stall tests carry: this drives the same
+            // non-2xx body drain, so a regressed deadline would hang the loop
+            // rather than fail it.
+          ).timeout(const Duration(seconds: 5));
+        }
+      },
+    );
 
-    test('a content type the server spelled differently is still a stream',
-        () async {
-      // Media types are case-insensitive; a reply typed `Text/Event-Stream`
-      // was read as a JSON body and failed as an unexpected reply.
-      final server = FakeMcpServer(streamCase: true);
-      final results =
-          await ZaiSearch(apiKey: 'k', client: server.client).search('dart');
-      expect(results, isNotEmpty);
-    });
+    test(
+      'a content type the server spelled differently is still a stream',
+      () async {
+        // Media types are case-insensitive; a reply typed `Text/Event-Stream`
+        // was read as a JSON body and failed as an unexpected reply.
+        final server = FakeMcpServer(streamCase: true);
+        final results = await ZaiSearch(
+          apiKey: 'k',
+          client: server.client,
+        ).search('dart');
+        expect(results, isNotEmpty);
+      },
+    );
 
     test('a paginated tool listing is walked to the end', () async {
       // MCP paginates tool listings; a search tool on page two must still be
       // found rather than reported as "no web search tool".
       final server = FakeMcpServer()..extraToolPages = 2;
-      final results =
-          await ZaiSearch(apiKey: 'k', client: server.client).search('dart');
+      final results = await ZaiSearch(
+        apiKey: 'k',
+        client: server.client,
+      ).search('dart');
 
       expect(results, isNotEmpty);
       expect(server.methods.where((m) => m == 'tools/list').length, 3);
@@ -955,20 +989,23 @@ void main() {
       // Heartbeats, banners and a bare `data:` line are all legal SSE. One of
       // them must not turn a recoverable stream into a raw FormatException.
       final server = FakeMcpServer(sse: true, noise: true);
-      final results =
-          await ZaiSearch(apiKey: 'k', client: server.client).search('dart');
+      final results = await ZaiSearch(
+        apiKey: 'k',
+        client: server.client,
+      ).search('dart');
       expect(results.map((r) => r.url), contains('https://dart.dev/3'));
     });
 
     test('a 200 that is not JSON fails like any other bad reply', () async {
       // A gateway answering with an HTML error page is the same failure as a
       // reply of the wrong shape, and deserves the same error type.
-      final client = MockClient.streaming((request, body) async =>
-          http.StreamedResponse(
-            Stream.value(utf8.encode('<html>gateway error</html>')),
-            200,
-            headers: {'content-type': 'text/html'},
-          ));
+      final client = MockClient.streaming(
+        (request, body) async => http.StreamedResponse(
+          Stream.value(utf8.encode('<html>gateway error</html>')),
+          200,
+          headers: {'content-type': 'text/html'},
+        ),
+      );
       await expectLater(
         ZaiSearch(apiKey: 'k', client: client).search('dart'),
         throwsA(
@@ -995,12 +1032,13 @@ void main() {
       addTearDown(() {
         unawaited(stalled.close());
       });
-      final client = MockClient.streaming((request, body) async =>
-          http.StreamedResponse(
-            stalled.stream,
-            200,
-            headers: {'content-type': 'application/json'},
-          ));
+      final client = MockClient.streaming(
+        (request, body) async => http.StreamedResponse(
+          stalled.stream,
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
       await expectLater(
         ZaiSearch(
           apiKey: 'k',
@@ -1022,40 +1060,43 @@ void main() {
       ).timeout(const Duration(seconds: 5));
     });
 
-    test('an error status whose body stalls is still reported as that status',
-        () async {
-      // The drain after an error status is deadlined, and its own
-      // TimeoutException was escaping — "Future not completed" in place of
-      // the status line that had already said what went wrong.
-      final stalled = StreamController<List<int>>();
-      // Not passed, and not an arrow either: `close()` on an unlistened
-      // single-subscription controller never completes, and package:test
-      // awaits whatever a teardown *returns* — which `() => close()` does,
-      // making it the same thing as passing `close` itself. A block body
-      // returns nothing, so a failed assertion here fails, rather than
-      // wedging the runner until its own timeout hides it.
-      addTearDown(() {
-        unawaited(stalled.close());
-      });
-      final client = MockClient.streaming((request, body) async =>
-          http.StreamedResponse(stalled.stream, 502));
-      await expectLater(
-        ZaiSearch(
-          apiKey: 'k',
-          client: client,
-          timeout: const Duration(milliseconds: 50),
-        ).search('dart'),
-        throwsA(
-          isA<http.ClientException>().having(
-            (e) => e.message,
-            'message',
-            contains('HTTP 502'),
+    test(
+      'an error status whose body stalls is still reported as that status',
+      () async {
+        // The drain after an error status is deadlined, and its own
+        // TimeoutException was escaping — "Future not completed" in place of
+        // the status line that had already said what went wrong.
+        final stalled = StreamController<List<int>>();
+        // Not passed, and not an arrow either: `close()` on an unlistened
+        // single-subscription controller never completes, and package:test
+        // awaits whatever a teardown *returns* — which `() => close()` does,
+        // making it the same thing as passing `close` itself. A block body
+        // returns nothing, so a failed assertion here fails, rather than
+        // wedging the runner until its own timeout hides it.
+        addTearDown(() {
+          unawaited(stalled.close());
+        });
+        final client = MockClient.streaming(
+          (request, body) async => http.StreamedResponse(stalled.stream, 502),
+        );
+        await expectLater(
+          ZaiSearch(
+            apiKey: 'k',
+            client: client,
+            timeout: const Duration(milliseconds: 50),
+          ).search('dart'),
+          throwsA(
+            isA<http.ClientException>().having(
+              (e) => e.message,
+              'message',
+              contains('HTTP 502'),
+            ),
           ),
-        ),
-        // Like its siblings: the drain deadline is what ends this, and a
-        // regression in it would hang until the runner's own timeout.
-      ).timeout(const Duration(seconds: 5));
-    });
+          // Like its siblings: the drain deadline is what ends this, and a
+          // regression in it would hang until the runner's own timeout.
+        ).timeout(const Duration(seconds: 5));
+      },
+    );
 
     test('a retired session whose 404 body stalls is still retried', () async {
       // Same drain on the 404 branch, where the escaping TimeoutException
@@ -1083,196 +1124,211 @@ void main() {
       final server = FakeMcpServer()
         ..expireSession = 1
         ..resetErrorBodies = true;
-      final results =
-          await ZaiSearch(apiKey: 'k', client: server.client).search('dart');
+      final results = await ZaiSearch(
+        apiKey: 'k',
+        client: server.client,
+      ).search('dart');
       expect(results, isNotEmpty);
       expect(server.methods.where((m) => m == 'initialize').length, 2);
     });
 
-    test('a search after a double expiry starts with a fresh handshake',
-        () async {
-      // The replacement session was retired too, and the gateway said so.
-      // Kept, the next call would send it, eat the 404 and only then start
-      // over — one round trip spent on a session already known to be dead.
-      final server = FakeMcpServer()..expireSession = 2;
-      final search = ZaiSearch(apiKey: 'k', client: server.client);
-      await expectLater(
-        search.search('dart'),
-        throwsA(isA<http.ClientException>()),
-      );
-      expect(await search.search('dart'), isNotEmpty);
-      // The original, the retry's replacement, and a fresh one afterwards.
-      expect(server.methods.where((m) => m == 'initialize').length, 3);
-      // And the listings, which are what tell the two readings apart. A client
-      // that kept the dead session would send it, eat a fourth 404 and only
-      // then handshake — same three `initialize` calls, same result, one more
-      // doomed listing. Two in the first search, one in the second.
-      expect(server.methods.where((m) => m == 'tools/list').length, 3);
-    });
-
-    test('a notification whose stream never closes is a named failure',
-        () async {
-      // No status speaks for this one: the gateway answered 200 and held the
-      // stream. It is a failure of its own, and reaches the UI as a sentence.
-      var stalledCancelled = false;
-      final stalled = StreamController<List<int>>(
-        onCancel: () => stalledCancelled = true,
-      );
-      // Not passed, and not an arrow either: `close()` on an unlistened
-      // single-subscription controller never completes, and package:test
-      // awaits whatever a teardown *returns* — which `() => close()` does,
-      // making it the same thing as passing `close` itself. A block body
-      // returns nothing, so a failed assertion here fails, rather than
-      // wedging the runner until its own timeout hides it.
-      addTearDown(() {
-        unawaited(stalled.close());
-      });
-      // The guard below only saw id-bearing payloads, so the other half of
-      // the reorder space — a notification sent before `initialize` — matched
-      // no branch and passed with the same message.
-      var initialized = false;
-      final client = MockClient.streaming((request, body) async {
-        final payload =
-            jsonDecode(await body.bytesToString()) as Map<String, dynamic>;
-        if (payload['method'] == 'initialize') {
-          initialized = true;
-          return http.StreamedResponse(
-            Stream.value(utf8.encode(jsonEncode({
-              'jsonrpc': '2.0',
-              'id': payload['id'],
-              'result': {'protocolVersion': '2025-06-18'},
-            }))),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        // Anything else means the client reordered the handshake, and this
-        // test's stall would then be reported as "no web search tool" —
-        // pointing at the wrong layer entirely.
-        if (!initialized) {
-          fail('${payload['method']} was sent before initialize');
-        }
-        if (payload.containsKey('id')) {
-          fail('unexpected ${payload['method']} before the notification');
-        }
-        return http.StreamedResponse(
-          stalled.stream,
-          200,
-          headers: {'content-type': 'text/event-stream'},
+    test(
+      'a search after a double expiry starts with a fresh handshake',
+      () async {
+        // The replacement session was retired too, and the gateway said so.
+        // Kept, the next call would send it, eat the 404 and only then start
+        // over — one round trip spent on a session already known to be dead.
+        final server = FakeMcpServer()..expireSession = 2;
+        final search = ZaiSearch(apiKey: 'k', client: server.client);
+        await expectLater(
+          search.search('dart'),
+          throwsA(isA<http.ClientException>()),
         );
-      });
-      await expectLater(
-        ZaiSearch(
-          apiKey: 'k',
-          client: client,
-          timeout: const Duration(milliseconds: 50),
-        ).search('dart'),
-        throwsA(
-          isA<http.ClientException>().having(
-            (e) => e.message,
-            'message',
-            contains('held the search stream open'),
-          ),
-        ),
-        // Test-side only, like the trickle test's: a deadline that stopped
-        // being enforced would hang this until the runner's own timeout.
-      ).timeout(const Duration(seconds: 5));
-      // Failed, and let go of: the deadline is thrown into the stream, so
-      // the subscription — and the socket behind it — is cancelled with it.
-      expect(stalledCancelled, isTrue);
-    });
+        expect(await search.search('dart'), isNotEmpty);
+        // The original, the retry's replacement, and a fresh one afterwards.
+        expect(server.methods.where((m) => m == 'initialize').length, 3);
+        // And the listings, which are what tell the two readings apart. A client
+        // that kept the dead session would send it, eat a fourth 404 and only
+        // then handshake — same three `initialize` calls, same result, one more
+        // doomed listing. Two in the first search, one in the second.
+        expect(server.methods.where((m) => m == 'tools/list').length, 3);
+      },
+    );
 
-    test('a 202 that holds an event stream open is cancelled, not waited out',
-        () async {
-      // 202 is the reply the protocol owes a notification, with no body. A
-      // server that holds an event stream open past it is owed nothing
-      // either; drained to its deadline instead, every handshake would have
-      // paid a full timeout at the notification step.
-      final server = FakeMcpServer();
-      var cancelled = false;
-      final held = StreamController<List<int>>(
-        onCancel: () => cancelled = true,
-      );
-      // Block body, for the reason spelled out on the stalled-body teardowns
-      // above: an arrow returns the future and package:test awaits it.
-      addTearDown(() {
-        unawaited(held.close());
-      });
-      final client = MockClient.streaming((request, body) async {
-        final bytes = await body.toBytes();
-        final payload = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-        if (!payload.containsKey('id')) {
+    test(
+      'a notification whose stream never closes is a named failure',
+      () async {
+        // No status speaks for this one: the gateway answered 200 and held the
+        // stream. It is a failure of its own, and reaches the UI as a sentence.
+        var stalledCancelled = false;
+        final stalled = StreamController<List<int>>(
+          onCancel: () => stalledCancelled = true,
+        );
+        // Not passed, and not an arrow either: `close()` on an unlistened
+        // single-subscription controller never completes, and package:test
+        // awaits whatever a teardown *returns* — which `() => close()` does,
+        // making it the same thing as passing `close` itself. A block body
+        // returns nothing, so a failed assertion here fails, rather than
+        // wedging the runner until its own timeout hides it.
+        addTearDown(() {
+          unawaited(stalled.close());
+        });
+        // The guard below only saw id-bearing payloads, so the other half of
+        // the reorder space — a notification sent before `initialize` — matched
+        // no branch and passed with the same message.
+        var initialized = false;
+        final client = MockClient.streaming((request, body) async {
+          final payload =
+              jsonDecode(await body.bytesToString()) as Map<String, dynamic>;
+          if (payload['method'] == 'initialize') {
+            initialized = true;
+            return http.StreamedResponse(
+              Stream.value(
+                utf8.encode(
+                  jsonEncode({
+                    'jsonrpc': '2.0',
+                    'id': payload['id'],
+                    'result': {'protocolVersion': '2025-06-18'},
+                  }),
+                ),
+              ),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          // Anything else means the client reordered the handshake, and this
+          // test's stall would then be reported as "no web search tool" —
+          // pointing at the wrong layer entirely.
+          if (!initialized) {
+            fail('${payload['method']} was sent before initialize');
+          }
+          if (payload.containsKey('id')) {
+            fail('unexpected ${payload['method']} before the notification');
+          }
           return http.StreamedResponse(
-            held.stream,
-            202,
+            stalled.stream,
+            200,
             headers: {'content-type': 'text/event-stream'},
           );
-        }
-        final forwarded = http.Request(request.method, request.url)
-          ..headers.addAll(request.headers)
-          ..bodyBytes = bytes;
-        return server.client.send(forwarded);
-      });
-
-      // Named once and used for both the deadline and the bound below: two
-      // literals a comment apart can be tuned one at a time, and lowering the
-      // deadline alone would let a drain-to-deadline regression finish inside
-      // the bound and pass.
-      const deadline = Duration(seconds: 3);
-      final clock = Stopwatch()..start();
-      final results = await ZaiSearch(
-        apiKey: 'k',
-        client: client,
-        timeout: deadline,
-      ).search('dart').timeout(const Duration(seconds: 5));
-
-      expect(results, isNotEmpty);
-      expect(cancelled, isTrue);
-      // Draining instead of cancelling costs the whole `deadline`, while the
-      // passing path is in-process mock I/O costing whatever the runner is
-      // doing — so any bound meaningfully below the deadline tells the two
-      // apart, and three quarters leaves a loaded container room. Relative,
-      // so tuning the deadline down tightens this with it. Parenthesised
-      // because `*` and `~/` only associate left by luck of equal precedence,
-      // and a clarifying `deadline * (3 ~/ 4)` would be zero — a bound
-      // nothing can satisfy, since `clock.elapsed` is never below zero, so
-      // the check would fail on every run rather than pass on every run.
-      // (Written the other way round here last round, which had it exactly
-      // backwards.)
-      expect(clock.elapsed, lessThan((deadline * 3) ~/ 4));
-    });
-
-    test('an over-long tool error is clipped without splitting a character',
-        () async {
-      // The quoted prose is capped because a server that answers an error
-      // with its whole corpus should not put it in a sentence — and it is
-      // free text from a search engine, so an emoji lands astride the cut
-      // about as often as anything else. A bare `substring` strands the high
-      // half of the pair, which renders as a replacement character and is
-      // mangled on its way into a log.
-      final server = FakeMcpServer();
-      server.overrides['tools/call'] = {
-        'jsonrpc': '2.0',
-        'result': {
-          'isError': true,
-          'content': [
-            {'type': 'text', 'text': '${'a' * 511}\u{1F600} and more'},
-          ],
-        },
-      };
-      await expectLater(
-        ZaiSearch(apiKey: 'k', client: server.client).search('dart'),
-        throwsA(
-          isA<http.ClientException>().having(
-            (e) => e.message,
-            'message',
-            // 511, not 512: the cut lands on the pair, so the clip steps back
-            // off it rather than through it.
-            'Z.AI search failed: ${'a' * 511}…',
+        });
+        await expectLater(
+          ZaiSearch(
+            apiKey: 'k',
+            client: client,
+            timeout: const Duration(milliseconds: 50),
+          ).search('dart'),
+          throwsA(
+            isA<http.ClientException>().having(
+              (e) => e.message,
+              'message',
+              contains('held the search stream open'),
+            ),
           ),
-        ),
-      );
-    });
+          // Test-side only, like the trickle test's: a deadline that stopped
+          // being enforced would hang this until the runner's own timeout.
+        ).timeout(const Duration(seconds: 5));
+        // Failed, and let go of: the deadline is thrown into the stream, so
+        // the subscription — and the socket behind it — is cancelled with it.
+        expect(stalledCancelled, isTrue);
+      },
+    );
+
+    test(
+      'a 202 that holds an event stream open is cancelled, not waited out',
+      () async {
+        // 202 is the reply the protocol owes a notification, with no body. A
+        // server that holds an event stream open past it is owed nothing
+        // either; drained to its deadline instead, every handshake would have
+        // paid a full timeout at the notification step.
+        final server = FakeMcpServer();
+        var cancelled = false;
+        final held = StreamController<List<int>>(
+          onCancel: () => cancelled = true,
+        );
+        // Block body, for the reason spelled out on the stalled-body teardowns
+        // above: an arrow returns the future and package:test awaits it.
+        addTearDown(() {
+          unawaited(held.close());
+        });
+        final client = MockClient.streaming((request, body) async {
+          final bytes = await body.toBytes();
+          final payload =
+              jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+          if (!payload.containsKey('id')) {
+            return http.StreamedResponse(
+              held.stream,
+              202,
+              headers: {'content-type': 'text/event-stream'},
+            );
+          }
+          final forwarded = http.Request(request.method, request.url)
+            ..headers.addAll(request.headers)
+            ..bodyBytes = bytes;
+          return server.client.send(forwarded);
+        });
+
+        // Named once and used for both the deadline and the bound below: two
+        // literals a comment apart can be tuned one at a time, and lowering the
+        // deadline alone would let a drain-to-deadline regression finish inside
+        // the bound and pass.
+        const deadline = Duration(seconds: 3);
+        final clock = Stopwatch()..start();
+        final results = await ZaiSearch(
+          apiKey: 'k',
+          client: client,
+          timeout: deadline,
+        ).search('dart').timeout(const Duration(seconds: 5));
+
+        expect(results, isNotEmpty);
+        expect(cancelled, isTrue);
+        // Draining instead of cancelling costs the whole `deadline`, while the
+        // passing path is in-process mock I/O costing whatever the runner is
+        // doing — so any bound meaningfully below the deadline tells the two
+        // apart, and three quarters leaves a loaded container room. Relative,
+        // so tuning the deadline down tightens this with it. Parenthesised
+        // because `*` and `~/` only associate left by luck of equal precedence,
+        // and a clarifying `deadline * (3 ~/ 4)` would be zero — a bound
+        // nothing can satisfy, since `clock.elapsed` is never below zero, so
+        // the check would fail on every run rather than pass on every run.
+        // (Written the other way round here last round, which had it exactly
+        // backwards.)
+        expect(clock.elapsed, lessThan((deadline * 3) ~/ 4));
+      },
+    );
+
+    test(
+      'an over-long tool error is clipped without splitting a character',
+      () async {
+        // The quoted prose is capped because a server that answers an error
+        // with its whole corpus should not put it in a sentence — and it is
+        // free text from a search engine, so an emoji lands astride the cut
+        // about as often as anything else. A bare `substring` strands the high
+        // half of the pair, which renders as a replacement character and is
+        // mangled on its way into a log.
+        final server = FakeMcpServer();
+        server.overrides['tools/call'] = {
+          'jsonrpc': '2.0',
+          'result': {
+            'isError': true,
+            'content': [
+              {'type': 'text', 'text': '${'a' * 511}\u{1F600} and more'},
+            ],
+          },
+        };
+        await expectLater(
+          ZaiSearch(apiKey: 'k', client: server.client).search('dart'),
+          throwsA(
+            isA<http.ClientException>().having(
+              (e) => e.message,
+              'message',
+              // 511, not 512: the cut lands on the pair, so the clip steps back
+              // off it rather than through it.
+              'Z.AI search failed: ${'a' * 511}…',
+            ),
+          ),
+        );
+      },
+    );
 
     test('an errored tool result is a failure, not an empty answer', () async {
       final server = FakeMcpServer();
@@ -1344,31 +1400,34 @@ void main() {
       expect(results.map((r) => r.url), ['https://example.com/x']);
     });
 
-    test('a leaf field nested past the cap degrades instead of overflowing',
-        () {
-      // `_collect`'s depth cap protects the walk *down to* a result-shaped
-      // map. That map is a leaf, so its own fields were then walked with no
-      // bound at all — and a `title` of ten thousand nested lists is about
-      // twenty kilobytes, nowhere near the 2 MiB this class will read. It
-      // recursed once per level and threw `StackOverflowError`, an `Error`,
-      // straight past the `on Exception` contract every caller of this class
-      // relies on. Measured at 10,000: overflow before, one result after.
-      const depth = 10000;
-      final title = '${'[' * depth}"deep"${']' * depth}';
-      final results = ZaiSearch.parseToolResult({
-        'content': [
-          {
-            'type': 'text',
-            'text': '{"search_result":[{"url":"https://example.com/a",'
-                '"title":$title}]}',
-          },
-        ],
-      }, 5);
-      // The result survives; only the unreadable field is given up, which is
-      // what any other untextual field does here.
-      expect(results.map((r) => r.url), ['https://example.com/a']);
-      expect(results.single.title, 'https://example.com/a');
-    });
+    test(
+      'a leaf field nested past the cap degrades instead of overflowing',
+      () {
+        // `_collect`'s depth cap protects the walk *down to* a result-shaped
+        // map. That map is a leaf, so its own fields were then walked with no
+        // bound at all — and a `title` of ten thousand nested lists is about
+        // twenty kilobytes, nowhere near the 2 MiB this class will read. It
+        // recursed once per level and threw `StackOverflowError`, an `Error`,
+        // straight past the `on Exception` contract every caller of this class
+        // relies on. Measured at 10,000: overflow before, one result after.
+        const depth = 10000;
+        final title = '${'[' * depth}"deep"${']' * depth}';
+        final results = ZaiSearch.parseToolResult({
+          'content': [
+            {
+              'type': 'text',
+              'text':
+                  '{"search_result":[{"url":"https://example.com/a",'
+                  '"title":$title}]}',
+            },
+          ],
+        }, 5);
+        // The result survives; only the unreadable field is given up, which is
+        // what any other untextual field does here.
+        expect(results.map((r) => r.url), ['https://example.com/a']);
+        expect(results.single.title, 'https://example.com/a');
+      },
+    );
 
     test('a double-encoded payload is decoded again, not dropped', () {
       // A tool that JSON-encodes its payload and then puts *that* string in
@@ -1382,15 +1441,17 @@ void main() {
         'content': [
           {
             'type': 'text',
-            'text': jsonEncode(jsonEncode({
-              'search_result': [
-                {
-                  'title': 'Wrapped twice',
-                  'link': 'https://example.com/deep',
-                  'content': 'text',
-                },
-              ],
-            })),
+            'text': jsonEncode(
+              jsonEncode({
+                'search_result': [
+                  {
+                    'title': 'Wrapped twice',
+                    'link': 'https://example.com/deep',
+                    'content': 'text',
+                  },
+                ],
+              }),
+            ),
           },
         ],
       }, 5);
@@ -1430,38 +1491,43 @@ void main() {
       expect(results.map((r) => r.url), ['https://example.com/a']);
     });
 
-    test('an empty content of any shape does not hide the snippet beside it',
-        () {
-      // `??` answers for null alone, so an explicitly empty list or map was
-      // kept and joined to nothing — the fall-through the string case had.
-      for (final empty in [
-        <Object?>[],
-        <String, Object?>{},
-        <Object?>[1, 2],
-        true,
-        '',
-      ]) {
-        final results = ZaiSearch.parseToolResult({
-          'content': [
-            {
-              'type': 'text',
-              'text': jsonEncode({
-                'search_result': [
-                  {
-                    'title': 'T',
-                    'link': 'https://example.com/e',
-                    'content': empty,
-                    'snippet': 'the real one',
-                  },
-                ],
-              }),
-            },
-          ],
-        }, 5);
-        expect(results.single.snippet, 'the real one',
-            reason: 'content: $empty should fall through');
-      }
-    });
+    test(
+      'an empty content of any shape does not hide the snippet beside it',
+      () {
+        // `??` answers for null alone, so an explicitly empty list or map was
+        // kept and joined to nothing — the fall-through the string case had.
+        for (final empty in [
+          <Object?>[],
+          <String, Object?>{},
+          <Object?>[1, 2],
+          true,
+          '',
+        ]) {
+          final results = ZaiSearch.parseToolResult({
+            'content': [
+              {
+                'type': 'text',
+                'text': jsonEncode({
+                  'search_result': [
+                    {
+                      'title': 'T',
+                      'link': 'https://example.com/e',
+                      'content': empty,
+                      'snippet': 'the real one',
+                    },
+                  ],
+                }),
+              },
+            ],
+          }, 5);
+          expect(
+            results.single.snippet,
+            'the real one',
+            reason: 'content: $empty should fall through',
+          );
+        }
+      },
+    );
 
     test('prose answers nothing when nothing was asked for', () {
       // The link path takes none when asked for none; prose answering anyway
@@ -1475,33 +1541,35 @@ void main() {
       expect(ZaiSearch.parseToolResult(prose, 1), hasLength(1));
     });
 
-    test('a JSON container with no usable links answers nothing, not itself',
-        () {
-      // `_collect` decodes a text block that is JSON and walks it, so a
-      // container holding no link-shaped entry leaves nothing found. The
-      // prose fallback then used to join the *same* text back as an answer:
-      // a synthetic "Z.AI web search" result whose snippet is raw JSON,
-      // handed to the model and rendered in the UI. "Nothing found" is an
-      // empty list.
-      expect(
-        ZaiSearch.parseToolResult({
+    test(
+      'a JSON container with no usable links answers nothing, not itself',
+      () {
+        // `_collect` decodes a text block that is JSON and walks it, so a
+        // container holding no link-shaped entry leaves nothing found. The
+        // prose fallback then used to join the *same* text back as an answer:
+        // a synthetic "Z.AI web search" result whose snippet is raw JSON,
+        // handed to the model and rendered in the UI. "Nothing found" is an
+        // empty list.
+        expect(
+          ZaiSearch.parseToolResult({
+            'content': [
+              {'type': 'text', 'text': '{"results": []}'},
+            ],
+          }, 5),
+          isEmpty,
+        );
+        // And the container is dropped rather than the whole fallback: real
+        // prose beside it still answers, without the JSON glued onto it.
+        final mixed = ZaiSearch.parseToolResult({
           'content': [
             {'type': 'text', 'text': '{"results": []}'},
+            {'type': 'text', 'text': 'No matches for that query.'},
           ],
-        }, 5),
-        isEmpty,
-      );
-      // And the container is dropped rather than the whole fallback: real
-      // prose beside it still answers, without the JSON glued onto it.
-      final mixed = ZaiSearch.parseToolResult({
-        'content': [
-          {'type': 'text', 'text': '{"results": []}'},
-          {'type': 'text', 'text': 'No matches for that query.'},
-        ],
-      }, 5);
-      expect(mixed, hasLength(1));
-      expect(mixed.single.snippet, 'No matches for that query.');
-    });
+        }, 5);
+        expect(mixed, hasLength(1));
+        expect(mixed.single.snippet, 'No matches for that query.');
+      },
+    );
 
     test('a list of localized parts is text, not nothing', () {
       // The list arm filtered with `whereType<String>()`, so a list of the
@@ -1612,7 +1680,12 @@ void main() {
       // kept its place and hid a usable description beside it. Both fields
       // now ask the renderer's own question, so they cannot disagree about
       // what "present" means.
-      for (final empty in [<Object?>[], <String, Object?>{}, <Object?>[1, 2], true]) {
+      for (final empty in [
+        <Object?>[],
+        <String, Object?>{},
+        <Object?>[1, 2],
+        true,
+      ]) {
         final results = ZaiSearch.parseToolResult({
           'content': [
             {
@@ -1630,8 +1703,11 @@ void main() {
             },
           ],
         }, 5);
-        expect(results.single.snippet, 'the usable one',
-            reason: 'snippet: $empty should fall through');
+        expect(
+          results.single.snippet,
+          'the usable one',
+          reason: 'snippet: $empty should fall through',
+        );
       }
     });
 
@@ -1683,8 +1759,11 @@ void main() {
         ],
       }, 5);
       expect(results.map((r) => r.url), [long, 'https://example.com/ok']);
-      expect(results.first.title, 'Huge',
-          reason: 'the title and snippet ride through with it');
+      expect(
+        results.first.title,
+        'Huge',
+        reason: 'the title and snippet ride through with it',
+      );
 
       // And the cap still lands, one layer on, where every backend meets it.
       final clipped = ChatController.clipSearchSnippets(results);
@@ -1739,16 +1818,22 @@ void main() {
       // The number tells a method-not-found from bad params; the server's
       // own text stays out, like every other message here.
       expect(
-        () => ZaiSearch.readRpcResult({
-          'jsonrpc': '2.0',
-          'id': 7,
-          'error': {'code': -32601, 'message': 'secret server prose'},
-        }, method: 'tools/call', id: 7),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          allOf(contains('(code -32601)'), isNot(contains('secret'))),
-        )),
+        () => ZaiSearch.readRpcResult(
+          {
+            'jsonrpc': '2.0',
+            'id': 7,
+            'error': {'code': -32601, 'message': 'secret server prose'},
+          },
+          method: 'tools/call',
+          id: 7,
+        ),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('(code -32601)'), isNot(contains('secret'))),
+          ),
+        ),
       );
       // No code, no parenthesis; an error that is not even a map, the same.
       // A distinctive number rather than `1`: the matcher below bans the
@@ -1757,25 +1842,27 @@ void main() {
       // trip, for a reason that has nothing to do with echoing a payload.
       for (final error in [const <String, Object>{}, 'down', 987654]) {
         expect(
-          () => ZaiSearch.readRpcResult({
-            'jsonrpc': '2.0',
-            'id': 7,
-            'error': error,
-          }, method: 'tools/call', id: 7),
-          throwsA(isA<http.ClientException>().having(
-            (e) => e.message,
-            'message',
-            // 'down' is the payload itself: "names its code and nothing
-            // else" is the claim, and only the map case was checking it.
-            allOf(
-              isNot(contains('(code')),
-              // Each payload against its own echo. `'down'` only says
-              // anything for the string case; the map and the number were
-              // asserted against a word they could not contain.
-              isNot(contains('$error')),
-              isNotEmpty,
+          () => ZaiSearch.readRpcResult(
+            {'jsonrpc': '2.0', 'id': 7, 'error': error},
+            method: 'tools/call',
+            id: 7,
+          ),
+          throwsA(
+            isA<http.ClientException>().having(
+              (e) => e.message,
+              'message',
+              // 'down' is the payload itself: "names its code and nothing
+              // else" is the claim, and only the map case was checking it.
+              allOf(
+                isNot(contains('(code')),
+                // Each payload against its own echo. `'down'` only says
+                // anything for the string case; the map and the number were
+                // asserted against a word they could not contain.
+                isNot(contains('$error')),
+                isNotEmpty,
+              ),
             ),
-          )),
+          ),
         );
       }
     });
@@ -1788,11 +1875,15 @@ void main() {
       // id for exactly that. Every other fixture in this file passes a
       // matching id, so the guard was unpinned.
       expect(
-        () => ZaiSearch.readRpcResult({
-          'jsonrpc': '2.0',
-          'id': 8,
-          'result': {'content': <Object?>[]},
-        }, method: 'tools/call', id: 7),
+        () => ZaiSearch.readRpcResult(
+          {
+            'jsonrpc': '2.0',
+            'id': 8,
+            'result': {'content': <Object?>[]},
+          },
+          method: 'tools/call',
+          id: 7,
+        ),
         throwsA(isA<http.ClientException>()),
       );
     });
@@ -1801,12 +1892,16 @@ void main() {
   group('buildArguments', () {
     test('uses whichever names the schema declares', () {
       expect(
-        ZaiSearch.buildArguments(const {
-          'properties': {
-            'query': {'type': 'string'},
-            'limit': {'type': 'integer'},
+        ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'query': {'type': 'string'},
+              'limit': {'type': 'integer'},
+            },
           },
-        }, 'dart', 4),
+          'dart',
+          4,
+        ),
         {'query': 'dart', 'limit': 4},
       );
     });
@@ -1817,12 +1912,16 @@ void main() {
       // anything by "give me zero results".
       for (final limit in [0, -3]) {
         expect(
-          ZaiSearch.buildArguments(const {
-            'properties': {
-              'query': {'type': 'string'},
-              'limit': {'type': 'integer'},
+          ZaiSearch.buildArguments(
+            const {
+              'properties': {
+                'query': {'type': 'string'},
+                'limit': {'type': 'integer'},
+              },
             },
-          }, 'dart', limit),
+            'dart',
+            limit,
+          ),
           {'query': 'dart'},
           reason: 'limit $limit is not a count',
         );
@@ -1830,13 +1929,17 @@ void main() {
       // A required count still gets the schema's own default rather than
       // nothing, so the request stays well-formed.
       expect(
-        ZaiSearch.buildArguments(const {
-          'properties': {
-            'query': {'type': 'string'},
-            'count': {'type': 'integer', 'default': 10},
+        ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'query': {'type': 'string'},
+              'count': {'type': 'integer', 'default': 10},
+            },
+            'required': ['count'],
           },
-          'required': ['count'],
-        }, 'dart', 0),
+          'dart',
+          0,
+        ),
         {'query': 'dart', 'count': 10},
       );
       // And the combination neither of those covers: required, no default,
@@ -1845,30 +1948,40 @@ void main() {
       // on `count: 0`, which no gateway can mean anything by, or on a request
       // missing a field its own schema calls required.
       expect(
-        () => ZaiSearch.buildArguments(const {
-          'properties': {
-            'query': {'type': 'string'},
-            'count': {'type': 'integer'},
+        () => ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'query': {'type': 'string'},
+              'count': {'type': 'integer'},
+            },
+            'required': ['count'],
           },
-          'required': ['count'],
-        }, 'dart', 0),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          contains('count'),
-        )),
+          'dart',
+          0,
+        ),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            contains('count'),
+          ),
+        ),
       );
     });
 
     test('fills a required parameter from its default', () {
       expect(
-        ZaiSearch.buildArguments(const {
-          'properties': {
-            'search_query': {'type': 'string'},
-            'search_engine': {'type': 'string', 'default': 'search-prime'},
+        ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'search_query': {'type': 'string'},
+              'search_engine': {'type': 'string', 'default': 'search-prime'},
+            },
+            'required': ['search_query', 'search_engine'],
           },
-          'required': ['search_query', 'search_engine'],
-        }, 'dart', 5),
+          'dart',
+          5,
+        ),
         {'search_query': 'dart', 'search_engine': 'search-prime'},
       );
       // And a default fills a gap rather than replacing an answer: a required
@@ -1876,13 +1989,17 @@ void main() {
       // a string parameter, and the count cases elsewhere pass limit 0, so
       // the precedence between the two was the combination nothing pinned.
       expect(
-        ZaiSearch.buildArguments(const {
-          'properties': {
-            'search_query': {'type': 'string'},
-            'count': {'type': 'integer', 'default': 10},
+        ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'search_query': {'type': 'string'},
+              'count': {'type': 'integer', 'default': 10},
+            },
+            'required': ['count'],
           },
-          'required': ['count'],
-        }, 'dart', 3),
+          'dart',
+          3,
+        ),
         {'search_query': 'dart', 'count': 3},
       );
     });
@@ -1898,25 +2015,31 @@ void main() {
       // nothing to do with its subject.
       final name = 'p' * 500;
       expect(
-        () => ZaiSearch.buildArguments({
-          'properties': {
-            'search_query': const {'type': 'string'},
-            name: const {'type': 'string'},
+        () => ZaiSearch.buildArguments(
+          {
+            'properties': {
+              'search_query': const {'type': 'string'},
+              name: const {'type': 'string'},
+            },
+            'required': ['search_query', name],
           },
-          'required': ['search_query', name],
-        }, 'dart', 5),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          allOf(
-            // Bounded *and* still there. On the length alone, a message that
-            // stopped naming the parameter altogether — the dead end the
-            // neighbouring test says this design exists to avoid — is under
-            // any cap and passes, and so is an empty echo.
-            contains('p' * 20),
-            predicate<String>((m) => m.length < 160, 'under 160 characters'),
+          'dart',
+          5,
+        ),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              // Bounded *and* still there. On the length alone, a message that
+              // stopped naming the parameter altogether — the dead end the
+              // neighbouring test says this design exists to avoid — is under
+              // any cap and passes, and so is an empty echo.
+              contains('p' * 20),
+              predicate<String>((m) => m.length < 160, 'under 160 characters'),
+            ),
           ),
-        )),
+        ),
       );
     });
 
@@ -1934,26 +2057,32 @@ void main() {
       for (var prefix = 32; prefix <= 64; prefix++) {
         final name = '${'p' * prefix}😀tail';
         expect(
-          () => ZaiSearch.buildArguments({
-            'properties': {
-              'search_query': const {'type': 'string'},
-              name: const {'type': 'string'},
+          () => ZaiSearch.buildArguments(
+            {
+              'properties': {
+                'search_query': const {'type': 'string'},
+                name: const {'type': 'string'},
+              },
+              'required': ['search_query', name],
             },
-            'required': ['search_query', name],
-          }, 'dart', 5),
-          throwsA(isA<http.ClientException>().having(
-            (e) => e.message,
-            'message',
-            // Any lone surrogate, not only one followed by the ellipsis: a
-            // cut on raw code units that appended nothing would leave one at
-            // the end, and U+FFFD only appears once such a string is encoded.
-            predicate<String>(
-              (m) =>
-                  !m.contains('\uFFFD') &&
-                  !m.runes.any((r) => r >= 0xD800 && r <= 0xDFFF),
-              'free of replacement characters and unpaired surrogates',
+            'dart',
+            5,
+          ),
+          throwsA(
+            isA<http.ClientException>().having(
+              (e) => e.message,
+              'message',
+              // Any lone surrogate, not only one followed by the ellipsis: a
+              // cut on raw code units that appended nothing would leave one at
+              // the end, and U+FFFD only appears once such a string is encoded.
+              predicate<String>(
+                (m) =>
+                    !m.contains('\uFFFD') &&
+                    !m.runes.any((r) => r >= 0xD800 && r <= 0xDFFF),
+                'free of replacement characters and unpaired surrogates',
+              ),
             ),
-          )),
+          ),
           reason: 'name prefix length $prefix',
         );
       }
@@ -1962,19 +2091,28 @@ void main() {
     test('refuses to guess a required parameter it cannot fill', () {
       // Guessing would spend a search to get an answer to a different question.
       expect(
-        () => ZaiSearch.buildArguments(const {
-          'properties': {
-            'search_query': {'type': 'string'},
-            'tenant': {'type': 'string'},
+        () => ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'search_query': {'type': 'string'},
+              'tenant': {'type': 'string'},
+            },
+            'required': ['search_query', 'tenant'],
           },
-          'required': ['search_query', 'tenant'],
-        }, 'dart', 5),
+          'dart',
+          5,
+        ),
         // Naming the parameter, not merely refusing: the gateway's schema is
         // the only place that says what it wanted, and "Z.AI advertised a
         // tool this build cannot call" with no name is a dead end for
         // whoever reads it.
-        throwsA(isA<http.ClientException>()
-            .having((e) => e.message, 'message', contains('tenant'))),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            contains('tenant'),
+          ),
+        ),
       );
     });
 
@@ -1983,15 +2121,19 @@ void main() {
       // would put the query where the server does not read it, and leave the
       // required loop below to fill the real parameter from its default.
       expect(
-        ZaiSearch.buildArguments(const {
-          'properties': {
-            'query': {'type': 'string'},
-            'q': {'type': 'string'},
-            'count': {'type': 'integer'},
-            'limit': {'type': 'integer'},
+        ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'query': {'type': 'string'},
+              'q': {'type': 'string'},
+              'count': {'type': 'integer'},
+              'limit': {'type': 'integer'},
+            },
+            'required': ['q', 'limit'],
           },
-          'required': ['q', 'limit'],
-        }, 'dart', 4),
+          'dart',
+          4,
+        ),
         {'q': 'dart', 'limit': 4},
       );
     });
@@ -2000,12 +2142,16 @@ void main() {
       // The names are the schema's to choose — that is what `pick` is for —
       // and `max_results` is as ordinary as `count` in MCP tool schemas.
       expect(
-        ZaiSearch.buildArguments(const {
-          'properties': {
-            'search_query': {'type': 'string'},
-            'max_results': {'type': 'integer'},
+        ZaiSearch.buildArguments(
+          const {
+            'properties': {
+              'search_query': {'type': 'string'},
+              'max_results': {'type': 'integer'},
+            },
           },
-        }, 'dart', 3),
+          'dart',
+          3,
+        ),
         {'search_query': 'dart', 'max_results': 3},
       );
     });
@@ -2029,7 +2175,8 @@ void main() {
         'content': [
           {
             'type': 'text',
-            'text': '[{"link":"https://a.example","title":{"en":"A"},'
+            'text':
+                '[{"link":"https://a.example","title":{"en":"A"},'
                 '"content":["one","two",3]},'
                 '{"link":"https://b.example","title":{"en":7}}]',
           },
@@ -2052,10 +2199,11 @@ void main() {
           ],
         },
       }, 5);
-      expect(
-        results.map((r) => r.url),
-        ['https://a.example', 'https://b.example', 'https://c.example'],
-      );
+      expect(results.map((r) => r.url), [
+        'https://a.example',
+        'https://b.example',
+        'https://c.example',
+      ]);
     });
 
     test('an empty title falls back to the media name', () {
@@ -2134,8 +2282,9 @@ void main() {
       // The control that keeps the assertion above from passing for a walk
       // that returns nothing at any depth.
       expect(
-        ZaiSearch.parseToolResult({'structuredContent': wrap(20)}, 5)
-            .map((r) => r.url),
+        ZaiSearch.parseToolResult({
+          'structuredContent': wrap(20),
+        }, 5).map((r) => r.url),
         ['https://deep.example'],
       );
     });
@@ -2203,11 +2352,10 @@ void main() {
       // bytes trips at 1200 on the second chunk, counting decoded units only
       // ever reaches 600. A cap of 500 was tripped by both.
       await expectLater(
-        ZaiSearch.bounded(source(), 1000, const Duration(seconds: 1))
-            .toList()
-            // Test-side only, like the deadline tests below: a byte cap that
-            // stopped being enforced should fail here, not hang.
-            .timeout(const Duration(seconds: 5)),
+        ZaiSearch.bounded(source(), 1000, const Duration(seconds: 1)).toList()
+        // Test-side only, like the deadline tests below: a byte cap that
+        // stopped being enforced should fail here, not hang.
+        .timeout(const Duration(seconds: 5)),
         throwsA(isA<http.ClientException>()),
       );
       await expectLater(
@@ -2217,9 +2365,11 @@ void main() {
         // deadline and fail it with the other guard's message. The byte-vs-
         // code-unit distinction is carried by the 1000-cap expectation above,
         // which a stall cannot make pass.
-        ZaiSearch.bounded(source(), 5000, const Duration(seconds: 30))
-            .toList()
-            .timeout(const Duration(seconds: 5)),
+        ZaiSearch.bounded(
+          source(),
+          5000,
+          const Duration(seconds: 30),
+        ).toList().timeout(const Duration(seconds: 5)),
         completion(hasLength(3)),
       );
     });
@@ -2258,17 +2408,19 @@ void main() {
           total: const Duration(milliseconds: 40),
           totalMessage: 'held open',
         ).toList()
-            // Test-side only, and it sat above beside `total:` and
-            // `totalMessage:` — two production arguments, one of which this
-            // test asserts the message of. It guards the line it is now on:
-            // a deadline that stopped being enforced would hang this until
-            // the runner's own timeout.
-            .timeout(const Duration(seconds: 5)),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          'held open',
-        )),
+        // Test-side only, and it sat above beside `total:` and
+        // `totalMessage:` — two production arguments, one of which this
+        // test asserts the message of. It guards the line it is now on:
+        // a deadline that stopped being enforced would hang this until
+        // the runner's own timeout.
+        .timeout(const Duration(seconds: 5)),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            'held open',
+          ),
+        ),
       );
       expect(cancelled, isTrue);
     });
@@ -2291,8 +2443,13 @@ void main() {
           1024,
           const Duration(milliseconds: 20),
         ).toList().timeout(const Duration(seconds: 5)),
-        throwsA(isA<http.ClientException>()
-            .having((e) => e.message, 'message', contains('stopped sending'))),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            contains('stopped sending'),
+          ),
+        ),
       );
       expect(cancelled, isTrue);
     });
@@ -2316,10 +2473,10 @@ void main() {
           1024,
           const Duration(milliseconds: 20),
         ).toList()
-            // Test-side only, like the trickle test's: an idle deadline that
-            // stopped being enforced would hang here on a controller that
-            // never closes, rather than failing the expectation.
-            .timeout(const Duration(seconds: 5)),
+        // Test-side only, like the trickle test's: an idle deadline that
+        // stopped being enforced would hang here on a controller that
+        // never closes, rather than failing the expectation.
+        .timeout(const Duration(seconds: 5)),
         // Readable, like the byte cap's: both guards exist for the same
         // 200-then-stall case and both reach the UI, so neither surfaces as
         // "Future not completed".
@@ -2339,59 +2496,63 @@ void main() {
     Stream<List<int>> sse(List<String> events) =>
         Stream.fromIterable(events.map(utf8.encode));
 
-    test('a comment frame inside an event neither ends it nor joins it',
-        () async {
-      // `: ping` is the standard SSE keep-alive, and this endpoint sits
-      // behind gateways that send them while holding a connection open.
-      // Placed *between* two data lines of one event, because that is the
-      // only position that discriminates: a reader that ends the event on
-      // any non-`data:` line decodes half a payload and then strands the
-      // rest, and one that appends the comment to the payload feeds
-      // `: ping` to `jsonDecode`. Both return null instead of the reply.
-      // Outside an event the same two bugs are invisible — `finish()` on an
-      // empty buffer answers null and the read simply continues. Measured:
-      // each of those two regressions fails this test and nothing else.
-      //
-      // No multi-line-payload test beside it. One was written and deleted:
-      // clearing the buffer per data line already fails three tests in this
-      // file, so accumulation is pinned — and the join *character* cannot be
-      // pinned at all, since every split of a valid JSON payload decodes the
-      // same joined with a newline or with nothing.
-      final message = await ZaiSearch.readSseRpcMessage(
-        sse([
-          'data: {"jsonrpc":"2.0",\n',
-          ': ping\n',
-          'data: "id":7,"result":{"content":[]}}\n',
-          '\n',
-        ]),
-        7,
-      ).timeout(const Duration(seconds: 5));
+    test(
+      'a comment frame inside an event neither ends it nor joins it',
+      () async {
+        // `: ping` is the standard SSE keep-alive, and this endpoint sits
+        // behind gateways that send them while holding a connection open.
+        // Placed *between* two data lines of one event, because that is the
+        // only position that discriminates: a reader that ends the event on
+        // any non-`data:` line decodes half a payload and then strands the
+        // rest, and one that appends the comment to the payload feeds
+        // `: ping` to `jsonDecode`. Both return null instead of the reply.
+        // Outside an event the same two bugs are invisible — `finish()` on an
+        // empty buffer answers null and the read simply continues. Measured:
+        // each of those two regressions fails this test and nothing else.
+        //
+        // No multi-line-payload test beside it. One was written and deleted:
+        // clearing the buffer per data line already fails three tests in this
+        // file, so accumulation is pinned — and the join *character* cannot be
+        // pinned at all, since every split of a valid JSON payload decodes the
+        // same joined with a newline or with nothing.
+        final message = await ZaiSearch.readSseRpcMessage(
+          sse([
+            'data: {"jsonrpc":"2.0",\n',
+            ': ping\n',
+            'data: "id":7,"result":{"content":[]}}\n',
+            '\n',
+          ]),
+          7,
+        ).timeout(const Duration(seconds: 5));
 
-      expect(message, isNotNull);
-      expect(message!['id'], 7);
-    });
+        expect(message, isNotNull);
+        expect(message!['id'], 7);
+      },
+    );
 
-    test('a server request carrying our id is walked past, not answered',
-        () async {
-      // JSON-RPC ids are scoped per direction: the server's own counter can
-      // hand a `sampling/createMessage` — or any request it initiates — the
-      // number this request is using. Matched on the id alone, that message
-      // ends the read and `readRpcResult` rejects it as an invalid reply,
-      // while the answer is still inbound on the same stream.
-      final message = await ZaiSearch.readSseRpcMessage(
-        sse([
-          'data: {"jsonrpc":"2.0","id":7,"method":"sampling/createMessage",'
-              '"params":{}}\n',
-          '\n',
-          'data: {"jsonrpc":"2.0","id":7,"result":{"content":[]}}\n',
-          '\n',
-        ]),
-        7,
-      ).timeout(const Duration(seconds: 5));
+    test(
+      'a server request carrying our id is walked past, not answered',
+      () async {
+        // JSON-RPC ids are scoped per direction: the server's own counter can
+        // hand a `sampling/createMessage` — or any request it initiates — the
+        // number this request is using. Matched on the id alone, that message
+        // ends the read and `readRpcResult` rejects it as an invalid reply,
+        // while the answer is still inbound on the same stream.
+        final message = await ZaiSearch.readSseRpcMessage(
+          sse([
+            'data: {"jsonrpc":"2.0","id":7,"method":"sampling/createMessage",'
+                '"params":{}}\n',
+            '\n',
+            'data: {"jsonrpc":"2.0","id":7,"result":{"content":[]}}\n',
+            '\n',
+          ]),
+          7,
+        ).timeout(const Duration(seconds: 5));
 
-      expect(message, isNotNull);
-      expect(message!['result'], isNotNull);
-    });
+        expect(message, isNotNull);
+        expect(message!['result'], isNotNull);
+      },
+    );
 
     test('a gateway rejection with no id ends the read', () async {
       // The gateway's `{"success": false}` envelope is not a JSON-RPC message
@@ -2399,21 +2560,20 @@ void main() {
       // deadline and the caller is told nothing replied, where the same
       // rejection over plain JSON says which of key, plan and quota is wrong.
       final message = await ZaiSearch.readSseRpcMessage(
-        sse([
-          'data: {"success":false,"msg":"invalid api key"}\n',
-          '\n',
-        ]),
+        sse(['data: {"success":false,"msg":"invalid api key"}\n', '\n']),
         7,
       ).timeout(const Duration(seconds: 5));
 
       expect(message, isNotNull);
       expect(
         () => ZaiSearch.readRpcResult(message, method: 'tools/call', id: 7),
-        throwsA(isA<http.ClientException>().having(
-          (e) => e.message,
-          'message',
-          contains('rejected the search API key'),
-        )),
+        throwsA(
+          isA<http.ClientException>().having(
+            (e) => e.message,
+            'message',
+            contains('rejected the search API key'),
+          ),
+        ),
       );
     });
 
@@ -2445,16 +2605,18 @@ void main() {
       expect(results.map((r) => r.url), ['https://x.example/docs']);
     });
 
-    test('a slash inside a query value is data, not a trailing slash',
-        () async {
-      // `?next=/docs/` and `?next=/docs` are two different redirects; the
-      // trailing-slash trim applies to a path, not to a query value.
-      final results = await CompositeSearch([
-        _Fixed([_hit('https://x.example/go?next=/docs/')]),
-        _Fixed([_hit('https://x.example/go?next=/docs')]),
-      ]).search('q', limit: 5);
-      expect(results, hasLength(2));
-    });
+    test(
+      'a slash inside a query value is data, not a trailing slash',
+      () async {
+        // `?next=/docs/` and `?next=/docs` are two different redirects; the
+        // trailing-slash trim applies to a path, not to a query value.
+        final results = await CompositeSearch([
+          _Fixed([_hit('https://x.example/go?next=/docs/')]),
+          _Fixed([_hit('https://x.example/go?next=/docs')]),
+        ]).search('q', limit: 5);
+        expect(results, hasLength(2));
+      },
+    );
 
     test('an explicit default port is the same page', () async {
       // Pinned either way, so a normalization refactor changes this on
@@ -2487,19 +2649,21 @@ void main() {
       expect(kept, hasLength(2));
     });
 
-    test('two forms of one page from a single backend are one result',
-        () async {
-      // Every other dedup case here feeds the variants from *different*
-      // backends, so a merge that deduped only across them would pass while
-      // still showing the same page twice from one index.
-      final results = await CompositeSearch([
-        _Fixed([
-          _hit('https://x.example/docs', title: 'Docs'),
-          _hit('https://x.example/docs/', title: 'Docs, again'),
-        ]),
-      ]).search('q');
-      expect(results.map((r) => r.url), ['https://x.example/docs']);
-    });
+    test(
+      'two forms of one page from a single backend are one result',
+      () async {
+        // Every other dedup case here feeds the variants from *different*
+        // backends, so a merge that deduped only across them would pass while
+        // still showing the same page twice from one index.
+        final results = await CompositeSearch([
+          _Fixed([
+            _hit('https://x.example/docs', title: 'Docs'),
+            _hit('https://x.example/docs/', title: 'Docs, again'),
+          ]),
+        ]).search('q');
+        expect(results.map((r) => r.url), ['https://x.example/docs']);
+      },
+    );
 
     test('a trailing slash is the path\'s even when a query follows', () async {
       // The path ends at the first '?', so its trailing slash is the path's
@@ -2513,8 +2677,10 @@ void main() {
         _Fixed([_hit('https://x.example/other')]),
       ]).search('q', limit: 2);
       // The duplicate must not eat the slot the third backend's page needs.
-      expect(results.map((r) => r.url),
-          ['https://x.example/docs/?q=1', 'https://x.example/other']);
+      expect(results.map((r) => r.url), [
+        'https://x.example/docs/?q=1',
+        'https://x.example/other',
+      ]);
     });
 
     test('an unparseable URL drops its fragment too', () async {
@@ -2565,10 +2731,12 @@ void main() {
       // Rank 0 from each backend, then rank 1 — where the *first* backend's
       // "b" is the duplicate (the second backend's rank-0 hit was already
       // emitted) and is skipped, so the second backend's "d" takes that slot.
-      expect(
-        results.map((r) => r.url),
-        ['https://a', 'https://b', 'https://d', 'https://c'],
-      );
+      expect(results.map((r) => r.url), [
+        'https://a',
+        'https://b',
+        'https://d',
+        'https://c',
+      ]);
     });
 
     test('one backend failing does not take the search with it', () async {
@@ -2580,7 +2748,6 @@ void main() {
         _Fixed([_hit('https://a')], delay: const Duration(milliseconds: 25)),
       ]).search('q');
       expect(results.map((r) => r.url), ['https://a']);
-
     });
 
     test('a parse failure is contained like a transport one', () async {
@@ -2590,8 +2757,7 @@ void main() {
         (await CompositeSearch([
           _Broken(const FormatException('bad payload')),
           _Fixed([_hit('https://a')]),
-        ]).search('q'))
-            .map((r) => r.url),
+        ]).search('q')).map((r) => r.url),
         ['https://a'],
       );
     });
@@ -2600,11 +2766,16 @@ void main() {
       // Asserted on what the backend was handed, not on the merged list: the
       // merge caps at the caller's limit either way, so a composite that
       // dropped the argument would return the same two results.
-      final backend =
-          _Fixed([_hit('https://a'), _hit('https://b'), _hit('https://c')]);
+      final backend = _Fixed([
+        _hit('https://a'),
+        _hit('https://b'),
+        _hit('https://c'),
+      ]);
       final second = _Fixed([_hit('https://x'), _hit('https://y')]);
-      final results =
-          await CompositeSearch([backend, second]).search('q', limit: 2);
+      final results = await CompositeSearch([
+        backend,
+        second,
+      ]).search('q', limit: 2);
       // Each backend is asked for the whole limit, not a share of it: the
       // union after dedup is usually smaller than the sum, and a short answer
       // from one is exactly when the other's results are wanted.
@@ -2638,19 +2809,21 @@ void main() {
       );
     });
 
-    test('a backend that failed does not make an empty answer an error',
-        () async {
-      // The middle case between the two tests above, and the one a user hits
-      // with a wrong key on one backend and no matches on the other: not
-      // every backend failed, so "nothing found" is the honest answer even
-      // with an error in hand. Two readings pass both neighbours — throw
-      // whenever the merged list is empty and something failed, or throw only
-      // when every backend failed — and only this tells them apart.
-      expect(
-        await CompositeSearch([_Broken(), _Fixed(const [])]).search('q'),
-        isEmpty,
-      );
-    });
+    test(
+      'a backend that failed does not make an empty answer an error',
+      () async {
+        // The middle case between the two tests above, and the one a user hits
+        // with a wrong key on one backend and no matches on the other: not
+        // every backend failed, so "nothing found" is the honest answer even
+        // with an error in hand. Two readings pass both neighbours — throw
+        // whenever the merged list is empty and something failed, or throw only
+        // when every backend failed — and only this tells them apart.
+        expect(
+          await CompositeSearch([_Broken(), _Fixed(const [])]).search('q'),
+          isEmpty,
+        );
+      },
+    );
 
     test('no backends at all is simply nothing to search', () async {
       expect(await CompositeSearch([]).search('q'), isEmpty);

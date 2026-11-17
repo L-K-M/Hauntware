@@ -240,7 +240,9 @@ Map<String, Object?> encodeAppearance(AppAppearance appearance) => {
 };
 
 AppAppearance decodeAppearance(Map<String, Object?> json) => AppAppearance(
-  palette: poltergeistThemeCodec.decodeStored(json[SettingsLinkKey.palette.name]),
+  palette: poltergeistThemeCodec.decodeStored(
+    json[SettingsLinkKey.palette.name],
+  ),
   mode: ThemeModePreference.values.byName(
     json[SettingsLinkKey.mode.name]! as String,
   ),
