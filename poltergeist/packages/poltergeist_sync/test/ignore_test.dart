@@ -69,10 +69,7 @@ void main() {
     });
 
     test('! cannot resurrect a name inside an excluded directory', () {
-      expect(
-        excluded(['build/', '!build/keep.txt'], 'build/keep.txt'),
-        isTrue,
-      );
+      expect(excluded(['build/', '!build/keep.txt'], 'build/keep.txt'), isTrue);
     });
 
     test('blank lines and # comments are ignored', () {
@@ -101,14 +98,8 @@ void main() {
     });
 
     test('includeHidden: false inserts .* before the defaults', () {
-      expect(
-        excluded([], '.hidden', includeHidden: false),
-        isTrue,
-      );
-      expect(
-        excluded([], 'sub/.hidden', includeHidden: false),
-        isTrue,
-      );
+      expect(excluded([], '.hidden', includeHidden: false), isTrue);
+      expect(excluded([], 'sub/.hidden', includeHidden: false), isTrue);
       expect(
         excluded(['!*.important'], '.important', includeHidden: false),
         // The hidden rule sits AFTER user rules (05 §2.1's ordering), so
@@ -140,10 +131,7 @@ void main() {
     });
 
     test('an empty or malformed trash root is rejected', () {
-      expect(
-        () => SyncIgnoreRules(trashRelativePath: ''),
-        throwsArgumentError,
-      );
+      expect(() => SyncIgnoreRules(trashRelativePath: ''), throwsArgumentError);
       // A backslash is a legal component character on POSIX — a\b is
       // one literal segment, not a Windows-style separator.
       SyncIgnoreRules(trashRelativePath: r'a\b');

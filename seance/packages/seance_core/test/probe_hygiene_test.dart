@@ -89,20 +89,25 @@ void main() {
   });
 
   group('one bad host does not take the sweep with it', () {
-    test('a throwing probe yields unknown, and the rest still complete', () async {
-      final service = ProbeService(prober: _ThrowingProber({'b.example.com'}));
-      addTearDown(service.dispose);
-      final result = await service.probeAll([
-        _server('a'),
-        _server('b'),
-        _server('c'),
-      ]);
-      expect(result.length, 3);
-      // Not `offline`: an unexpected error is not evidence the host is down.
-      expect(result['b'], ProbeStatus.unknown);
-      expect(result['a'], ProbeStatus.online);
-      expect(result['c'], ProbeStatus.online);
-    });
+    test(
+      'a throwing probe yields unknown, and the rest still complete',
+      () async {
+        final service = ProbeService(
+          prober: _ThrowingProber({'b.example.com'}),
+        );
+        addTearDown(service.dispose);
+        final result = await service.probeAll([
+          _server('a'),
+          _server('b'),
+          _server('c'),
+        ]);
+        expect(result.length, 3);
+        // Not `offline`: an unexpected error is not evidence the host is down.
+        expect(result['b'], ProbeStatus.unknown);
+        expect(result['a'], ProbeStatus.online);
+        expect(result['c'], ProbeStatus.online);
+      },
+    );
   });
 
   group('a disposed service stops for good', () {

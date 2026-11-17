@@ -166,14 +166,13 @@ class SettingsWindowHost implements QuitSettingsWindow {
     return _dispatch(method, argument);
   }
 
-  Future<Object?> _dispatch(
-    SettingsLinkMethod method,
-    Object? argument,
-  ) async {
+  Future<Object?> _dispatch(SettingsLinkMethod method, Object? argument) async {
     Map<String, dynamic> map() => (argument! as Map).cast<String, dynamic>();
     switch (method) {
       case SettingsLinkMethod.setAppLock:
-        await _backend.setAppLock(AppLockMode.values.byName(argument! as String));
+        await _backend.setAppLock(
+          AppLockMode.values.byName(argument! as String),
+        );
       case SettingsLinkMethod.setCheckForUpdates:
         await _backend.setCheckForUpdates(argument! as bool);
       case SettingsLinkMethod.setLocalShellEnabled:
@@ -338,8 +337,8 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
 
   @override
   void applySnapshot(Map<String, Object?> snapshot) {
-    _appLockAvailability = snapshot['appLockAvailability'] ==
-            AppLockAvailability.available.name
+    _appLockAvailability =
+        snapshot['appLockAvailability'] == AppLockAvailability.available.name
         ? AppLockAvailability.available
         : AppLockAvailability.unavailable;
     _settings = AppSettings.fromJson(
@@ -374,8 +373,7 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   /// local shell reads are identical on both sides, so the answer is
   /// computed here rather than carried over the link.
   @override
-  LocalShellInfo get localShell =>
-      LocalShellInfo.of(LocalShellService());
+  LocalShellInfo get localShell => LocalShellInfo.of(LocalShellService());
 
   @override
   Future<void> setLocalShellEnabled(bool enabled) =>
@@ -472,9 +470,10 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
     required bool keepLocal,
   }) async => PulledPinResolution.values.byName(
     (await _call(SettingsLinkMethod.resolvePinConflict, {
-      'conflict': hostKeyConflictToJson(conflict),
-      'keepLocal': keepLocal,
-    }))! as String,
+          'conflict': hostKeyConflictToJson(conflict),
+          'keepLocal': keepLocal,
+        }))!
+        as String,
   );
 
   @override
@@ -486,8 +485,10 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
       (await _call(SettingsLinkMethod.addInboxApp, draft.toJson()))! as String;
 
   @override
-  Future<void> updateInboxApp(String appId, InboxAppDraft draft) =>
-      _call(SettingsLinkMethod.updateInboxApp, {'app': appId, 'draft': draft.toJson()});
+  Future<void> updateInboxApp(String appId, InboxAppDraft draft) => _call(
+    SettingsLinkMethod.updateInboxApp,
+    {'app': appId, 'draft': draft.toJson()},
+  );
 
   @override
   Future<void> removeInboxApp(String appId) =>

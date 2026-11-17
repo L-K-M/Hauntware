@@ -53,8 +53,7 @@ Future<PaneTabsController> pumpLauncher(
 }
 
 Finder get addressField => find.byKey(const ValueKey('quickConnect.field'));
-Finder get connectButton =>
-    find.byKey(const ValueKey('quickConnect.connect'));
+Finder get connectButton => find.byKey(const ValueKey('quickConnect.connect'));
 
 /// Drives one adhoc remote binding to the browsing phase through the
 /// fake lanes: the surface the "Save as favorite…" bar renders on.
@@ -127,24 +126,23 @@ Future<void> pumpPane(
 
 void main() {
   group('Quick Connect field', () {
-    testWidgets('renders the address field with autofocus on the active pane',
-        (tester) async {
+    testWidgets('renders the address field with autofocus on the active pane', (
+      tester,
+    ) async {
       final lanes = controller_test.FakePaneLanes();
       await pumpLauncher(tester, lanes);
 
       expect(addressField, findsOneWidget);
       expect(connectButton, findsOneWidget);
       final editable = tester.widget<EditableText>(
-        find.descendant(
-          of: addressField,
-          matching: find.byType(EditableText),
-        ),
+        find.descendant(of: addressField, matching: find.byType(EditableText)),
       );
       expect(editable.focusNode.hasFocus, isTrue);
     });
 
-    testWidgets('an in-range port shows the visible interpretation',
-        (tester) async {
+    testWidgets('an in-range port shows the visible interpretation', (
+      tester,
+    ) async {
       final lanes = controller_test.FakePaneLanes();
       await pumpLauncher(tester, lanes);
 
@@ -170,8 +168,9 @@ void main() {
       expect(tester.widget<FilledButton>(connectButton).enabled, isTrue);
     });
 
-    testWidgets('an unbracketed IPv6 address shows the bracket hint',
-        (tester) async {
+    testWidgets('an unbracketed IPv6 address shows the bracket hint', (
+      tester,
+    ) async {
       final lanes = controller_test.FakePaneLanes();
       await pumpLauncher(tester, lanes);
 
@@ -208,8 +207,7 @@ void main() {
     });
 
     testWidgets('the address field takes no autocorrect, suggestions or '
-        'keyboard learning',
-        (tester) async {
+        'keyboard learning', (tester) async {
       final lanes = controller_test.FakePaneLanes();
       await pumpLauncher(tester, lanes);
 
@@ -244,8 +242,7 @@ void main() {
       );
     });
 
-    testWidgets('typing never leaves the field or swaps panes',
-        (tester) async {
+    testWidgets('typing never leaves the field or swaps panes', (tester) async {
       final lanes = controller_test.FakePaneLanes();
       final strip = await pumpLauncher(tester, lanes);
 
@@ -254,10 +251,7 @@ void main() {
 
       expect(strip.tabs, isEmpty);
       final editable = tester.widget<EditableText>(
-        find.descendant(
-          of: addressField,
-          matching: find.byType(EditableText),
-        ),
+        find.descendant(of: addressField, matching: find.byType(EditableText)),
       );
       expect(editable.focusNode.hasFocus, isTrue);
     });
@@ -286,14 +280,10 @@ void main() {
       await tester.pump();
     }
 
-    test('USER wins, USERNAME is the Windows fallback, none means blank',
-        () {
+    test('USER wins, USERNAME is the Windows fallback, none means blank', () {
       expect(quickConnectUserPrefill({'USER': 'lkm'}), 'lkm@');
       expect(quickConnectUserPrefill({'USERNAME': 'Lukas'}), 'Lukas@');
-      expect(
-        quickConnectUserPrefill({'USER': 'a', 'USERNAME': 'b'}),
-        'a@',
-      );
+      expect(quickConnectUserPrefill({'USER': 'a', 'USERNAME': 'b'}), 'a@');
       expect(quickConnectUserPrefill(const {}), '');
     });
 
@@ -329,11 +319,11 @@ void main() {
   });
 
   group('Quick Connect connect', () {
-    testWidgets('connects through the remote seam with an adhoc bookmark',
-        (tester) async {
+    testWidgets('connects through the remote seam with an adhoc bookmark', (
+      tester,
+    ) async {
       final lanes = controller_test.FakePaneLanes();
-      lanes.nextRemoteChannel =
-          controller_test.FakePaneChannel('/home/deploy');
+      lanes.nextRemoteChannel = controller_test.FakePaneChannel('/home/deploy');
       final strip = await pumpLauncher(tester, lanes);
 
       await tester.enterText(addressField, 'deploy@example.com:/srv/www');
@@ -357,8 +347,7 @@ void main() {
 
     testWidgets('Enter submits the address', (tester) async {
       final lanes = controller_test.FakePaneLanes();
-      lanes.nextRemoteChannel =
-          controller_test.FakePaneChannel('/home/deploy');
+      lanes.nextRemoteChannel = controller_test.FakePaneChannel('/home/deploy');
       final strip = await pumpLauncher(tester, lanes);
 
       await tester.enterText(addressField, 'deploy@example.com');
@@ -459,9 +448,7 @@ void main() {
 
       // The rail's "Save to Favorites…" writes the same endpoint.
       await tester.runAsync(
-        () => store.save(
-          adhocBookmark(id: 'saved-1', label: 'deploy'),
-        ),
+        () => store.save(adhocBookmark(id: 'saved-1', label: 'deploy')),
       );
       await tester.pumpAndSettle();
       expect(bar, findsNothing);

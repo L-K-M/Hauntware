@@ -301,14 +301,13 @@ Future<EnclosedApplyCount> countEnclosedApplyItems(
   var flagged = 0;
   var links = 0;
   var clean = true;
-  EnclosedApplyCount snapshot({required bool cancelled}) =>
-      EnclosedApplyCount(
-        items: items,
-        flagged: flagged,
-        links: links,
-        clean: clean,
-        cancelled: cancelled,
-      );
+  EnclosedApplyCount snapshot({required bool cancelled}) => EnclosedApplyCount(
+    items: items,
+    flagged: flagged,
+    links: links,
+    clean: clean,
+    cancelled: cancelled,
+  );
 
   final visited = <String>{_dedupeKey(path)};
   final pending = <String>[path];
@@ -340,8 +339,7 @@ Future<EnclosedApplyCount> countEnclosedApplyItems(
         continue;
       }
       items++;
-      if (entry.isDirectory &&
-          visited.add(_dedupeKey(entry.path))) {
+      if (entry.isDirectory && visited.add(_dedupeKey(entry.path))) {
         pending.add(entry.path);
       }
     }
@@ -385,22 +383,20 @@ Future<EnclosedApplyProgress> applyModeToEnclosed(
   var linksSkipped = 0;
   var unreadable = 0;
   var failed = 0;
-  EnclosedApplyProgress snapshot(
-    EnclosedApplyStage stage, {
-    Object? error,
-  }) => EnclosedApplyProgress(
-    targetPath: path,
-    targetName: targetName,
-    mode: mode,
-    stage: stage,
-    visited: visited,
-    applied: applied,
-    skippedUndecodable: skippedUndecodable,
-    linksSkipped: linksSkipped,
-    unreadable: unreadable,
-    failed: failed,
-    error: error,
-  );
+  EnclosedApplyProgress snapshot(EnclosedApplyStage stage, {Object? error}) =>
+      EnclosedApplyProgress(
+        targetPath: path,
+        targetName: targetName,
+        mode: mode,
+        stage: stage,
+        visited: visited,
+        applied: applied,
+        skippedUndecodable: skippedUndecodable,
+        linksSkipped: linksSkipped,
+        unreadable: unreadable,
+        failed: failed,
+        error: error,
+      );
 
   // Directories wait for post-order chmod in discovery order — a
   // parent's listing always precedes its descendants', so replaying the
@@ -497,8 +493,8 @@ String _dedupeKey(String path) {
   // stays ambiguous rather than guessed: under-stripping can double-
   // process a misspelled directory, but over-stripping silently merges
   // distinct names and loses a subtree.
-  final windowsStyle = _windowsAbsoluteHead.hasMatch(key) ||
-      key.startsWith(r'\\');
+  final windowsStyle =
+      _windowsAbsoluteHead.hasMatch(key) || key.startsWith(r'\\');
   while (key.length > 1 &&
       (key.endsWith('/') || (windowsStyle && key.endsWith(r'\')))) {
     key = key.substring(0, key.length - 1);

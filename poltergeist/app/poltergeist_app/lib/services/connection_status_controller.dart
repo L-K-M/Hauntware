@@ -201,9 +201,7 @@ final class ConnectionStatusController extends ChangeNotifier {
     // unresolved pane failure — and blank live status until every replay
     // lands. A server the store no longer lists keeps nothing (its id is
     // absent), and a stopped engine carries only cleared truth.
-    final previous = {
-      for (final server in _servers) server.serverId: server,
-    };
+    final previous = {for (final server in _servers) server.serverId: server};
     _servers = List.unmodifiable([
       for (final server in _serversOf(bookmarks))
         if (previous[server.serverId] case final old?)

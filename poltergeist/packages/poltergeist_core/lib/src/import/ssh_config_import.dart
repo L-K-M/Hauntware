@@ -292,8 +292,7 @@ class SshConfigImportService {
       final limitations = {
         ...resolver.globalLimitations,
         ...?resolver.hostLimitations[parsed.host.alias],
-        if (parsed.host.proxyJump != null)
-          SshConfigImportLimitation.proxyJump,
+        if (parsed.host.proxyJump != null) SshConfigImportLimitation.proxyJump,
       };
       final refusedPort = parsed.refusedPort;
       if (refusedPort != null) {
@@ -550,8 +549,8 @@ class _Resolver {
               _hostLimitations(alias).add(limitation);
             }
           }
-          // Top-level includes resolve (the chunker cut them out); a
-          // Match-block include is covered by the matchBlock badge.
+        // Top-level includes resolve (the chunker cut them out); a
+        // Match-block include is covered by the matchBlock badge.
         case 'port':
         case 'user':
         case 'hostname':
@@ -568,9 +567,7 @@ class _Resolver {
                 );
               }
             case _BlockContextWildcard():
-              globalLimitations.add(
-                SshConfigImportLimitation.wildcardDefaults,
-              );
+              globalLimitations.add(SshConfigImportLimitation.wildcardDefaults);
             case _BlockContextHost():
             case _BlockContextMatch():
               break; // the pin applies host-block values; Match covers all
@@ -615,10 +612,7 @@ class _Resolver {
           // ssh ignores missing include targets; the note keeps the
           // preview honest about what was not read.
           notices.add(
-            SshConfigUnresolvedInclude(
-              SshConfigIncludeNote.unreadable,
-              target,
-            ),
+            SshConfigUnresolvedInclude(SshConfigIncludeNote.unreadable, target),
           );
           continue;
         }

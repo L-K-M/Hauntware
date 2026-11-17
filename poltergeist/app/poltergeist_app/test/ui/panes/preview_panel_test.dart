@@ -26,8 +26,7 @@ void main() {
     WidgetTester tester,
     PreviewSession session, {
     void Function(PaneController, RemoteFileEntry)? onOpen,
-    void Function(BuildContext, PaneController, RemoteFileEntry)?
-    onOpenWith,
+    void Function(BuildContext, PaneController, RemoteFileEntry)? onOpenWith,
     void Function(PaneController, RemoteFileEntry)? onOpenInEditor,
   }) {
     tester.view.physicalSize = const Size(1100, 800);
@@ -118,9 +117,7 @@ void main() {
     });
     await tester.pump();
     await drive(tester, () async {
-      await tester.tap(
-        find.byKey(const ValueKey('preview.confirm.download')),
-      );
+      await tester.tap(find.byKey(const ValueKey('preview.confirm.download')));
       await untilPhase(h.session, PreviewPhase.producing);
       await untilTrue(() => h.producer.specs.isNotEmpty);
     });
@@ -146,14 +143,8 @@ void main() {
     });
     await pumpPanel(tester, h.session);
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('preview.gate.cancel')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('preview.gate.keep')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('preview.gate.cancel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('preview.gate.keep')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('preview.gate.keep')));
     await tester.pump();
@@ -161,8 +152,7 @@ void main() {
     expect(h.producer.specs.single.gate!.isAwaitingConfirmation, isFalse);
   });
 
-  testWidgets('rendered text shows the preview.text surface',
-      (tester) async {
+  testWidgets('rendered text shows the preview.text surface', (tester) async {
     final h = (await tester.runAsync(PreviewHarness.create))!;
     await drive(tester, () async {
       await h.connectRemote([previewEntry('a.txt', size: 5)]);
@@ -256,9 +246,7 @@ void main() {
     expect(opened, 1);
   });
 
-  testWidgets('metadata refusal card carries Open/Open With', (
-    tester,
-  ) async {
+  testWidgets('metadata refusal card carries Open/Open With', (tester) async {
     final h = (await tester.runAsync(
       () => PreviewHarness.create(cacheCapacityBytes: 8),
     ))!;
@@ -298,9 +286,7 @@ void main() {
     expect(h.workspace.previewPanelHidden, isTrue);
   });
 
-  testWidgets('Quick Look overlay shows the producing card', (
-    tester,
-  ) async {
+  testWidgets('Quick Look overlay shows the producing card', (tester) async {
     final h = (await tester.runAsync(
       () => PreviewHarness.create(
         platform: TargetPlatform.macOS,
@@ -324,10 +310,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey('preview.quickLookCard')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('preview.quickLookCard')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('preview.quickLookCard.cancel')),
       findsOneWidget,
@@ -335,8 +318,7 @@ void main() {
   });
 
   group('commands', () {
-    test('file.preview and view.togglePreview register per D21',
-        () async {
+    test('file.preview and view.togglePreview register per D21', () async {
       final h = await PreviewHarness.create();
       final commands = buildPaneCommands(
         workspace: h.workspace,
@@ -345,9 +327,7 @@ void main() {
         swapFocus: () {},
         preview: h.session,
       );
-      final preview = commands.firstWhere(
-        (c) => c.id == kFilePreviewCommandId,
-      );
+      final preview = commands.firstWhere((c) => c.id == kFilePreviewCommandId);
       final toggle = commands.firstWhere(
         (c) => c.id == kViewTogglePreviewCommandId,
       );
@@ -356,18 +336,12 @@ void main() {
       // key tier, never the chord layer, per 02 §8.2).
       expect(
         preview.activators!(TargetPlatform.linux),
-        contains(
-          const SingleActivator(LogicalKeyboardKey.space),
-        ),
+        contains(const SingleActivator(LogicalKeyboardKey.space)),
       );
       // ⌥⌘P on macOS, Ctrl+Alt+P elsewhere.
       expect(
         toggle.activators!(TargetPlatform.macOS).single,
-        const SingleActivator(
-          LogicalKeyboardKey.keyP,
-          meta: true,
-          alt: true,
-        ),
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true, alt: true),
       );
       expect(
         toggle.activators!(TargetPlatform.linux).single,
@@ -447,9 +421,7 @@ void main() {
         swapFocus: () {},
         preview: h.session,
       );
-      final preview = commands.firstWhere(
-        (c) => c.id == kFilePreviewCommandId,
-      );
+      final preview = commands.firstWhere((c) => c.id == kFilePreviewCommandId);
       final l10n = AppLocalizationsEn();
 
       // Space opens Quick Look on every desktop (D32: the native panel

@@ -64,10 +64,7 @@ class ConflictPolicy {
   /// Resolves the direction pair into the per-task policy the queue
   /// consumes at enqueue time (03 §4.1's one-bucket-pair-per-task rule).
   /// Every direction that can collide maps to exactly one bucket.
-  ResolvedConflictPolicy policyFor(
-    FsLocation source,
-    FsLocation destination,
-  ) {
+  ResolvedConflictPolicy policyFor(FsLocation source, FsLocation destination) {
     final sourceRemote = source is ServerFsLocation;
     final destinationRemote = destination is ServerFsLocation;
     if (sourceRemote && destinationRemote) {
@@ -77,10 +74,7 @@ class ConflictPolicy {
       );
     }
     if (destinationRemote) {
-      return ResolvedConflictPolicy(
-        files: uploadFiles,
-        folders: uploadFolders,
-      );
+      return ResolvedConflictPolicy(files: uploadFiles, folders: uploadFolders);
     }
     if (sourceRemote) {
       return ResolvedConflictPolicy(
@@ -106,17 +100,16 @@ class ConflictPolicy {
     'remoteToRemoteFolders': remoteToRemoteFolders.name,
   };
 
-  factory ConflictPolicy.fromJson(Map<String, Object?> json) =>
-      ConflictPolicy(
-        uploadFiles: _decodeVerb(json['uploadFiles']),
-        uploadFolders: _decodeVerb(json['uploadFolders']),
-        downloadFiles: _decodeVerb(json['downloadFiles']),
-        downloadFolders: _decodeVerb(json['downloadFolders']),
-        localFiles: _decodeVerb(json['localFiles']),
-        localFolders: _decodeVerb(json['localFolders']),
-        remoteToRemoteFiles: _decodeVerb(json['remoteToRemoteFiles']),
-        remoteToRemoteFolders: _decodeVerb(json['remoteToRemoteFolders']),
-      );
+  factory ConflictPolicy.fromJson(Map<String, Object?> json) => ConflictPolicy(
+    uploadFiles: _decodeVerb(json['uploadFiles']),
+    uploadFolders: _decodeVerb(json['uploadFolders']),
+    downloadFiles: _decodeVerb(json['downloadFiles']),
+    downloadFolders: _decodeVerb(json['downloadFolders']),
+    localFiles: _decodeVerb(json['localFiles']),
+    localFolders: _decodeVerb(json['localFolders']),
+    remoteToRemoteFiles: _decodeVerb(json['remoteToRemoteFiles']),
+    remoteToRemoteFolders: _decodeVerb(json['remoteToRemoteFolders']),
+  );
 
   /// Absent or unrecognized values fall back to `ask` — a hand-edited or
   /// forward-versioned settings file degrades to prompting, never to a
@@ -227,9 +220,7 @@ ConflictDisposition resolveTransferConflict({
       final newer =
           sourceModifiedAt != null &&
           existingMtime != null &&
-          sourceModifiedAt.isAfter(
-            existingMtime.add(conflictMtimeTolerance),
-          );
+          sourceModifiedAt.isAfter(existingMtime.add(conflictMtimeTolerance));
       if (sourceIsDirectory) {
         // 03 §4.1: unknown or equal directory mtime is never "newer" —
         // directory mtimes are an unreliable freshness proxy and the

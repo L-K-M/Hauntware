@@ -72,10 +72,10 @@ void main() {
       controller.changeFilterQuery('txt');
       expect(controller.filterQuery, 'txt');
       expect(controller.filterActive, isTrue);
-      expect(
-        controller.entries.map((e) => e.name),
-        ['notes.txt', 'report.txt'],
-      );
+      expect(controller.entries.map((e) => e.name), [
+        'notes.txt',
+        'report.txt',
+      ]);
       expect(controller.unfilteredCount, 4);
 
       controller.clearFilter();
@@ -102,8 +102,11 @@ void main() {
       // matcher on purpose (02 §2.5 specifies plain substring).
       controller.changeFilterQuery('et');
       expect(controller.entries.map((e) => e.name), isEmpty);
-      expect(controller.filterActive, isTrue,
-          reason: 'an active filter may hide every row — §2.7 covers it');
+      expect(
+        controller.filterActive,
+        isTrue,
+        reason: 'an active filter may hide every row — §2.7 covers it',
+      );
 
       controller.changeFilterQuery('ét');
       expect(controller.entries.map((e) => e.name), ['Étude.doc']);
@@ -166,8 +169,7 @@ void main() {
       controller.dispose();
     });
 
-    test('open requires verbs; the field gate blocks stray edits',
-        () async {
+    test('open requires verbs; the field gate blocks stray edits', () async {
       final unbound = PaneController(paneTabId: 'pane.left');
       unbound.openFilter();
       expect(unbound.filterFieldOpen, isFalse);
@@ -188,7 +190,8 @@ void main() {
       expect(
         controller.filterFocusGeneration,
         greaterThan(generation),
-        reason: 're-invoking view.filter re-requests field focus even '
+        reason:
+            're-invoking view.filter re-requests field focus even '
             'while the strip is already mounted',
       );
       controller.dispose();
@@ -211,8 +214,11 @@ void main() {
 
       controller.openFilter();
       controller.changeFilterQuery('txt');
-      expect(controller.quickSelectActive, isFalse,
-          reason: 'the row-set replacement ends the session first');
+      expect(
+        controller.quickSelectActive,
+        isFalse,
+        reason: 'the row-set replacement ends the session first',
+      );
       // The restored baseline (gamma.png) then prunes against the
       // filtered rows — it must not survive as a hidden selection.
       expect(controller.selectedCount, 0);
@@ -239,7 +245,8 @@ void main() {
       expect(
         controller.entries[controller.cursorIndex!].name,
         'beta.txt',
-        reason: 'gamma.png is filtered out — no match keeps the cursor '
+        reason:
+            'gamma.png is filtered out — no match keeps the cursor '
             'on the last hit, it does not reach the hidden row',
       );
       controller.dispose();
@@ -257,49 +264,49 @@ void main() {
 
       controller.openFilter();
       controller.changeFilterQuery('bon');
-      expect(controller.typeAheadBuffer, '',
-          reason: 'the buffer matched rows that no longer stand');
-      controller.dispose();
-    });
-
-    test('the filter survives navigation and refresh within the binding',
-        () async {
-      final lanes = FakePaneLanes();
-      final channel = FakePaneChannel('/home/tester');
-      channel.listings['/home/tester'] = [
-        _entry('sub', type: RemoteFileType.directory),
-        _entry('report.txt'),
-      ];
-      channel.listings['/home/tester/sub'] = [
-        _entry('nested.txt'),
-        _entry('photo.png'),
-      ];
-      lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
-      await controller.openLocalHome();
-      await settle();
-
-      controller.openFilter();
-      controller.changeFilterQuery('txt');
-
-      controller.navigate('/home/tester/sub');
-      await settle();
-      expect(controller.filterQuery, 'txt');
       expect(
-        controller.entries.map((e) => e.name),
-        ['nested.txt'],
-        reason: 'the query reapplies to the newly accepted listing',
+        controller.typeAheadBuffer,
+        '',
+        reason: 'the buffer matched rows that no longer stand',
       );
-
-      controller.refresh();
-      await settle();
-      expect(controller.filterActive, isTrue);
-      expect(controller.entries.map((e) => e.name), ['nested.txt']);
       controller.dispose();
     });
+
+    test(
+      'the filter survives navigation and refresh within the binding',
+      () async {
+        final lanes = FakePaneLanes();
+        final channel = FakePaneChannel('/home/tester');
+        channel.listings['/home/tester'] = [
+          _entry('sub', type: RemoteFileType.directory),
+          _entry('report.txt'),
+        ];
+        channel.listings['/home/tester/sub'] = [
+          _entry('nested.txt'),
+          _entry('photo.png'),
+        ];
+        lanes.nextLocalChannel = channel;
+        final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+        await controller.openLocalHome();
+        await settle();
+
+        controller.openFilter();
+        controller.changeFilterQuery('txt');
+
+        controller.navigate('/home/tester/sub');
+        await settle();
+        expect(controller.filterQuery, 'txt');
+        expect(controller.entries.map((e) => e.name), [
+          'nested.txt',
+        ], reason: 'the query reapplies to the newly accepted listing');
+
+        controller.refresh();
+        await settle();
+        expect(controller.filterActive, isTrue);
+        expect(controller.entries.map((e) => e.name), ['nested.txt']);
+        controller.dispose();
+      },
+    );
 
     test('Esc-cancel of a navigation restores the pre-filter listing and '
         're-applies the query', () async {
@@ -311,10 +318,7 @@ void main() {
         _entry('photo.png'),
       ];
       lanes.nextLocalChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.left',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
       await controller.openLocalHome();
       await settle();
 
@@ -362,9 +366,13 @@ void main() {
 
       expect(controller.filterQuery, '');
       expect(controller.filterFieldOpen, isFalse);
-      expect(controller.entries.length, 2,
-          reason: 'a stale query must not hide a fresh listing — that '
-              'reads as data loss');
+      expect(
+        controller.entries.length,
+        2,
+        reason:
+            'a stale query must not hide a fresh listing — that '
+            'reads as data loss',
+      );
       controller.dispose();
     });
 
@@ -376,10 +384,7 @@ void main() {
         _entry('notes.txt'),
       ];
       lanes.nextRemoteChannel = channel;
-      final controller = PaneController(
-        paneTabId: 'pane.right',
-        lanes: lanes,
-      );
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
       await controller.connectRemote(_remoteBookmark());
       await settle();
       expect(controller.phase, PanePhase.browsing);
@@ -414,7 +419,8 @@ void main() {
           'columns',
           'columnWidths',
         },
-        reason: 'the §2.5 filter is transient by construction — any new '
+        reason:
+            'the §2.5 filter is transient by construction — any new '
             'persisted key must be a deliberate, reviewed addition',
       );
     });

@@ -34,8 +34,7 @@ String typeAheadFold(String value) {
     final mapped = _diacriticFoldTable[point];
     if (mapped != null) {
       _writeFolded(mapped, result);
-    } else if (point >= _hangulSBase &&
-        point < _hangulSBase + _hangulSCount) {
+    } else if (point >= _hangulSBase && point < _hangulSBase + _hangulSCount) {
       _decomposeHangul(point, result);
     } else {
       result.writeCharCode(point);
@@ -54,8 +53,7 @@ const _maxFoldChase = 8;
 /// point and throws if any emitted value remains a table key, so on
 /// verified data every lookup below misses — the chase exists so the
 /// runtime stays correct even if the committed table regresses.
-void _writeFolded(List<int> mapped, StringBuffer out,
-    [int depth = 0]) {
+void _writeFolded(List<int> mapped, StringBuffer out, [int depth = 0]) {
   for (final unit in mapped) {
     final next = _diacriticFoldTable[unit];
     if (next != null && depth < _maxFoldChase) {
@@ -70,9 +68,7 @@ void _decomposeHangul(int syllable, StringBuffer out) {
   final sIndex = syllable - _hangulSBase;
   out
     ..writeCharCode(_hangulLBase + sIndex ~/ _hangulNCount)
-    ..writeCharCode(
-      _hangulVBase + (sIndex % _hangulNCount) ~/ _hangulTCount,
-    );
+    ..writeCharCode(_hangulVBase + (sIndex % _hangulNCount) ~/ _hangulTCount);
   final tIndex = sIndex % _hangulTCount;
   if (tIndex != 0) out.writeCharCode(_hangulTBase + tIndex);
 }

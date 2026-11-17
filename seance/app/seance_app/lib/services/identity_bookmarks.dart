@@ -21,8 +21,11 @@ class ResolvedIdentityFile {
   final String path;
   final String token;
   final String? refreshedBookmark;
-  const ResolvedIdentityFile(this.path,
-      {required this.token, this.refreshedBookmark});
+  const ResolvedIdentityFile(
+    this.path, {
+    required this.token,
+    this.refreshedBookmark,
+  });
 }
 
 /// Browse…-picked identity files. On macOS the picking runs through a native
@@ -40,8 +43,9 @@ class IdentityFileBookmarks {
   /// Let the user pick an identity file. Returns null when cancelled.
   Future<PickedIdentityFile?> pick() async {
     if (isSupported) {
-      final result =
-          await _channel.invokeMapMethod<String, dynamic>('pickIdentityFile');
+      final result = await _channel.invokeMapMethod<String, dynamic>(
+        'pickIdentityFile',
+      );
       if (result == null) return null;
       return PickedIdentityFile(
         result['path'] as String,
@@ -64,7 +68,9 @@ class IdentityFileBookmarks {
     if (!isSupported) return null;
     try {
       final result = await _channel.invokeMapMethod<String, dynamic>(
-          'resolveBookmark', {'bookmark': bookmark});
+        'resolveBookmark',
+        {'bookmark': bookmark},
+      );
       if (result == null) return null;
       return ResolvedIdentityFile(
         result['path'] as String,

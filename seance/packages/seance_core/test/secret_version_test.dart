@@ -35,25 +35,33 @@ void main() {
     original.copyWith(identityFilePassphrase: 'file phrase'),
     const Secret(id: 'secret', kind: SecretKind.privateKey, value: 'PEM'),
   ]) {
-    test('changing credential material advances a timestamp behind its peer '
-        '(${changed.kind}, passphrase=${changed.keyPassphrase != null})',
-        () async {
-      await vault.putSecret(original.copyWith(updatedAt: 100));
-      await vault.putLocalSecret(changed, updatedAt: 10);
+    test(
+      'changing credential material advances a timestamp behind its peer '
+      '(${changed.kind}, passphrase=${changed.keyPassphrase != null})',
+      () async {
+        await vault.putSecret(original.copyWith(updatedAt: 100));
+        await vault.putLocalSecret(changed, updatedAt: 10);
 
-      final saved = (await vault.getSecret('secret'))!;
-      expect(saved.toJson(), changed.copyWith(updatedAt: 101).toJson());
-    });
+        final saved = (await vault.getSecret('secret'))!;
+        expect(saved.toJson(), changed.copyWith(updatedAt: 101).toJson());
+      },
+    );
   }
 
-  test('legacy unchanged material stays unversioned until a real edit', () async {
-    await vault.putSecret(original);
-    await vault.putLocalSecret(original, updatedAt: 30);
-    expect((await vault.getSecret('secret'))!.updatedAt, 0);
+  test(
+    'legacy unchanged material stays unversioned until a real edit',
+    () async {
+      await vault.putSecret(original);
+      await vault.putLocalSecret(original, updatedAt: 30);
+      expect((await vault.getSecret('secret'))!.updatedAt, 0);
 
-    await vault.putLocalSecret(original.copyWith(value: 'new'), updatedAt: 40);
-    expect((await vault.getSecret('secret'))!.updatedAt, 40);
-  });
+      await vault.putLocalSecret(
+        original.copyWith(value: 'new'),
+        updatedAt: 40,
+      );
+      expect((await vault.getSecret('secret'))!.updatedAt, 40);
+    },
+  );
 
   test('reencrypting a credential preserves its version', () async {
     await vault.putLocalSecret(original, updatedAt: 10);
@@ -73,8 +81,10 @@ void main() {
     });
 
     test('an entry that will not open reads as null', () async {
-      await SecretVault(store, secureRandomBytes(32))
-          .putSecret(original.copyWith(value: 'sealed under another key'));
+      await SecretVault(
+        store,
+        secureRandomBytes(32),
+      ).putSecret(original.copyWith(value: 'sealed under another key'));
 
       await expectLater(vault.getSecret('secret'), throwsA(isA<Exception>()));
       expect(await vault.readableSecret('secret'), isNull);

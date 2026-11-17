@@ -16,8 +16,7 @@ String syncBrowseCauseText(AppLocalizations l10n, SyncBrowseCause cause) {
           ? l10n.syncBrowsingSideLeft
           : l10n.syncBrowsingSideRight,
     ),
-    SyncBrowseSuspension.outsideAnchor =>
-      l10n.syncBrowsingSuspendedOutside,
+    SyncBrowseSuspension.outsideAnchor => l10n.syncBrowsingSuspendedOutside,
     SyncBrowseSuspension.pairNotVisible ||
     SyncBrowseSuspension.diverged => l10n.syncBrowsingSuspended,
   };
@@ -41,11 +40,7 @@ bool syncChipAnnounces({
 /// chip reads the link state itself, so callers mount it
 /// unconditionally while the link is enabled.
 class SyncBrowseChip extends StatelessWidget {
-  const SyncBrowseChip({
-    super.key,
-    required this.link,
-    this.announce = true,
-  });
+  const SyncBrowseChip({super.key, required this.link, this.announce = true});
 
   /// The workspace's Sync Browsing link.
   final SyncBrowsingController link;

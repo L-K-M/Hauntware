@@ -309,9 +309,7 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('two requests in one frame open one generator', (
-      tester,
-    ) async {
+    testWidgets('two requests in one frame open one generator', (tester) async {
       final host = await pumpHost(tester);
       // A menu click and a shortcut can land before the first dialog's
       // first frame, when it is not yet mounted.

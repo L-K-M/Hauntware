@@ -5,16 +5,16 @@ AssistantSettings settings({
   Map<String, String> apiKeys = const {},
   String? searxngUrl = 'https://searx.example.com',
 }) => AssistantSettings(
-      providerKind: 'anthropic',
-      baseUrl: 'https://api.anthropic.com',
-      model: 'claude-haiku-4-5-20251001',
-      llmApiKeyRef: 'anthropic',
-      searxngUrl: searxngUrl,
-      zaiApiKeyRef: 'zai',
-      redactSecrets: false,
-      apiKeys: apiKeys,
-      updatedAt: 42,
-    );
+  providerKind: 'anthropic',
+  baseUrl: 'https://api.anthropic.com',
+  model: 'claude-haiku-4-5-20251001',
+  llmApiKeyRef: 'anthropic',
+  searxngUrl: searxngUrl,
+  zaiApiKeyRef: 'zai',
+  redactSecrets: false,
+  apiKeys: apiKeys,
+  updatedAt: 42,
+);
 
 void main() {
   test('an empty record decodes to the defaults rather than throwing', () {
@@ -80,8 +80,10 @@ void main() {
   test('a cleared field arrives cleared, not as an empty endpoint', () {
     final json = settings().toJson()..['searxngUrl'] = '';
     expect(AssistantSettings.fromJson(json).searxngUrl, isNull);
-    expect(settings(searxngUrl: null).toJson().containsKey('searxngUrl'),
-        isFalse);
+    expect(
+      settings(searxngUrl: null).toJson().containsKey('searxngUrl'),
+      isFalse,
+    );
   });
 
   test('a stamp that is not a finite number decodes to zero', () {
@@ -91,8 +93,9 @@ void main() {
     // Zero is the safe reading: it loses to every real stamp.
     for (final bad in <num>[double.nan, double.infinity, -double.infinity]) {
       expect(
-        AssistantSettings.fromJson(settings().toJson()..['updatedAt'] = bad)
-            .updatedAt,
+        AssistantSettings.fromJson(
+          settings().toJson()..['updatedAt'] = bad,
+        ).updatedAt,
         0,
         reason: '$bad',
       );
@@ -101,8 +104,9 @@ void main() {
     // case with it: JSON has one number type, and a stamp that round-trips
     // through a codec preserving doubles arrives as one.
     expect(
-      AssistantSettings.fromJson(settings().toJson()..['updatedAt'] = 42.0)
-          .updatedAt,
+      AssistantSettings.fromJson(
+        settings().toJson()..['updatedAt'] = 42.0,
+      ).updatedAt,
       42,
     );
   });
@@ -128,10 +132,15 @@ void main() {
   });
 
   test('a malformed keys map reads as no keys', () {
-    for (final bad in [42, 'string', {'a': 1}]) {
+    for (final bad in [
+      42,
+      'string',
+      {'a': 1},
+    ]) {
       expect(
-        AssistantSettings.fromJson(settings().toJson()..['apiKeys'] = bad)
-            .apiKeys,
+        AssistantSettings.fromJson(
+          settings().toJson()..['apiKeys'] = bad,
+        ).apiKeys,
         isEmpty,
         reason: 'apiKeys=$bad should read as no keys',
       );
@@ -183,8 +192,9 @@ void main() {
     // compares what `toJson` writes, so it must not turn into a way to lose
     // one. `zai` is set by the fixture; the LLM ref is `anthropic`.
     expect(
-      settings(apiKeys: const {'anthropic': 'sk-1', 'zai': 'sk-z'})
-          .toJson()['apiKeys'],
+      settings(
+        apiKeys: const {'anthropic': 'sk-1', 'zai': 'sk-z'},
+      ).toJson()['apiKeys'],
       {'anthropic': 'sk-1', 'zai': 'sk-z'},
     );
   });
@@ -193,18 +203,27 @@ void main() {
     // The reader drops it; a writer that kept it would produce a record its
     // own reader disagrees with.
     final json = settings(
-      apiKeys: const {'anthropic': '', '': 'x', ' ': 'y', 'brave': ' ', 'zai': 'z'},
+      apiKeys: const {
+        'anthropic': '',
+        '': 'x',
+        ' ': 'y',
+        'brave': ' ',
+        'zai': 'z',
+      },
     ).toJson();
     expect(json['apiKeys'], {'zai': 'z'});
-    expect(settings(apiKeys: const {'anthropic': ''}).toJson(),
-        isNot(contains('apiKeys')));
+    expect(
+      settings(apiKeys: const {'anthropic': ''}).toJson(),
+      isNot(contains('apiKeys')),
+    );
   });
 
   test('a blank LLM key reference reads and writes as empty', () {
     // Like its optional siblings: a stray space is not a keystore entry.
     expect(
-      AssistantSettings.fromJson(settings().toJson()..['llmApiKeyRef'] = ' ')
-          .llmApiKeyRef,
+      AssistantSettings.fromJson(
+        settings().toJson()..['llmApiKeyRef'] = ' ',
+      ).llmApiKeyRef,
       '',
     );
     final blank = AssistantSettings.fromJson(
@@ -256,8 +275,11 @@ void main() {
     // box down to a stray space is clearing it.
     for (final blank in ['', '   ']) {
       final json = settings(searxngUrl: blank).toJson();
-      expect(json.containsKey('searxngUrl'), isFalse,
-          reason: 'searxngUrl=${json['searxngUrl']} should be omitted');
+      expect(
+        json.containsKey('searxngUrl'),
+        isFalse,
+        reason: 'searxngUrl=${json['searxngUrl']} should be omitted',
+      );
       expect(AssistantSettings.fromJson(json).searxngUrl, isNull);
     }
   });
@@ -298,8 +320,10 @@ void main() {
     expect(decoded.braveApiKeyRef, 'brave');
     expect(decoded.zaiApiKeyRef, 'zai');
     // And a second decode of the same record changes nothing further.
-    expect(AssistantSettings.fromJson(decoded.toJson()).toJson(),
-        decoded.toJson());
+    expect(
+      AssistantSettings.fromJson(decoded.toJson()).toJson(),
+      decoded.toJson(),
+    );
   });
 
   test('a padded key name is trimmed to the ref that looks it up', () {
@@ -319,15 +343,20 @@ void main() {
     // A record decoding to 0 loses to everything, which is what an absent
     // stamp should do; a double is the shape a JSON round-trip can produce.
     final json = settings().toJson();
-    expect(AssistantSettings.fromJson({...json}..remove('updatedAt')).updatedAt,
-        0);
     expect(
-        AssistantSettings.fromJson({...json, 'updatedAt': 42.0}).updatedAt, 42);
+      AssistantSettings.fromJson({...json}..remove('updatedAt')).updatedAt,
+      0,
+    );
+    expect(
+      AssistantSettings.fromJson({...json, 'updatedAt': 42.0}).updatedAt,
+      42,
+    );
     // And a wrong-typed one degrades rather than throwing, like every other
     // field here: a record that loses to everything is the safe reading.
     expect(
-        AssistantSettings.fromJson({...json, 'updatedAt': 'soon'}).updatedAt,
-        0);
+      AssistantSettings.fromJson({...json, 'updatedAt': 'soon'}).updatedAt,
+      0,
+    );
   });
 
   test('copyWith clears the optional refs and keeps everything else', () {
@@ -353,7 +382,9 @@ void main() {
     expect(
       settings()
           .copyWith(
-              searxngUrl: 'https://searx.example.com', clearSearxngUrl: true)
+            searxngUrl: 'https://searx.example.com',
+            clearSearxngUrl: true,
+          )
           .searxngUrl,
       isNull,
     );

@@ -28,7 +28,8 @@ class ShellSeam extends StatelessWidget {
     width: shellSeamWidth,
     height: double.infinity,
     child: ColoredBox(
-      color: color ??
+      color:
+          color ??
           PoltergeistChrome.of(context, poltergeistThemeStyle).separator,
     ),
   );

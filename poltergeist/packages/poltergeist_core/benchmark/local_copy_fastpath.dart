@@ -40,25 +40,36 @@ import 'package:path/path.dart' as p;
 
 final class _LibC {
   _LibC(DynamicLibrary lib)
-    : open = lib.lookupFunction<
-        Int32 Function(Pointer<Utf8>, Int32, Int32),
-        int Function(Pointer<Utf8>, int, int)
-      >('open'),
+    : open = lib
+          .lookupFunction<
+            Int32 Function(Pointer<Utf8>, Int32, Int32),
+            int Function(Pointer<Utf8>, int, int)
+          >('open'),
       close = lib.lookupFunction<Int32 Function(Int32), int Function(int)>(
         'close',
       ),
-      ioctl = lib.lookupFunction<
-        Int32 Function(Int32, UnsignedLong, Int32),
-        int Function(int, int, int)
-      >('ioctl'),
-      copyFileRange = lib.lookupFunction<
-        Int64 Function(Int32, Pointer<Void>, Int32, Pointer<Void>, Int64, Uint32),
-        int Function(int, Pointer<Void>, int, Pointer<Void>, int, int)
-      >('copy_file_range'),
-      strerror = lib.lookupFunction<
-        Pointer<Utf8> Function(Int32),
-        Pointer<Utf8> Function(int)
-      >('strerror');
+      ioctl = lib
+          .lookupFunction<
+            Int32 Function(Int32, UnsignedLong, Int32),
+            int Function(int, int, int)
+          >('ioctl'),
+      copyFileRange = lib
+          .lookupFunction<
+            Int64 Function(
+              Int32,
+              Pointer<Void>,
+              Int32,
+              Pointer<Void>,
+              Int64,
+              Uint32,
+            ),
+            int Function(int, Pointer<Void>, int, Pointer<Void>, int, int)
+          >('copy_file_range'),
+      strerror = lib
+          .lookupFunction<
+            Pointer<Utf8> Function(Int32),
+            Pointer<Utf8> Function(int)
+          >('strerror');
 
   final int Function(Pointer<Utf8>, int, int) open;
   final int Function(int) close;
@@ -94,18 +105,17 @@ String _fsTypeOf(String path) {
       : 'unknown(${result.exitCode})';
 }
 
-String _errnoName(_LibC libc) =>
-    libc.strerror(_errno()).toDartString();
+String _errnoName(_LibC libc) => libc.strerror(_errno()).toDartString();
 
 int _errno() {
   // dart:ffi has no errno accessor; read it through libc's
   // __errno_location on Linux (glibc/musl both provide it). The process
   // handle resolves symbols from the already-loaded libc regardless of
   // its on-disk soname.
-  final loc = DynamicLibrary.process().lookupFunction<
-    Pointer<Int32> Function(),
-    Pointer<Int32> Function()
-  >('__errno_location');
+  final loc = DynamicLibrary.process()
+      .lookupFunction<Pointer<Int32> Function(), Pointer<Int32> Function()>(
+        '__errno_location',
+      );
   return loc().value;
 }
 
@@ -151,7 +161,13 @@ Future<void> _dartCopy(File src, File dst, void Function(int) onBytes) async {
 /// ioctl(FICLONE): whole-file reflink. Atomic — no progress, no cancel —
 /// so a capability probe plus timing, never an adoption candidate.
 Future<void> _ficlone(File src, File dst, void Function(int) onBytes) =>
-    _kernelCopy(src, dst, onBytes, chunkBytes: _cfrSingleShotBytes, ficlone: true);
+    _kernelCopy(
+      src,
+      dst,
+      onBytes,
+      chunkBytes: _cfrSingleShotBytes,
+      ficlone: true,
+    );
 
 /// copy_file_range chunked at 128 MiB: between chunks the production
 /// loop can report progress and check cancellation — the adoption
@@ -162,7 +178,13 @@ Future<void> _cfrChunked(File src, File dst, void Function(int) onBytes) =>
 /// copy_file_range in one syscall: the reference point for what
 /// chunking costs (and the shape a "copy without progress" would take).
 Future<void> _cfrSingle(File src, File dst, void Function(int) onBytes) =>
-    _kernelCopy(src, dst, onBytes, chunkBytes: _cfrSingleShotBytes, ficlone: false);
+    _kernelCopy(
+      src,
+      dst,
+      onBytes,
+      chunkBytes: _cfrSingleShotBytes,
+      ficlone: false,
+    );
 
 final _libc = _LibC(DynamicLibrary.process());
 
@@ -236,10 +258,9 @@ final class _KernelCopyUnsupported implements Exception {
   const _KernelCopyUnsupported(this.errnoCode);
   final int errnoCode;
   @override
-  String toString() =>
-      errnoCode == _eopnotsupp
-          ? 'EOPNOTSUPP'
-          : 'errno $errnoCode (${_errnoName(_libc)})';
+  String toString() => errnoCode == _eopnotsupp
+      ? 'EOPNOTSUPP'
+      : 'errno $errnoCode (${_errnoName(_libc)})';
 }
 
 /// Deterministic content: position-dependent bytes so a truncated or
@@ -272,14 +293,12 @@ Future<bool> _verify(File src, File dst) async {
   // without re-reading both files.
   for (final offset in [0, (await src.length()) - 65536]) {
     final start = offset < 0 ? 0 : offset;
-    final a = await src.openRead(start, start + 65536).fold<List<int>>(
-      [],
-      (acc, c) => acc..addAll(c),
-    );
-    final b = await dst.openRead(start, start + 65536).fold<List<int>>(
-      [],
-      (acc, c) => acc..addAll(c),
-    );
+    final a = await src
+        .openRead(start, start + 65536)
+        .fold<List<int>>([], (acc, c) => acc..addAll(c));
+    final b = await dst
+        .openRead(start, start + 65536)
+        .fold<List<int>>([], (acc, c) => acc..addAll(c));
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -319,9 +338,7 @@ Future<int> main(List<String> args) async {
           exitCode = 2;
           return 2;
         }
-        final sizes = [
-          for (final s in args[i].split(',')) int.tryParse(s),
-        ];
+        final sizes = [for (final s in args[i].split(',')) int.tryParse(s)];
         if (sizes.any((s) => s == null)) {
           stderr.writeln('--sizes needs comma-separated integers');
           exitCode = 2;
@@ -349,9 +366,11 @@ Future<int> main(List<String> args) async {
   }
 
   if (!Platform.isLinux) {
-    stdout.writeln('D26 fast-path spike: this collector measures the '
-        'Linux mechanisms (FICLONE, copy_file_range); run it on a Linux '
-        'host. APFS clonefile/CopyFileEx are source-research legs.');
+    stdout.writeln(
+      'D26 fast-path spike: this collector measures the '
+      'Linux mechanisms (FICLONE, copy_file_range); run it on a Linux '
+      'host. APFS clonefile/CopyFileEx are source-research legs.',
+    );
     return 0;
   }
 
@@ -382,9 +401,7 @@ Future<int> main(List<String> args) async {
         String? failure;
         for (var rep = 0; rep < reps; rep++) {
           final src = File(p.join(dirPath, 'd26-spike-src-$mib.bin'));
-          final dst = File(
-            p.join(dirPath, 'd26-spike-dst-$name-$rep.bin'),
-          );
+          final dst = File(p.join(dirPath, 'd26-spike-dst-$name-$rep.bin'));
           try {
             if (!await src.exists() || await src.length() != bytes) {
               await _fill(src, bytes);

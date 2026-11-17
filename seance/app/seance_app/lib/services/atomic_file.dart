@@ -14,9 +14,11 @@ export 'package:seance_core/catalog.dart' show AtomicFilePrivacy;
 
 /// Write [contents] through the shared writer. Symlink aliases and lexical
 /// or case variants share its ordered queue.
-Future<void> writeStringAtomically(File file, String contents,
-    {AtomicFilePrivacy privacy = AtomicFilePrivacy.processDefault}) =>
-    const AtomicFileWriter().write(file, contents, privacy: privacy);
+Future<void> writeStringAtomically(
+  File file,
+  String contents, {
+  AtomicFilePrivacy privacy = AtomicFilePrivacy.processDefault,
+}) => const AtomicFileWriter().write(file, contents, privacy: privacy);
 
 /// Move a file that failed to parse aside (to `*.corrupt`) so a single bad byte
 /// can't wedge startup on every launch. Best-effort — any failure is swallowed

@@ -909,10 +909,8 @@ class _UpdateBanner extends StatelessWidget {
         message: '$name is available.',
         action: (
           'View release',
-          () => launchUrl(
-            info.releasesUrl,
-            mode: LaunchMode.externalApplication,
-          ),
+          () =>
+              launchUrl(info.releasesUrl, mode: LaunchMode.externalApplication),
         ),
         onDismiss: onDismiss,
       );

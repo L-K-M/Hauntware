@@ -81,7 +81,8 @@ CredentialEditPlan planCredentialEdit({
               'A referenced private key requires an identity file path',
             );
           }
-          final sourceBound = stored.identityFilePath != null ||
+          final sourceBound =
+              stored.identityFilePath != null ||
               stored.identityFilePassphrase != null;
           if (sourceBound && stored.identityFilePath != path) {
             throw ArgumentError(

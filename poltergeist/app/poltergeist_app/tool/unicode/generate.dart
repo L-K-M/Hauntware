@@ -42,8 +42,7 @@ void main() {
     if (decomposition.isNotEmpty) {
       decompositions[point] = [
         for (final part in decomposition.split(' '))
-          if (!part.startsWith('<'))
-            int.parse(part, radix: 16),
+          if (!part.startsWith('<')) int.parse(part, radix: 16),
       ];
     }
   }
@@ -53,18 +52,13 @@ void main() {
     'CaseFolding-$_unicodeVersion.txt',
     _caseFoldingSha256,
   );
-  for (final line in const LineSplitter().convert(
-    utf8.decode(caseFolding),
-  )) {
+  for (final line in const LineSplitter().convert(utf8.decode(caseFolding))) {
     if (line.isEmpty || line.startsWith('#')) continue;
 
     final fields = line.split(';').map((field) => field.trim()).toList();
     if (fields[1] != 'C' && fields[1] != 'S') continue;
 
-    folding[int.parse(fields[0], radix: 16)] = int.parse(
-      fields[2],
-      radix: 16,
-    );
+    folding[int.parse(fields[0], radix: 16)] = int.parse(fields[2], radix: 16);
   }
 
   // The fold result of one code point: recursively decompose
@@ -154,8 +148,8 @@ void main() {
     ..writeln('// empty list strips the mark outright.')
     ..writeln('// dart format off')
     ..writeln('const _diacriticFoldTable = <int, List<int>>{');
-  for (final entry in table.entries.toList()
-    ..sort((a, b) => a.key.compareTo(b.key))) {
+  for (final entry
+      in table.entries.toList()..sort((a, b) => a.key.compareTo(b.key))) {
     output.writeln(
       '  ${_hex(entry.key)}: [${entry.value.map(_hex).join(', ')}],',
     );

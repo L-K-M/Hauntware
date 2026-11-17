@@ -61,9 +61,7 @@ void main() {
         _generateEvents(fixture.path, capacity + _overflowMargin);
 
         child.kill(ProcessSignal.sigcont);
-        final code = await child.exitCode.timeout(
-          const Duration(seconds: 120),
-        );
+        final code = await child.exitCode.timeout(const Duration(seconds: 120));
         exited = true;
 
         expect(code, 0, reason: 'stdout: ${stdoutLines.lines}');
@@ -72,8 +70,11 @@ void main() {
         );
         // The detail ties the loss to the overflow itself, not to an
         // incidental close or unrelated error.
-        expect(lost, contains('overflow'),
-            reason: 'stdout: ${stdoutLines.lines}');
+        expect(
+          lost,
+          contains('overflow'),
+          reason: 'stdout: ${stdoutLines.lines}',
+        );
       } finally {
         if (!exited) {
           child.kill(ProcessSignal.sigcont);
@@ -108,16 +109,18 @@ Future<Process> _spawnChild(String directory) async {
   // child resolves the same package config no matter where the suite runs.
   final config = Isolate.packageConfigSync!;
   final root = p.dirname(p.dirname(p.fromUri(config)));
-  return Process.start(
-    Platform.resolvedExecutable,
-    [
-      'run',
-      p.join(root, 'packages', 'poltergeist_core', 'test', 'engine',
-          'inotify_overflow_child.dart'),
-      directory,
-    ],
-    workingDirectory: root,
-  );
+  return Process.start(Platform.resolvedExecutable, [
+    'run',
+    p.join(
+      root,
+      'packages',
+      'poltergeist_core',
+      'test',
+      'engine',
+      'inotify_overflow_child.dart',
+    ),
+    directory,
+  ], workingDirectory: root);
 }
 
 Future<void> _awaitStopped(int pid) async {
@@ -148,7 +151,9 @@ void _generateEvents(String directory, int target) {
   var generated = 0;
   var round = 0;
   while (generated < target) {
-    final file = File(p.join(directory, _probeNames[round++ % _probeNames.length]));
+    final file = File(
+      p.join(directory, _probeNames[round++ % _probeNames.length]),
+    );
     file.createSync();
     file.deleteSync();
     generated += 2;

@@ -366,7 +366,10 @@ Host y
     test('flags recursive delete of a specific system directory', () {
       // These slipped through the old rule (which only matched a bare /, ~, *).
       expect(DangerLinter.worst('rm -rf /etc'), DangerSeverity.critical);
-      expect(DangerLinter.worst('sudo rm -rf /var/lib'), DangerSeverity.critical);
+      expect(
+        DangerLinter.worst('sudo rm -rf /var/lib'),
+        DangerSeverity.critical,
+      );
       expect(DangerLinter.worst('rm -fr /usr/local'), DangerSeverity.critical);
       expect(DangerLinter.worst('rm -rf *'), DangerSeverity.critical);
       expect(DangerLinter.worst('wipefs -a /dev/sdb'), DangerSeverity.critical);
@@ -387,7 +390,10 @@ Host y
         DangerLinter.worst('find . -name "*.log" -delete'),
         DangerSeverity.warning,
       );
-      expect(DangerLinter.worst('truncate -s 0 app.log'), DangerSeverity.warning);
+      expect(
+        DangerLinter.worst('truncate -s 0 app.log'),
+        DangerSeverity.warning,
+      );
       expect(DangerLinter.worst('git clean -fdx'), DangerSeverity.warning);
     });
 
@@ -942,12 +948,10 @@ Host y
           'echo ok\nrm -rf /\nls\nuserdel \\\n  -r deploy\ncurl x | sh\n'
           ':(){ :|:& };:',
         );
-        expect([for (final f in findings) (f.line, f.severity)], [
-          (2, critical),
-          (4, critical),
-          (6, warning),
-          (7, critical),
-        ]);
+        expect(
+          [for (final f in findings) (f.line, f.severity)],
+          [(2, critical), (4, critical), (6, warning), (7, critical)],
+        );
       });
 
       test('a command after a continuation starts on the next line', () {

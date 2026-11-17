@@ -104,10 +104,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(
-      find.text('Save changes to “config.txt”?'),
-      findsOneWidget,
-    );
+    expect(find.text('Save changes to “config.txt”?'), findsOneWidget);
     expect(find.text('unsaved'), findsOneWidget);
   });
 
@@ -321,100 +318,96 @@ void main() {
     expect(find.text('Saved and uploaded.'), findsOneWidget);
   });
 
-  testWidgets(
-    'macOS keeps Control+F and Control+N for moving the caret',
-    (tester) async {
-      var newWindows = 0;
-      var closeRequests = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: BuiltInTextEditorScreen(
-            file: file,
-            initialText: 'ab\ncd\n',
-            onCloseRequested: () async => closeRequests++,
-            onNewWindowRequested: () async => newWindows++,
-            showToast: (_, _) {},
-            monoFontFallback: const ['monospace'],
-            basenameOf: remoteBasename,
-          ),
+  testWidgets('macOS keeps Control+F and Control+N for moving the caret', (
+    tester,
+  ) async {
+    var newWindows = 0;
+    var closeRequests = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: BuiltInTextEditorScreen(
+          file: file,
+          initialText: 'ab\ncd\n',
+          onCloseRequested: () async => closeRequests++,
+          onNewWindowRequested: () async => newWindows++,
+          showToast: (_, _) {},
+          monoFontFallback: const ['monospace'],
+          basenameOf: remoteBasename,
         ),
-      );
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+    final text = tester.widget<TextField>(find.byType(TextField)).controller!;
+    text.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+
+    Future<void> control(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
-      final text = tester.widget<TextField>(find.byType(TextField)).controller!;
-      text.selection = const TextSelection.collapsed(offset: 0);
-      await tester.pump();
+    }
 
-      Future<void> control(LogicalKeyboardKey key) async {
-        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-        await tester.sendKeyEvent(key);
-        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-        await tester.pumpAndSettle();
-      }
+    // Cocoa's text bindings: Control+F moves forward a character and
+    // Control+N down a line, as in the shared editor on its own.
+    await control(LogicalKeyboardKey.keyF);
+    expect(text.selection.baseOffset, 1);
+    expect(find.byTooltip('Close search'), findsNothing);
 
-      // Cocoa's text bindings: Control+F moves forward a character and
-      // Control+N down a line, as in the shared editor on its own.
-      await control(LogicalKeyboardKey.keyF);
-      expect(text.selection.baseOffset, 1);
-      expect(find.byTooltip('Close search'), findsNothing);
+    await control(LogicalKeyboardKey.keyN);
+    expect(text.selection.baseOffset, 4);
+    expect(newWindows, 0);
 
-      await control(LogicalKeyboardKey.keyN);
-      expect(text.selection.baseOffset, 4);
-      expect(newWindows, 0);
+    // Close is Command+W there; Control+W does nothing.
+    await control(LogicalKeyboardKey.keyW);
+    expect(closeRequests, 0);
 
-      // Close is Command+W there; Control+W does nothing.
-      await control(LogicalKeyboardKey.keyW);
-      expect(closeRequests, 0);
+    // Command keeps Find and New Window.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Close search'), findsOneWidget);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
-      // Command keeps Find and New Window.
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Close search'), findsOneWidget);
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
-  );
-
-  testWidgets(
-    'Linux keeps the Control chords for Find and Close',
-    (tester) async {
-      var closeRequests = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: BuiltInTextEditorScreen(
-            file: file,
-            initialText: 'ab\n',
-            onCloseRequested: () async => closeRequests++,
-            showToast: (_, _) {},
-            monoFontFallback: const ['monospace'],
-            basenameOf: remoteBasename,
-          ),
+  testWidgets('Linux keeps the Control chords for Find and Close', (
+    tester,
+  ) async {
+    var closeRequests = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: BuiltInTextEditorScreen(
+          file: file,
+          initialText: 'ab\n',
+          onCloseRequested: () async => closeRequests++,
+          showToast: (_, _) {},
+          monoFontFallback: const ['monospace'],
+          basenameOf: remoteBasename,
         ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byType(TextField));
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
 
-      Future<void> control(LogicalKeyboardKey key) async {
-        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-        await tester.sendKeyEvent(key);
-        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-        await tester.pumpAndSettle();
-      }
+    Future<void> control(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
 
-      await control(LogicalKeyboardKey.keyF);
-      expect(find.byTooltip('Close search'), findsOneWidget);
-      await control(LogicalKeyboardKey.keyW);
-      expect(closeRequests, 1);
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.linux),
-  );
+    await control(LogicalKeyboardKey.keyF);
+    expect(find.byTooltip('Close search'), findsOneWidget);
+    await control(LogicalKeyboardKey.keyW);
+    expect(closeRequests, 1);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('the zoom chords resize the text through the shared size', (
     tester,
@@ -504,7 +497,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(tester.widget<TextField>(find.byType(TextField)).style?.fontSize, 14);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).style?.fontSize,
+      14,
+    );
   });
 
   testWidgets('Ctrl-S falls back to reconciling when the upload fails', (
@@ -531,9 +527,7 @@ void main() {
     expect(find.text('Saved locally; not uploaded.'), findsOneWidget);
   });
 
-  testWidgets('Ctrl-S still reconciles when the upload throws', (
-    tester,
-  ) async {
+  testWidgets('Ctrl-S still reconciles when the upload throws', (tester) async {
     var saved = 0;
     await tester.pumpWidget(
       editorApp(
@@ -586,9 +580,7 @@ void main() {
   testWidgets('opens scrolled to the top with the caret at the start', (
     tester,
   ) async {
-    final longText = List.generate(400, (index) => 'line $index').join(
-      '\n',
-    );
+    final longText = List.generate(400, (index) => 'line $index').join('\n');
     await tester.pumpWidget(
       editorApp(remotePath: '/etc/long.txt', initialText: longText),
     );
@@ -617,53 +609,51 @@ void main() {
     expect(style?.fontFamilyFallback, contains('monospace'));
   });
 
-  testWidgets(
-    'find bar counts matches, navigates, wraps, and toggles case',
-    (tester) async {
-      await tester.pumpWidget(
-        editorApp(
-          remotePath: '/etc/config.txt',
-          initialText: 'alpha beta\nBeta gamma\nbeta end\n',
-        ),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('find bar counts matches, navigates, wraps, and toggles case', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      editorApp(
+        remotePath: '/etc/config.txt',
+        initialText: 'alpha beta\nBeta gamma\nbeta end\n',
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Find'));
-      await tester.pumpAndSettle();
-      final searchField = find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField &&
-            widget.decoration?.hintText == 'Find in file',
-      );
-      expect(searchField, findsOneWidget);
+    await tester.tap(find.byTooltip('Find'));
+    await tester.pumpAndSettle();
+    final searchField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.hintText == 'Find in file',
+    );
+    expect(searchField, findsOneWidget);
 
-      await tester.enterText(searchField, 'beta');
-      await tester.pumpAndSettle();
-      expect(find.text('1/3'), findsOneWidget);
+    await tester.enterText(searchField, 'beta');
+    await tester.pumpAndSettle();
+    expect(find.text('1/3'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Next match'));
-      await tester.pumpAndSettle();
-      expect(find.text('2/3'), findsOneWidget);
+    await tester.tap(find.byTooltip('Next match'));
+    await tester.pumpAndSettle();
+    expect(find.text('2/3'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Previous match'));
-      await tester.pumpAndSettle();
-      expect(find.text('1/3'), findsOneWidget);
+    await tester.tap(find.byTooltip('Previous match'));
+    await tester.pumpAndSettle();
+    expect(find.text('1/3'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Previous match'));
-      await tester.pumpAndSettle();
-      expect(find.text('3/3'), findsOneWidget); // wraps backwards
+    await tester.tap(find.byTooltip('Previous match'));
+    await tester.pumpAndSettle();
+    expect(find.text('3/3'), findsOneWidget); // wraps backwards
 
-      // The caret is parked on the third match; the case-sensitive re-search
-      // drops 'Beta' and resumes from the caret, i.e. its second match.
-      await tester.tap(find.byTooltip('Match case'));
-      await tester.pumpAndSettle();
-      expect(find.text('2/2'), findsOneWidget);
+    // The caret is parked on the third match; the case-sensitive re-search
+    // drops 'Beta' and resumes from the caret, i.e. its second match.
+    await tester.tap(find.byTooltip('Match case'));
+    await tester.pumpAndSettle();
+    expect(find.text('2/2'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Close search'));
-      await tester.pumpAndSettle();
-      expect(searchField, findsNothing);
-    },
-  );
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pumpAndSettle();
+    expect(searchField, findsNothing);
+  });
 
   testWidgets('search highlights land on the editor text', (tester) async {
     await tester.pumpWidget(
@@ -686,8 +676,7 @@ void main() {
     final editorField = find
         .byWidgetPredicate(
           (widget) =>
-              widget is TextField &&
-              widget.controller is CodeEditingController,
+              widget is TextField && widget.controller is CodeEditingController,
         )
         .first;
     final controller =
@@ -736,9 +725,7 @@ void main() {
     );
   });
 
-  testWidgets('the AppBar shows basename over the full path', (
-    tester,
-  ) async {
+  testWidgets('the AppBar shows basename over the full path', (tester) async {
     await tester.pumpWidget(
       editorApp(remotePath: '/etc/nginx/nginx.conf', initialText: 'x\n'),
     );
@@ -786,10 +773,7 @@ void main() {
 
     await tester.tap(find.text('1 problem'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Duplicate key "a", first set on line 2'),
-      findsOneWidget,
-    );
+    expect(find.text('Duplicate key "a", first set on line 2'), findsOneWidget);
   });
 
   testWidgets('the status row clears the bottom safe area', (tester) async {
@@ -907,60 +891,56 @@ void main() {
     skip: !(Platform.isLinux || Platform.isMacOS),
   );
 
-  testWidgets(
-    'production save on an independently changed file surfaces the '
-    'conflict, leaves the disk copy alone, and never uploads',
-    (tester) async {
-      // Real disk I/O throughout — see the BOM/CRLF test above.
-      var uploads = 0;
-      await tester.runAsync(() async {
-        await tester.pumpWidget(
-          editorApp(
-            remotePath: '/etc/config.txt', // real disk load
-            // A managed checkout's seam — the conflict must refuse the
-            // local save before this is ever invoked.
-            onUpload: () async {
-              uploads++;
-              return true;
-            },
-          ),
-        );
-        for (var i = 0; i < 40; i++) {
-          await tester.pump();
-          if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-
-        // Another program rewrote the file under the open editor.
-        await file.writeAsString('external change\n');
-        await tester.enterText(find.byType(TextField), 'built-in change\n');
+  testWidgets('production save on an independently changed file surfaces the '
+      'conflict, leaves the disk copy alone, and never uploads', (
+    tester,
+  ) async {
+    // Real disk I/O throughout — see the BOM/CRLF test above.
+    var uploads = 0;
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        editorApp(
+          remotePath: '/etc/config.txt', // real disk load
+          // A managed checkout's seam — the conflict must refuse the
+          // local save before this is ever invoked.
+          onUpload: () async {
+            uploads++;
+            return true;
+          },
+        ),
+      );
+      for (var i = 0; i < 40; i++) {
         await tester.pump();
-        await tester.tap(find.byTooltip('Save and upload'));
-        for (var i = 0; i < 40; i++) {
-          await tester.pump();
-          if (find
-              .textContaining('changed in another editor')
-              .evaluate()
-              .isNotEmpty) {
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+          break;
         }
-        await tester.pump(const Duration(milliseconds: 300));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
 
-        expect(
-          find.textContaining('changed in another editor'),
-          findsOneWidget,
-        );
-        // The external write stands — the editor refused rather than
-        // clobber — and the refused save never reached the upload seam.
-        expect(await file.readAsString(), 'external change\n');
-        expect(uploads, 0);
-      });
-    },
-  );
+      // Another program rewrote the file under the open editor.
+      await file.writeAsString('external change\n');
+      await tester.enterText(find.byType(TextField), 'built-in change\n');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Save and upload'));
+      for (var i = 0; i < 40; i++) {
+        await tester.pump();
+        if (find
+            .textContaining('changed in another editor')
+            .evaluate()
+            .isNotEmpty) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.textContaining('changed in another editor'), findsOneWidget);
+      // The external write stands — the editor refused rather than
+      // clobber — and the refused save never reached the upload seam.
+      expect(await file.readAsString(), 'external change\n');
+      expect(uploads, 0);
+    });
+  });
 
   testWidgets('a local file exposes no upload action', (tester) async {
     await tester.pumpWidget(

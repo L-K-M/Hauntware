@@ -9,7 +9,8 @@ import 'package:klabautermann_app/controllers/window_panes.dart';
 import 'package:klabautermann_app/ui/desktop_shell.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
-import 'package:klabautermann_app/ui/fleet_rows.dart' show fleetSectionHeaderKey;
+import 'package:klabautermann_app/ui/fleet_rows.dart'
+    show fleetSectionHeaderKey;
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';

@@ -265,9 +265,7 @@ void main() {
       final store = await openStore();
       final spec = localToRemoteSpec(rootPaths: ['/src/a.txt']);
       store.appendJournal(enqueued('t1', spec));
-      store.appendJournal(
-        fileEntry('t1', 'i1', '/src/a.txt', '/dest/a.txt'),
-      );
+      store.appendJournal(fileEntry('t1', 'i1', '/src/a.txt', '/dest/a.txt'));
       store.appendJournal(
         ScanCompleteRecord(taskId: 't1', totalBytes: 5, skippedSymlinks: 0),
       );
@@ -301,11 +299,15 @@ void main() {
 
     test('terminal and removed tasks do not replay', () async {
       final store = await openStore();
-      store.appendJournal(enqueued('done', localToRemoteSpec(rootPaths: ['/a'])));
+      store.appendJournal(
+        enqueued('done', localToRemoteSpec(rootPaths: ['/a'])),
+      );
       store.appendJournal(
         TaskStateRecord(taskId: 'done', state: TransferTaskState.completed),
       );
-      store.appendJournal(enqueued('gone', localToRemoteSpec(rootPaths: ['/b'])));
+      store.appendJournal(
+        enqueued('gone', localToRemoteSpec(rootPaths: ['/b'])),
+      );
       store.appendJournal(TaskRemovedRecord(taskId: 'gone'));
       await store.flush();
 
@@ -314,54 +316,57 @@ void main() {
       await reopened.shutdown();
     });
 
-    test('item outcomes survive: completed and removed never resurrect',
-        () async {
-      final store = await openStore();
-      store.appendJournal(enqueued('t1', localToRemoteSpec(rootPaths: ['/s'])));
-      store.appendJournal(fileEntry('t1', 'done', '/s/a', '/dest/a'));
-      store.appendJournal(fileEntry('t1', 'cut', '/s/b', '/dest/b'));
-      store.appendJournal(fileEntry('t1', 'live', '/s/c', '/dest/c'));
-      store.appendJournal(
-        FileCompletedRecord(taskId: 't1', itemId: 'done'),
-      );
-      store.appendJournal(ItemRemovedRecord(taskId: 't1', itemId: 'cut'));
-      await store.flush();
+    test(
+      'item outcomes survive: completed and removed never resurrect',
+      () async {
+        final store = await openStore();
+        store.appendJournal(
+          enqueued('t1', localToRemoteSpec(rootPaths: ['/s'])),
+        );
+        store.appendJournal(fileEntry('t1', 'done', '/s/a', '/dest/a'));
+        store.appendJournal(fileEntry('t1', 'cut', '/s/b', '/dest/b'));
+        store.appendJournal(fileEntry('t1', 'live', '/s/c', '/dest/c'));
+        store.appendJournal(FileCompletedRecord(taskId: 't1', itemId: 'done'));
+        store.appendJournal(ItemRemovedRecord(taskId: 't1', itemId: 'cut'));
+        await store.flush();
 
-      final reopened = await openStore();
-      final items = {
-        for (final item in reopened.replay.tasks.single.items)
-          item.itemId: item.outcome,
-      };
-      expect(items['done'], RestoredItemOutcome.completed);
-      expect(items['cut'], RestoredItemOutcome.removed);
-      expect(items['live'], isNull);
-      await reopened.shutdown();
-    });
+        final reopened = await openStore();
+        final items = {
+          for (final item in reopened.replay.tasks.single.items)
+            item.itemId: item.outcome,
+        };
+        expect(items['done'], RestoredItemOutcome.completed);
+        expect(items['cut'], RestoredItemOutcome.removed);
+        expect(items['live'], isNull);
+        await reopened.shutdown();
+      },
+    );
 
-    test('a torn trailing line truncates and reports the dropped bytes',
-        () async {
-      final store = await openStore();
-      store.appendJournal(enqueued('t1', localToRemoteSpec(rootPaths: ['/r'])));
-      await store.flush();
-      // A crash mid-append leaves bytes without the newline terminator.
-      // No shutdown — the crash simulation abandons the store (a clean
-      // shutdown's compaction rewrite would consume the tail).
-      await store.journalFile.writeAsString(
-        '{"v":1,"type":"taskState","taskId":"t1","state":"paus',
-        mode: FileMode.append,
-        flush: true,
-      );
+    test(
+      'a torn trailing line truncates and reports the dropped bytes',
+      () async {
+        final store = await openStore();
+        store.appendJournal(
+          enqueued('t1', localToRemoteSpec(rootPaths: ['/r'])),
+        );
+        await store.flush();
+        // A crash mid-append leaves bytes without the newline terminator.
+        // No shutdown — the crash simulation abandons the store (a clean
+        // shutdown's compaction rewrite would consume the tail).
+        await store.journalFile.writeAsString(
+          '{"v":1,"type":"taskState","taskId":"t1","state":"paus',
+          mode: FileMode.append,
+          flush: true,
+        );
 
-      final reopened = await openStore();
-      expect(reopened.replay.tornJournalBytes, greaterThan(0));
-      expect(reopened.replay.tasks, hasLength(1));
-      // The file was truncated before reopen — no malformed tail remains.
-      expect(
-        store.journalFile.readAsStringSync().endsWith('\n'),
-        isTrue,
-      );
-      await reopened.shutdown();
-    });
+        final reopened = await openStore();
+        expect(reopened.replay.tornJournalBytes, greaterThan(0));
+        expect(reopened.replay.tasks, hasLength(1));
+        // The file was truncated before reopen — no malformed tail remains.
+        expect(store.journalFile.readAsStringSync().endsWith('\n'), isTrue);
+        await reopened.shutdown();
+      },
+    );
 
     test('a torn tail after non-ASCII records truncates at the byte '
         'offset — String.length is UTF-16 units, not bytes', () async {
@@ -595,18 +600,20 @@ void main() {
     test('finished tasks migrate to history; the journal keeps only '
         'pending record sets', () async {
       final store = await openStore();
-      store.appendJournal(enqueued('done', localToRemoteSpec(rootPaths: ['/a'])));
+      store.appendJournal(
+        enqueued('done', localToRemoteSpec(rootPaths: ['/a'])),
+      );
       store.appendJournal(fileEntry('done', 'i1', '/a/f', '/dest/f'));
       store.appendJournal(
         ScanCompleteRecord(taskId: 'done', totalBytes: 5, skippedSymlinks: 0),
       );
-      store.appendJournal(
-        FileCompletedRecord(taskId: 'done', itemId: 'i1'),
-      );
+      store.appendJournal(FileCompletedRecord(taskId: 'done', itemId: 'i1'));
       store.appendJournal(
         TaskStateRecord(taskId: 'done', state: TransferTaskState.completed),
       );
-      store.appendJournal(enqueued('live', localToRemoteSpec(rootPaths: ['/b'])));
+      store.appendJournal(
+        enqueued('live', localToRemoteSpec(rootPaths: ['/b'])),
+      );
       store.appendJournal(fileEntry('live', 'i2', '/b/g', '/dest/g'));
       await store.flush();
 
@@ -621,10 +628,7 @@ void main() {
       expect(records.every((r) => r.taskId == 'live'), isTrue);
       // The pending task's full record set survived — taskEnqueued plus
       // the planEntry.
-      expect(
-        records.whereType<TaskEnqueuedRecord>(),
-        hasLength(1),
-      );
+      expect(records.whereType<TaskEnqueuedRecord>(), hasLength(1));
       expect(records.whereType<PlanEntryRecord>(), hasLength(1));
       await reopened.shutdown();
     });
@@ -633,7 +637,9 @@ void main() {
         'appended twice', () async {
       final store = await openStore();
       store.appendHistory(historyEntry('done'));
-      store.appendJournal(enqueued('done', localToRemoteSpec(rootPaths: ['/a'])));
+      store.appendJournal(
+        enqueued('done', localToRemoteSpec(rootPaths: ['/a'])),
+      );
       store.appendJournal(
         TaskStateRecord(taskId: 'done', state: TransferTaskState.completed),
       );
@@ -653,7 +659,9 @@ void main() {
       final openRewrites = io.rewriteCalls;
       // Arm the gate AFTER open — the startup compaction rewrites too.
       io.rewriteGate = Completer();
-      store.appendJournal(enqueued('done', localToRemoteSpec(rootPaths: ['/a'])));
+      store.appendJournal(
+        enqueued('done', localToRemoteSpec(rootPaths: ['/a'])),
+      );
       store.appendJournal(
         TaskStateRecord(taskId: 'done', state: TransferTaskState.completed),
       );
@@ -663,13 +671,15 @@ void main() {
         reason: 'no mid-session rewrite',
       );
       // Queue an append behind it — it must land on the rewritten file.
-      store.appendJournal(enqueued('late', localToRemoteSpec(rootPaths: ['/z'])));
+      store.appendJournal(
+        enqueued('late', localToRemoteSpec(rootPaths: ['/z'])),
+      );
       io.rewriteGate!.complete();
       await store.flush();
 
-      final records = journalLines(store.journalFile)
-          .map(TransferJournalRecord.parse)
-          .toList();
+      final records = journalLines(
+        store.journalFile,
+      ).map(TransferJournalRecord.parse).toList();
       expect(records.single.taskId, 'late');
       await store.shutdown();
     });
@@ -770,9 +780,9 @@ void main() {
 
       expect(journalRewrites(io) - rewritesBefore, 1);
       expect(store.history.single.taskId, 'done');
-      final records = journalLines(store.journalFile)
-          .map(TransferJournalRecord.parse)
-          .toList();
+      final records = journalLines(
+        store.journalFile,
+      ).map(TransferJournalRecord.parse).toList();
       expect(records.every((r) => r.taskId == 'live'), isTrue);
       expect(records, hasLength(2));
     });
@@ -836,26 +846,17 @@ void main() {
 
     String lineOf(Map<String, Object?> json) => jsonEncode(json);
 
-    test('a managed-checkout spec round-trips through the journal',
-        () {
-      final parsed = TransferJournalRecord.parse(
-        lineOf(managedEnqueuedJson()),
-      );
+    test('a managed-checkout spec round-trips through the journal', () {
+      final parsed = TransferJournalRecord.parse(lineOf(managedEnqueuedJson()));
       final spec = (parsed as TaskEnqueuedRecord).spec;
       expect(spec.managedCheckout, isNotNull);
       expect(spec.managedCheckout!.checkoutId, 'edit-1');
-      expect(
-        spec.managedCheckout!.direction,
-        ManagedCheckoutDirection.upload,
-      );
+      expect(spec.managedCheckout!.direction, ManagedCheckoutDirection.upload);
     });
 
     test('terminal failure retry policy round-trips and defaults safely', () {
       final defaulted = FileFailedRecord(taskId: 't1', itemId: 'i1');
-      expect(
-        defaulted.retryPolicy,
-        TransferFailureRetryPolicy.terminal,
-      );
+      expect(defaulted.retryPolicy, TransferFailureRetryPolicy.terminal);
 
       final retryable = FileFailedRecord(
         taskId: 't1',
@@ -987,35 +988,34 @@ void main() {
       await store.shutdown();
 
       final reopened = await openStore();
-      expect(
-        reopened.history.map((e) => e.taskId),
-        ['h1', 'h2'],
-      );
+      expect(reopened.history.map((e) => e.taskId), ['h1', 'h2']);
       await reopened.shutdown();
     });
 
-    test('the cap trims only after the 10% slack and keeps the newest',
-        () async {
-      final store = await openStore(historyLimit: 10);
-      for (var i = 0; i < 11; i++) {
-        store.appendHistory(historyEntry('h$i'));
-      }
-      await store.flush();
-      // 11 records = cap + slack: not yet trimmed.
-      expect(journalLines(store.historyFile), hasLength(11));
+    test(
+      'the cap trims only after the 10% slack and keeps the newest',
+      () async {
+        final store = await openStore(historyLimit: 10);
+        for (var i = 0; i < 11; i++) {
+          store.appendHistory(historyEntry('h$i'));
+        }
+        await store.flush();
+        // 11 records = cap + slack: not yet trimmed.
+        expect(journalLines(store.historyFile), hasLength(11));
 
-      store.appendHistory(historyEntry('h11'));
-      await store.flush();
-      final lines = journalLines(store.historyFile);
-      expect(lines, hasLength(10));
-      final kept = lines
-          .map((l) => jsonDecode(l) as Map<String, Object?>)
-          .map((j) => j['taskId'])
-          .toList();
-      expect(kept.first, 'h2');
-      expect(kept.last, 'h11');
-      await store.shutdown();
-    });
+        store.appendHistory(historyEntry('h11'));
+        await store.flush();
+        final lines = journalLines(store.historyFile);
+        expect(lines, hasLength(10));
+        final kept = lines
+            .map((l) => jsonDecode(l) as Map<String, Object?>)
+            .map((j) => j['taskId'])
+            .toList();
+        expect(kept.first, 'h2');
+        expect(kept.last, 'h11');
+        await store.shutdown();
+      },
+    );
 
     test('trim preserves unknown fields from upgraded history', () async {
       await storeDir.create(recursive: true);
@@ -1042,8 +1042,7 @@ void main() {
   });
 
   group('fsync policy', () {
-    test('journal fsyncs at the record boundary and before history',
-        () async {
+    test('journal fsyncs at the record boundary and before history', () async {
       final io = ScriptedIo();
       final store = await openStore(io: io, fsyncEveryRecords: 2);
       store.appendJournal(enqueued('t1', localToRemoteSpec(rootPaths: ['/r'])));
@@ -1145,10 +1144,7 @@ void main() {
 
       await Future<void>.delayed(fsyncInterval * 2);
       appendGate.complete();
-      await expectLater(
-        failingAppend,
-        throwsA(isA<FileSystemException>()),
-      );
+      await expectLater(failingAppend, throwsA(isA<FileSystemException>()));
       await expectLater(store.flush(), throwsA(isA<FileSystemException>()));
 
       expect(io.fsyncCalls, 0);
@@ -1200,8 +1196,7 @@ void main() {
       createdQueues.clear();
     });
 
-    test('journal calls precede the state transitions they describe',
-        () async {
+    test('journal calls precede the state transitions they describe', () async {
       final recording = RecordingPersistence();
       final queue = newQueue(persistence: recording);
       final seenAtAppend = <String>[];
@@ -1212,9 +1207,7 @@ void main() {
         final task = queue.tasks
             .where((t) => t.id == record.taskId)
             .firstOrNull;
-        seenAtAppend.add(
-          task == null ? 'absent' : task.state.name,
-        );
+        seenAtAppend.add(task == null ? 'absent' : task.state.name);
       };
       // Gate the upload so the task is provably mid-flight at pause.
       final uploadGate = Completer<void>();
@@ -1242,8 +1235,7 @@ void main() {
       await awaitTaskDone(task);
     });
 
-    test('a completed transfer journals lifecycle + writes history',
-        () async {
+    test('a completed transfer journals lifecycle + writes history', () async {
       final store = await openStore();
       final queue = newQueue(persistence: store);
       File('${localSrc.path}/a.txt').writeAsStringSync('hello');
@@ -1273,23 +1265,14 @@ void main() {
       // Craft a crashed session's journal: one file done, one pending.
       final crashed = await openStore();
       final f1 = File('${localSrc.path}/done.txt')..writeAsStringSync('done!');
-      final f2 = File('${localSrc.path}/todo.txt')
-        ..writeAsStringSync('todo?');
-      final spec = localToRemoteSpec(
-        rootPaths: [f1.path, f2.path],
-      );
+      final f2 = File('${localSrc.path}/todo.txt')..writeAsStringSync('todo?');
+      final spec = localToRemoteSpec(rootPaths: [f1.path, f2.path]);
       crashed.appendJournal(enqueued('task-1', spec));
       crashed.appendJournal(
         fileEntry('task-1', 'item-done', f1.path, '/dest/done.txt', size: 5),
       );
       crashed.appendJournal(
-        fileEntry(
-          'task-1',
-          'item-todo',
-          f2.path,
-          '/dest/todo.txt',
-          size: 5,
-        ),
+        fileEntry('task-1', 'item-todo', f2.path, '/dest/todo.txt', size: 5),
       );
       crashed.appendJournal(
         ScanCompleteRecord(
@@ -1411,17 +1394,10 @@ void main() {
         fileEntry('task-1', 'item-a', f1.path, '/dest/a.txt', size: 3),
       );
       crashed.appendJournal(
-        ScanCompleteRecord(
-          taskId: 'task-1',
-          totalBytes: 3,
-          skippedSymlinks: 0,
-        ),
+        ScanCompleteRecord(taskId: 'task-1', totalBytes: 3, skippedSymlinks: 0),
       );
       crashed.appendJournal(
-        TaskStateRecord(
-          taskId: 'task-1',
-          state: TransferTaskState.paused,
-        ),
+        TaskStateRecord(taskId: 'task-1', state: TransferTaskState.paused),
       );
       await crashed.flush();
       final uploadsBefore = s1.uploadCalls;
@@ -1503,10 +1479,7 @@ void main() {
         enqueued('task-1', localToRemoteSpec(rootPaths: ['/r'])),
       );
       crashed.appendJournal(
-        TaskStateRecord(
-          taskId: 'task-1',
-          state: TransferTaskState.cancelled,
-        ),
+        TaskStateRecord(taskId: 'task-1', state: TransferTaskState.cancelled),
       );
       await crashed.flush();
 
@@ -1518,33 +1491,35 @@ void main() {
       await queue.dispose();
     });
 
-    test('removeTask journals the removal and the task does not restore',
-        () async {
-      // Drive the production API: a completed task removed from the
-      // listing, not a hand-appended record.
-      final store = await openStore();
-      final queue = newQueue(persistence: store);
-      File('${localSrc.path}/a.txt').writeAsStringSync('bye!');
-      final task = queue.enqueue(
-        localToRemoteSpec(rootPaths: ['${localSrc.path}/a.txt']),
-      );
-      await awaitTaskDone(task);
-      queue.removeTask(task.id);
-      await store.flush();
-      expect(
-        journalLines(store.journalFile)
-            .map(TransferJournalRecord.parse)
-            .whereType<TaskRemovedRecord>(),
-        hasLength(1),
-      );
-      // Clean-shutdown compaction writes the history row.
-      await store.shutdown();
+    test(
+      'removeTask journals the removal and the task does not restore',
+      () async {
+        // Drive the production API: a completed task removed from the
+        // listing, not a hand-appended record.
+        final store = await openStore();
+        final queue = newQueue(persistence: store);
+        File('${localSrc.path}/a.txt').writeAsStringSync('bye!');
+        final task = queue.enqueue(
+          localToRemoteSpec(rootPaths: ['${localSrc.path}/a.txt']),
+        );
+        await awaitTaskDone(task);
+        queue.removeTask(task.id);
+        await store.flush();
+        expect(
+          journalLines(
+            store.journalFile,
+          ).map(TransferJournalRecord.parse).whereType<TaskRemovedRecord>(),
+          hasLength(1),
+        );
+        // Clean-shutdown compaction writes the history row.
+        await store.shutdown();
 
-      final reopened = await openStore();
-      expect(reopened.replay.tasks, isEmpty);
-      expect(reopened.history.single.taskId, task.id);
-      expect(reopened.history.single.outcome, TransferTaskState.completed);
-    });
+        final reopened = await openStore();
+        expect(reopened.replay.tasks, isEmpty);
+        expect(reopened.history.single.taskId, task.id);
+        expect(reopened.history.single.outcome, TransferTaskState.completed);
+      },
+    );
 
     test('restore sweeps orphaned upload temps in journaled directories '
         'only', () async {
@@ -1554,19 +1529,15 @@ void main() {
       s1.addFile('/dest/.seance-upload-deadbeef.tmp', [1], modifiedAt: old);
       s1.addFile('/dest/.poltergeist-12345678.tmp', [2], modifiedAt: old);
       s1.addFile('/dest/keep.txt', [3]);
-      s1.addFile(
-        '/elsewhere/.seance-upload-99999999.tmp',
-        [4],
-        modifiedAt: old,
-      );
+      s1.addFile('/elsewhere/.seance-upload-99999999.tmp', [
+        4,
+      ], modifiedAt: old);
 
       final crashed = await openStore();
       crashed.appendJournal(
         enqueued('task-1', localToRemoteSpec(rootPaths: ['/r'])),
       );
-      crashed.appendJournal(
-        fileEntry('task-1', 'i1', '/r/f', '/dest/f'),
-      );
+      crashed.appendJournal(fileEntry('task-1', 'i1', '/r/f', '/dest/f'));
       crashed.appendJournal(
         ScanCompleteRecord(taskId: 'task-1', totalBytes: 5, skippedSymlinks: 0),
       );
@@ -1584,10 +1555,7 @@ void main() {
       );
       expect(s1.entryAt('/dest/.poltergeist-12345678.tmp'), isNull);
       expect(s1.entryAt('/dest/keep.txt'), isNotNull);
-      expect(
-        s1.entryAt('/elsewhere/.seance-upload-99999999.tmp'),
-        isNotNull,
-      );
+      expect(s1.entryAt('/elsewhere/.seance-upload-99999999.tmp'), isNotNull);
     });
 
     group('the restore sweep reads the server clock', () {
@@ -1613,8 +1581,9 @@ void main() {
         await queue.restore();
       }
 
-      bool probeLeft() => (s1.directories['/dest'] ?? const [])
-          .any((entry) => entry.name.startsWith('.poltergeist-clock-'));
+      bool probeLeft() => (s1.directories['/dest'] ?? const []).any(
+        (entry) => entry.name.startsWith('.poltergeist-clock-'),
+      );
 
       test('a server clock behind this one keeps a live temp', () async {
         // Whole seconds, as SFTP v3 reports them, five minutes behind.
@@ -1774,22 +1743,10 @@ void main() {
       // Journal order opposes scan order: pending i2 first, completed
       // i1 second — a destination-only merge would pop i2 for A's file.
       crashed.appendJournal(
-        fileEntry(
-          'task-1',
-          'i2',
-          '${dirB.path}/f.txt',
-          '/dest/f.txt',
-          size: 4,
-        ),
+        fileEntry('task-1', 'i2', '${dirB.path}/f.txt', '/dest/f.txt', size: 4),
       );
       crashed.appendJournal(
-        fileEntry(
-          'task-1',
-          'i1',
-          '${dirA.path}/f.txt',
-          '/dest/f.txt',
-          size: 3,
-        ),
+        fileEntry('task-1', 'i1', '${dirA.path}/f.txt', '/dest/f.txt', size: 3),
       );
       crashed.appendJournal(
         FileCompletedRecord(taskId: 'task-1', itemId: 'i1'),
@@ -2646,8 +2603,7 @@ void main() {
       const artifactId = 'artifact';
       const sourcePath = '/source/folder';
       const destinationPath = '/dest/folder';
-      const artifactName =
-          '.poltergeist-nameprobe-0123456789abcdef-e\u0301';
+      const artifactName = '.poltergeist-nameprobe-0123456789abcdef-e\u0301';
       final source = FakeTreeFileSystem()..addDirectory(sourcePath);
       connections.filesystems['source'] = source;
       s1.addDirectory(destinationPath);
@@ -2786,97 +2742,91 @@ void main() {
     });
 
     for (final scanComplete in [true, false]) {
-      test(
-        '${scanComplete ? 'fully-scanned' : 'mid-scan'} restore preserves '
-        'a completed canonical directory self-move',
-        () async {
-          const taskId = 'task-1';
-          const directoryId = 'directory';
-          const sourcePath = '/dest/Folder';
-          const claimedPath = '/dest/folder';
-          s1
-            ..caseInsensitive = true
-            ..addDirectory(sourcePath);
+      test('${scanComplete ? 'fully-scanned' : 'mid-scan'} restore preserves '
+          'a completed canonical directory self-move', () async {
+        const taskId = 'task-1';
+        const directoryId = 'directory';
+        const sourcePath = '/dest/Folder';
+        const claimedPath = '/dest/folder';
+        s1
+          ..caseInsensitive = true
+          ..addDirectory(sourcePath);
 
-          final crashed = await openStore();
-          crashed.appendJournal(
-            enqueued(
-              taskId,
-              TransferTaskSpec(
-                source: const ServerFsLocation('s1'),
-                destination: const ServerFsLocation('s1'),
-                rootPaths: const [sourcePath],
-                destinationDir: '/dest',
-                policy: ResolvedConflictPolicy(),
-                operation: TransferOperation.move,
-              ),
+        final crashed = await openStore();
+        crashed.appendJournal(
+          enqueued(
+            taskId,
+            TransferTaskSpec(
+              source: const ServerFsLocation('s1'),
+              destination: const ServerFsLocation('s1'),
+              rootPaths: const [sourcePath],
+              destinationDir: '/dest',
+              policy: ResolvedConflictPolicy(),
+              operation: TransferOperation.move,
             ),
-          );
+          ),
+        );
+        crashed.appendJournal(
+          PlanEntryRecord(
+            taskId: taskId,
+            itemId: directoryId,
+            isDirectory: true,
+            sourcePath: sourcePath,
+            destinationPath: sourcePath,
+            sourceType: RemoteFileType.directory,
+            name: 'Folder',
+          ),
+        );
+        crashed.appendJournal(
+          DestinationClaimedRecord(
+            taskId: taskId,
+            itemId: directoryId,
+            destinationPath: claimedPath,
+          ),
+        );
+        crashed.appendJournal(
+          FileCompletedRecord(
+            taskId: taskId,
+            itemId: directoryId,
+            resolvedPath: claimedPath,
+          ),
+        );
+        if (scanComplete) {
           crashed.appendJournal(
-            PlanEntryRecord(
+            ScanCompleteRecord(
               taskId: taskId,
-              itemId: directoryId,
-              isDirectory: true,
-              sourcePath: sourcePath,
-              destinationPath: sourcePath,
-              sourceType: RemoteFileType.directory,
-              name: 'Folder',
+              totalBytes: 0,
+              skippedSymlinks: 0,
+              destinationNameComparison:
+                  DestinationNameComparison.normalizedCaseInsensitive,
             ),
           );
-          crashed.appendJournal(
-            DestinationClaimedRecord(
-              taskId: taskId,
-              itemId: directoryId,
-              destinationPath: claimedPath,
-            ),
-          );
-          crashed.appendJournal(
-            FileCompletedRecord(
-              taskId: taskId,
-              itemId: directoryId,
-              resolvedPath: claimedPath,
-            ),
-          );
-          if (scanComplete) {
-            crashed.appendJournal(
-              ScanCompleteRecord(
-                taskId: taskId,
-                totalBytes: 0,
-                skippedSymlinks: 0,
-                destinationNameComparison:
-                    DestinationNameComparison.normalizedCaseInsensitive,
-              ),
-            );
-          }
-          await crashed.flush();
+        }
+        await crashed.flush();
 
-          final store = await openStore();
-          final queue = newQueue(persistence: store);
-          await queue.restore();
-          final restored = queue.tasks.single;
-          if (scanComplete) {
-            await pump(20);
-            expect(s1.entryAt(sourcePath), isNotNull);
-          }
-
-          queue.resumeQueue();
-          await awaitTaskDone(restored);
-
-          expect(restored.state, TransferTaskState.completed);
+        final store = await openStore();
+        final queue = newQueue(persistence: store);
+        await queue.restore();
+        final restored = queue.tasks.single;
+        if (scanComplete) {
+          await pump(20);
           expect(s1.entryAt(sourcePath), isNotNull);
-          expect(s1.deleteCalls, 0);
-        },
-      );
+        }
+
+        queue.resumeQueue();
+        await awaitTaskDone(restored);
+
+        expect(restored.state, TransferTaskState.completed);
+        expect(s1.entryAt(sourcePath), isNotNull);
+        expect(s1.deleteCalls, 0);
+      });
     }
 
     test('cancel and dispose wait for restored trait validation', () async {
       final source = File('${localSrc.path}/a.txt')..writeAsStringSync('a');
       final crashed = await openStore();
       crashed.appendJournal(
-        enqueued(
-          'task-1',
-          localToRemoteSpec(rootPaths: [source.path]),
-        ),
+        enqueued('task-1', localToRemoteSpec(rootPaths: [source.path])),
       );
       crashed.appendJournal(
         fileEntry('task-1', 'file', source.path, '/dest/a.txt', size: 1),
@@ -2958,9 +2908,8 @@ void main() {
               return null;
             }
             if (record is FileFailedRecord) {
-              final legacy =
-                  (jsonDecode(line) as Map).cast<String, Object?>()
-                    ..remove('retryPolicy');
+              final legacy = (jsonDecode(line) as Map).cast<String, Object?>()
+                ..remove('retryPolicy');
               return jsonEncode(legacy);
             }
 
@@ -3124,13 +3073,7 @@ void main() {
         ),
       );
       for (final (itemId, sourcePath, destinationPath, name, containerKey) in [
-        (
-          parentItemId,
-          sourceParent,
-          destinationParent,
-          'mount',
-          null,
-        ),
+        (parentItemId, sourceParent, destinationParent, 'mount', null),
         (
           upperItemId,
           '$sourceParent/A',
@@ -3487,9 +3430,7 @@ void main() {
           destination: const ServerFsLocation('s1'),
           rootPaths: const [freshRoot],
           destinationDir: '/dest',
-          policy: ResolvedConflictPolicy(
-            folders: ConflictResolution.keepBoth,
-          ),
+          policy: ResolvedConflictPolicy(folders: ConflictResolution.keepBoth),
         ),
       );
 
@@ -3553,11 +3494,7 @@ void main() {
           ),
         );
         crashed.appendJournal(
-          ScanCompleteRecord(
-            taskId: taskId,
-            totalBytes: 0,
-            skippedSymlinks: 0,
-          ),
+          ScanCompleteRecord(taskId: taskId, totalBytes: 0, skippedSymlinks: 0),
         );
       }
       await crashed.flush();

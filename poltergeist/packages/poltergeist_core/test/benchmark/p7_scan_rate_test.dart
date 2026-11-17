@@ -234,21 +234,24 @@ void main() {
       );
     });
 
-    test('a warmup failure reports repetition 0 with unknown entries', () async {
-      final outcome = await collectScanRateSamples(
-        listDirectory: (path) async => throw StateError('warmup exploded'),
-        rootPath: '/root',
-        warmups: 1,
-        repetitions: 5,
-        listingTimeout: const Duration(seconds: 5),
-        deadline: const Duration(minutes: 1),
-      );
+    test(
+      'a warmup failure reports repetition 0 with unknown entries',
+      () async {
+        final outcome = await collectScanRateSamples(
+          listDirectory: (path) async => throw StateError('warmup exploded'),
+          rootPath: '/root',
+          warmups: 1,
+          repetitions: 5,
+          listingTimeout: const Duration(seconds: 5),
+          deadline: const Duration(minutes: 1),
+        );
 
-      expect(outcome.failedRepetition, 0);
-      expect(outcome.measuredScans, isEmpty);
-      expect(outcome.totalEntries, isNull);
-      expect(outcome.failureMessage, contains('warmup exploded'));
-    });
+        expect(outcome.failedRepetition, 0);
+        expect(outcome.measuredScans, isEmpty);
+        expect(outcome.totalEntries, isNull);
+        expect(outcome.failureMessage, contains('warmup exploded'));
+      },
+    );
 
     test(
       'a mid-run entry-count change fails instead of smearing counts',
@@ -335,38 +338,35 @@ void main() {
       expect(outcome.failureMessage, contains('count changed'));
     });
 
-    test(
-      'an in-flight listing failure fails the run even with siblings '
-      'still pending',
-      () async {
-        // Two directory listings in flight; the first-issued fails while
-        // the sibling still holds a pending entry — the run must fail at
-        // the failing listing without an unhandled async error and
-        // without reporting the abandoned sibling's entries.
-        final vfs = FakeScanVfs({
-          '/root': [
-            scanEntry('/root', 'a', RemoteFileType.directory),
-            scanEntry('/root', 'b', RemoteFileType.directory),
-          ],
-          '/root/b': [scanEntry('/root/b', 'f', RemoteFileType.file)],
-        });
-        vfs.listingDelay = const Duration(milliseconds: 10);
-        vfs.failureHook = (path) =>
-            path == '/root/a' ? StateError('a broke') : null;
-        final outcome = await collectScanRateSamples(
-          listDirectory: vfs.listDirectory,
-          rootPath: '/root',
-          warmups: 0,
-          repetitions: 5,
-          listingTimeout: const Duration(seconds: 5),
-          deadline: const Duration(minutes: 1),
-        );
+    test('an in-flight listing failure fails the run even with siblings '
+        'still pending', () async {
+      // Two directory listings in flight; the first-issued fails while
+      // the sibling still holds a pending entry — the run must fail at
+      // the failing listing without an unhandled async error and
+      // without reporting the abandoned sibling's entries.
+      final vfs = FakeScanVfs({
+        '/root': [
+          scanEntry('/root', 'a', RemoteFileType.directory),
+          scanEntry('/root', 'b', RemoteFileType.directory),
+        ],
+        '/root/b': [scanEntry('/root/b', 'f', RemoteFileType.file)],
+      });
+      vfs.listingDelay = const Duration(milliseconds: 10);
+      vfs.failureHook = (path) =>
+          path == '/root/a' ? StateError('a broke') : null;
+      final outcome = await collectScanRateSamples(
+        listDirectory: vfs.listDirectory,
+        rootPath: '/root',
+        warmups: 0,
+        repetitions: 5,
+        listingTimeout: const Duration(seconds: 5),
+        deadline: const Duration(minutes: 1),
+      );
 
-        expect(outcome.failedRepetition, 0);
-        expect(outcome.measuredScans, isEmpty);
-        expect(outcome.failureMessage, contains('a broke'));
-      },
-    );
+      expect(outcome.failedRepetition, 0);
+      expect(outcome.measuredScans, isEmpty);
+      expect(outcome.failureMessage, contains('a broke'));
+    });
 
     test('a zero in-flight bound is rejected as an argument error', () async {
       await expectLater(
@@ -448,8 +448,9 @@ void main() {
           final opened = buildChannel(tree: tree)
             ..fs.listingDelay = listingDelay
             ..fs.listingFailure = listingFailure
-            ..fs.listingFailureCall =
-                listingFailure == null ? 1 : listingFailureCall
+            ..fs.listingFailureCall = listingFailure == null
+                ? 1
+                : listingFailureCall
             ..fs.canonicalFailure = canonicalFailure;
           opens.add(opened);
           return opened;
@@ -502,8 +503,7 @@ void main() {
         expect(
           value,
           closeTo(
-            (row['entries']! as num) /
-                ((row['elapsedMs']! as num) / 1000.0),
+            (row['entries']! as num) / ((row['elapsedMs']! as num) / 1000.0),
             value * 0.001,
           ),
           reason: 'value is the unclipped entries/elapsed rate',
@@ -660,78 +660,74 @@ void main() {
       },
     );
 
-    test(
-      'partial rows keep the frozen scenarioConfig after a mid-run count '
-      'change',
-      () async {
-        final output = '${tempDir.path}/results.json';
-        final tree = scanTreeSpec(rootPath: '/remote/tree');
-        final channel = FakeScanChannel(
-          rootPath: '/remote/tree',
-          tree: tree,
-          events: events = <String>[],
-        );
-        // After the warmup + first two measured scans, the tree shrinks:
-        // the fourth root listing (measured repetition 2) is the first
-        // scan that observes the changed size, and the run fails there.
-        var rootListings = 0;
-        channel.fs.onRootListing = () {
-          rootListings++;
-          if (rootListings == 4) {
-            tree['/remote/tree/b']!.removeLast();
-          }
-        };
-        final result = await runP7Collection(
-          config: P7CollectorConfig(
-            targetPath: '/remote/tree',
-            outputPath: output,
-            warmups: 1,
-            repetitions: 5,
-            listingTimeout: const Duration(seconds: 5),
-            deadline: const Duration(minutes: 1),
-          ),
-          fingerprint: const P7FingerprintFields(
-            runnerImage: 'test-image',
-            arch: 'x64test',
-            dartVersion: 'test-dart',
-            flutterVersion: null,
-            mode: 'aot',
-            cpuModel: 'test-cpu',
-          ),
-          openChannel: () async => channel,
-          releaseServer: () async {},
-        );
-
-        expect(result.exitCode, 1);
-        expect(result.stderr, contains('count changed'));
-        final document =
-            jsonDecode(await File(output).readAsString())
-                as Map<String, Object?>;
-        final rows = document['rows']! as List<Object?>;
-        expect(rows, hasLength(3));
-        final frozenEntries = channel.fs.treeEntries + 1;
-        for (final row in rows.cast<Map<String, Object?>>()) {
-          final fingerprint = row['fingerprint']! as Map<String, Object?>;
-          // Every row — ok and error — carries the frozen identity the
-          // successful scans were measured under; the changed count
-          // appears only in the error row's text.
-          expect(
-            fingerprint['scenarioConfig'],
-            contains(';entries=$frozenEntries;'),
-          );
-          expect(
-            fingerprint['scenarioConfig'],
-            isNot(contains(';entries=${frozenEntries - 1};')),
-          );
+    test('partial rows keep the frozen scenarioConfig after a mid-run count '
+        'change', () async {
+      final output = '${tempDir.path}/results.json';
+      final tree = scanTreeSpec(rootPath: '/remote/tree');
+      final channel = FakeScanChannel(
+        rootPath: '/remote/tree',
+        tree: tree,
+        events: events = <String>[],
+      );
+      // After the warmup + first two measured scans, the tree shrinks:
+      // the fourth root listing (measured repetition 2) is the first
+      // scan that observes the changed size, and the run fails there.
+      var rootListings = 0;
+      channel.fs.onRootListing = () {
+        rootListings++;
+        if (rootListings == 4) {
+          tree['/remote/tree/b']!.removeLast();
         }
-        final errorRow = rows.last! as Map<String, Object?>;
-        expect(errorRow['status'], 'error');
+      };
+      final result = await runP7Collection(
+        config: P7CollectorConfig(
+          targetPath: '/remote/tree',
+          outputPath: output,
+          warmups: 1,
+          repetitions: 5,
+          listingTimeout: const Duration(seconds: 5),
+          deadline: const Duration(minutes: 1),
+        ),
+        fingerprint: const P7FingerprintFields(
+          runnerImage: 'test-image',
+          arch: 'x64test',
+          dartVersion: 'test-dart',
+          flutterVersion: null,
+          mode: 'aot',
+          cpuModel: 'test-cpu',
+        ),
+        openChannel: () async => channel,
+        releaseServer: () async {},
+      );
+
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('count changed'));
+      final document =
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final rows = document['rows']! as List<Object?>;
+      expect(rows, hasLength(3));
+      final frozenEntries = channel.fs.treeEntries + 1;
+      for (final row in rows.cast<Map<String, Object?>>()) {
+        final fingerprint = row['fingerprint']! as Map<String, Object?>;
+        // Every row — ok and error — carries the frozen identity the
+        // successful scans were measured under; the changed count
+        // appears only in the error row's text.
         expect(
-          errorRow['error'],
-          contains('$frozenEntries->${frozenEntries - 1}'),
+          fingerprint['scenarioConfig'],
+          contains(';entries=$frozenEntries;'),
         );
-      },
-    );
+        expect(
+          fingerprint['scenarioConfig'],
+          isNot(contains(';entries=${frozenEntries - 1};')),
+        );
+      }
+      final errorRow = rows.last! as Map<String, Object?>;
+      expect(errorRow['status'], 'error');
+      expect(
+        errorRow['error'],
+        contains('$frozenEntries->${frozenEntries - 1}'),
+      );
+    });
   });
 
   group('results temp ownership', () {

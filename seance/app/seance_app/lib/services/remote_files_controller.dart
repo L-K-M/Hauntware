@@ -1597,9 +1597,8 @@ class RemoteFilesController extends ChangeNotifier {
       // Deepest last, so every planned parent is mirrored before its
       // children and a directory can never be created under a name a
       // shallower planned item already claimed.
-      final sorted = [...directories]..sort(
-        (a, b) => _nameDepth(a).compareTo(_nameDepth(b)),
-      );
+      final sorted = [...directories]
+        ..sort((a, b) => _nameDepth(a).compareTo(_nameDepth(b)));
       for (final relative in sorted) {
         cancellation.throwIfCancelled();
         final path = '${probe.path}${Platform.pathSeparator}$relative';

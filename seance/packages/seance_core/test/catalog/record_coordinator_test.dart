@@ -511,11 +511,13 @@ void main() {
     test('a hostkey tombstone never deletes a local pin', () async {
       final device = await _Device.create(tempDir, 'a');
       await device.hostKeys.put(pin('h.example.com', 'SHA256:LOCAL'));
-      server.seed(await pinRecord(
-        pin('h.example.com', 'SHA256:IGNORED', pinnedAt: 99999),
-        deviceId: 'anyone',
-        deleted: true,
-      ));
+      server.seed(
+        await pinRecord(
+          pin('h.example.com', 'SHA256:IGNORED', pinnedAt: 99999),
+          deviceId: 'anyone',
+          deleted: true,
+        ),
+      );
       await device.coordinator.runRound(server);
       expect(
         (await device.hostKeys.get('h.example.com', 22))!.fingerprintSha256,
@@ -650,31 +652,42 @@ void main() {
       },
     );
 
-    test('a tombstone sealed under the wrong kind trips without deleting the server', () async {
-      final device = await _Device.create(tempDir, 'a', shared: true);
-      final crypto = RecordCrypto(RecordCodec(_key));
-      server.seed(await crypto.seal(DecryptedRecord(
-        id: 'srv-uuid-1',
-        kind: RecordKind.serverConfig,
-        updatedAt: 1,
-        deviceId: 'seance-device',
-        data: config('srv-uuid-1', 'web').toJson(),
-      )));
-      await device.coordinator.runRound(server);
-      expect(device.catalog!.servers, hasLength(1));
+    test(
+      'a tombstone sealed under the wrong kind trips without deleting the server',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        final crypto = RecordCrypto(RecordCodec(_key));
+        server.seed(
+          await crypto.seal(
+            DecryptedRecord(
+              id: 'srv-uuid-1',
+              kind: RecordKind.serverConfig,
+              updatedAt: 1,
+              deviceId: 'seance-device',
+              data: config('srv-uuid-1', 'web').toJson(),
+            ),
+          ),
+        );
+        await device.coordinator.runRound(server);
+        expect(device.catalog!.servers, hasLength(1));
 
-      server.seed(await crypto.seal(const DecryptedRecord(
-        id: 'srv-uuid-1',
-        kind: RecordKind.hostKey,
-        updatedAt: 2,
-        deviceId: 'seance-device',
-        deleted: true,
-      )));
-      await device.coordinator.runRound(server);
+        server.seed(
+          await crypto.seal(
+            const DecryptedRecord(
+              id: 'srv-uuid-1',
+              kind: RecordKind.hostKey,
+              updatedAt: 2,
+              deviceId: 'seance-device',
+              deleted: true,
+            ),
+          ),
+        );
+        await device.coordinator.runRound(server);
 
-      expect(device.catalog!.servers.single.id, 'srv-uuid-1');
-      expect(await device.tripwires.trippedIds(), contains('srv-uuid-1'));
-    });
+        expect(device.catalog!.servers.single.id, 'srv-uuid-1');
+        expect(await device.tripwires.trippedIds(), contains('srv-uuid-1'));
+      },
+    );
 
     test('separate mode never decrypts prefixless ids', () async {
       final device = await _Device.create(tempDir, 'a');
@@ -690,30 +703,32 @@ void main() {
   });
 
   group('serverConfig write path (04 §4.2, amended)', () {
-    test('an unauthenticated future tombstone cannot settle a dirty edit',
-        () async {
-      final device = await _Device.create(tempDir, 'a', shared: true);
-      await _saveServer(device, _server('web', label: 'local edit'));
+    test(
+      'an unauthenticated future tombstone cannot settle a dirty edit',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        await _saveServer(device, _server('web', label: 'local edit'));
 
-      server.seed(
-        EncryptedRecord(
-          id: 'web',
-          updatedAt: 1 << 50,
-          deviceId: 'forged-device',
-          deleted: true,
-          seq: null,
-          blob: Uint8List(0),
-        ),
-      );
+        server.seed(
+          EncryptedRecord(
+            id: 'web',
+            updatedAt: 1 << 50,
+            deviceId: 'forged-device',
+            deleted: true,
+            seq: null,
+            blob: Uint8List(0),
+          ),
+        );
 
-      await device.coordinator.runRound(server);
+        await device.coordinator.runRound(server);
 
-      final dirty = await device.records.dirtyRecords();
-      expect(dirty, hasLength(1));
-      expect(dirty.single.id, 'web');
-      expect(dirty.single.deleted, isFalse);
-      expect(device.catalog!.servers.single.label, 'local edit');
-    });
+        final dirty = await device.records.dirtyRecords();
+        expect(dirty, hasLength(1));
+        expect(dirty.single.id, 'web');
+        expect(dirty.single.deleted, isFalse);
+        expect(device.catalog!.servers.single.label, 'local edit');
+      },
+    );
 
     test('a delete the store could not tombstone still outranks its live '
         'tuple', () async {
@@ -804,45 +819,53 @@ void main() {
         return b;
       }
 
-      test('a per-record server takes the edit and the new one waits', () async {
-        server.perRecordQuota = true;
-        final b = await full();
-        server.pushSizes.clear();
+      test(
+        'a per-record server takes the edit and the new one waits',
+        () async {
+          server.perRecordQuota = true;
+          final b = await full();
+          server.pushSizes.clear();
 
-        final failure = await _quotaRefusal(b.coordinator.runRound(server));
+          final failure = await _quotaRefusal(b.coordinator.runRound(server));
 
-        expect(failure.code, 'account_quota_exceeded');
-        expect(failure.awaitingSpaceIds, ['cache']);
-        expect(failure.toString(),
-            startsWith('1 record waits for space on the sync server.'));
-        expect(server.records.keys, unorderedEquals(['web', 'db']));
-        final web = await b.crypto.open(server.records['web']!);
-        expect(ServerConfig.fromJson(web.data).label, 'web-renamed');
-        expect(
-          [for (final r in await b.records.dirtyRecords()) r.id],
-          ['cache'],
-          reason: 'the new server stays queued, not lost',
-        );
-        expect(server.pushSizes, [2],
-            reason: 'a waiting record is sent once per round, not per pass');
+          expect(failure.code, 'account_quota_exceeded');
+          expect(failure.awaitingSpaceIds, ['cache']);
+          expect(
+            failure.toString(),
+            startsWith('1 record waits for space on the sync server.'),
+          );
+          expect(server.records.keys, unorderedEquals(['web', 'db']));
+          final web = await b.crypto.open(server.records['web']!);
+          expect(ServerConfig.fromJson(web.data).label, 'web-renamed');
+          expect(
+            [for (final r in await b.records.dirtyRecords()) r.id],
+            ['cache'],
+            reason: 'the new server stays queued, not lost',
+          );
+          expect(server.pushSizes, [
+            2,
+          ], reason: 'a waiting record is sent once per round, not per pass');
 
-        // Deleting a server frees a slot, and the next round fills it.
-        b.clock.ms += 1000;
-        await _deleteServer(b, (await b.servers!.byId('db'))!);
-        await b.coordinator.runRound(server);
-        expect(server.records['cache'], isNotNull);
-        expect(server.records['db']!.deleted, isTrue);
-        expect(await b.records.dirtyRecords(), isEmpty);
-      });
+          // Deleting a server frees a slot, and the next round fills it.
+          b.clock.ms += 1000;
+          await _deleteServer(b, (await b.servers!.byId('db'))!);
+          await b.coordinator.runRound(server);
+          expect(server.records['cache'], isNotNull);
+          expect(server.records['db']!.deleted, isTrue);
+          expect(await b.records.dirtyRecords(), isEmpty);
+        },
+      );
 
       test('an older server still refuses the whole push', () async {
         final b = await full();
 
         await expectLater(
           b.coordinator.runRound(server),
-          throwsA(isA<ApiError>()
-              .having((e) => e.code, 'code', 'account_quota_exceeded')
-              .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
+          throwsA(
+            isA<ApiError>()
+                .having((e) => e.code, 'code', 'account_quota_exceeded')
+                .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>())),
+          ),
         );
         final web = await b.crypto.open(server.records['web']!);
         expect(ServerConfig.fromJson(web.data).label, 'web');

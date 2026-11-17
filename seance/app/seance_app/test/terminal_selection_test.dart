@@ -6,8 +6,9 @@ void main() {
   // Guards the terminal copy path: the right-click "Select all" sets a
   // selection on our controller, and Copy reads it back via
   // buffer.getText(selection). If the xterm API for either drifts, this breaks.
-  testWidgets('select-all includes scrollback, not just the visible screen',
-      (tester) async {
+  testWidgets('select-all includes scrollback, not just the visible screen', (
+    tester,
+  ) async {
     final terminal = Terminal(maxLines: 500);
     final controller = TerminalController();
     addTearDown(controller.dispose);
@@ -44,14 +45,18 @@ void main() {
       buffer.createAnchor(0, buffer.height - terminal.viewHeight),
       buffer.createAnchor(terminal.viewWidth, buffer.height - 1),
     );
-    expect(terminal.buffer.getText(controller.selection), isNot(contains('line 0')));
+    expect(
+      terminal.buffer.getText(controller.selection),
+      isNot(contains('line 0')),
+    );
   });
 
   // Guards the render-object selection API the app's menus and the fork's
   // double-click path build on (the gesture wiring itself is regression-
   // tested inside third_party/xterm - see selection_gesture_test.dart).
-  testWidgets('selectWord via the render object selects a single word',
-      (tester) async {
+  testWidgets('selectWord via the render object selects a single word', (
+    tester,
+  ) async {
     final terminal = Terminal(maxLines: 100);
     final controller = TerminalController();
     final key = GlobalKey<TerminalViewState>();

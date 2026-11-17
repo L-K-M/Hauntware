@@ -431,49 +431,44 @@ void main() {
       },
     );
 
-    testWidgets(
-      "the row's Open never OS-launches a program type (06 §5.3)",
-      (tester) async {
-        await tester.runAsync(() async {
-          debugEditorHostPlatform = () => EditorHostPlatform.windows;
-          addTearDown(() => debugEditorHostPlatform = null);
-          const remotePath = '/srv/www/payload.hta';
-          final first = await EditorCheckoutHarness.open();
-          first.fs.seed(remotePath, utf8.encode('<script></script>\n'));
-          final record = await first.checkout.checkout(
-            serverId: 'b1',
-            entry: RemoteFileEntry(
-              path: remotePath,
-              name: 'payload.hta',
-              type: RemoteFileType.file,
-              size: 18,
-              modifiedAt: DateTime.utc(2026, 1, 1),
-              mode: 0x1a4,
-            ),
-          );
-          await first.checkout.localFile(record).writeAsString('edited\n');
-          final supportDir = first.supportDir.path;
-          await killProcess(first);
-          harness = await relaunch(supportDir);
-          final seams = OpenerSeams();
-          await mountEditorShell(
-            tester,
-            harness!,
-            externalOpener: seams.opener,
-          );
+    testWidgets("the row's Open never OS-launches a program type (06 §5.3)", (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        debugEditorHostPlatform = () => EditorHostPlatform.windows;
+        addTearDown(() => debugEditorHostPlatform = null);
+        const remotePath = '/srv/www/payload.hta';
+        final first = await EditorCheckoutHarness.open();
+        first.fs.seed(remotePath, utf8.encode('<script></script>\n'));
+        final record = await first.checkout.checkout(
+          serverId: 'b1',
+          entry: RemoteFileEntry(
+            path: remotePath,
+            name: 'payload.hta',
+            type: RemoteFileType.file,
+            size: 18,
+            modifiedAt: DateTime.utc(2026, 1, 1),
+            mode: 0x1a4,
+          ),
+        );
+        await first.checkout.localFile(record).writeAsString('edited\n');
+        final supportDir = first.supportDir.path;
+        await killProcess(first);
+        harness = await relaunch(supportDir);
+        final seams = OpenerSeams();
+        await mountEditorShell(tester, harness!, externalOpener: seams.opener);
 
-          await tester.tap(find.byKey(const ValueKey('localEdits.review')));
-          await tester.pump();
-          await pollFor(tester, find.byType(AlertDialog));
-          await tester.tap(dialogButton('Open'));
-          await pollFor(
-            tester,
-            find.text(l10nOf(tester).fileOpenProgramRefused('payload.hta')),
-          );
+        await tester.tap(find.byKey(const ValueKey('localEdits.review')));
+        await tester.pump();
+        await pollFor(tester, find.byType(AlertDialog));
+        await tester.tap(dialogButton('Open'));
+        await pollFor(
+          tester,
+          find.text(l10nOf(tester).fileOpenProgramRefused('payload.hta')),
+        );
 
-          expect(seams.systemOpener.opens, isEmpty);
-        });
-      },
-    );
+        expect(seams.systemOpener.opens, isEmpty);
+      });
+    });
   });
 }

@@ -11,23 +11,23 @@ import 'package:test/test.dart';
 /// plus durability across a close/reopen.
 void main() {
   Account account(String user) => Account(
-        username: user,
-        generation: 'generation-$user',
-        authVerifierHash: 'hash',
-        verifierSalt: 'salt',
-        argonSalt: 'asalt',
-        argonParams: const Argon2Params(),
-        vaultKeyCheck: 'opaque-check',
-      );
+    username: user,
+    generation: 'generation-$user',
+    authVerifierHash: 'hash',
+    verifierSalt: 'salt',
+    argonSalt: 'asalt',
+    argonParams: const Argon2Params(),
+    vaultKeyCheck: 'opaque-check',
+  );
 
   EncryptedRecord rec(String id, int seq, int updatedAt) => EncryptedRecord(
-        id: id,
-        updatedAt: updatedAt,
-        deviceId: 'd',
-        deleted: false,
-        seq: seq,
-        blob: Uint8List.fromList([1, 2, 3, seq]),
-      );
+    id: id,
+    updatedAt: updatedAt,
+    deviceId: 'd',
+    deleted: false,
+    seq: seq,
+    blob: Uint8List.fromList([1, 2, 3, seq]),
+  );
 
   test('account, token, and record round-trips in :memory:', () async {
     final s = SqliteStorage.open(':memory:');
@@ -111,10 +111,15 @@ void main() {
           PRIMARY KEY (username, id)
         )
       ''');
-      legacy.execute(
-        'INSERT INTO records VALUES (?, ?, ?, ?, ?, ?, ?)',
-        ['alice', 'old', 1, 'device', 0, 1, Uint8List.fromList([1])],
-      );
+      legacy.execute('INSERT INTO records VALUES (?, ?, ?, ?, ?, ?, ?)', [
+        'alice',
+        'old',
+        1,
+        'device',
+        0,
+        1,
+        Uint8List.fromList([1]),
+      ]);
       legacy.close();
 
       final storage = SqliteStorage.open(path);

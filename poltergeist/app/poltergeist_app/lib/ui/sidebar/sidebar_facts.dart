@@ -106,8 +106,8 @@ SidebarPaneFacts sidebarPaneFactsOf(WorkspaceController workspace) {
       if (remote == null) continue;
       // Pane-owned engine truth includes blocked catalog routes, which the
       // bookmark-derived connection list cannot watch.
-      final state = controller.connectionStatus?.state ??
-          _bindState(controller.phase);
+      final state =
+          controller.connectionStatus?.state ?? _bindState(controller.phase);
       if (state == null) continue;
       final id = remote.id;
       tabs[id] = (tabs[id] ?? 0) + 1;

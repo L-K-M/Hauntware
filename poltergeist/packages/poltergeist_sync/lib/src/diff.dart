@@ -72,8 +72,7 @@ Future<SyncPlan> diffScans({
     for (final entry in left.entries.entries) {
       if (cancellation?.isCancelled ?? false) throw const ScanCancelled();
       final l = entry.value;
-      if (l.kind != EntryKind.file ||
-          excludedOn(SyncSide.left, entry.key)) {
+      if (l.kind != EntryKind.file || excludedOn(SyncSide.left, entry.key)) {
         continue;
       }
       final rightPath = rightByKey[keyOf(entry.key)];
@@ -102,9 +101,8 @@ Future<SyncPlan> diffScans({
       mtimeToleranceSecs: rules.mtimeToleranceSecs,
       acceptedTimeShifts: rules.acceptedTimeShifts,
     ),
-    untrustedMtimes: !rules.preserveMtime ||
-        mtimeUnreliableLeft ||
-        mtimeUnreliableRight,
+    untrustedMtimes:
+        !rules.preserveMtime || mtimeUnreliableLeft || mtimeUnreliableRight,
     excludedOn: excludedOn,
     hashedLeft: hashedLeft,
     hashedRight: hashedRight,
@@ -206,11 +204,7 @@ final class _Differ {
     // treated as assumed-sensitive still flags the variants that would
     // merge if the assumption is wrong (05 §3's ask-class upgrade).
     final hazardLeft = _hazardMap(left, other: right, side: SyncSide.left);
-    final hazardRight = _hazardMap(
-      right,
-      other: left,
-      side: SyncSide.right,
-    );
+    final hazardRight = _hazardMap(right, other: left, side: SyncSide.right);
 
     // The other side's entries at a hazard path's match key can never
     // pair safely — they ride the hazard rows as the shared counterpart
@@ -242,11 +236,13 @@ final class _Differ {
             relativePath: path,
             left: isLeft ? scan.entries[path] : counterpart,
             right: isLeft ? counterpart : scan.entries[path],
-            suggested: reason == SyncReason.caseCollision &&
+            suggested:
+                reason == SyncReason.caseCollision &&
                     _asksBeforeMerging(otherScan)
                 ? SyncActionType.conflict
                 : SyncActionType.skip,
-            effective: reason == SyncReason.caseCollision &&
+            effective:
+                reason == SyncReason.caseCollision &&
                     _asksBeforeMerging(otherScan)
                 ? SyncActionType.conflict
                 : SyncActionType.skip,
@@ -422,8 +418,7 @@ final class _Differ {
     // already exists at the match key (an existing name is written,
     // not created, and stays valid for updates).
     final otherByMatch = _groupBy(other, _matchKey);
-    final destination =
-        side == SyncSide.left ? SyncSide.right : SyncSide.left;
+    final destination = side == SyncSide.left ? SyncSide.right : SyncSide.left;
     if (_directionAllows(side) && _enforcesNames(destination)) {
       for (final hazard in invalidDestinationNames(
         scan,
@@ -470,10 +465,12 @@ final class _Differ {
         relativePath: path,
         left: isLeft ? snapshot : null,
         right: isLeft ? null : snapshot,
-        suggested:
-            isLeft ? SyncActionType.deleteLeft : SyncActionType.deleteRight,
-        effective:
-            isLeft ? SyncActionType.deleteLeft : SyncActionType.deleteRight,
+        suggested: isLeft
+            ? SyncActionType.deleteLeft
+            : SyncActionType.deleteRight,
+        effective: isLeft
+            ? SyncActionType.deleteLeft
+            : SyncActionType.deleteRight,
         reason: isLeft ? SyncReason.onlyOnLeft : SyncReason.onlyOnRight,
       );
     }
@@ -483,8 +480,8 @@ final class _Differ {
       final action = isDir
           ? (toRight ? SyncActionType.makeDirRight : SyncActionType.makeDirLeft)
           : (toRight
-              ? SyncActionType.copyLeftToRight
-              : SyncActionType.copyRightToLeft);
+                ? SyncActionType.copyLeftToRight
+                : SyncActionType.copyRightToLeft);
       return SyncItem(
         relativePath: path,
         left: isLeft ? snapshot : null,
@@ -512,7 +509,8 @@ final class _Differ {
     // Symlink involvement (05 §3): plan skip on both sides; a kind
     // mismatch against a link surfaces typeDiffers with suggested
     // skip, never a deletion.
-    final symlinkInvolved = leftSnap.kind == EntryKind.symlink ||
+    final symlinkInvolved =
+        leftSnap.kind == EntryKind.symlink ||
         rightSnap.kind == EntryKind.symlink;
     if (symlinkInvolved) {
       final kindMismatch = leftSnap.kind != rightSnap.kind;
@@ -596,17 +594,16 @@ final class _Differ {
     );
   }
 
-  EntrySnapshot _withHash(EntrySnapshot snapshot, String? hash) =>
-      hash == null
-          ? snapshot
-          : EntrySnapshot(
-              kind: snapshot.kind,
-              size: snapshot.size,
-              mtimeSecs: snapshot.mtimeSecs,
-              mode: snapshot.mode,
-              symlinkTarget: snapshot.symlinkTarget,
-              sha256: hash,
-            );
+  EntrySnapshot _withHash(EntrySnapshot snapshot, String? hash) => hash == null
+      ? snapshot
+      : EntrySnapshot(
+          kind: snapshot.kind,
+          size: snapshot.size,
+          mtimeSecs: snapshot.mtimeSecs,
+          mode: snapshot.mode,
+          symlinkTarget: snapshot.symlinkTarget,
+          sha256: hash,
+        );
 
   /// §6 rule 4's kind-change row: the directory side's recursive
   /// contents are captured while the scans are in hand (the executor's
@@ -692,9 +689,7 @@ final class _Differ {
       case ConflictDefault.newerWins:
         final leftSecs = leftSnap.mtimeSecs;
         final rightSecs = rightSnap.mtimeSecs;
-        if (leftSecs == null ||
-            rightSecs == null ||
-            leftSecs == rightSecs) {
+        if (leftSecs == null || rightSecs == null || leftSecs == rightSecs) {
           return SyncActionType.conflict;
         }
         return leftSecs > rightSecs
@@ -725,11 +720,11 @@ final class _Differ {
         }
         return kindChange
             ? (toRight
-                ? SyncActionType.copyLeftToRight
-                : SyncActionType.copyRightToLeft)
+                  ? SyncActionType.copyLeftToRight
+                  : SyncActionType.copyRightToLeft)
             : (toRight
-                ? SyncActionType.updateLeftToRight
-                : SyncActionType.updateRightToLeft);
+                  ? SyncActionType.updateLeftToRight
+                  : SyncActionType.updateRightToLeft);
       case SyncDirection.leftToRight:
         if (!toRight) return SyncActionType.skip;
         return isDir

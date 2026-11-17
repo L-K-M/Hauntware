@@ -2,8 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show UndoDirection;
-import 'package:ghost_ui/ghost_ui.dart'
-    show GhostUndoableChange, showTopToast;
+import 'package:ghost_ui/ghost_ui.dart' show GhostUndoableChange, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/alert_rules_controller.dart';

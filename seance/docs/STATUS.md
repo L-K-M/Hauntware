@@ -48,9 +48,6 @@ lock prompt on Android, iOS, macOS and Windows devices.
   or "N times". A repeat after the decision queues fresh with a count
   of 1. The shared queue is unchanged.
 
-Deferred, suite follow-up: the app directories are not format-checked
-in CI.
-
 Proof: analysis and the full app suite passed locally, and CI passed on
 each PR's last head; #795's macOS Poltergeist pure-Dart job was
 cancelled there and passed on main's merge run. Still manual: the iOS

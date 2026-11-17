@@ -39,23 +39,15 @@ void main() {
       environment['POLTERGEIST_SSHD_USER'] != null &&
       environment['POLTERGEIST_SSHD_KEY'] != null;
 
-  test(
-    'a refused setstat flags the destination mtime-unreliable and the '
-    'next diff converges on size only',
-    () async {
-      await _runScenario(serviceId: _restrictedId, expectSetstatIgnored: true);
-    },
-    skip: enabled ? false : _skipMessage,
-  );
+  test('a refused setstat flags the destination mtime-unreliable and the '
+      'next diff converges on size only', () async {
+    await _runScenario(serviceId: _restrictedId, expectSetstatIgnored: true);
+  }, skip: enabled ? false : _skipMessage);
 
-  test(
-    'a landed setstat keeps the destination mtime-reliable '
-    '(sshd-modern control)',
-    () async {
-      await _runScenario(serviceId: _modernId, expectSetstatIgnored: false);
-    },
-    skip: enabled ? false : _skipMessage,
-  );
+  test('a landed setstat keeps the destination mtime-reliable '
+      '(sshd-modern control)', () async {
+    await _runScenario(serviceId: _modernId, expectSetstatIgnored: false);
+  }, skip: enabled ? false : _skipMessage);
 }
 
 const _skipMessage =
@@ -93,9 +85,7 @@ Future<void> _runScenario({
     throw StateError('Core package is unresolved.');
   }
   final publicKey = (await File.fromUri(
-    package.resolve(
-      '../../../test/integration/keys/ssh_host_ed25519_key.pub',
-    ),
+    package.resolve('../../../test/integration/keys/ssh_host_ed25519_key.pub'),
   ).readAsString()).trim().split(RegExp(r'\s+'));
   final store = InMemoryHostKeyStore();
   await store.put(

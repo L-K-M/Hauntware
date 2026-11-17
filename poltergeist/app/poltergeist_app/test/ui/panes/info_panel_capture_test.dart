@@ -30,7 +30,8 @@ import '../../support/test_panes.dart';
 /// assertions run regardless. POLTERGEIST_CAPTURE_DIR overrides the
 /// output root — the default only resolves at the repo root when the
 /// test is launched from the app package directory.
-final _captureDir = Platform.environment['POLTERGEIST_CAPTURE_DIR'] ??
+final _captureDir =
+    Platform.environment['POLTERGEIST_CAPTURE_DIR'] ??
     '../../tasks/run3-task59';
 
 Future<ByteData> _fontBytes(String path) async =>
@@ -45,14 +46,14 @@ Future<void> _loadRealFonts() async {
   // be registered itself — otherwise code text rasterizes as tofu. Shipped
   // with the app, so always there.
   await loadBundledMonoFonts();
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       '${Platform.environment['HOME']}/.local/share/fonts';
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
   final mono = File('$dir/DejaVuSansMono.ttf');
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -148,8 +149,11 @@ void main() {
     ];
     local.listings['/home/tester/docs'] = [
       _entry('draft.md', size: 1200, root: '/home/tester/docs'),
-      _entry('images', type: RemoteFileType.directory,
-          root: '/home/tester/docs'),
+      _entry(
+        'images',
+        type: RemoteFileType.directory,
+        root: '/home/tester/docs',
+      ),
     ];
     local.listings['/home/tester/docs/images'] = [
       _entry('hero.png', size: 80240, root: '/home/tester/docs/images'),
@@ -215,8 +219,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme:
-          base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       // The shell-level boundary wraps the MaterialApp so a capture can
@@ -314,22 +317,16 @@ void main() {
         tester.renderObject<RenderRepaintBoundary>(
           find.byKey(const ValueKey('capture.info')),
         );
-    final captureEnabled =
-        Platform.environment['POLTERGEIST_CAPTURE'] == '1';
+    final captureEnabled = Platform.environment['POLTERGEIST_CAPTURE'] == '1';
     final outDir = Directory(_captureDir);
     if (captureEnabled) outDir.createSync(recursive: true);
 
-    Future<void> capture(
-      RenderRepaintBoundary boundary,
-      String name,
-    ) async {
+    Future<void> capture(RenderRepaintBoundary boundary, String name) async {
       if (!captureEnabled) return;
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List();
         } finally {
           image.dispose();
@@ -376,9 +373,7 @@ void main() {
       expect(
         tester
             .widget<Checkbox>(
-              find.byKey(
-                ValueKey('infoPanel.permCell.${cell.$1}.${cell.$2}'),
-              ),
+              find.byKey(ValueKey('infoPanel.permCell.${cell.$1}.${cell.$2}')),
             )
             .value,
         cell.$3,

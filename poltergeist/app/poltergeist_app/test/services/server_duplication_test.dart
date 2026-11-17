@@ -31,51 +31,62 @@ void main() {
       updatedAt: 2,
     );
 
-    test('planning writes nothing, which is what lets the save be aborted',
-        () async {
-      final writes = <String>[];
-      // The guard runs between the plan and the save, so `SourceServerChanged`
-      // can promise nothing was created — but only while planning stays a
-      // read. A vault write moved in here would strand an entry no server
-      // names, and nothing reference-counts those.
-      final store =
-          SecretVault(_RecordingVaultStore(writes), List.filled(32, 7));
-      await store.putSecret(const Secret(
-        id: 'sec-old',
-        kind: SecretKind.password,
-        value: 'hunter2',
-      ));
-      // The recorder is proven to record before it is cleared: without this,
-      // a `putSecret` that stopped routing through `putSecretBlob` would
-      // leave the emptiness assertion below passing for nothing.
-      expect(writes, isNotEmpty);
-      writes.clear();
-      final plan = await planServerDuplication(
-        source(secretRef: 'sec-old'),
-        vault: store,
-        takenLabels: const [],
-        id: 'copy-1',
-        secretId: 'sec-new',
-        now: 100,
-      );
+    test(
+      'planning writes nothing, which is what lets the save be aborted',
+      () async {
+        final writes = <String>[];
+        // The guard runs between the plan and the save, so `SourceServerChanged`
+        // can promise nothing was created — but only while planning stays a
+        // read. A vault write moved in here would strand an entry no server
+        // names, and nothing reference-counts those.
+        final store = SecretVault(
+          _RecordingVaultStore(writes),
+          List.filled(32, 7),
+        );
+        await store.putSecret(
+          const Secret(
+            id: 'sec-old',
+            kind: SecretKind.password,
+            value: 'hunter2',
+          ),
+        );
+        // The recorder is proven to record before it is cleared: without this,
+        // a `putSecret` that stopped routing through `putSecretBlob` would
+        // leave the emptiness assertion below passing for nothing.
+        expect(writes, isNotEmpty);
+        writes.clear();
+        final plan = await planServerDuplication(
+          source(secretRef: 'sec-old'),
+          vault: store,
+          takenLabels: const [],
+          id: 'copy-1',
+          secretId: 'sec-new',
+          now: 100,
+        );
 
-      expect(plan.secret?.id, 'sec-new');
-      // Every write, not just the one id the plan happens to name: a write
-      // under any other id would strand an entry no server references, and
-      // nothing reference-counts those.
-      expect(writes, isEmpty,
-          reason: 'the planned entry is written by the save, not the plan');
-      expect((await store.getSecret('sec-old'))?.value, 'hunter2');
-    });
+        expect(plan.secret?.id, 'sec-new');
+        // Every write, not just the one id the plan happens to name: a write
+        // under any other id would strand an entry no server references, and
+        // nothing reference-counts those.
+        expect(
+          writes,
+          isEmpty,
+          reason: 'the planned entry is written by the save, not the plan',
+        );
+        expect((await store.getSecret('sec-old'))?.value, 'hunter2');
+      },
+    );
 
     test('copies the credential into a vault entry of its own', () async {
       final store = vault();
-      await store.putSecret(const Secret(
-        id: 'sec-old',
-        kind: SecretKind.privateKey,
-        value: 'PEM',
-        keyPassphrase: 'phrase',
-      ));
+      await store.putSecret(
+        const Secret(
+          id: 'sec-old',
+          kind: SecretKind.privateKey,
+          value: 'PEM',
+          keyPassphrase: 'phrase',
+        ),
+      );
 
       final plan = await planServerDuplication(
         source(secretRef: 'sec-old'),
@@ -94,10 +105,7 @@ void main() {
       // is only caught here once the fixture above gives it a non-default
       // value, since one left at its default matches on both sides.
       final original = (await store.getSecret('sec-old'))!;
-      expect(
-        plan.secret!.toJson(),
-        {...original.toJson()}..['id'] = 'sec-new',
-      );
+      expect(plan.secret!.toJson(), {...original.toJson()}..['id'] = 'sec-new');
       // Spelled out as well, because these are the two that stop a copy
       // connecting: the material and the passphrase that opens it.
       expect(plan.secret!.value, 'PEM');
@@ -116,21 +124,23 @@ void main() {
       expect(numbered.config.label, 'web copy 2');
     });
 
-    test('a dangling reference plans as no credential, not as a failure',
-        () async {
-      // The original is already in this state; the copy is not the place to
-      // discover it.
-      final plan = await planServerDuplication(
-        source(secretRef: 'sec-gone'),
-        vault: vault(),
-        takenLabels: const [],
-        id: 'fresh',
-        secretId: 'sec-new',
-        now: 999,
-      );
-      expect(plan.secret, isNull);
-      expect(plan.config.secretRef, isNull);
-    });
+    test(
+      'a dangling reference plans as no credential, not as a failure',
+      () async {
+        // The original is already in this state; the copy is not the place to
+        // discover it.
+        final plan = await planServerDuplication(
+          source(secretRef: 'sec-gone'),
+          vault: vault(),
+          takenLabels: const [],
+          id: 'fresh',
+          secretId: 'sec-new',
+          now: 999,
+        );
+        expect(plan.secret, isNull);
+        expect(plan.config.secretRef, isNull);
+      },
+    );
 
     test('a locked vault fails instead of losing the credential', () async {
       // A duplicate that quietly lost its password would look identical in the

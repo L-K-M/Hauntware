@@ -16,10 +16,7 @@ void main() {
   build() {
     final lanes = controller_test.FakePaneLanes();
     final left = PaneController(paneTabId: 'pane.left.tab1', lanes: lanes);
-    final right = PaneController(
-      paneTabId: 'pane.right.tab1',
-      lanes: lanes,
-    );
+    final right = PaneController(paneTabId: 'pane.right.tab1', lanes: lanes);
     final workspace = WorkspaceController(
       left: testPaneStrip(left, lanes: lanes),
       right: testPaneStrip(right, lanes: lanes),
@@ -40,7 +37,8 @@ void main() {
       expect(
         rig.workspace.activePane,
         rig.workspace.left,
-        reason: 'pane-scoped commands resolve the ACTIVE pane — it must '
+        reason:
+            'pane-scoped commands resolve the ACTIVE pane — it must '
             'never be the unmounted one',
       );
       expect(identical(rig.workspace.activeTabController, rig.left), isTrue);
@@ -97,7 +95,8 @@ void main() {
       expect(
         rig.workspace.secondPaneHidden,
         isFalse,
-        reason: 'a transient auto-hide restores on regrow — only the '
+        reason:
+            'a transient auto-hide restores on regrow — only the '
             'explicit command persists (02 §1)',
       );
       expect(rig.workspace.activePane, rig.workspace.left);

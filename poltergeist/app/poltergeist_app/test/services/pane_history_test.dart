@@ -90,8 +90,7 @@ void main() {
     );
   });
 
-  test('a new navigation drops forward entries (branch truncation)',
-      () async {
+  test('a new navigation drops forward entries (branch truncation)', () async {
     final lanes = base.FakePaneLanes();
     final (controller, channel) = await boundPane(lanes, [
       '/home/tester/a',
@@ -158,44 +157,44 @@ void main() {
     expect(controller.location?.path, '/home/tester/a');
   });
 
-  test('a failed navigation stays in the trail; Back returns from it',
-      () async {
-    final lanes = base.FakePaneLanes();
-    final (controller, channel) = await boundPane(lanes, [
-      '/home/tester/a',
-    ]);
-    addTearDown(controller.dispose);
+  test(
+    'a failed navigation stays in the trail; Back returns from it',
+    () async {
+      final lanes = base.FakePaneLanes();
+      final (controller, channel) = await boundPane(lanes, ['/home/tester/a']);
+      addTearDown(controller.dispose);
 
-    controller.navigate('/home/tester/a');
-    await settle();
-    // '/gone' is unscripted — the listing fails and the pane lands on
-    // the erred location with its inline error (02 §2.7).
-    controller.navigate('/gone');
-    await settle();
-    expect(controller.error, isNotNull);
-    expect(controller.location?.path, '/gone');
-    expect(controller.canGoBack, isTrue);
+      controller.navigate('/home/tester/a');
+      await settle();
+      // '/gone' is unscripted — the listing fails and the pane lands on
+      // the erred location with its inline error (02 §2.7).
+      controller.navigate('/gone');
+      await settle();
+      expect(controller.error, isNotNull);
+      expect(controller.location?.path, '/gone');
+      expect(controller.canGoBack, isTrue);
 
-    controller.goBack();
-    await settle();
-    expect(controller.location?.path, '/home/tester/a');
-    expect(controller.error, isNull);
+      controller.goBack();
+      await settle();
+      expect(controller.location?.path, '/home/tester/a');
+      expect(controller.error, isNull);
 
-    // Forward re-attempts the failed location — browser semantics.
-    expect(controller.canGoForward, isTrue);
-    channel.listings['/gone'] = [
-      RemoteFileEntry(
-        path: '/gone/now.txt',
-        name: 'now.txt',
-        type: RemoteFileType.file,
-      ),
-    ];
-    controller.goForward();
-    await settle();
-    expect(controller.location?.path, '/gone');
-    expect(controller.error, isNull);
-    expect(controller.entries.single.name, 'now.txt');
-  });
+      // Forward re-attempts the failed location — browser semantics.
+      expect(controller.canGoForward, isTrue);
+      channel.listings['/gone'] = [
+        RemoteFileEntry(
+          path: '/gone/now.txt',
+          name: 'now.txt',
+          type: RemoteFileType.file,
+        ),
+      ];
+      controller.goForward();
+      await settle();
+      expect(controller.location?.path, '/gone');
+      expect(controller.error, isNull);
+      expect(controller.entries.single.name, 'now.txt');
+    },
+  );
 
   test('Esc-cancel rejoins the trail; Forward re-attempts the cancelled '
       'navigation', () async {
@@ -293,10 +292,7 @@ void main() {
   test('history is per-tab: sibling tabs keep independent trails and a '
       'reopened ghost starts empty', () async {
     final lanes = base.FakePaneLanes();
-    final strip = PaneTabsController(
-      paneId: 'pane.left',
-      lanes: lanes,
-    );
+    final strip = PaneTabsController(paneId: 'pane.left', lanes: lanes);
     addTearDown(strip.dispose);
 
     base.FakePaneChannel channelFor(String home, List<String> paths) {
@@ -336,8 +332,11 @@ void main() {
     expect(controller2.canGoBack, isTrue);
     controller2.goBack();
     await settle();
-    expect(controller2.location?.path, '/home/two',
-        reason: 'tab 2 walks its own trail, never tab 1\'s');
+    expect(
+      controller2.location?.path,
+      '/home/two',
+      reason: 'tab 2 walks its own trail, never tab 1\'s',
+    );
 
     // Switching back to tab 1 keeps its trail intact (02 §3's per-tab
     // state carries the history with the tab's controller).
@@ -513,27 +512,28 @@ void main() {
       expect(controller.cursorIndex, 3);
     });
 
-    test('a re-list issued while the parent is loading keeps the re-select',
-        () async {
-      final (controller, channel) = await homePane();
-      final held = Completer<void>();
-      channel.holdNext = held;
-      controller.goUp();
-      await settle();
-      expect(controller.loading, isTrue);
+    test(
+      'a re-list issued while the parent is loading keeps the re-select',
+      () async {
+        final (controller, channel) = await homePane();
+        final held = Completer<void>();
+        channel.holdNext = held;
+        controller.goUp();
+        await settle();
+        expect(controller.loading, isTrue);
 
-      // A refresh (or a watch re-list) of the same folder supersedes the
-      // held answer before anything was accepted.
-      controller.refresh();
-      await settle();
-      expect(cursorPath(controller), '/home/tester');
-      held.complete();
-      await settle();
-      expect(cursorPath(controller), '/home/tester');
-    });
+        // A refresh (or a watch re-list) of the same folder supersedes the
+        // held answer before anything was accepted.
+        controller.refresh();
+        await settle();
+        expect(cursorPath(controller), '/home/tester');
+        held.complete();
+        await settle();
+        expect(cursorPath(controller), '/home/tester');
+      },
+    );
 
-    test('an Esc-cancelled climb leaves no re-select pending',
-        () async {
+    test('an Esc-cancelled climb leaves no re-select pending', () async {
       final (controller, channel) = await homePane();
       controller.navigate('/home/tester/docs');
       await settle();
@@ -550,9 +550,7 @@ void main() {
       expect(controller.location?.path, '/home/tester/docs');
       // A leaked re-select would ride the next same-folder re-list; a
       // docs listing holding a row by that path makes one observable.
-      channel.listings['/home/tester/docs'] = [
-        folder('/home/tester/docs'),
-      ];
+      channel.listings['/home/tester/docs'] = [folder('/home/tester/docs')];
       controller.refresh();
       await settle();
       expect(controller.cursorIndex, isNull);

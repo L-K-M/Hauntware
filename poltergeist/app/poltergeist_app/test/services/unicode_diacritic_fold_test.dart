@@ -58,7 +58,10 @@ void main() {
   test('spacing marks survive — they carry text, not decoration', () {
     // The Devanagari vowel sign ि (Mc) must not strip: folding would
     // otherwise conflate कल and किल.
-    expect(typeAheadFold('\u{0915}\u{093F}\u{0932}'), isNot(typeAheadFold('\u{0915}\u{0932}')));
+    expect(
+      typeAheadFold('\u{0915}\u{093F}\u{0932}'),
+      isNot(typeAheadFold('\u{0915}\u{0932}')),
+    );
   });
 
   test('combining marks alone strip to nothing', () {
@@ -112,15 +115,22 @@ void main() {
     // Offline equivalent of an upstream diff: a hand-edited or truncated
     // fixture fails here before the generator ever consumes it.
     for (final (name, expected) in [
-      ('UnicodeData-17.0.0.txt',
-          '2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c'),
-      ('CaseFolding-17.0.0.txt',
-          'ff8d8fefbf123574205085d6714c36149eb946d717a0c585c27f0f4ef58c4183'),
+      (
+        'UnicodeData-17.0.0.txt',
+        '2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c',
+      ),
+      (
+        'CaseFolding-17.0.0.txt',
+        'ff8d8fefbf123574205085d6714c36149eb946d717a0c585c27f0f4ef58c4183',
+      ),
     ]) {
       final file = File('tool/unicode/$name');
       expect(file.existsSync(), isTrue, reason: '$name must stay vendored');
-      expect(sha256.convert(file.readAsBytesSync()).toString(), expected,
-          reason: '$name must stay byte-identical to the pinned release');
+      expect(
+        sha256.convert(file.readAsBytesSync()).toString(),
+        expected,
+        reason: '$name must stay byte-identical to the pinned release',
+      );
     }
   });
 }

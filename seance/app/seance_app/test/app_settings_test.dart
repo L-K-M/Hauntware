@@ -51,17 +51,23 @@ void main() {
     // and the only one not covered here. A serializer that stamped `now` when
     // the toggle was on, or collapsed a zero stamp to absent, would satisfy
     // every other assertion in this test while removing the guard's premise.
-    final neverPublished =
-        AppSettings(syncAssistant: true, assistantUpdatedAt: 0);
-    final neverPublishedRestored = AppSettings.fromJson(neverPublished.toJson());
+    final neverPublished = AppSettings(
+      syncAssistant: true,
+      assistantUpdatedAt: 0,
+    );
+    final neverPublishedRestored = AppSettings.fromJson(
+      neverPublished.toJson(),
+    );
     expect(neverPublishedRestored.syncAssistant, isTrue);
     expect(neverPublishedRestored.assistantUpdatedAt, 0);
 
     // The stamp is independent of the toggle: someone who published and then
     // turned sync off must not read as "never published" when they turn it
     // back on, which is what the publish guard keys on.
-    final offWithHistory =
-        AppSettings(syncAssistant: false, assistantUpdatedAt: 900);
+    final offWithHistory = AppSettings(
+      syncAssistant: false,
+      assistantUpdatedAt: 900,
+    );
     final offRestored = AppSettings.fromJson(offWithHistory.toJson());
     expect(offRestored.syncAssistant, isFalse);
     expect(offRestored.assistantUpdatedAt, 900);
@@ -103,9 +109,7 @@ void main() {
   test('the terminal-output opt-out defaults on and persists', () async {
     expect(AppSettings().includeTerminalContext, isTrue);
 
-    final directory = await Directory.systemTemp.createTemp(
-      'seance-settings-',
-    );
+    final directory = await Directory.systemTemp.createTemp('seance-settings-');
     addTearDown(() => directory.delete(recursive: true));
     final store = SettingsStore(File('${directory.path}/settings.json'));
     await store.save(AppSettings(includeTerminalContext: false));
@@ -175,10 +179,17 @@ void main() {
         8: {'path': '/k', 'bookmark': 'Ym9va21hcms='},
       };
     expect(AppSettings.fromJson(json).identityFileBookmarks, {
-      'server': const IdentityFileBookmark(path: '/k', bookmark: 'Ym9va21hcms='),
+      'server': const IdentityFileBookmark(
+        path: '/k',
+        bookmark: 'Ym9va21hcms=',
+      ),
     });
-    expect(AppSettings.fromJson(json..remove('identityFileBookmarks'))
-        .identityFileBookmarks, isEmpty);
+    expect(
+      AppSettings.fromJson(
+        json..remove('identityFileBookmarks'),
+      ).identityFileBookmarks,
+      isEmpty,
+    );
   });
 
   test('pending credential cleanup is local, sorted, and tolerant', () {
@@ -222,10 +233,7 @@ void main() {
 
     final restored = AppSettings.fromJson(json);
 
-    expect(
-      restored.editorRegistry.defaultEditorId,
-      EditorRegistry.builtInId,
-    );
+    expect(restored.editorRegistry.defaultEditorId, EditorRegistry.builtInId);
     expect(restored.remotePathBookmarks, {
       'server': ['/valid'],
     });
@@ -252,10 +260,7 @@ void main() {
     expect(restored.remotePathBookmarks, {
       'server': ['/srv'],
     });
-    expect(
-      restored.editorRegistry.defaultEditorId,
-      EditorRegistry.builtInId,
-    );
+    expect(restored.editorRegistry.defaultEditorId, EditorRegistry.builtInId);
   });
 
   test('legacy BBEdit setting migrates into the editor registry', () {
@@ -265,10 +270,7 @@ void main() {
 
     final restored = AppSettings.fromJson(json);
 
-    expect(
-      restored.editorRegistry.defaultEditorId,
-      seanceMigratedBbeditId,
-    );
+    expect(restored.editorRegistry.defaultEditorId, seanceMigratedBbeditId);
     expect(restored.editorRegistry.editors.single.displayName, 'BBEdit');
   });
 
@@ -278,10 +280,11 @@ void main() {
     );
     final json = settings.toJson();
     expect(json['collapsedServerGroups'], ['ci', 'home lab', 'production']);
-    expect(
-      AppSettings.fromJson(json).collapsedServerGroups,
-      {'ci', 'home lab', 'production'},
-    );
+    expect(AppSettings.fromJson(json).collapsedServerGroups, {
+      'ci',
+      'home lab',
+      'production',
+    });
   });
 
   test('a missing or malformed collapsed-group list reads as empty', () {

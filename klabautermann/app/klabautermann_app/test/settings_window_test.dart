@@ -734,14 +734,7 @@ void main() {
             .widget<TabBar>(find.byType(TabBar))
             .tabs
             .map((tab) => (tab as Tab).text),
-        [
-          'General',
-          'Appearance',
-          'Sync',
-          'Servers',
-          'Safety',
-          'Alerts',
-        ],
+        ['General', 'Appearance', 'Sync', 'Servers', 'Safety', 'Alerts'],
       );
       expect(find.byType(SegmentedButton<ThemeModePreference>), findsOneWidget);
     });

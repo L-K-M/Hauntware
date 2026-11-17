@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:poltergeist_core/poltergeist_core.dart'
-    show AtomicFileWriter;
+import 'package:poltergeist_core/poltergeist_core.dart' show AtomicFileWriter;
 
 final class SettingsStore {
   SettingsStore({

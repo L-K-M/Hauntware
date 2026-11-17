@@ -81,27 +81,30 @@ void main() {
     await services.masterKeys.putApiKey('zai', 'sk-zai');
 
     final provider = await services.buildSearchProvider();
-    expect(
-      (provider as CompositeSearch).providers.map((p) => p.runtimeType),
-      [SearxngSearch, BraveSearch, ZaiSearch],
-    );
+    expect((provider as CompositeSearch).providers.map((p) => p.runtimeType), [
+      SearxngSearch,
+      BraveSearch,
+      ZaiSearch,
+    ]);
   });
 
-  test('a reference whose key is gone skips that backend, not the search',
-      () async {
-    // A locked keyring reads as "this backend is unavailable", and the ones
-    // that need no key still answer.
-    services.settings.searxngUrl = 'https://searx.example.com';
-    services.settings.braveApiKeyRef = 'brave';
-    services.settings.zaiApiKeyRef = 'zai';
-    await services.masterKeys.putApiKey('zai', 'sk-zai');
+  test(
+    'a reference whose key is gone skips that backend, not the search',
+    () async {
+      // A locked keyring reads as "this backend is unavailable", and the ones
+      // that need no key still answer.
+      services.settings.searxngUrl = 'https://searx.example.com';
+      services.settings.braveApiKeyRef = 'brave';
+      services.settings.zaiApiKeyRef = 'zai';
+      await services.masterKeys.putApiKey('zai', 'sk-zai');
 
-    final provider = await services.buildSearchProvider();
-    expect(
-      (provider as CompositeSearch).providers.map((p) => p.runtimeType),
-      [SearxngSearch, ZaiSearch],
-    );
-  });
+      final provider = await services.buildSearchProvider();
+      expect(
+        (provider as CompositeSearch).providers.map((p) => p.runtimeType),
+        [SearxngSearch, ZaiSearch],
+      );
+    },
+  );
 
   test('a key reference on its own is enough', () async {
     // No URL at all: the Z.AI-only configuration this feature added, which
@@ -123,9 +126,9 @@ void main() {
     await services.masterKeys.putApiKey('brave', 'sk-brave');
     await services.masterKeys.putApiKey('zai', 'sk-zai');
     final provider = await services.buildSearchProvider();
-    expect(
-      (provider as CompositeSearch).providers.map((p) => p.runtimeType),
-      [BraveSearch, ZaiSearch],
-    );
+    expect((provider as CompositeSearch).providers.map((p) => p.runtimeType), [
+      BraveSearch,
+      ZaiSearch,
+    ]);
   });
 }

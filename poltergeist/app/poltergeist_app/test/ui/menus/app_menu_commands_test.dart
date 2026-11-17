@@ -83,12 +83,16 @@ void main() {
       );
       final file = menus.singleWhere((m) => m.id == AppMenuId.file);
       expect(
-        file.groups.last.map((row) => ghostRowCommand((row as GhostCommandRow).command).id),
+        file.groups.last.map(
+          (row) => ghostRowCommand((row as GhostCommandRow).command).id,
+        ),
         [kAppSettingsCommandId, kAppQuitCommandId],
         reason: platform.name,
       );
       expect(
-        ghostRowCommand((file.groups.last.last as GhostCommandRow).command).label(l10n),
+        ghostRowCommand(
+          (file.groups.last.last as GhostCommandRow).command,
+        ).label(l10n),
         'Quit',
       );
     }
@@ -104,8 +108,9 @@ void main() {
       final help = menus.singleWhere((m) => m.id == AppMenuId.help);
       expect(ids(help), [kAppAboutCommandId], reason: platform.name);
       expect(
-        ghostRowCommand((help.groups.last.last as GhostCommandRow).command)
-            .label(l10n),
+        ghostRowCommand(
+          (help.groups.last.last as GhostCommandRow).command,
+        ).label(l10n),
         'About Poltergeist',
       );
     }

@@ -103,10 +103,7 @@ Future<void> showTransferConflictDialog(
 }) async {
   final result = await showDialog<ConflictDialogResult>(
     context: context,
-    builder: (_) => _ConflictDialog(
-      controller: controller,
-      conflict: conflict,
-    ),
+    builder: (_) => _ConflictDialog(controller: controller, conflict: conflict),
   );
   switch (result) {
     case ConflictDialogAnswer(:final verb, :final scope):
@@ -150,17 +147,14 @@ class _ConflictDialogState extends State<_ConflictDialog> {
       title: Text(
         l10n.conflictDialogTitle(
           conflict.source.name,
-          pathDirname(conflict.destinationPath) ??
-              conflict.destinationPath,
+          pathDirname(conflict.destinationPath) ?? conflict.destinationPath,
         ),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.conflictExistingLine(_statSummary(conflict.existing)),
-          ),
+          Text(l10n.conflictExistingLine(_statSummary(conflict.existing))),
           const SizedBox(height: 4),
           Text(
             l10n.conflictReplacingLine(
@@ -204,9 +198,8 @@ class _ConflictDialogState extends State<_ConflictDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(
-            const ConflictDialogStop(),
-          ),
+          onPressed: () =>
+              Navigator.of(context).pop(const ConflictDialogStop()),
           child: Text(l10n.conflictStop),
         ),
         TextButton(
@@ -223,16 +216,13 @@ class _ConflictDialogState extends State<_ConflictDialog> {
     final size = formatPaneSize(stat.size, platform: platform);
     final modified = stat.modifiedAt == null
         ? paneUnevaluated
-        : DateFormat.yMd(localeName)
-            .add_jm()
-            .format(stat.modifiedAt!.toLocal());
+        : DateFormat.yMd(
+            localeName,
+          ).add_jm().format(stat.modifiedAt!.toLocal());
     return '$size · $modified';
   }
 
-  static String _verbLabel(
-    ConflictResolution verb,
-    AppLocalizations l10n,
-  ) =>
+  static String _verbLabel(ConflictResolution verb, AppLocalizations l10n) =>
       switch (verb) {
         ConflictResolution.replace => l10n.conflictVerbReplace,
         ConflictResolution.replaceIfNewer => l10n.conflictVerbReplaceIfNewer,

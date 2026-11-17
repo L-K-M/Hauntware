@@ -776,17 +776,15 @@ void main() {
           right: LocalEndpoint(localRoot.path),
           rules: const SyncRuleSet(),
         );
-        final trashRoot = Directory(
-          '${remoteRoot.path}/.poltergeist-trash',
-        )..createSync();
+        final trashRoot = Directory('${remoteRoot.path}/.poltergeist-trash')
+          ..createSync();
         final identity = await resolveSyncTrashRoot(
           fileSystem,
           trashRoot.path,
           pathStyle: SyncTrashPathStyle.posix,
           access: SyncTrashRootAccess.createOrClaim,
         );
-        const runId =
-            '12345678-12345678-1234-4123-a123-123456789abc';
+        const runId = '12345678-12345678-1234-4123-a123-123456789abc';
         final runDirectory = Directory('${trashRoot.path}/$runId')
           ..createSync();
         final trashed = File('${runDirectory.path}/000001-a.txt')
@@ -869,10 +867,7 @@ void main() {
 
         expect(second.trashNotices, hasLength(1));
         expect(second.trashNotices.single.isStale, isTrue);
-        expect(
-          second.pairState.trashCacheLeft?.locationKey,
-          cachedLocationKey,
-        );
+        expect(second.pairState.trashCacheLeft?.locationKey, cachedLocationKey);
       },
     );
 

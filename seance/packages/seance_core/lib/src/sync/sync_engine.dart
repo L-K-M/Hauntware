@@ -56,7 +56,8 @@ Stream<PullResponse> pullPages(SyncApi api, {required int since}) async* {
     if (pageThrough == null) {
       if (through != null || page.hasMore) {
         throw const FormatException(
-            'A paged sync response omitted its snapshot watermark');
+          'A paged sync response omitted its snapshot watermark',
+        );
       }
       yield page;
       return;
@@ -72,7 +73,8 @@ Stream<PullResponse> pullPages(SyncApi api, {required int since}) async* {
       final seq = record.seq;
       if (seq == null || seq <= next || seq > pageThrough) {
         throw const FormatException(
-            'Sync page records are not strictly ordered');
+          'Sync page records are not strictly ordered',
+        );
       }
       next = seq;
     }
@@ -95,8 +97,7 @@ void _validatePullEnvelopeFloor(PullResponse response) {
   }
   if (floor >= kCurrentRecordEnvelopeVersion &&
       response.records.any(
-        (record) =>
-            record.envelopeVersion < kCurrentRecordEnvelopeVersion,
+        (record) => record.envelopeVersion < kCurrentRecordEnvelopeVersion,
       )) {
     throw const FormatException(
       'Authenticated-envelope account returned a legacy record',
@@ -121,10 +122,7 @@ typedef SyncLocalRunner = Future<T> Function<T>(Future<T> Function() action);
 Future<T> _runLocalDirectly<T>(Future<T> Function() action) => action();
 
 /// How a local refresh should interpret domain-store absence.
-enum SyncLocalRefreshMode {
-  normal,
-  cursorRecovery,
-}
+enum SyncLocalRefreshMode { normal, cursorRecovery }
 
 /// Refreshes the mirror from its domain stores before the engine merges or
 /// settles network state. During [SyncLocalRefreshMode.cursorRecovery], absence
@@ -136,8 +134,11 @@ class SyncOutcome {
   final int pulled;
   final int pushed;
   final int rounds;
-  const SyncOutcome(
-      {required this.pulled, required this.pushed, required this.rounds});
+  const SyncOutcome({
+    required this.pulled,
+    required this.pushed,
+    required this.rounds,
+  });
 }
 
 /// The server's error code for a push it refuses as too large to store.
@@ -213,16 +214,17 @@ class SyncRecordsRefused extends ApiError {
     this.records, {
     this.awaitingSpace = const [],
     required this.outcome,
-  })  : assert(records.isNotEmpty || awaitingSpace.isNotEmpty),
-        super(
-          code: records.isNotEmpty ? _payloadTooLarge : _accountQuotaExceeded,
-          message: _describe(records, awaitingSpace),
-        );
+  }) : assert(records.isNotEmpty || awaitingSpace.isNotEmpty),
+       super(
+         code: records.isNotEmpty ? _payloadTooLarge : _accountQuotaExceeded,
+         message: _describe(records, awaitingSpace),
+       );
 
   List<String> get recordIds => [for (final record in records) record.id];
 
-  List<String> get awaitingSpaceIds =>
-      [for (final record in awaitingSpace) record.id];
+  List<String> get awaitingSpaceIds => [
+    for (final record in awaitingSpace) record.id,
+  ];
 
   static String _describe(
     List<RefusedRecord> tooLarge,
@@ -252,9 +254,9 @@ class SyncRecordsRefused extends ApiError {
   /// and the remedy (free space on the account) is the same for each.
   static String _describeAwaitingSpace(int count) => count == 1
       ? '1 record waits for space on the sync server. It stays on this '
-          'device and syncs once the account has room.'
+            'device and syncs once the account has room.'
       : '$count records wait for space on the sync server. They stay on '
-          'this device and sync once the account has room.';
+            'this device and sync once the account has room.';
 
   /// The message alone: it is written for the person reading the sync status.
   @override
@@ -363,14 +365,15 @@ class SyncEngine {
       });
       if (pulled.applied == 0 && dirty.isEmpty) break;
       // Safety: if a push keeps getting rejected with no progress, stop.
-      if (pulled.applied == 0 &&
-          pushed.accepted == 0 &&
-          pushed.rejected == 0) {
+      if (pulled.applied == 0 && pushed.accepted == 0 && pushed.rejected == 0) {
         break;
       }
     }
     final outcome = SyncOutcome(
-        pulled: totalPulled, pushed: totalPushed, rounds: round);
+      pulled: totalPulled,
+      pushed: totalPushed,
+      rounds: round,
+    );
     if (refused.isEmpty && awaitingSpace.isEmpty) return outcome;
     // A later round may have adopted another device's winning copy of a
     // refused record, which settles it; only the ones still owed are news.
@@ -379,9 +382,9 @@ class SyncEngine {
       return {for (final record in await store.dirtyRecords()) record.id};
     });
     List<RefusedRecord> stillOwed(Set<String> ids) => [
-          for (final id in ids)
-            if (owed.contains(id)) RefusedRecord(id),
-        ];
+      for (final id in ids)
+        if (owed.contains(id)) RefusedRecord(id),
+    ];
     final stillRefused = stillOwed(refused);
     final stillWaiting = stillOwed(awaitingSpace);
     if (stillRefused.isEmpty && stillWaiting.isEmpty) return outcome;
@@ -413,10 +416,7 @@ class SyncEngine {
     await for (final page in pullPages(api, since: since)) {
       limits = page.limits ?? limits;
       await runLocal(() async {
-        await _observeRecordEnvelopeFloor(
-          store,
-          page.recordEnvelopeFloor,
-        );
+        await _observeRecordEnvelopeFloor(store, page.recordEnvelopeFloor);
         await refreshLocal?.call(
           cursorRecoveryPending
               ? SyncLocalRefreshMode.cursorRecovery
@@ -560,9 +560,7 @@ class SyncEngine {
         // record the server does not hold, so it waits the same way.
         for (final refusal in resp.refused) {
           if (!sentById.containsKey(refusal.id)) {
-            throw StateError(
-              'Sync server refused unsent record ${refusal.id}',
-            );
+            throw StateError('Sync server refused unsent record ${refusal.id}');
           }
           awaitingSpace.add(refusal.id);
         }

@@ -58,10 +58,7 @@ void main() {
     rightNode.dispose();
   });
 
-  Future<void> pumpShell(
-    WidgetTester tester, {
-    Widget? above,
-  }) async {
+  Future<void> pumpShell(WidgetTester tester, {Widget? above}) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -100,7 +97,12 @@ void main() {
         home: Scaffold(
           body: above == null
               ? panes
-              : Column(children: [above, Expanded(child: panes)]),
+              : Column(
+                  children: [
+                    above,
+                    Expanded(child: panes),
+                  ],
+                ),
         ),
       ),
     );
@@ -193,9 +195,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('the badge disappears with the one-second reset', (
-    tester,
-  ) async {
+  testWidgets('the badge disappears with the one-second reset', (tester) async {
     listLeft([_entry('readme.md')]);
     await left.openLocalHome();
     await pumpShell(tester);
@@ -208,8 +208,11 @@ void main() {
 
     await tester.pump(const Duration(seconds: 1));
     expect(left.typeAheadBuffer, '');
-    expect(find.byKey(const ValueKey('pane.typeAhead')), findsNothing,
-        reason: 'the badge is transient — it unmounts on buffer reset');
+    expect(
+      find.byKey(const ValueKey('pane.typeAhead')),
+      findsNothing,
+      reason: 'the badge is transient — it unmounts on buffer reset',
+    );
   });
 
   testWidgets('a jump scrolls the matched row into view', (tester) async {
@@ -222,16 +225,22 @@ void main() {
     leftNode.requestFocus();
     await tester.pump();
 
-    expect(find.text('zeta-final.txt'), findsNothing,
-        reason: 'the target starts scrolled off-screen');
+    expect(
+      find.text('zeta-final.txt'),
+      findsNothing,
+      reason: 'the target starts scrolled off-screen',
+    );
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
     await tester.pump();
     await tester.pump();
 
     expect(left.entries[left.cursorIndex!].name, 'zeta-final.txt');
     expect(find.text('zeta-final.txt'), findsOneWidget);
-    expect(find.text('row00'), findsNothing,
-        reason: 'the viewport moved to the match');
+    expect(
+      find.text('row00'),
+      findsNothing,
+      reason: 'the viewport moved to the match',
+    );
     await tester.pump(const Duration(seconds: 2));
   });
 
@@ -262,11 +271,17 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
     await tester.pump();
-    expect(left.typeAheadBuffer, '',
-        reason: 'no type-ahead while a text field holds focus (02 §2.5)');
+    expect(
+      left.typeAheadBuffer,
+      '',
+      reason: 'no type-ahead while a text field holds focus (02 §2.5)',
+    );
     expect(find.byKey(const ValueKey('pane.typeAhead')), findsNothing);
-    expect(left.cursorIndex, isNull,
-        reason: 'no prefix jump ran behind the focused field');
+    expect(
+      left.cursorIndex,
+      isNull,
+      reason: 'no prefix jump ran behind the focused field',
+    );
   });
 
   testWidgets('a focused text field outside the pane suppresses it too', (
@@ -310,8 +325,11 @@ void main() {
     await tester.pump();
     expect(left.typeAheadBuffer, '');
     expect(find.byKey(const ValueKey('pane.typeAhead')), findsNothing);
-    expect(left.cursorIndex, jumpedTo,
-        reason: 'Esc clears the buffer, not the cursor it jumped');
+    expect(
+      left.cursorIndex,
+      jumpedTo,
+      reason: 'Esc clears the buffer, not the cursor it jumped',
+    );
   });
 
   testWidgets('flagged rows are skipped but stay pointer-selectable', (
@@ -326,8 +344,11 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
     await tester.pump();
-    expect(left.cursorIndex, isNull,
-        reason: 'the only f-prefixed row is flagged — no match is a no-op');
+    expect(
+      left.cursorIndex,
+      isNull,
+      reason: 'the only f-prefixed row is flagged — no match is a no-op',
+    );
 
     expect(find.text('fl\u{FFFD}ag.bin'), findsOneWidget);
     expect(left.entries.length, 2);
@@ -369,7 +390,10 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyR, character: 'r');
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    expect(left.typeAheadBuffer, '',
-        reason: 'Ctrl+R is a chord for whoever binds it, not type-ahead');
+    expect(
+      left.typeAheadBuffer,
+      '',
+      reason: 'Ctrl+R is a chord for whoever binds it, not type-ahead',
+    );
   });
 }

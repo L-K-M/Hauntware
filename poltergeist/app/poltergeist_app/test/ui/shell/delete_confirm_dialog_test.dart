@@ -188,9 +188,7 @@ void main() {
     expect(find.textContaining('counting failed'), findsOneWidget);
   });
 
-  testWidgets('Retry after a preparation error counts again', (
-    tester,
-  ) async {
+  testWidgets('Retry after a preparation error counts again', (tester) async {
     final attempts = <Completer<DeleteConfirmation?>>[];
     DeleteDecision? decision;
     await tester.pumpWidget(
@@ -277,7 +275,10 @@ void main() {
   testWidgets('a walk that gave up falls back without counts and still '
       'discloses flagged names', (tester) async {
     await _open(tester, _confirmation(quantified: false, flagged: 1));
-    expect(find.text('Delete the selected items from prod-web?'), findsOneWidget);
+    expect(
+      find.text('Delete the selected items from prod-web?'),
+      findsOneWidget,
+    );
     expect(
       find.text('May include items with undecodable names.'),
       findsOneWidget,
@@ -330,10 +331,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('delete.confirm')));
     await tester.pumpAndSettle();
-    expect(
-      (decision! as DeleteConfirmed).disposition,
-      DeleteDisposition.trash,
-    );
+    expect((decision! as DeleteConfirmed).disposition, DeleteDisposition.trash);
   });
 
   testWidgets('confirming reports whether the final wording was permanent', (
@@ -371,7 +369,10 @@ void main() {
 
   testWidgets('trash unavailable carries D15 notice', (tester) async {
     await _open(tester, _confirmation(trashUnavailable: true));
-    expect(find.byKey(const ValueKey('delete.trashUnavailable')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('delete.trashUnavailable')),
+      findsOneWidget,
+    );
     // One item reads in the singular.
     expect(
       find.text(

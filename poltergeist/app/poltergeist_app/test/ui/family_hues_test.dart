@@ -56,11 +56,7 @@ void main() {
         // The selected inspector tab lights up in its hue, and the phone's
         // kind badges and Home discs sit their glyph on a disc of it.
         final washes = <(String, double, Color)>[
-          (
-            'inspector tab',
-            inspectorTabWashAlpha,
-            chrome.inspectorBackground,
-          ),
+          ('inspector tab', inspectorTabWashAlpha, chrome.inspectorBackground),
           (
             'kind badge and Home disc',
             FamilyPalette.discWashAlpha,
@@ -91,7 +87,10 @@ void main() {
 
   test('every tile glyph stays ≥ 3:1 on both ends of its fill', () {
     for (final hue in FamilyHue.values) {
-      for (final (end, fill) in [('sheen', hue.tileSheen), ('fill', hue.tileFill)]) {
+      for (final (end, fill) in [
+        ('sheen', hue.tileSheen),
+        ('fill', hue.tileFill),
+      ]) {
         expect(
           contrast(hue.onTile, fill),
           greaterThanOrEqualTo(minimumNonTextContrast),

@@ -29,7 +29,10 @@ void main() {
       ),
     );
 
-    expect(find.text('Public key rejected by prod.example.com.'), findsOneWidget);
+    expect(
+      find.text('Public key rejected by prod.example.com.'),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.error_outline), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_outline), findsNothing);
   });
@@ -42,7 +45,9 @@ void main() {
       const ConnectionTestResult(ok: true, summary: 'Authenticated.', log: ''),
     );
     expect(
-      tester.widget<Icon>(find.byIcon(Icons.check_circle_outline)).semanticLabel,
+      tester
+          .widget<Icon>(find.byIcon(Icons.check_circle_outline))
+          .semanticLabel,
       'Connection test succeeded',
     );
 

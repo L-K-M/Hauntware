@@ -152,10 +152,7 @@ void main() {
   ) async {
     final (controller, _, _) = await pump(
       tester,
-      rows: [
-        entry('untitled folder (2)', dir: true),
-        entry('x.txt', size: 1),
-      ],
+      rows: [entry('untitled folder (2)', dir: true), entry('x.txt', size: 1)],
     );
     controller.setCursorIndex(0);
     controller.startRename();

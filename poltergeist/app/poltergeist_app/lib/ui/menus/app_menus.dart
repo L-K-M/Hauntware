@@ -68,9 +68,7 @@ List<GhostMenu> buildAppMenus({
       // every Mac app places it.
       groups = [
         ...groups,
-        const [
-          GhostProvidedRow(PlatformProvidedMenuItemType.toggleFullScreen),
-        ],
+        const [GhostProvidedRow(PlatformProvidedMenuItemType.toggleFullScreen)],
       ];
     }
     if (mac && id == AppMenuId.window) {
@@ -81,16 +79,12 @@ List<GhostMenu> buildAppMenus({
         ],
         ...groups,
         const [
-          GhostProvidedRow(
-            PlatformProvidedMenuItemType.arrangeWindowsInFront,
-          ),
+          GhostProvidedRow(PlatformProvidedMenuItemType.arrangeWindowsInFront),
         ],
       ];
     }
     if (groups.isEmpty) continue;
-    menus.add(
-      GhostMenu(id: id, title: _menuTitle(id, l10n), groups: groups),
-    );
+    menus.add(GhostMenu(id: id, title: _menuTitle(id, l10n), groups: groups));
   }
   return menus;
 }
@@ -126,15 +120,16 @@ List<List<GhostMenuRow>> _menuGroups(
   AppLocalizations l10n,
   TargetPlatform platform,
 ) {
-  final sorted = [...items]..sort((a, b) {
-    final pa = a.menuPlacement!;
-    final pb = b.menuPlacement!;
-    final byGroup = pa.group.compareTo(pb.group);
-    if (byGroup != 0) return byGroup;
-    final byOrder = pa.order.compareTo(pb.order);
-    if (byOrder != 0) return byOrder;
-    return a.id.compareTo(b.id);
-  });
+  final sorted = [...items]
+    ..sort((a, b) {
+      final pa = a.menuPlacement!;
+      final pb = b.menuPlacement!;
+      final byGroup = pa.group.compareTo(pb.group);
+      if (byGroup != 0) return byGroup;
+      final byOrder = pa.order.compareTo(pb.order);
+      if (byOrder != 0) return byOrder;
+      return a.id.compareTo(b.id);
+    });
   assert(() {
     final slots = <String>{};
     for (final command in sorted) {
@@ -163,10 +158,7 @@ List<List<GhostMenuRow>> _menuGroups(
     groups.add([
       for (final entry in entries)
         switch (entry) {
-          String() => GhostSubmenuRow(
-            title: entry,
-            items: submenus[entry]!,
-          ),
+          String() => GhostSubmenuRow(title: entry, items: submenus[entry]!),
           GhostSubmenuRow() => entry,
           _ => GhostCommandRow(
             ghostCommandSpec(entry as RegisteredCommand, l10n, platform),

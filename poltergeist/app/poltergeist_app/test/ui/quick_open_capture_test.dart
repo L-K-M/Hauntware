@@ -6,7 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/l10n/app_localizations.dart' show AppLocalizations;
+import 'package:poltergeist_app/l10n/app_localizations.dart'
+    show AppLocalizations;
 import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/pane_location.dart';
@@ -45,7 +46,8 @@ Future<ByteData> _fontBytes(String path) async {
 
 Future<void> _loadRealFonts() async {
   final home = Platform.environment['HOME'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home == null ? '' : '$home/.local/share/fonts');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -60,8 +62,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -70,8 +71,7 @@ Future<void> _loadRealFonts() async {
     await monoLoader.load();
     // The import dialog styles cells with the generic 'monospace'
     // alias — register the same face under it so captures show text.
-    final aliasLoader = FontLoader('monospace')
-      ..addFont(_fontBytes(mono.path));
+    final aliasLoader = FontLoader('monospace')..addFont(_fontBytes(mono.path));
     await aliasLoader.load();
   }
 }
@@ -184,9 +184,7 @@ void main() {
       ),
     );
     addTearDown(recents.dispose);
-    recents.recordLocation(
-      const LocalPaneLocation('/home/tester/docs'),
-    );
+    recents.recordLocation(const LocalPaneLocation('/home/tester/docs'));
     recents.recordLocation(
       const RemotePaneLocation('fav-web', '/srv/web'),
       remoteBookmark: _favorite('fav-web', 'web'),
@@ -195,9 +193,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme: base.primaryTextTheme.apply(
-        fontFamily: 'DejaVu Sans',
-      ),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       RepaintBoundary(
@@ -215,9 +211,7 @@ void main() {
             sshConfigImport: SshConfigImportSetup(
               service: SshConfigImportService(
                 homeDirectory: _home,
-                source: FakeSshConfigSource(
-                  const {_configPath: _sampleConfig},
-                ),
+                source: FakeSshConfigSource(const {_configPath: _sampleConfig}),
                 mintId: uuidV4,
               ),
               bookmarks: bookmarks,
@@ -269,9 +263,7 @@ void main() {
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List();
         } finally {
           image.dispose();
@@ -295,10 +287,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('quickOpen.field')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('quickOpen.field')), findsOneWidget);
     await capture(_m9CaptureDir, 'quick-open');
 
     // A filtered view: one query over commands + favorites + recents.
@@ -327,10 +316,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.text('Import servers from ssh config'),
-      findsOneWidget,
-    );
+    expect(find.text('Import servers from ssh config'), findsOneWidget);
     await capture(_d22CaptureDir, 'ssh-import-preview');
 
     await tester.tap(find.text(l10n.sshImportCancel));

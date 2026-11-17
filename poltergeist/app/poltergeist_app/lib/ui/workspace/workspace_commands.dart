@@ -125,13 +125,12 @@ Future<void> _openWorkspace(
   SavedWorkspace saved, {
   required WorkspaceController workspace,
   required WorkspaceLibrary library,
-}) =>
-    openWorkspaceBookmark(
-      context,
-      workspace: workspace,
-      library: library,
-      saved: saved,
-    );
+}) => openWorkspaceBookmark(
+  context,
+  workspace: workspace,
+  library: library,
+  saved: saved,
+);
 
 /// The workspace open both surfaces share (02 §3): the "Workspaces"
 /// submenu's command and the sidebar's workspace row run the identical

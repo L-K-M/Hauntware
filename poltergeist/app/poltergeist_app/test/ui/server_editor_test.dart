@@ -115,10 +115,7 @@ void main() {
 
   setUp(() => delegate = _FakeDelegate());
 
-  Future<void> openEditor(
-    WidgetTester tester, {
-    ServerConfig? existing,
-  }) async {
+  Future<void> openEditor(WidgetTester tester, {ServerConfig? existing}) async {
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -494,10 +491,7 @@ void main() {
       // so and stays up with the choice still in it.
       expect(delegate.saved, isNotNull);
       expect(find.text('Edit server'), findsOneWidget);
-      expect(
-        find.textContaining('its transfer limit wasn\'t'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('its transfer limit wasn\'t'), findsOneWidget);
 
       delegate.limitWriteFailure = null;
       await save(tester);
@@ -521,9 +515,7 @@ void main() {
       expect(find.text('Add server'), findsNothing);
     });
 
-    testWidgets('in the login script is a newline, not a save', (
-      tester,
-    ) async {
+    testWidgets('in the login script is a newline, not a save', (tester) async {
       await openEditor(tester);
       await fillRequired(tester);
       final script = field('Login script (optional)');
@@ -572,9 +564,7 @@ void main() {
   });
 
   group('exclude from sync', () {
-    testWidgets('turning it on for a synced server asks first', (
-      tester,
-    ) async {
+    testWidgets('turning it on for a synced server asks first', (tester) async {
       delegate.configured = true;
       delegate.serverList = [_server('web')];
       await openEditor(tester, existing: _server('web'));
@@ -651,7 +641,10 @@ void main() {
   group('excludingNeedsConfirmation', () {
     test('only an already-synced server confirms', () {
       expect(
-        excludingNeedsConfirmation(existing: _server('web'), syncConfigured: true),
+        excludingNeedsConfirmation(
+          existing: _server('web'),
+          syncConfigured: true,
+        ),
         isTrue,
       );
       // A server being added has never been anywhere.

@@ -18,9 +18,7 @@ void main() {
       'poltergeist_session_store_test_',
     );
     settingsFile = File(p.join(temporaryDirectory.path, 'settings.json'));
-    store = SessionStateStore(
-      store: SettingsStore(path: settingsFile.path),
-    );
+    store = SessionStateStore(store: SettingsStore(path: settingsFile.path));
   });
 
   tearDown(() async {
@@ -79,9 +77,7 @@ void main() {
 
   test('load rejects a newer schema without touching the file', () async {
     final newer = fixture.toJson()..['version'] = 99;
-    await settingsFile.writeAsString(
-      jsonEncode({'session.state': newer}),
-    );
+    await settingsFile.writeAsString(jsonEncode({'session.state': newer}));
 
     await expectLater(store.load(), throwsFormatException);
     // The document stays on disk untouched — never silently dropped.
@@ -100,15 +96,17 @@ void main() {
     expect((settingsJson()['session.state'] as Map)['version'], 99);
   });
 
-  test('save rejects a malformed stored document rather than masking it',
-      () async {
-    await settingsFile.writeAsString(
-      jsonEncode({'session.state': 'not-a-map'}),
-    );
+  test(
+    'save rejects a malformed stored document rather than masking it',
+    () async {
+      await settingsFile.writeAsString(
+        jsonEncode({'session.state': 'not-a-map'}),
+      );
 
-    await expectLater(store.save(fixture), throwsFormatException);
-    expect(settingsJson()['session.state'], 'not-a-map');
-  });
+      await expectLater(store.save(fixture), throwsFormatException);
+      expect(settingsJson()['session.state'], 'not-a-map');
+    },
+  );
 
   group('the windows beside the first (00 D39)', () {
     test('load none when none were persisted', () async {
@@ -134,17 +132,19 @@ void main() {
       expect(await store.loadWindows(), isEmpty);
     });
 
-    test("a newer build's windows document is neither read nor overwritten",
-        () async {
-      final newer = {'version': 99, 'windows': <Object>[]};
-      await SettingsStore(
-        path: settingsFile.path,
-      ).set('session.windows', newer);
+    test(
+      "a newer build's windows document is neither read nor overwritten",
+      () async {
+        final newer = {'version': 99, 'windows': <Object>[]};
+        await SettingsStore(
+          path: settingsFile.path,
+        ).set('session.windows', newer);
 
-      await expectLater(store.loadWindows(), throwsFormatException);
-      await expectLater(store.saveAll(fixture, []), throwsFormatException);
-      expect(settingsJson()['session.windows'], newer);
-      expect(settingsJson().containsKey('session.state'), isFalse);
-    });
+        await expectLater(store.loadWindows(), throwsFormatException);
+        await expectLater(store.saveAll(fixture, []), throwsFormatException);
+        expect(settingsJson()['session.windows'], newer);
+        expect(settingsJson().containsKey('session.state'), isFalse);
+      },
+    );
   });
 }

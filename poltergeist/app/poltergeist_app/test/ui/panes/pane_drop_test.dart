@@ -76,9 +76,7 @@ Future<void> _osChannel(
 ) async {
   await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
     'desktop_drop',
-    const StandardMethodCodec().encodeMethodCall(
-      MethodCall(method, arguments),
-    ),
+    const StandardMethodCodec().encodeMethodCall(MethodCall(method, arguments)),
     (_) {},
   );
   await tester.pump();
@@ -296,41 +294,45 @@ void main() {
     // An extra window's view: another id over the test view's metrics.
     Widget inView(Widget app) => viewId == null
         ? app
-        : View(view: _ExtraView(tester.view, viewId: viewId), child: app);
+        : View(
+            view: _ExtraView(tester.view, viewId: viewId),
+            child: app,
+          );
     await tester.pumpWidget(
       wrapWithView: viewId == null,
-      inView(MaterialApp(
-        builder: (context, child) => Directionality(
-          textDirection: textDirection,
-          child: _inWindow(window, child!),
-        ),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: TickerMode(
-            enabled: tickerEnabled,
-            child: Row(
-              children: [
-                Expanded(
-                  child: PaneView(
-                    controller: left,
-                    pane: leftStrip,
-                    workspace: workspace,
-                    focusNode: leftNode,
-                    onSwapFocus: () => rightNode.requestFocus(),
-                    onCancelRecovery: () =>
-                        unawaited(left.cancelRecovery()),
-                    dropDelegate: drop,
-                    supportsOsDrop: supportsOsDrop,
-                    clock: () => DateTime(2026, 9, 15, 10),
+      inView(
+        MaterialApp(
+          builder: (context, child) => Directionality(
+            textDirection: textDirection,
+            child: _inWindow(window, child!),
+          ),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: TickerMode(
+              enabled: tickerEnabled,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: PaneView(
+                      controller: left,
+                      pane: leftStrip,
+                      workspace: workspace,
+                      focusNode: leftNode,
+                      onSwapFocus: () => rightNode.requestFocus(),
+                      onCancelRecovery: () => unawaited(left.cancelRecovery()),
+                      dropDelegate: drop,
+                      supportsOsDrop: supportsOsDrop,
+                      clock: () => DateTime(2026, 9, 15, 10),
+                    ),
                   ),
-                ),
-                Expanded(child: rightWidget),
-              ],
+                  Expanded(child: rightWidget),
+                ],
+              ),
             ),
           ),
         ),
-      )),
+      ),
     );
   }
 
@@ -481,10 +483,7 @@ void main() {
     await endDrag(tester, gesture);
 
     expect(queue.enqueuedSpecs, hasLength(1));
-    expect(
-      queue.enqueuedSpecs.single.destinationDir,
-      '/srv/other/images',
-    );
+    expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other/images');
   });
 
   // 02 §2.5: a file row inside a folder opened in place lies in that
@@ -505,10 +504,7 @@ void main() {
     );
     await endDrag(tester, gesture);
 
-    expect(
-      queue.enqueuedSpecs.single.destinationDir,
-      '/srv/other/images',
-    );
+    expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other/images');
   });
 
   dndWidgets('a dragged selection leaves out rows its folders carry', (
@@ -572,9 +568,7 @@ void main() {
     await endDrag(tester, gesture);
 
     expect(queue.enqueuedSpecs, hasLength(1));
-    expect(queue.enqueuedSpecs.single.rootPaths, [
-      '/home/tester/report.txt',
-    ]);
+    expect(queue.enqueuedSpecs.single.rootPaths, ['/home/tester/report.txt']);
   });
 
   dndWidgets('a drop on a scrolled listing resolves the rendered row, '
@@ -592,8 +586,7 @@ void main() {
     rightChannel = controller_test.FakePaneChannel('/home/tester');
     rightChannel.listings['/srv/other'] = [
       _entryAt('/srv/other', 'adir', type: RemoteFileType.directory),
-      for (var i = 0; i < 60; i++)
-        _entryAt('/srv/other', 'f$i.txt', size: 64),
+      for (var i = 0; i < 60; i++) _entryAt('/srv/other', 'f$i.txt', size: 64),
     ];
     lanes.nextLocalChannel = rightChannel;
     await right.openLocalAt('/srv/other');
@@ -834,10 +827,7 @@ void main() {
 
     // Left's listing background == the rows' parent: a move is a no-op.
     final leftRect = tester.getRect(find.byType(PaneView).first);
-    final leftBackground = Offset(
-      leftRect.center.dx,
-      leftRect.bottom - 60,
-    );
+    final leftBackground = Offset(leftRect.center.dx, leftRect.bottom - 60);
     var gesture = await dragRowOnto(
       tester,
       find.text('report.txt'),
@@ -858,14 +848,8 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
 
     expect(queue.enqueuedSpecs, hasLength(1));
-    expect(
-      queue.enqueuedSpecs.single.operation,
-      TransferOperation.copy,
-    );
-    expect(
-      queue.enqueuedSpecs.single.destinationDir,
-      '/home/tester',
-    );
+    expect(queue.enqueuedSpecs.single.operation, TransferOperation.copy);
+    expect(queue.enqueuedSpecs.single.destinationDir, '/home/tester');
   });
 
   dndWidgets('the move modifier forces a move across filesystems', (
@@ -909,10 +893,7 @@ void main() {
     expect(find.text('Upload to /srv/home'), findsOneWidget);
     await endDrag(tester, gesture);
 
-    expect(
-      queue.enqueuedSpecs.single.operation,
-      TransferOperation.copy,
-    );
+    expect(queue.enqueuedSpecs.single.operation, TransferOperation.copy);
   });
 
   dndWidgets('the hover overlay names the move verb on a folder row', (
@@ -1010,10 +991,7 @@ void main() {
     await endDrag(tester, gesture);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
 
-    expect(
-      queue.enqueuedSpecs.single.operation,
-      TransferOperation.copy,
-    );
+    expect(queue.enqueuedSpecs.single.operation, TransferOperation.copy);
   });
 
   dndWidgets('a folder row held under a drag spring-loads open', (
@@ -1036,19 +1014,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump();
 
-    expect(
-      right.location,
-      const LocalPaneLocation('/srv/other/images'),
-    );
+    expect(right.location, const LocalPaneLocation('/srv/other/images'));
     await tester.pump();
     await endDrag(tester, gesture);
 
     // The drop lands in the spring-loaded directory.
     expect(queue.enqueuedSpecs, hasLength(1));
-    expect(
-      queue.enqueuedSpecs.single.destinationDir,
-      '/srv/other/images',
-    );
+    expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other/images');
   });
 
   dndWidgets('a drag over a busy pane enqueues nothing', (tester) async {
@@ -1109,9 +1081,7 @@ void main() {
     expect(queue.enqueuedSpecs, isEmpty);
     // The OS channel sees the same absence: the hidden pane's
     // DropTarget never subscribed.
-    await _osDropAt(tester, const Offset(1050, 400), [
-      '/tmp/incoming.txt',
-    ]);
+    await _osDropAt(tester, const Offset(1050, 400), ['/tmp/incoming.txt']);
     expect(queue.enqueuedSpecs, isEmpty);
   });
 
@@ -1139,17 +1109,12 @@ void main() {
     await bindLocals();
     await pumpShell(tester);
 
-    await _osDropAt(
-      tester,
-      tester.getCenter(find.text('images')),
-      ['/tmp/incoming.txt'],
-    );
+    await _osDropAt(tester, tester.getCenter(find.text('images')), [
+      '/tmp/incoming.txt',
+    ]);
 
     expect(queue.enqueuedSpecs, hasLength(1));
-    expect(
-      queue.enqueuedSpecs.single.destinationDir,
-      '/srv/other/images',
-    );
+    expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other/images');
   });
 
   dndWidgets('OS drop hover shows the copy label and clears on exit', (
@@ -1173,29 +1138,21 @@ void main() {
 
     // Copying '/srv/other/images' onto '/srv/other/images' itself is a
     // self-containment refusal.
-    await _osDropAt(
-      tester,
-      tester.getCenter(find.text('images')),
-      ['/srv/other/images'],
-    );
-    expect(queue.enqueuedSpecs, isEmpty);
-  });
-
-  dndWidgets('a paused ticker disables the OS drop target', (
-    tester,
-  ) async {
-    await bindLocals();
-    await pumpShell(tester, tickerEnabled: false);
-
-    await _osDropAt(tester, rightPaneBackground(tester), [
-      '/tmp/incoming.txt',
+    await _osDropAt(tester, tester.getCenter(find.text('images')), [
+      '/srv/other/images',
     ]);
     expect(queue.enqueuedSpecs, isEmpty);
   });
 
-  dndWidgets('a pushed route disables the OS drop target', (
-    tester,
-  ) async {
+  dndWidgets('a paused ticker disables the OS drop target', (tester) async {
+    await bindLocals();
+    await pumpShell(tester, tickerEnabled: false);
+
+    await _osDropAt(tester, rightPaneBackground(tester), ['/tmp/incoming.txt']);
+    expect(queue.enqueuedSpecs, isEmpty);
+  });
+
+  dndWidgets('a pushed route disables the OS drop target', (tester) async {
     await bindLocals();
     await pumpShell(tester);
 
@@ -1220,9 +1177,7 @@ void main() {
     await pumpShell(tester, supportsOsDrop: false);
 
     expect(find.byType(DropTarget), findsNothing);
-    await _osDropAt(tester, rightPaneBackground(tester), [
-      '/tmp/incoming.txt',
-    ]);
+    await _osDropAt(tester, rightPaneBackground(tester), ['/tmp/incoming.txt']);
     expect(queue.enqueuedSpecs, isEmpty);
   });
 
@@ -1305,16 +1260,10 @@ void main() {
   dndWidgets('a drop on a tab header lands in that tab’s current '
       'directory', (tester) async {
     await bindLocals();
-    final second = PaneController(
-      paneTabId: 'pane.right.tab2',
-      lanes: lanes,
-    );
+    final second = PaneController(paneTabId: 'pane.right.tab2', lanes: lanes);
     rightStrip.addTab(second);
-    final secondChannel =
-        controller_test.FakePaneChannel('/home/tester');
-    secondChannel.listings['/srv/else'] = [
-      _entryAt('/srv/else', 'readme.md'),
-    ];
+    final secondChannel = controller_test.FakePaneChannel('/home/tester');
+    secondChannel.listings['/srv/else'] = [_entryAt('/srv/else', 'readme.md')];
     lanes.nextLocalChannel = secondChannel;
     await second.openLocalAt('/srv/else');
     // The first tab stays active — the chip under test is inactive.
@@ -1375,16 +1324,10 @@ void main() {
     tester,
   ) async {
     await bindLocals();
-    final second = PaneController(
-      paneTabId: 'pane.right.tab2',
-      lanes: lanes,
-    );
+    final second = PaneController(paneTabId: 'pane.right.tab2', lanes: lanes);
     final secondTab = rightStrip.addTab(second);
-    final secondChannel =
-        controller_test.FakePaneChannel('/home/tester');
-    secondChannel.listings['/srv/else'] = [
-      _entryAt('/srv/else', 'readme.md'),
-    ];
+    final secondChannel = controller_test.FakePaneChannel('/home/tester');
+    secondChannel.listings['/srv/else'] = [_entryAt('/srv/else', 'readme.md')];
     lanes.nextLocalChannel = secondChannel;
     await second.openLocalAt('/srv/else');
     rightStrip.activateTab(rightStrip.tabs.first);
@@ -1409,20 +1352,12 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  dndWidgets('escape over a tab header disarms its activation', (
-    tester,
-  ) async {
+  dndWidgets('escape over a tab header disarms its activation', (tester) async {
     await bindLocals();
-    final second = PaneController(
-      paneTabId: 'pane.right.tab2',
-      lanes: lanes,
-    );
+    final second = PaneController(paneTabId: 'pane.right.tab2', lanes: lanes);
     final secondTab = rightStrip.addTab(second);
-    final secondChannel =
-        controller_test.FakePaneChannel('/home/tester');
-    secondChannel.listings['/srv/else'] = [
-      _entryAt('/srv/else', 'readme.md'),
-    ];
+    final secondChannel = controller_test.FakePaneChannel('/home/tester');
+    secondChannel.listings['/srv/else'] = [_entryAt('/srv/else', 'readme.md')];
     lanes.nextLocalChannel = secondChannel;
     await second.openLocalAt('/srv/else');
     rightStrip.activateTab(rightStrip.tabs.first);
@@ -1455,13 +1390,9 @@ void main() {
     // The second tab sits on the dragged folder's parent: a move onto
     // it is the parent no-op (refused), but Ctrl forces a legal copy —
     // so the timer arms only while the modifier is held.
-    final second = PaneController(
-      paneTabId: 'pane.right.tab2',
-      lanes: lanes,
-    );
+    final second = PaneController(paneTabId: 'pane.right.tab2', lanes: lanes);
     final secondTab = rightStrip.addTab(second);
-    final secondChannel =
-        controller_test.FakePaneChannel('/home/tester');
+    final secondChannel = controller_test.FakePaneChannel('/home/tester');
     secondChannel.listings['/home/tester'] = [
       _entryAt('/home/tester', 'docs', type: RemoteFileType.directory),
       _entryAt('/home/tester', 'report.txt'),
@@ -1479,15 +1410,10 @@ void main() {
     );
     final chip = tester.getCenter(chipTarget);
     bool ringVisible() {
-      final primary = Theme.of(
-        tester.element(chipTarget),
-      ).colorScheme.primary;
+      final primary = Theme.of(tester.element(chipTarget)).colorScheme.primary;
       return tester
           .widgetList<Container>(
-            find.descendant(
-              of: chipTarget,
-              matching: find.byType(Container),
-            ),
+            find.descendant(of: chipTarget, matching: find.byType(Container)),
           )
           .any(
             (c) =>

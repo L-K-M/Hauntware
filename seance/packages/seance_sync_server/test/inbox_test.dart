@@ -492,11 +492,7 @@ void _inboxTests(Storage Function() newStorage) {
       final app = await h.app(alice);
       await h.deposit(app.id, app.token, _blob());
 
-      final legacy = await h.send(
-        'GET',
-        '/v1/inbox?since=0',
-        bearer: alice,
-      );
+      final legacy = await h.send('GET', '/v1/inbox?since=0', bearer: alice);
       expect(legacy.status, 200, reason: legacy.text);
       expect(legacy.json['items'], hasLength(1));
       expect(legacy.json, isNot(contains('throughReceived')));

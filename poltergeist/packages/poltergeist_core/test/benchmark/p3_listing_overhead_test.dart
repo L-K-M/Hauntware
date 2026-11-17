@@ -548,54 +548,47 @@ void main() {
       },
     );
 
-    test(
-      'partial rows keep the frozen scenarioConfig after a mid-run count '
-      'change',
-      () async {
-        final output = '${tempDir.path}/results.json';
-        final result = await runCollectionAgainst(
-          FakeBrowseChannel(
-            targetPath: '/remote/target',
-            controlPath: '/remote/control',
-            controlEntries: 2,
-            events: events = <String>[],
-            // Warmup + two measured pairs at 10000 entries; the third
-            // measured pair observes a shrunk tree.
-            targetCounts: (call) => call <= 3 ? 10000 : 9999,
-          ),
-          output: output,
-        );
+    test('partial rows keep the frozen scenarioConfig after a mid-run count '
+        'change', () async {
+      final output = '${tempDir.path}/results.json';
+      final result = await runCollectionAgainst(
+        FakeBrowseChannel(
+          targetPath: '/remote/target',
+          controlPath: '/remote/control',
+          controlEntries: 2,
+          events: events = <String>[],
+          // Warmup + two measured pairs at 10000 entries; the third
+          // measured pair observes a shrunk tree.
+          targetCounts: (call) => call <= 3 ? 10000 : 9999,
+        ),
+        output: output,
+      );
 
-        expect(result.exitCode, 1);
-        expect(result.stderr, contains('entry count changed'));
-        final document =
-            jsonDecode(await File(output).readAsString())
-                as Map<String, Object?>;
-        final rows = document['rows']! as List<Object?>;
-        expect(rows, hasLength(3));
-        for (final row in rows.cast<Map<String, Object?>>()) {
-          final fingerprint = row['fingerprint']! as Map<String, Object?>;
-          // Every row — ok and error — carries the frozen identity the
-          // successful pairs were measured under; the changed count
-          // appears only in the error row's text.
-          expect(
-            fingerprint['scenarioConfig'],
-            contains('target-entries=10000'),
-          );
-          expect(
-            fingerprint['scenarioConfig'],
-            isNot(contains('target-entries=9999')),
-          );
-        }
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('entry count changed'));
+      final document =
+          jsonDecode(await File(output).readAsString()) as Map<String, Object?>;
+      final rows = document['rows']! as List<Object?>;
+      expect(rows, hasLength(3));
+      for (final row in rows.cast<Map<String, Object?>>()) {
+        final fingerprint = row['fingerprint']! as Map<String, Object?>;
+        // Every row — ok and error — carries the frozen identity the
+        // successful pairs were measured under; the changed count
+        // appears only in the error row's text.
+        expect(fingerprint['scenarioConfig'], contains('target-entries=10000'));
         expect(
-          document['provenance']! as Map,
-          containsPair('targetEntries', 10000),
+          fingerprint['scenarioConfig'],
+          isNot(contains('target-entries=9999')),
         );
-        final errorRow = rows.last! as Map<String, Object?>;
-        expect(errorRow['status'], 'error');
-        expect(errorRow['error'], contains('10000->9999'));
-      },
-    );
+      }
+      expect(
+        document['provenance']! as Map,
+        containsPair('targetEntries', 10000),
+      );
+      final errorRow = rows.last! as Map<String, Object?>;
+      expect(errorRow['status'], 'error');
+      expect(errorRow['error'], contains('10000->9999'));
+    });
 
     test(
       'a mid-run listing failure writes partial rows and an error row',
@@ -1155,8 +1148,7 @@ void main() {
       final firstRow =
           (emitted['rows']! as List).first! as Map<String, Object?>;
       final rowFingerprint = firstRow['fingerprint']! as Map<String, Object?>;
-      final calibration = {...rowFingerprint}
-        ..remove('scenarioConfig');
+      final calibration = {...rowFingerprint}..remove('scenarioConfig');
       final budgets = {
         'schema': 'poltergeist-d12-budgets-2',
         'calibratedFingerprint': calibration,

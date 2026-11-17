@@ -176,10 +176,10 @@ void main() {
       final row = menus.single.groups.single.single;
       final submenu = row as GhostSubmenuRow;
       expect(submenu.title, 'Sort By');
-      expect(
-        submenu.items.map((item) => ghostRowCommand(item.command).id),
-        ['a.byName', 'a.bySize'],
-      );
+      expect(submenu.items.map((item) => ghostRowCommand(item.command).id), [
+        'a.byName',
+        'a.bySize',
+      ]);
     });
 
     test('adds the platform chrome only on macOS', () {
@@ -255,10 +255,9 @@ void main() {
         PlatformProvidedMenuItemType.about,
       );
       expect(_commandIds(app), ['a.settings']);
-      expect(
-        _commandIds(mac.firstWhere((m) => m.id == AppMenuId.file)),
-        ['a.open'],
-      );
+      expect(_commandIds(mac.firstWhere((m) => m.id == AppMenuId.file)), [
+        'a.open',
+      ]);
 
       final linux = buildAppMenus(
         commands: commands,
@@ -296,26 +295,20 @@ void main() {
       required Future<void> Function(RegisteredCommand) onRun,
       TargetPlatform platform = TargetPlatform.linux,
     }) async {
-      await tester.pumpWidget(
-        host(commands, onRun: onRun, platform: platform),
-      );
+      await tester.pumpWidget(host(commands, onRun: onRun, platform: platform));
       await tester.pump();
     }
 
     testWidgets('renders menu titles and command rows', (tester) async {
-      await pumpHost(
-        tester,
-        [
-          _command(
-            'x.newTab',
-            placement: const CommandMenuPlacement(
-              menu: AppMenuId.file,
-              order: 10,
-            ),
+      await pumpHost(tester, [
+        _command(
+          'x.newTab',
+          placement: const CommandMenuPlacement(
+            menu: AppMenuId.file,
+            order: 10,
           ),
-        ],
-        onRun: (_) async {},
-      );
+        ),
+      ], onRun: (_) async {});
 
       expect(find.byType(MenuBar), findsOneWidget);
       expect(find.byType(SubmenuButton), findsOneWidget);
@@ -382,20 +375,16 @@ void main() {
       tester,
     ) async {
       const chord = SingleActivator(LogicalKeyboardKey.keyR, control: true);
-      await pumpHost(
-        tester,
-        [
-          _command(
-            'x.refresh',
-            activators: (_) => const [chord],
-            placement: const CommandMenuPlacement(
-              menu: AppMenuId.view,
-              order: 10,
-            ),
+      await pumpHost(tester, [
+        _command(
+          'x.refresh',
+          activators: (_) => const [chord],
+          placement: const CommandMenuPlacement(
+            menu: AppMenuId.view,
+            order: 10,
           ),
-        ],
-        onRun: (_) async {},
-      );
+        ),
+      ], onRun: (_) async {});
 
       await tester.tap(find.text('View'));
       await tester.pumpAndSettle();
@@ -416,28 +405,24 @@ void main() {
       tester,
     ) async {
       String submenuTitle(AppLocalizations l10n) => 'Sort By';
-      await pumpHost(
-        tester,
-        [
-          _command(
-            'x.byName',
-            placement: CommandMenuPlacement(
-              menu: AppMenuId.view,
-              order: 10,
-              submenu: submenuTitle,
-            ),
+      await pumpHost(tester, [
+        _command(
+          'x.byName',
+          placement: CommandMenuPlacement(
+            menu: AppMenuId.view,
+            order: 10,
+            submenu: submenuTitle,
           ),
-          _command(
-            'x.bySize',
-            placement: CommandMenuPlacement(
-              menu: AppMenuId.view,
-              order: 11,
-              submenu: submenuTitle,
-            ),
+        ),
+        _command(
+          'x.bySize',
+          placement: CommandMenuPlacement(
+            menu: AppMenuId.view,
+            order: 11,
+            submenu: submenuTitle,
           ),
-        ],
-        onRun: (_) async {},
-      );
+        ),
+      ], onRun: (_) async {});
 
       await tester.tap(find.text('View'));
       await tester.pumpAndSettle();
@@ -482,9 +467,8 @@ void main() {
           run: (_) async => checked = !checked,
         ),
       ];
-      Future<void> onRun(RegisteredCommand command) => command.run(
-        tester.element(find.byType(Scaffold)),
-      );
+      Future<void> onRun(RegisteredCommand command) =>
+          command.run(tester.element(find.byType(Scaffold)));
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(platform: TargetPlatform.linux),
@@ -579,10 +563,12 @@ void main() {
           find.byType(PlatformMenuBar),
         );
         final item = _leavesOf(_menuNamed(bar, 'View')).first;
-        return item.toChannelRepresentation(
-          WidgetsBinding.instance.platformMenuDelegate,
-          getId: (_) => 17,
-        ).single;
+        return item
+            .toChannelRepresentation(
+              WidgetsBinding.instance.platformMenuDelegate,
+              getId: (_) => 17,
+            )
+            .single;
       }
 
       await tester.pumpWidget(host());
@@ -631,9 +617,7 @@ void main() {
       );
       await tester.pump();
 
-      final bar = tester.widget<PlatformMenuBar>(
-        find.byType(PlatformMenuBar),
-      );
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
       // The delegate received the push itself, not just the widget's
       // configuration: app chrome first, then View (always present on
       // macOS for its provided Enter Full Screen row, D32 §8), then Go,
@@ -699,9 +683,9 @@ void main() {
       final pushed =
           WidgetsBinding.instance.platformMenuDelegate
               as _RecordingMenuDelegate;
-      final view = pushed.menus
-          .whereType<PlatformMenu>()
-          .singleWhere((m) => m.label == 'View');
+      final view = pushed.menus.whereType<PlatformMenu>().singleWhere(
+        (m) => m.label == 'View',
+      );
       final leaves = _leavesOf(view);
       final nested = leaves.whereType<PlatformMenu>().single;
       expect(nested.label, 'Sort By');
@@ -710,10 +694,10 @@ void main() {
         (leaves.last as PlatformProvidedMenuItem).type,
         PlatformProvidedMenuItemType.toggleFullScreen,
       );
-      expect(
-        _leavesOf(nested).map((item) => item.label),
-        ['x.byName', 'x.bySize'],
-      );
+      expect(_leavesOf(nested).map((item) => item.label), [
+        'x.byName',
+        'x.bySize',
+      ]);
     });
 
     testWidgets('a disabled command pushes a disabled item', (tester) async {
@@ -743,9 +727,7 @@ void main() {
       );
       await tester.pump();
 
-      final bar = tester.widget<PlatformMenuBar>(
-        find.byType(PlatformMenuBar),
-      );
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
       final item = _leavesOf(_menuNamed(bar, 'File')).single;
       expect(item.onSelected, isNull);
     });
@@ -848,9 +830,7 @@ void main() {
       );
       await tester.pump();
 
-      final bar = tester.widget<PlatformMenuBar>(
-        find.byType(PlatformMenuBar),
-      );
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
       final item = _leavesOf(_menuNamed(bar, 'Edit')).single;
       expect(item.label, 'edit.selectAll');
 
@@ -914,9 +894,7 @@ void main() {
         ),
       );
       await tester.pump();
-      final bar = tester.widget<PlatformMenuBar>(
-        find.byType(PlatformMenuBar),
-      );
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
       final item = _leavesOf(_menuNamed(bar, 'File')).single;
       rowNode.requestFocus();
       await tester.pump();

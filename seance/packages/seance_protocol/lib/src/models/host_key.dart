@@ -81,22 +81,22 @@ class HostKey {
   }
 
   Map<String, dynamic> toJson() => {
-        'host': host,
-        'port': port,
-        'type': type,
-        'fingerprintSha256': fingerprintSha256,
-        if (publicKeyBase64 != null) 'publicKeyBase64': publicKeyBase64,
-        'pinnedAt': pinnedAt,
-      };
+    'host': host,
+    'port': port,
+    'type': type,
+    'fingerprintSha256': fingerprintSha256,
+    if (publicKeyBase64 != null) 'publicKeyBase64': publicKeyBase64,
+    'pinnedAt': pinnedAt,
+  };
 
   factory HostKey.fromJson(Map<String, dynamic> json) => HostKey(
-        host: json['host'] as String,
-        port: (json['port'] as num?)?.toInt() ?? 22,
-        type: json['type'] as String,
-        fingerprintSha256: json['fingerprintSha256'] as String,
-        publicKeyBase64: json['publicKeyBase64'] as String?,
-        pinnedAt: (json['pinnedAt'] as num?)?.toInt() ?? 0,
-      );
+    host: json['host'] as String,
+    port: (json['port'] as num?)?.toInt() ?? 22,
+    type: json['type'] as String,
+    fingerprintSha256: json['fingerprintSha256'] as String,
+    publicKeyBase64: json['publicKeyBase64'] as String?,
+    pinnedAt: (json['pinnedAt'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// The [HostKey.locator] a given host and port would produce, without a key to

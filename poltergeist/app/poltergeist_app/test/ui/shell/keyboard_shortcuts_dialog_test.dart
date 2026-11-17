@@ -56,18 +56,12 @@ void main() {
     tester,
   ) async {
     final commands = [
-      _command(
-        'tab.new',
-        'New Tab',
-        const [SingleActivator(LogicalKeyboardKey.keyT, meta: true)],
-        menu: AppMenuId.file,
-      ),
-      _command(
-        'view.refresh',
-        'Refresh',
-        const [SingleActivator(LogicalKeyboardKey.keyR, meta: true)],
-        menu: AppMenuId.view,
-      ),
+      _command('tab.new', 'New Tab', const [
+        SingleActivator(LogicalKeyboardKey.keyT, meta: true),
+      ], menu: AppMenuId.file),
+      _command('view.refresh', 'Refresh', const [
+        SingleActivator(LogicalKeyboardKey.keyR, meta: true),
+      ], menu: AppMenuId.view),
       _command('app.noChord', 'No Chord', null, menu: AppMenuId.file),
     ];
     await tester.pumpWidget(

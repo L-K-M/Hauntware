@@ -120,58 +120,62 @@ void main() {
     expect(result.entries, 0);
   });
 
-  test('sizeless entries count toward unmeasured, not the byte total',
-      () async {
-    final channel = FakePaneChannel('/root');
-    channel.listings['/root'] = [
-      _entry('/root/a.txt', 'a.txt', size: 8),
-      _entry('/root/mystery', 'mystery'),
-      _entry('/root/link', 'link', type: RemoteFileType.symbolicLink),
-    ];
+  test(
+    'sizeless entries count toward unmeasured, not the byte total',
+    () async {
+      final channel = FakePaneChannel('/root');
+      channel.listings['/root'] = [
+        _entry('/root/a.txt', 'a.txt', size: 8),
+        _entry('/root/mystery', 'mystery'),
+        _entry('/root/link', 'link', type: RemoteFileType.symbolicLink),
+      ];
 
-    final result = await measureFolderSize(
-      channel,
-      '/root',
-      cancellation: RemoteTransferCancellation(),
-    );
+      final result = await measureFolderSize(
+        channel,
+        '/root',
+        cancellation: RemoteTransferCancellation(),
+      );
 
-    expect(result.status, FolderSizeStatus.done);
-    expect(result.bytes, 8);
-    expect(result.entries, 3);
-    // 'mystery' (no size) and 'link' (no size, never followed).
-    expect(result.unmeasured, 2);
-    // The link was counted but never listed.
-    expect(channel.listCalls, ['/root']);
-  });
+      expect(result.status, FolderSizeStatus.done);
+      expect(result.bytes, 8);
+      expect(result.entries, 3);
+      // 'mystery' (no size) and 'link' (no size, never followed).
+      expect(result.unmeasured, 2);
+      // The link was counted but never listed.
+      expect(channel.listCalls, ['/root']);
+    },
+  );
 
-  test('cancellation stops the walk and reports the partial counters',
-      () async {
-    final channel = FakePaneChannel('/root');
-    channel.listings['/root'] = [
-      _entry('/root/a.txt', 'a.txt', size: 4),
-      _entry('/root/sub', 'sub', type: RemoteFileType.directory),
-    ];
-    channel.listings['/root/sub'] = [
-      _entry('/root/sub/b.txt', 'b.txt', size: 6),
-    ];
-    final cancellation = RemoteTransferCancellation();
+  test(
+    'cancellation stops the walk and reports the partial counters',
+    () async {
+      final channel = FakePaneChannel('/root');
+      channel.listings['/root'] = [
+        _entry('/root/a.txt', 'a.txt', size: 4),
+        _entry('/root/sub', 'sub', type: RemoteFileType.directory),
+      ];
+      channel.listings['/root/sub'] = [
+        _entry('/root/sub/b.txt', 'b.txt', size: 6),
+      ];
+      final cancellation = RemoteTransferCancellation();
 
-    final result = await measureFolderSize(
-      channel,
-      '/root',
-      cancellation: cancellation,
-      onProgress: (progress) {
-        // Cancel after the root listing lands: the subdirectory is
-        // still queued but never listed.
-        cancellation.cancel();
-      },
-    );
+      final result = await measureFolderSize(
+        channel,
+        '/root',
+        cancellation: cancellation,
+        onProgress: (progress) {
+          // Cancel after the root listing lands: the subdirectory is
+          // still queued but never listed.
+          cancellation.cancel();
+        },
+      );
 
-    expect(result.status, FolderSizeStatus.cancelled);
-    expect(result.bytes, 4);
-    expect(result.entries, 2);
-    expect(channel.listCalls, ['/root']);
-  });
+      expect(result.status, FolderSizeStatus.cancelled);
+      expect(result.bytes, 4);
+      expect(result.entries, 2);
+      expect(channel.listCalls, ['/root']);
+    },
+  );
 
   test('echoed dot segments and cyclic listings cannot recurse', () async {
     final channel = FakePaneChannel('/root');
@@ -198,8 +202,7 @@ void main() {
     expect(channel.listCalls, ['/root']);
   });
 
-  test('a directory echoed with a trailing separator is walked once',
-      () async {
+  test('a directory echoed with a trailing separator is walked once', () async {
     final channel = FakePaneChannel('/root');
     channel.listings['/root'] = [
       // The server spells the child WITH a trailing separator...
@@ -248,8 +251,10 @@ void main() {
 
     expect(result.status, FolderSizeStatus.done);
     expect(result.bytes, 3);
-    expect(channel.listCalls,
-        containsAll(<String>['/root/sub', r'/root/sub\']));
+    expect(
+      channel.listCalls,
+      containsAll(<String>['/root/sub', r'/root/sub\']),
+    );
   });
 
   test('a mixed-separator Windows spelling still dedupes', () async {
@@ -298,8 +303,7 @@ void main() {
 
     expect(result.status, FolderSizeStatus.done);
     expect(result.bytes, 1);
-    expect(channel.listCalls,
-        containsAll(<String>['C:notes', r'C:notes\']));
+    expect(channel.listCalls, containsAll(<String>['C:notes', r'C:notes\']));
   });
 
   test('an untyped nested fault propagates — only typed refusals '

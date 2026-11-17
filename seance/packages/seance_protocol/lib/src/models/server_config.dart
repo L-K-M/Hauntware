@@ -4,9 +4,10 @@ import 'server_mark.dart';
 /// an ssh-agent", which is the lowest-risk mode and the encouraged default.
 enum AuthMethod { password, privateKey, agent }
 
-AuthMethod _authFromName(String name) =>
-    AuthMethod.values.firstWhere((m) => m.name == name,
-        orElse: () => AuthMethod.password);
+AuthMethod _authFromName(String name) => AuthMethod.values.firstWhere(
+  (m) => m.name == name,
+  orElse: () => AuthMethod.password,
+);
 
 /// A server's accent color, as a *name* rather than an ARGB value.
 ///
@@ -209,11 +210,8 @@ class ServerConfig {
   /// [iconEmoji] and [icon] in that order of preference. Callers draw this
   /// rather than reading the three fields, which is what keeps the precedence
   /// in one place.
-  ServerMark get mark => ServerMark.resolve(
-        icon: icon,
-        emoji: iconEmoji,
-        image: iconImage,
-      );
+  ServerMark get mark =>
+      ServerMark.resolve(icon: icon, emoji: iconEmoji, image: iconImage);
 
   const ServerConfig({
     required this.id,
@@ -327,15 +325,16 @@ class ServerConfig {
       iconImage: clearIconImage
           ? null
           : (iconImage != null
-              ? normalizeServerIconImage(iconImage)
-              : this.iconImage),
+                ? normalizeServerIconImage(iconImage)
+                : this.iconImage),
       loginScript: clearLoginScript
           ? null
           : normalizeLoginScript(loginScript ?? this.loginScript),
       startDirectory: clearStartDirectory
           ? null
           : normalizeServerStartDirectory(
-              startDirectory ?? this.startDirectory),
+              startDirectory ?? this.startDirectory,
+            ),
       excludeFromSync: excludeFromSync ?? this.excludeFromSync,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -350,87 +349,87 @@ class ServerConfig {
     final custom = normalizeServerCustomColor(customColor);
     final start = normalizeServerStartDirectory(startDirectory);
     return {
-        'id': id,
-        'label': label,
-        'host': host,
-        'port': port,
-        'username': username,
-        'authMethod': authMethod.name,
-        if (secretRef != null) 'secretRef': secretRef,
-        if (identityFilePath != null) 'identityFilePath': identityFilePath,
-        if (jumpHostId != null) 'jumpHostId': jumpHostId,
-        'syncSecret': syncSecret,
-        if (group != null) 'group': group,
-        if (color != null) 'color': color!.name,
-        'customColor': ?custom,
-        if (icon != null) 'icon': icon!.name,
-        // Written only when they survive validation, so a value this build
-        // refuses to draw is never re-published as though it had been
-        // accepted. `fromJson` applies the same rule on the way in.
-        'iconEmoji': ?emoji,
-        'iconImage': ?image,
-        if (loginScript != null) 'loginScript': loginScript,
-        'startDirectory': ?start,
-        // Written unconditionally, like `syncSecret` and unlike the optional
-        // presentation fields above: the two sync-policy booleans are a pair
-        // and should read the same way round, and "no, I want this synced" is
-        // an answer the user gave rather than an attribute left unset.
-        'excludeFromSync': excludeFromSync,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-      };
+      'id': id,
+      'label': label,
+      'host': host,
+      'port': port,
+      'username': username,
+      'authMethod': authMethod.name,
+      if (secretRef != null) 'secretRef': secretRef,
+      if (identityFilePath != null) 'identityFilePath': identityFilePath,
+      if (jumpHostId != null) 'jumpHostId': jumpHostId,
+      'syncSecret': syncSecret,
+      if (group != null) 'group': group,
+      if (color != null) 'color': color!.name,
+      'customColor': ?custom,
+      if (icon != null) 'icon': icon!.name,
+      // Written only when they survive validation, so a value this build
+      // refuses to draw is never re-published as though it had been
+      // accepted. `fromJson` applies the same rule on the way in.
+      'iconEmoji': ?emoji,
+      'iconImage': ?image,
+      if (loginScript != null) 'loginScript': loginScript,
+      'startDirectory': ?start,
+      // Written unconditionally, like `syncSecret` and unlike the optional
+      // presentation fields above: the two sync-policy booleans are a pair
+      // and should read the same way round, and "no, I want this synced" is
+      // an answer the user gave rather than an attribute left unset.
+      'excludeFromSync': excludeFromSync,
+      'createdAt': createdAt,
+      'updatedAt': updatedAt,
+    };
   }
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) => ServerConfig(
-        id: json['id'] as String,
-        label: json['label'] as String,
-        host: json['host'] as String,
-        port: (json['port'] as num?)?.toInt() ?? 22,
-        username: json['username'] as String,
-        authMethod: _authFromName(json['authMethod'] as String? ?? 'agent'),
-        secretRef: json['secretRef'] as String?,
-        identityFilePath: json['identityFilePath'] as String?,
-        jumpHostId: json['jumpHostId'] as String?,
-        syncSecret: json['syncSecret'] as bool? ?? false,
-        // Normalized on the way in as well as on the way out: a group that is
-        // blank or all whitespace is "no group", and letting one through would
-        // put a nameless section in the list on the device that read it.
-        group: normalizeServerGroup(json['group'] as String?),
-        color: _colorFromName(json['color'] as String?),
-        // Type-tested for the same reason the mark fields below are: a
-        // record carrying a number here must cost the colour, not the server.
-        customColor: json['customColor'] is String
-            ? normalizeServerCustomColor(json['customColor'] as String)
-            : null,
-        // Type-tested like the two fields below rather than cast: a record
-        // carrying a number here would otherwise throw out of fromJson and
-        // take the whole server entry with it, which is the degradation the
-        // sibling fields exist to avoid.
-        icon: json['icon'] is String
-            ? serverIconFromName(json['icon'] as String)
-            : null,
-        // A mark from a newer build, or from a device whose idea of an emoji
-        // this one does not share, degrades to the glyph beside it rather
-        // than poisoning the whole record. Tested for type rather than cast:
-        // a record carrying a number or a list here would otherwise throw out
-        // of `fromJson` and take the whole server entry with it, which is
-        // exactly the failure the degradation is meant to rule out.
-        iconEmoji: json['iconEmoji'] is String
-            ? normalizeServerEmoji(json['iconEmoji'] as String)
-            : null,
-        iconImage: json['iconImage'] is String
-            ? normalizeServerIconImage(json['iconImage'] as String)
-            : null,
-        loginScript: normalizeLoginScript(json['loginScript'] as String?),
-        // Type-tested like the mark fields: a malformed folder costs the
-        // folder, not the server.
-        startDirectory: json['startDirectory'] is String
-            ? normalizeServerStartDirectory(json['startDirectory'] as String)
-            : null,
-        excludeFromSync: json['excludeFromSync'] as bool? ?? false,
-        createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
-        updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    label: json['label'] as String,
+    host: json['host'] as String,
+    port: (json['port'] as num?)?.toInt() ?? 22,
+    username: json['username'] as String,
+    authMethod: _authFromName(json['authMethod'] as String? ?? 'agent'),
+    secretRef: json['secretRef'] as String?,
+    identityFilePath: json['identityFilePath'] as String?,
+    jumpHostId: json['jumpHostId'] as String?,
+    syncSecret: json['syncSecret'] as bool? ?? false,
+    // Normalized on the way in as well as on the way out: a group that is
+    // blank or all whitespace is "no group", and letting one through would
+    // put a nameless section in the list on the device that read it.
+    group: normalizeServerGroup(json['group'] as String?),
+    color: _colorFromName(json['color'] as String?),
+    // Type-tested for the same reason the mark fields below are: a
+    // record carrying a number here must cost the colour, not the server.
+    customColor: json['customColor'] is String
+        ? normalizeServerCustomColor(json['customColor'] as String)
+        : null,
+    // Type-tested like the two fields below rather than cast: a record
+    // carrying a number here would otherwise throw out of fromJson and
+    // take the whole server entry with it, which is the degradation the
+    // sibling fields exist to avoid.
+    icon: json['icon'] is String
+        ? serverIconFromName(json['icon'] as String)
+        : null,
+    // A mark from a newer build, or from a device whose idea of an emoji
+    // this one does not share, degrades to the glyph beside it rather
+    // than poisoning the whole record. Tested for type rather than cast:
+    // a record carrying a number or a list here would otherwise throw out
+    // of `fromJson` and take the whole server entry with it, which is
+    // exactly the failure the degradation is meant to rule out.
+    iconEmoji: json['iconEmoji'] is String
+        ? normalizeServerEmoji(json['iconEmoji'] as String)
+        : null,
+    iconImage: json['iconImage'] is String
+        ? normalizeServerIconImage(json['iconImage'] as String)
+        : null,
+    loginScript: normalizeLoginScript(json['loginScript'] as String?),
+    // Type-tested like the mark fields: a malformed folder costs the
+    // folder, not the server.
+    startDirectory: json['startDirectory'] is String
+        ? normalizeServerStartDirectory(json['startDirectory'] as String)
+        : null,
+    excludeFromSync: json['excludeFromSync'] as bool? ?? false,
+    createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+    updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// The stored form of a group name: trimmed, with blank meaning "no group".
@@ -470,10 +469,7 @@ final RegExp _sixHexDigits = RegExp(r'^[0-9a-fA-F]{6}$');
 /// discipline as an Enter of its own, turning one stored line into two.
 String? normalizeLoginScript(String? script) {
   if (script == null) return null;
-  final trimmed = script
-      .replaceAll('\r\n', '\n')
-      .replaceAll('\r', '\n')
-      .trim();
+  final trimmed = script.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
   return trimmed.isEmpty ? null : trimmed;
 }
 

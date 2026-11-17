@@ -19,24 +19,23 @@ const int savedSyncRulesVersion = 1;
 /// SyncRuleSet → the `rules` map of a [SavedSyncSpec]. `excludeGlobs`
 /// is deliberately absent: it lives in the spec's first-class
 /// `ignoreRules` field instead.
-Map<String, Object?> syncRuleSetToJson(SyncRuleSet rules) =>
-    <String, Object?>{
-      'direction': rules.direction.name,
-      'deletions': rules.deletions.name,
-      'backups': rules.backups.name,
-      'comparison': rules.comparison.name,
-      'mtimeToleranceSecs': rules.mtimeToleranceSecs,
-      'acceptedTimeShifts': rules.acceptedTimeShifts,
-      'conflictDefault': rules.conflictDefault.name,
-      'includeHidden': rules.includeHidden,
-      'symlinks': rules.symlinks.name,
-      'trashPathLeft': rules.trashPathLeft,
-      'trashPathRight': rules.trashPathRight,
-      'maxDelete': rules.maxDelete,
-      'deleteFractionWarn': rules.deleteFractionWarn,
-      'preserveMtime': rules.preserveMtime,
-      'transferConcurrency': rules.transferConcurrency,
-    };
+Map<String, Object?> syncRuleSetToJson(SyncRuleSet rules) => <String, Object?>{
+  'direction': rules.direction.name,
+  'deletions': rules.deletions.name,
+  'backups': rules.backups.name,
+  'comparison': rules.comparison.name,
+  'mtimeToleranceSecs': rules.mtimeToleranceSecs,
+  'acceptedTimeShifts': rules.acceptedTimeShifts,
+  'conflictDefault': rules.conflictDefault.name,
+  'includeHidden': rules.includeHidden,
+  'symlinks': rules.symlinks.name,
+  'trashPathLeft': rules.trashPathLeft,
+  'trashPathRight': rules.trashPathRight,
+  'maxDelete': rules.maxDelete,
+  'deleteFractionWarn': rules.deleteFractionWarn,
+  'preserveMtime': rules.preserveMtime,
+  'transferConcurrency': rules.transferConcurrency,
+};
 
 /// Tolerant decode for synced records: absent keys take defaults, so a
 /// rules map written before a knob existed still loads — and
@@ -69,11 +68,7 @@ SyncRuleSet syncRuleSetFromJson(Map<String, Object?> json) {
   final rules = SyncRuleSet(
     direction: direction,
     deletions: deletions,
-    backups: enumOf(
-      BackupPolicy.values,
-      json['backups'],
-      defaults.backups,
-    ),
+    backups: enumOf(BackupPolicy.values, json['backups'], defaults.backups),
     comparison: enumOf(
       ComparisonMode.values,
       json['comparison'],
@@ -95,19 +90,14 @@ SyncRuleSet syncRuleSetFromJson(Map<String, Object?> json) {
         if (value is String) value,
     ],
     includeHidden: (json['includeHidden'] as bool?) ?? defaults.includeHidden,
-    symlinks: enumOf(
-      SymlinkPolicy.values,
-      json['symlinks'],
-      defaults.symlinks,
-    ),
+    symlinks: enumOf(SymlinkPolicy.values, json['symlinks'], defaults.symlinks),
     trashPathLeft: json['trashPathLeft'] as String?,
     trashPathRight: json['trashPathRight'] as String?,
     maxDelete: (json['maxDelete'] as int?) ?? defaults.maxDelete,
     deleteFractionWarn:
         (json['deleteFractionWarn'] as num?)?.toDouble() ??
-            defaults.deleteFractionWarn,
-    preserveMtime:
-        (json['preserveMtime'] as bool?) ?? defaults.preserveMtime,
+        defaults.deleteFractionWarn,
+    preserveMtime: (json['preserveMtime'] as bool?) ?? defaults.preserveMtime,
     transferConcurrency:
         (json['transferConcurrency'] as int?) ?? defaults.transferConcurrency,
   );
@@ -120,15 +110,17 @@ SyncRuleSet syncRuleSetFromJson(Map<String, Object?> json) {
 BookmarkLocation bookmarkLocationFromEndpoint(SyncEndpoint endpoint) =>
     switch (endpoint) {
       LocalEndpoint(:final path) => BookmarkLocation(path: path),
-      RemoteEndpoint(:final server, :final path) =>
-        BookmarkLocation(server: server, path: path),
+      RemoteEndpoint(:final server, :final path) => BookmarkLocation(
+        server: server,
+        path: path,
+      ),
     };
 
 /// The inverse; a null server decodes to [LocalEndpoint].
 SyncEndpoint endpointFromBookmarkLocation(BookmarkLocation location) =>
     location.server == null
-        ? LocalEndpoint(location.path)
-        : RemoteEndpoint(server: location.server!, path: location.path);
+    ? LocalEndpoint(location.path)
+    : RemoteEndpoint(server: location.server!, path: location.path);
 
 /// SyncPair → SavedSyncSpec (04 §2.1): the pair's left/right land in
 /// the spec's source/destination — the names differ, the order does

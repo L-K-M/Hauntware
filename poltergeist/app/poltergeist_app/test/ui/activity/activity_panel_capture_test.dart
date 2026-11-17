@@ -32,7 +32,8 @@ Future<ByteData> _fontBytes(String path) async {
 
 Future<void> _loadRealFonts() async {
   final home = Platform.environment['HOME'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home == null ? '' : '$home/.local/share/fonts');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -47,8 +48,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -119,9 +119,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme: base.primaryTextTheme.apply(
-        fontFamily: 'DejaVu Sans',
-      ),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       RepaintBoundary(
@@ -129,8 +127,7 @@ void main() {
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: theme,
-          localizationsDelegates:
-              AppLocalizations.localizationsDelegates,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           navigatorKey: navigatorKey,
           home: Scaffold(
@@ -141,10 +138,8 @@ void main() {
                   height: 420,
                   child: ListenableBuilder(
                     listenable: controller,
-                    builder: (context, _) => ActivityPanel(
-                      controller: controller,
-                      onClose: () {},
-                    ),
+                    builder: (context, _) =>
+                        ActivityPanel(controller: controller, onClose: () {}),
                   ),
                 ),
               ],
@@ -166,9 +161,7 @@ void main() {
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List();
         } finally {
           image.dispose();
@@ -193,10 +186,7 @@ void main() {
       find.byKey(ValueKey('activity.conflictResolve.${parked.id}')),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('conflict.verb.replace')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('conflict.verb.replace')), findsOneWidget);
     await capture('activity-conflict-dialog');
     await tester.tap(find.text('Not now'));
     await tester.pumpAndSettle();

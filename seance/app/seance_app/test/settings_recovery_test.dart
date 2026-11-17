@@ -16,13 +16,16 @@ void main() {
 
   Future<AppSettings> load() => SettingsStore(file).load();
 
-  test('a missing file starts from defaults without claiming a recovery', () async {
-    final store = SettingsStore(file);
-    final settings = await store.load();
-    expect(settings.deviceId, isEmpty);
-    expect(store.recoveredFromCorruptFile, isFalse);
-    expect(File('${file.path}.corrupt').existsSync(), isFalse);
-  });
+  test(
+    'a missing file starts from defaults without claiming a recovery',
+    () async {
+      final store = SettingsStore(file);
+      final settings = await store.load();
+      expect(settings.deviceId, isEmpty);
+      expect(store.recoveredFromCorruptFile, isFalse);
+      expect(File('${file.path}.corrupt').existsSync(), isFalse);
+    },
+  );
 
   test('a good file round-trips and reports no recovery', () async {
     final original = AppSettings(
@@ -51,30 +54,34 @@ void main() {
       expect(quarantined.readAsStringSync(), '{"deviceId": "device-1", trunca');
     });
 
-    test('keeps the device id, which sync conflict resolution depends on',
-        () async {
-      await file.writeAsString(
-        '{"deviceId":"device-1","syncBaseUrl":"https://sync.example.com",'
-        '"syncUsername":"ops","editorRegistry":{ truncated',
-      );
-      final settings = await load();
-      expect(settings.deviceId, 'device-1');
-      expect(settings.syncBaseUrl, 'https://sync.example.com');
-      expect(settings.syncUsername, 'ops');
-    });
+    test(
+      'keeps the device id, which sync conflict resolution depends on',
+      () async {
+        await file.writeAsString(
+          '{"deviceId":"device-1","syncBaseUrl":"https://sync.example.com",'
+          '"syncUsername":"ops","editorRegistry":{ truncated',
+        );
+        final settings = await load();
+        expect(settings.deviceId, 'device-1');
+        expect(settings.syncBaseUrl, 'https://sync.example.com');
+        expect(settings.syncUsername, 'ops');
+      },
+    );
 
-    test('the salvage is written back, so it survives the next launch',
-        () async {
-      await file.writeAsString('{"deviceId":"device-1", truncated');
-      await SettingsStore(file).load();
+    test(
+      'the salvage is written back, so it survives the next launch',
+      () async {
+        await file.writeAsString('{"deviceId":"device-1", truncated');
+        await SettingsStore(file).load();
 
-      // A second store, as a fresh launch would build it: the quarantined
-      // file is gone, so only a persisted salvage can carry the id across.
-      final relaunch = SettingsStore(file);
-      final settings = await relaunch.load();
-      expect(relaunch.recoveredFromCorruptFile, isFalse);
-      expect(settings.deviceId, 'device-1');
-    });
+        // A second store, as a fresh launch would build it: the quarantined
+        // file is gone, so only a persisted salvage can carry the id across.
+        final relaunch = SettingsStore(file);
+        final settings = await relaunch.load();
+        expect(relaunch.recoveredFromCorruptFile, isFalse);
+        expect(settings.deviceId, 'device-1');
+      },
+    );
 
     test('salvages nothing it cannot find, and stays on defaults', () async {
       await file.writeAsString('not json at all');
@@ -85,14 +92,16 @@ void main() {
       expect(settings.autoSync, isTrue);
     });
 
-    test('a JSON document that is not an object is treated as corrupt',
-        () async {
-      await file.writeAsString('["not", "an", "object"]');
-      final store = SettingsStore(file);
-      await store.load();
-      expect(store.recoveredFromCorruptFile, isTrue);
-      expect(File('${file.path}.corrupt').existsSync(), isTrue);
-    });
+    test(
+      'a JSON document that is not an object is treated as corrupt',
+      () async {
+        await file.writeAsString('["not", "an", "object"]');
+        final store = SettingsStore(file);
+        await store.load();
+        expect(store.recoveredFromCorruptFile, isTrue);
+        expect(File('${file.path}.corrupt').existsSync(), isTrue);
+      },
+    );
   });
 
   group('salvageSettings', () {

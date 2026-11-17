@@ -40,7 +40,8 @@ Future<ByteData> _fontBytes(String path) async {
 
 Future<void> _loadRealFonts() async {
   final home = Platform.environment['HOME'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home == null ? '' : '$home/.local/share/fonts');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -55,8 +56,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -195,9 +195,7 @@ void main() {
     final bytes = (await tester.runAsync(() async {
       final image = await boundary.toImage(pixelRatio: 2);
       try {
-        final data = await image.toByteData(
-          format: ui.ImageByteFormat.png,
-        );
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
         return data!.buffer.asUint8List();
       } finally {
         image.dispose();
@@ -212,93 +210,89 @@ void main() {
     file.writeAsBytesSync(bytes);
   }
 
-  testWidgets(
-    'restores tabs, hidden pane, and live bindings (reconnect ON)',
-    (tester) async {
-      // The remote tab's live listing and the two local opens (pane A's
-      // inactive tab does NOT resume — only the active tab per pane).
-      engine.channel = session_test.FakeAppBrowseChannel(homePath: '/srv')
-        ..listings['/srv/www'] = [_row('/srv/www', 'live.txt')];
-      engine.localChannels.addAll([
-        session_test.FakeAppBrowseChannel(homePath: '/home/tester')
-          ..listings['/home/tester/pics'] = [
-            _row('/home/tester/pics', 'photo.jpg'),
-          ],
-      ]);
+  testWidgets('restores tabs, hidden pane, and live bindings (reconnect ON)', (
+    tester,
+  ) async {
+    // The remote tab's live listing and the two local opens (pane A's
+    // inactive tab does NOT resume — only the active tab per pane).
+    engine.channel = session_test.FakeAppBrowseChannel(homePath: '/srv')
+      ..listings['/srv/www'] = [_row('/srv/www', 'live.txt')];
+    engine.localChannels.addAll([
+      session_test.FakeAppBrowseChannel(homePath: '/home/tester')
+        ..listings['/home/tester/pics'] = [
+          _row('/home/tester/pics', 'photo.jpg'),
+        ],
+    ]);
 
-      await pumpShell(tester, restored: _sessionDoc());
+    await pumpShell(tester, restored: _sessionDoc());
 
-      // Pane A: the remote tab reconnected on its persisted path.
-      expect(engine.openCalls, hasLength(1));
-      expect(engine.openCalls.single.serverId, 'b1');
-      expect(engine.openCalls.single.paneTabId, 'pane.left.tab1');
-      expect(find.text('live.txt'), findsOneWidget);
-      // Both persisted tabs exist — chips title by the location's last
-      // segment, the remote one active on its restored path.
-      expect(find.text('www'), findsWidgets);
-      expect(find.text('docs'), findsWidgets);
+    // Pane A: the remote tab reconnected on its persisted path.
+    expect(engine.openCalls, hasLength(1));
+    expect(engine.openCalls.single.serverId, 'b1');
+    expect(engine.openCalls.single.paneTabId, 'pane.left.tab1');
+    expect(find.text('live.txt'), findsOneWidget);
+    // Both persisted tabs exist — chips title by the location's last
+    // segment, the remote one active on its restored path.
+    expect(find.text('www'), findsWidgets);
+    expect(find.text('docs'), findsWidgets);
 
-      // Pane B restored hidden — nothing of it is mounted, but its
-      // local tab already rebound live (the active tab of a restored
-      // pane rebinds regardless of visibility).
-      expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsNothing);
-      expect(engine.localChannelRoots, ['~']);
-      expect(find.text('photo.jpg'), findsNothing);
+    // Pane B restored hidden — nothing of it is mounted, but its
+    // local tab already rebound live (the active tab of a restored
+    // pane rebinds regardless of visibility).
+    expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsNothing);
+    expect(engine.localChannelRoots, ['~']);
+    expect(find.text('photo.jpg'), findsNothing);
 
-      // Re-showing pane B presents the already-live listing.
-      await runShellCommand(tester, 'view.toggleSecondPane');
-      expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsOneWidget);
-      expect(find.text('photo.jpg'), findsOneWidget);
-    },
-  );
+    // Re-showing pane B presents the already-live listing.
+    await runShellCommand(tester, 'view.toggleSecondPane');
+    expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsOneWidget);
+    expect(find.text('photo.jpg'), findsOneWidget);
+  });
 
-  testWidgets(
-    'reconnect OFF: cached rows under the bar until the button',
-    (tester) async {
-      if (Platform.environment['POLTERGEIST_CAPTURE'] == '1') {
-        await tester.runAsync(_loadRealFonts);
-      }
-      engine.channel = session_test.FakeAppBrowseChannel(homePath: '/srv')
-        ..listings['/srv/www'] = [_row('/srv/www', 'live.txt')];
-      engine.localChannels.addAll([
-        session_test.FakeAppBrowseChannel(homePath: '/home/tester')
-          ..listings['/home/tester/pics'] = [
-            _row('/home/tester/pics', 'photo.jpg'),
-          ],
-      ]);
+  testWidgets('reconnect OFF: cached rows under the bar until the button', (
+    tester,
+  ) async {
+    if (Platform.environment['POLTERGEIST_CAPTURE'] == '1') {
+      await tester.runAsync(_loadRealFonts);
+    }
+    engine.channel = session_test.FakeAppBrowseChannel(homePath: '/srv')
+      ..listings['/srv/www'] = [_row('/srv/www', 'live.txt')];
+    engine.localChannels.addAll([
+      session_test.FakeAppBrowseChannel(homePath: '/home/tester')
+        ..listings['/home/tester/pics'] = [
+          _row('/home/tester/pics', 'photo.jpg'),
+        ],
+    ]);
 
-      await pumpShell(
-        tester,
-        restored: _sessionDoc(),
-        reconnectRestoredTabs: false,
-      );
+    await pumpShell(
+      tester,
+      restored: _sessionDoc(),
+      reconnectRestoredTabs: false,
+    );
 
-      // Activation alone never reconnects: no browse open, the cached
-      // snapshot rows render under the localized bar instead.
-      expect(engine.openCalls, isEmpty);
-      expect(find.text('cached-a.txt'), findsOneWidget);
-      expect(find.text('cached-b.txt'), findsOneWidget);
-      expect(
-        find.text('Session restored — web.example.com is offline.'),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('pane.reconnectBar.reconnect')),
-        findsOneWidget,
-      );
-      await capture(tester, 'session-restore-reconnect-bar');
+    // Activation alone never reconnects: no browse open, the cached
+    // snapshot rows render under the localized bar instead.
+    expect(engine.openCalls, isEmpty);
+    expect(find.text('cached-a.txt'), findsOneWidget);
+    expect(find.text('cached-b.txt'), findsOneWidget);
+    expect(
+      find.text('Session restored — web.example.com is offline.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('pane.reconnectBar.reconnect')),
+      findsOneWidget,
+    );
+    await capture(tester, 'session-restore-reconnect-bar');
 
-      // The explicit gesture is what connects.
-      await tester.tap(
-        find.byKey(const ValueKey('pane.reconnectBar.reconnect')),
-      );
-      await tester.pumpAndSettle();
-      expect(engine.openCalls, hasLength(1));
-      expect(engine.openCalls.single.serverId, 'b1');
-      expect(find.text('live.txt'), findsOneWidget);
-      expect(find.text('cached-a.txt'), findsNothing);
-    },
-  );
+    // The explicit gesture is what connects.
+    await tester.tap(find.byKey(const ValueKey('pane.reconnectBar.reconnect')));
+    await tester.pumpAndSettle();
+    expect(engine.openCalls, hasLength(1));
+    expect(engine.openCalls.single.serverId, 'b1');
+    expect(find.text('live.txt'), findsOneWidget);
+    expect(find.text('cached-a.txt'), findsNothing);
+  });
 
   testWidgets('a restored local tab rebinds live on activation', (
     tester,
@@ -313,9 +307,7 @@ void main() {
         ],
       // Pane A's local tab, rebound on activation.
       session_test.FakeAppBrowseChannel(homePath: '/home/tester')
-        ..listings['/home/tester/docs'] = [
-          _row('/home/tester/docs', 'doc.md'),
-        ],
+        ..listings['/home/tester/docs'] = [_row('/home/tester/docs', 'doc.md')],
     ]);
 
     await pumpShell(tester, restored: _sessionDoc());
@@ -361,8 +353,9 @@ void main() {
     expect(engine.localChannelRoots, isEmpty);
   });
 
-  testWidgets('a session restored with pane B visible shows both strips',
-      (tester) async {
+  testWidgets('a session restored with pane B visible shows both strips', (
+    tester,
+  ) async {
     engine.localChannels.addAll([
       session_test.FakeAppBrowseChannel(homePath: '/home/tester')
         ..listings['/home/tester/pics'] = [

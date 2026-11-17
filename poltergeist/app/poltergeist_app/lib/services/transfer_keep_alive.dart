@@ -26,8 +26,7 @@ class PoltergeistKeepAliveStrings implements KeepAliveStrings {
   String get notificationTitle => _l10n.appTitle;
 
   @override
-  String notificationText(int count) =>
-      _l10n.keepAliveNotificationText(count);
+  String notificationText(int count) => _l10n.keepAliveNotificationText(count);
 
   @override
   String get smallIconResourceName => 'ic_stat_transfer_keep_alive';
@@ -55,9 +54,7 @@ final class TransferKeepAliveReporter {
   late final StreamSubscription<TransferQueueEvent> _subscription;
 
   void _refresh() {
-    _keepAlive.refresh(
-      _queue.tasks.where((task) => !task.isTerminal).length,
-    );
+    _keepAlive.refresh(_queue.tasks.where((task) => !task.isTerminal).length);
   }
 
   /// Stops listening and drops the anchor immediately, without the grace,

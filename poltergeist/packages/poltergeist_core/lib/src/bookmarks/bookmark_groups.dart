@@ -32,7 +32,8 @@ final class BookmarkGroupSection {
 
   /// The identity this section is collapsed and re-found by, stable across
   /// a re-sort and across a member being renamed.
-  String get key => name == null ? kUngroupedBookmarkKey : serverGroupKey(name!);
+  String get key =>
+      name == null ? kUngroupedBookmarkKey : serverGroupKey(name!);
 }
 
 /// [bookmarks] split into sections: one per group, sorted by

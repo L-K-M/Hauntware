@@ -581,23 +581,23 @@ class _CompactListingState extends State<CompactListing> {
         itemBuilder: (context, index) => Opacity(
           opacity: isCut(index) ? kCutRowOpacity : 1,
           child: GhostFileCompactRow(
-          key: ValueKey((CompactKey.row, entries[index].path)),
-          item: paneFileItem(entries[index]),
-          selected: controller.isRowSelected(index),
-          selecting: widget.selecting,
-          clock: widget.clock,
-          strings: paneRowStrings(l10n),
-          onTap: () => widget.callbacks.onTap(controller, index),
-          onLongPress: () => widget.callbacks.onLongPress(controller, index),
-          onActions: () => widget.callbacks.onActions(controller, index),
-          onRename:
-              controller.verbsEnabled && !nameIsFlagged(entries[index].name)
-              ? () {
-                  controller.setCursorIndex(index);
-                  controller.startRename();
-                }
-              : null,
-        ),
+            key: ValueKey((CompactKey.row, entries[index].path)),
+            item: paneFileItem(entries[index]),
+            selected: controller.isRowSelected(index),
+            selecting: widget.selecting,
+            clock: widget.clock,
+            strings: paneRowStrings(l10n),
+            onTap: () => widget.callbacks.onTap(controller, index),
+            onLongPress: () => widget.callbacks.onLongPress(controller, index),
+            onActions: () => widget.callbacks.onActions(controller, index),
+            onRename:
+                controller.verbsEnabled && !nameIsFlagged(entries[index].name)
+                ? () {
+                    controller.setCursorIndex(index);
+                    controller.startRename();
+                  }
+                : null,
+          ),
         ),
       );
     }

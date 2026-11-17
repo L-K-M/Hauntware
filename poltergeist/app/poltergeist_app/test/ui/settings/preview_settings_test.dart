@@ -42,10 +42,7 @@ void main() {
     test('values round-trip through a reopened store', () async {
       await prefs.savePreviewCacheCapacityBytes(64 << 20);
       await prefs.savePreviewThresholdBytes(8 << 20);
-      expect(
-        await reopened().loadPreviewCacheCapacityBytes(),
-        64 << 20,
-      );
+      expect(await reopened().loadPreviewCacheCapacityBytes(), 64 << 20);
       expect(await reopened().loadPreviewThresholdBytes(), 8 << 20);
     });
 
@@ -181,9 +178,7 @@ void main() {
       expect(find.textContaining('7'), findsWidgets);
     });
 
-    testWidgets('a null cache renders the section disabled', (
-      tester,
-    ) async {
+    testWidgets('a null cache renders the section disabled', (tester) async {
       await tester.pumpWidget(wrap(settings(cache: null)));
       final clear = tester.widget<TextButton>(
         find.byKey(const ValueKey('preview.clearCache')),

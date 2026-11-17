@@ -83,65 +83,74 @@ class _ToggleableKeystore extends FlutterSecureStorage {
 }
 
 void main() {
-  group('MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug)',
-      () {
-    test('probeKeystore returns null and marks the keystore unavailable',
+  group(
+    'MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug)',
+    () {
+      test(
+        'probeKeystore returns null and marks the keystore unavailable',
         () async {
-      final keys = MasterKeyManager(_LockedKeystore());
-      final key = await keys.probeKeystore(hasExistingVault: false);
-      expect(key, isNull);
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-      expect(keys.lastKeystoreError, contains('KeyringLocked'));
-    });
-
-    test('reads degrade to "not set" instead of throwing', () async {
-      final keys = MasterKeyManager(_LockedKeystore());
-      expect(await keys.getApiKey('anthropic'), isNull);
-      expect(await keys.hasKeystoreKey(), isFalse);
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-    });
-
-    test('writes throw a clear KeystoreException', () async {
-      final keys = MasterKeyManager(_LockedKeystore());
-      await expectLater(
-        () => keys.putApiKey('anthropic', 'sk-test'),
-        throwsA(
-          isA<KeystoreException>()
-              .having((e) => e.message, 'message', contains('keyring')),
-        ),
+          final keys = MasterKeyManager(_LockedKeystore());
+          final key = await keys.probeKeystore(hasExistingVault: false);
+          expect(key, isNull);
+          expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+          expect(keys.lastKeystoreError, contains('KeyringLocked'));
+        },
       );
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-    });
 
-    test('a keystore that comes back is picked up on re-probe', () async {
-      final storage = _ToggleableKeystore()..locked = true;
-      final keys = MasterKeyManager(storage);
+      test('reads degrade to "not set" instead of throwing', () async {
+        final keys = MasterKeyManager(_LockedKeystore());
+        expect(await keys.getApiKey('anthropic'), isNull);
+        expect(await keys.hasKeystoreKey(), isFalse);
+        expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+      });
 
-      expect(await keys.probeKeystore(hasExistingVault: false), isNull);
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+      test('writes throw a clear KeystoreException', () async {
+        final keys = MasterKeyManager(_LockedKeystore());
+        await expectLater(
+          () => keys.putApiKey('anthropic', 'sk-test'),
+          throwsA(
+            isA<KeystoreException>().having(
+              (e) => e.message,
+              'message',
+              contains('keyring'),
+            ),
+          ),
+        );
+        expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+      });
 
-      storage.locked = false;
-      final key = await keys.probeKeystore(hasExistingVault: false);
-      expect(key, isNotNull);
-      expect(key, hasLength(32));
-      expect(keys.keystoreStatus, KeystoreStatus.available);
-      expect(keys.lastKeystoreError, isNull);
+      test('a keystore that comes back is picked up on re-probe', () async {
+        final storage = _ToggleableKeystore()..locked = true;
+        final keys = MasterKeyManager(storage);
 
-      // The created key persists: a second probe returns the same one.
-      expect(await keys.probeKeystore(hasExistingVault: false), equals(key));
-    });
+        expect(await keys.probeKeystore(hasExistingVault: false), isNull);
+        expect(keys.keystoreStatus, KeystoreStatus.unavailable);
 
-    test('probeKeystore never fabricates an ephemeral key while locked',
+        storage.locked = false;
+        final key = await keys.probeKeystore(hasExistingVault: false);
+        expect(key, isNotNull);
+        expect(key, hasLength(32));
+        expect(keys.keystoreStatus, KeystoreStatus.available);
+        expect(keys.lastKeystoreError, isNull);
+
+        // The created key persists: a second probe returns the same one.
+        expect(await keys.probeKeystore(hasExistingVault: false), equals(key));
+      });
+
+      test(
+        'probeKeystore never fabricates an ephemeral key while locked',
         () async {
-      // Regression guard for the tempting wrong fix: if probeKeystore had
-      // returned a fresh random key under a locked keystore, anything saved
-      // this session would decrypt to garbage (or appear corrupt) forever
-      // after — "unavailable" is the only honest answer.
-      final keys = MasterKeyManager(_LockedKeystore());
-      expect(await keys.probeKeystore(hasExistingVault: false), isNull);
-      expect(await keys.probeKeystore(hasExistingVault: false), isNull);
-    });
-  });
+          // Regression guard for the tempting wrong fix: if probeKeystore had
+          // returned a fresh random key under a locked keystore, anything saved
+          // this session would decrypt to garbage (or appear corrupt) forever
+          // after — "unavailable" is the only honest answer.
+          final keys = MasterKeyManager(_LockedKeystore());
+          expect(await keys.probeKeystore(hasExistingVault: false), isNull);
+          expect(await keys.probeKeystore(hasExistingVault: false), isNull);
+        },
+      );
+    },
+  );
 
   group('LockedSecretVault', () {
     test('reads and writes throw VaultLockedException; deletes work', () async {

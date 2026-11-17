@@ -137,7 +137,8 @@ void main() {
       await crashMidRekey(installed: oldKey);
 
       services = await AppServices.initialize(
-          masterKeyManager: MasterKeyManager(keystore));
+        masterKeyManager: MasterKeyManager(keystore),
+      );
 
       expect((await services.vault.getSecret('a'))!.value, 'value-a');
       expect(await journalFile.exists(), isFalse);
@@ -147,7 +148,8 @@ void main() {
       await crashMidRekey(installed: newKey);
 
       services = await AppServices.initialize(
-          masterKeyManager: MasterKeyManager(keystore));
+        masterKeyManager: MasterKeyManager(keystore),
+      );
 
       expect((await services.vault.getSecret('a'))!.value, 'value-a');
       expect(services.vaultKey, equals(newKey));
@@ -159,7 +161,8 @@ void main() {
       keystore.locked = true;
 
       services = await AppServices.initialize(
-          masterKeyManager: MasterKeyManager(keystore));
+        masterKeyManager: MasterKeyManager(keystore),
+      );
 
       // Nothing can be settled without the key, so the vault stays locked and
       // the journal survives to be settled later.
@@ -182,14 +185,16 @@ void main() {
     /// A vault holding one credential, opened by the key the keystore holds.
     Future<void> enrolled() async {
       await MasterKeyManager(keystore).setKeystoreKey(oldKey);
-      await SecretVault(FileVaultStore(vaultFile), oldKey)
-          .putSecret(secret('a'));
+      await SecretVault(
+        FileVaultStore(vaultFile),
+        oldKey,
+      ).putSecret(secret('a'));
       services = await AppServices.initialize(
-          masterKeyManager: MasterKeyManager(keystore));
+        masterKeyManager: MasterKeyManager(keystore),
+      );
     }
 
-    test('both generations are staged before the keystore is changed',
-        () async {
+    test('both generations are staged before the keystore is changed', () async {
       await enrolled();
       // The whole point of the journal is that it is durable *first*. Read the
       // sidecar at the moment the keystore write begins: staged after it, this
@@ -210,105 +215,125 @@ void main() {
       expect(await journalFile.exists(), isFalse);
     });
 
-    test('a keyring that refuses the new key leaves the old one working',
-        () async {
-      await enrolled();
-      keystore.locked = true;
+    test(
+      'a keyring that refuses the new key leaves the old one working',
+      () async {
+        await enrolled();
+        keystore.locked = true;
 
-      await expectLater(() => services.rekeyVaultForTesting(newKey),
-          throwsA(isA<KeystoreException>()));
+        await expectLater(
+          () => services.rekeyVaultForTesting(newKey),
+          throwsA(isA<KeystoreException>()),
+        );
 
-      // Staging never wrote the vault file, so there is nothing to roll back:
-      // the old generation is still the stored one and still the installed key.
-      expect(services.vaultKey, equals(oldKey));
-      expect((await services.vault.getSecret('a'))!.value, 'value-a');
-      // The journal stays: a keyring this locked cannot say which key it
-      // holds, and settling on a guess is what would make the loss permanent.
-      expect(await journalFile.exists(), isTrue);
+        // Staging never wrote the vault file, so there is nothing to roll back:
+        // the old generation is still the stored one and still the installed key.
+        expect(services.vaultKey, equals(oldKey));
+        expect((await services.vault.getSecret('a'))!.value, 'value-a');
+        // The journal stays: a keyring this locked cannot say which key it
+        // holds, and settling on a guess is what would make the loss permanent.
+        expect(await journalFile.exists(), isTrue);
 
-      keystore.locked = false;
-      expect(
-          (await SecretVault(FileVaultStore(vaultFile), oldKey)
-                  .getSecret('a'))!
-              .value,
-          'value-a');
-    });
+        keystore.locked = false;
+        expect(
+          (await SecretVault(
+            FileVaultStore(vaultFile),
+            oldKey,
+          ).getSecret('a'))!.value,
+          'value-a',
+        );
+      },
+    );
 
-    test('retrying once the keyring is back settles the staged journal',
-        () async {
-      await enrolled();
-      keystore.locked = true;
-      await expectLater(() => services.rekeyVaultForTesting(newKey),
-          throwsA(isA<KeystoreException>()));
-      expect(await journalFile.exists(), isTrue);
+    test(
+      'retrying once the keyring is back settles the staged journal',
+      () async {
+        await enrolled();
+        keystore.locked = true;
+        await expectLater(
+          () => services.rekeyVaultForTesting(newKey),
+          throwsA(isA<KeystoreException>()),
+        );
+        expect(await journalFile.exists(), isTrue);
 
-      // Staging refuses to write a second journal over the first, so without
-      // settling first the retry would fail on the leftovers of the attempt
-      // that could not finish rather than on anything wrong with this one.
-      keystore.locked = false;
-      await services.rekeyVaultForTesting(newKey);
+        // Staging refuses to write a second journal over the first, so without
+        // settling first the retry would fail on the leftovers of the attempt
+        // that could not finish rather than on anything wrong with this one.
+        keystore.locked = false;
+        await services.rekeyVaultForTesting(newKey);
 
-      expect(services.vaultKey, equals(newKey));
-      expect((await services.vault.getSecret('a'))!.value, 'value-a');
-      expect(await journalFile.exists(), isFalse);
-    });
+        expect(services.vaultKey, equals(newKey));
+        expect((await services.vault.getSecret('a'))!.value, 'value-a');
+        expect(await journalFile.exists(), isFalse);
+      },
+    );
 
-    test('a keyring that stores the key and then throws settles on it',
-        () async {
-      await enrolled();
-      keystore.throwAfterWrite = true;
+    test(
+      'a keyring that stores the key and then throws settles on it',
+      () async {
+        await enrolled();
+        keystore.throwAfterWrite = true;
 
-      await expectLater(() => services.rekeyVaultForTesting(newKey),
-          throwsA(isA<KeystoreException>()));
+        await expectLater(
+          () => services.rekeyVaultForTesting(newKey),
+          throwsA(isA<KeystoreException>()),
+        );
 
-      // The keystore kept the new key, so the new generation is the one that
-      // has to win, and reading the keystore back is what tells them apart.
-      expect(services.vaultKey, equals(newKey));
-      expect((await services.vault.getSecret('a'))!.value, 'value-a');
-      expect(await journalFile.exists(), isFalse);
+        // The keystore kept the new key, so the new generation is the one that
+        // has to win, and reading the keystore back is what tells them apart.
+        expect(services.vaultKey, equals(newKey));
+        expect((await services.vault.getSecret('a'))!.value, 'value-a');
+        expect(await journalFile.exists(), isFalse);
 
-      keystore.throwAfterWrite = false;
-      expect(
-          (await SecretVault(FileVaultStore(vaultFile), newKey)
-                  .getSecret('a'))!
-              .value,
-          'value-a');
-    });
+        keystore.throwAfterWrite = false;
+        expect(
+          (await SecretVault(
+            FileVaultStore(vaultFile),
+            newKey,
+          ).getSecret('a'))!.value,
+          'value-a',
+        );
+      },
+    );
 
-    test('a keyring that commits and then cannot testify keeps the journal',
-        () async {
-      await enrolled();
-      keystore.lockAfterWrite = true;
+    test(
+      'a keyring that commits and then cannot testify keeps the journal',
+      () async {
+        await enrolled();
+        keystore.lockAfterWrite = true;
 
-      await expectLater(() => services.rekeyVaultForTesting(newKey),
-          throwsA(isA<KeystoreException>()));
+        await expectLater(
+          () => services.rekeyVaultForTesting(newKey),
+          throwsA(isA<KeystoreException>()),
+        );
 
-      // The one state no witness can resolve: the new key is installed, and
-      // the keyring that would say so is locked. Settling on the old key here
-      // would commit the vault to a generation the keystore cannot open and
-      // clear the only copy of the other one.
-      expect(await journalFile.exists(), isTrue);
-      // Staging never wrote the vault file, so this session keeps reading
-      // through the generation that is still stored.
-      expect(services.vaultKey, equals(oldKey));
-      expect((await services.vault.getSecret('a'))!.value, 'value-a');
+        // The one state no witness can resolve: the new key is installed, and
+        // the keyring that would say so is locked. Settling on the old key here
+        // would commit the vault to a generation the keystore cannot open and
+        // clear the only copy of the other one.
+        expect(await journalFile.exists(), isTrue);
+        // Staging never wrote the vault file, so this session keeps reading
+        // through the generation that is still stored.
+        expect(services.vaultKey, equals(oldKey));
+        expect((await services.vault.getSecret('a'))!.value, 'value-a');
 
-      // The next launch, once the keyring is back: it settles against the key
-      // the keystore really kept, and the new generation wins after all.
-      keystore.locked = false;
-      keystore.lockAfterWrite = false;
-      final next = await AppServices.initialize(
-          masterKeyManager: MasterKeyManager(keystore));
-      addTearDown(next.probe.dispose);
-      expect(next.vaultKey, equals(newKey));
-      expect((await next.vault.getSecret('a'))!.value, 'value-a');
-      expect(await journalFile.exists(), isFalse);
-    });
+        // The next launch, once the keyring is back: it settles against the key
+        // the keystore really kept, and the new generation wins after all.
+        keystore.locked = false;
+        keystore.lockAfterWrite = false;
+        final next = await AppServices.initialize(
+          masterKeyManager: MasterKeyManager(keystore),
+        );
+        addTearDown(next.probe.dispose);
+        expect(next.vaultKey, equals(newKey));
+        expect((await next.vault.getSecret('a'))!.value, 'value-a');
+        expect(await journalFile.exists(), isFalse);
+      },
+    );
 
     for (final writeThrows in [false, true]) {
       for (final restart in [false, true]) {
-        test(
-            'a failed settle preserves the session until recovery '
+        test('a failed settle preserves the session until recovery '
             '(writeThrows=$writeThrows, restart=$restart)', () async {
           await enrolled();
           final blockedWrite = AtomicWriteBlocker(vaultFile);
@@ -319,9 +344,11 @@ void main() {
 
           await expectLater(
             () => services.rekeyVaultForTesting(newKey),
-            throwsA(writeThrows
-                ? isA<KeystoreException>()
-                : isA<FileSystemException>()),
+            throwsA(
+              writeThrows
+                  ? isA<KeystoreException>()
+                  : isA<FileSystemException>(),
+            ),
           );
 
           // The caller has not adopted a new key after a failed settle. The
@@ -329,15 +356,18 @@ void main() {
           expect(services.vaultKey, equals(oldKey));
           expect((await services.vault.getSecret('a'))!.value, 'value-a');
           expect(await journalFile.exists(), isTrue);
-          await expectLater(() => services.vault.putSecret(secret('b')),
-              throwsA(isA<StateError>()));
+          await expectLater(
+            () => services.vault.putSecret(secret('b')),
+            throwsA(isA<StateError>()),
+          );
 
           await blockedWrite.delete();
           keystore.onWrite = null;
           keystore.throwAfterWrite = false;
           if (restart) {
             final next = await AppServices.initialize(
-                masterKeyManager: MasterKeyManager(keystore));
+              masterKeyManager: MasterKeyManager(keystore),
+            );
             addTearDown(next.probe.dispose);
             expect(next.vaultKey, equals(newKey));
             expect((await next.vault.getSecret('a'))!.value, 'value-a');
@@ -348,29 +378,35 @@ void main() {
           }
           expect(await journalFile.exists(), isFalse);
           expect(
-              (await SecretVault(FileVaultStore(vaultFile), newKey)
-                      .getSecret('a'))!
-                  .value,
-              'value-a');
+            (await SecretVault(
+              FileVaultStore(vaultFile),
+              newKey,
+            ).getSecret('a'))!.value,
+            'value-a',
+          );
         });
       }
     }
 
-    test('a key matching neither generation leaves the session readable',
-        () async {
-      await enrolled();
-      // The keystore ends up holding something neither staged generation was
-      // sealed under: a foreign or rewritten entry.
-      keystore.substituteOnWrite = base64.encode(secureRandomBytes(32));
+    test(
+      'a key matching neither generation leaves the session readable',
+      () async {
+        await enrolled();
+        // The keystore ends up holding something neither staged generation was
+        // sealed under: a foreign or rewritten entry.
+        keystore.substituteOnWrite = base64.encode(secureRandomBytes(32));
 
-      await expectLater(() => services.rekeyVaultForTesting(newKey),
-          throwsA(isA<KeystoreException>()));
+        await expectLater(
+          () => services.rekeyVaultForTesting(newKey),
+          throwsA(isA<KeystoreException>()),
+        );
 
-      // The journal is discarded because nothing opens it, but the stored
-      // vault still holds the old generation — so the session must stay on the
-      // key that reads it rather than adopting the one that cannot.
-      expect(services.vaultKey, equals(oldKey));
-      expect((await services.vault.getSecret('a'))!.value, 'value-a');
-    });
+        // The journal is discarded because nothing opens it, but the stored
+        // vault still holds the old generation — so the session must stay on the
+        // key that reads it rather than adopting the one that cannot.
+        expect(services.vaultKey, equals(oldKey));
+        expect((await services.vault.getSecret('a'))!.value, 'value-a');
+      },
+    );
   });
 }

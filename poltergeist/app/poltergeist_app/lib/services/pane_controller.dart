@@ -628,8 +628,7 @@ class PaneController extends ChangeNotifier {
   /// P4-21's Undo feed: invoked after an inline rename of `from` to `to`
   /// on [location]'s host committed. The strip stamps the same callback
   /// on every tab; the shell records it on Edit ▸ Undo.
-  void Function(PaneLocation location, String from, String to)?
-  onEntryRenamed;
+  void Function(PaneLocation location, String from, String to)? onEntryRenamed;
 
   /// The same feed for Rename Items: invoked once a run that renamed
   /// anything settles, with the renames in the order they ran, so Undo
@@ -994,7 +993,9 @@ class PaneController extends ChangeNotifier {
   /// Names app storage without exposing its platform directory name.
   /// Paths used for navigation and file operations keep their real values.
   String pathLabel(String? path, AppLocalizations l10n) {
-    if (_location is LocalPaneLocation && path != null && path == _appStoragePath) {
+    if (_location is LocalPaneLocation &&
+        path != null &&
+        path == _appStoragePath) {
       return l10n.compactHomeThisDeviceSubtitle;
     }
 
@@ -1233,7 +1234,8 @@ class PaneController extends ChangeNotifier {
     if (_selection.selectedKeys.isEmpty) return [];
     return [
       for (var i = 0; i < _entries.length; i++)
-        if (i < _rowKeys.length && _selection.selectedKeys.contains(_rowKeys[i]))
+        if (i < _rowKeys.length &&
+            _selection.selectedKeys.contains(_rowKeys[i]))
           _entries[i],
     ];
   }
@@ -1563,12 +1565,11 @@ class PaneController extends ChangeNotifier {
     Bookmark bookmark, {
     String? initialPath,
     ServerConfig? resolvedConfig,
-  }) =>
-      _connectRemote(
-        bookmark,
-        initialPath: initialPath,
-        resolvedConfig: resolvedConfig,
-      );
+  }) => _connectRemote(
+    bookmark,
+    initialPath: initialPath,
+    resolvedConfig: resolvedConfig,
+  );
 
   Future<void> _connectRemote(
     Bookmark bookmark, {
@@ -2042,7 +2043,8 @@ class PaneController extends ChangeNotifier {
     final relistLost = (_watchRefreshGeneration ?? 0) > answered;
     final channel = _channel;
     final location = _location;
-    final ownDirt = _watchDirty &&
+    final ownDirt =
+        _watchDirty &&
         channel != null &&
         location is LocalPaneLocation &&
         _watchHolds(channel, location.path);
@@ -2093,7 +2095,8 @@ class PaneController extends ChangeNotifier {
       path,
       _channel!,
       historyTraversal: true,
-      reveal: stop.cursorPath ?? (from == null ? null : _childToward(path, from)),
+      reveal:
+          stop.cursorPath ?? (from == null ? null : _childToward(path, from)),
     );
   }
 
@@ -5049,9 +5052,7 @@ class PaneController extends ChangeNotifier {
       _rowDepths = List.filled(top.length, 0);
       return top;
     }
-    final folded = _filterQuery.isEmpty
-        ? null
-        : _filterQuery.toLowerCase();
+    final folded = _filterQuery.isEmpty ? null : _filterQuery.toLowerCase();
     final rows = <RemoteFileEntry>[];
     final depths = <int>[];
     void add(List<RemoteFileEntry> level, int depth) {
@@ -5375,10 +5376,7 @@ class PaneController extends ChangeNotifier {
   /// it still stands on the restored directory; otherwise
   /// [relistIfStale] re-lists (which re-arms) or, for Esc, only
   /// re-arms.
-  void _rewatchRestored({
-    required bool relistIfStale,
-    bool signalled = false,
-  }) {
+  void _rewatchRestored({required bool relistIfStale, bool signalled = false}) {
     final channel = _channel;
     final location = _location;
     if (channel == null ||

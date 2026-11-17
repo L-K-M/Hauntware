@@ -63,23 +63,19 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final path = '${directory.path}/bench-results-p1.json';
 
-    await (BenchResults(fingerprint: fingerprint)
-          ..addValue(
-            scenario: 'P6',
-            repetition: 2,
-            value: 0.1,
-            unit: '%',
-            scenarioConfig: 'local-entries-100000-scroll-30s@60hz',
-          ))
+    await (BenchResults(fingerprint: fingerprint)..addValue(
+          scenario: 'P6',
+          repetition: 2,
+          value: 0.1,
+          unit: '%',
+          scenarioConfig: 'local-entries-100000-scroll-30s@60hz',
+        ))
         .writeTo(path);
 
     final decoded = jsonDecode(await File(path).readAsString());
     expect((decoded as Map<String, Object?>)['schema'], resultsSchemaId);
     expect((decoded['rows']! as List<Object?>).single, isNotNull);
     // The owned temp must not linger beside the published file.
-    expect(
-      directory.listSync().where((f) => f.path.endsWith('.tmp')),
-      isEmpty,
-    );
+    expect(directory.listSync().where((f) => f.path.endsWith('.tmp')), isEmpty);
   });
 }

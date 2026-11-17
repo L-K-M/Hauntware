@@ -21,12 +21,13 @@ const String _secretIdPrefix = 'secret$_recordKindDelimiter';
 const String _snippetIdPrefix = 'snippet$_recordKindDelimiter';
 const String _syncLoggerName = 'seance.sync';
 
-typedef _ApplySkip = void Function(
-  String id,
-  Object error,
-  StackTrace stackTrace, {
-  bool? permanent,
-});
+typedef _ApplySkip =
+    void Function(
+      String id,
+      Object error,
+      StackTrace stackTrace, {
+      bool? permanent,
+    });
 
 Future<T> _runLocalDirectly<T>(Future<T> Function() action) => action();
 
@@ -86,19 +87,17 @@ RecordKind _tombstoneKind(String id) {
 }
 
 bool _isSeancePublication(String id) => switch (_tombstoneKind(id)) {
-      RecordKind.serverConfig ||
-      RecordKind.hostKey ||
-      RecordKind.secret ||
-      RecordKind.snippet ||
-      RecordKind.assistantSettings ||
-      RecordKind.inboxApp ||
-      RecordKind.inboxStatus =>
-        true,
-      RecordKind.bookmark ||
-      RecordKind.klabautermann ||
-      RecordKind.unknown =>
-        false,
-    };
+  RecordKind.serverConfig ||
+  RecordKind.hostKey ||
+  RecordKind.secret ||
+  RecordKind.snippet ||
+  RecordKind.assistantSettings ||
+  RecordKind.inboxApp ||
+  RecordKind.inboxStatus => true,
+  RecordKind.bookmark ||
+  RecordKind.klabautermann ||
+  RecordKind.unknown => false,
+};
 
 /// Bridges the app's domain objects (server configs, pinned host keys, and —
 /// opt-in — secrets) to the encrypted record layer and back, then drives a
@@ -233,8 +232,7 @@ class SyncCoordinator {
   /// local pin for [putIfNoConflict] to conflict with. A matching current pin,
   /// on the other hand, is an explicit later trust decision and may sync.
   Future<bool> _rejectedWithoutTrustedMatch(HostKey pin) async {
-    final rejected =
-        await pinVerdicts?.rejectedFingerprintFor(pin.locator);
+    final rejected = await pinVerdicts?.rejectedFingerprintFor(pin.locator);
     if (rejected != pin.fingerprintSha256) return false;
     final trusted = await hostKeyStore.get(pin.host, pin.port);
     return trusted?.fingerprintSha256 != pin.fingerprintSha256;
@@ -249,16 +247,16 @@ class SyncCoordinator {
   /// excluded half — a shape the second caller could only copy, not share, so
   /// adding a condition would have reached one and missed the other.
   Set<String> _publishableSecretRefs(List<ServerConfig> servers) => {
-        if (syncSecrets)
-          for (final server in servers)
-            if (!server.excludeFromSync &&
-                server.syncSecret &&
-                server.secretRef != null &&
-                // The app's own vault entries are never a credential, even
-                // under a config that names one.
-                !isReservedVaultId(server.secretRef!))
-              server.secretRef!,
-      };
+    if (syncSecrets)
+      for (final server in servers)
+        if (!server.excludeFromSync &&
+            server.syncSecret &&
+            server.secretRef != null &&
+            // The app's own vault entries are never a credential, even
+            // under a config that names one.
+            !isReservedVaultId(server.secretRef!))
+          server.secretRef!,
+  };
 
   /// Host-key locators an actively synced server names.
   ///
@@ -268,13 +266,10 @@ class SyncCoordinator {
   /// Publishing only affirmative live references therefore fails closed for
   /// that privacy choice. A later synced config naming the address makes the
   /// existing local pin eligible again.
-  static Set<String> _publishableHostKeyLocators(
-    List<ServerConfig> servers,
-  ) =>
+  static Set<String> _publishableHostKeyLocators(List<ServerConfig> servers) =>
       {
         for (final server in servers)
-          if (!server.excludeFromSync)
-            hostKeyLocator(server.host, server.port),
+          if (!server.excludeFromSync) hostKeyLocator(server.host, server.port),
       };
 
   /// Stage a trusted domain value only when its semantic contents changed.
@@ -306,7 +301,8 @@ class SyncCoordinator {
         // turn stale equal-stamp content into a winning upload. Durable
         // deletion intents do retain their deleting device id, so tombstones
         // can still use the complete LWW tuple on a tie.
-        final existingWins = existing.updatedAt > desired.updatedAt ||
+        final existingWins =
+            existing.updatedAt > desired.updatedAt ||
             (sameStamp && !desired.deleted) ||
             (sameStamp &&
                 desired.deleted &&
@@ -444,8 +440,9 @@ class SyncCoordinator {
     }
     final serversForPolicy = policyServers.values.toList();
 
-    final publishableHostKeyLocators =
-        _publishableHostKeyLocators(serversForPolicy);
+    final publishableHostKeyLocators = _publishableHostKeyLocators(
+      serversForPolicy,
+    );
     // The same rule, for credentials: nothing prevents two configs pointing at
     // one vault entry, and a credential a still-synced server holds must keep
     // reaching the devices that want it.
@@ -487,13 +484,15 @@ class SyncCoordinator {
         changed += await _retract(server, syncedSecretRefs, collectedIds.add);
         continue;
       }
-      await stage(DecryptedRecord(
-        id: server.id,
-        kind: RecordKind.serverConfig,
-        updatedAt: server.updatedAt,
-        deviceId: deviceId,
-        data: server.toJson(),
-      ));
+      await stage(
+        DecryptedRecord(
+          id: server.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: server.updatedAt,
+          deviceId: deviceId,
+          data: server.toJson(),
+        ),
+      );
     }
     // Publish each opted-in credential at its own edit time. Legacy local
     // entries use zero until an actual edit or a remote version supplies a
@@ -518,13 +517,15 @@ class SyncCoordinator {
       // which is not the same as having nothing to say.
       final secret = await secretVault?.readableSecret(ref);
       if (secret == null) continue;
-      await stage(DecryptedRecord(
-        id: '$_secretIdPrefix${secret.id}',
-        kind: RecordKind.secret,
-        updatedAt: secret.updatedAt,
-        deviceId: deviceId,
-        data: secret.toJson(),
-      ));
+      await stage(
+        DecryptedRecord(
+          id: '$_secretIdPrefix${secret.id}',
+          kind: RecordKind.secret,
+          updatedAt: secret.updatedAt,
+          deviceId: deviceId,
+          data: secret.toJson(),
+        ),
+      );
     }
     // Deletions the user made are remembered in [tombstoneStore], not in
     // configStore — the row is gone. Republish each as a dirty tombstone so the
@@ -547,13 +548,15 @@ class SyncCoordinator {
       if (presentIds.contains(tombstone.id)) continue;
       final kind = _tombstoneKind(tombstone.id);
       if (kind == RecordKind.unknown) continue;
-      await stage(DecryptedRecord(
-        id: tombstone.id,
-        kind: kind,
-        updatedAt: tombstone.updatedAt,
-        deviceId: tombstone.deviceId,
-        deleted: true,
-      ));
+      await stage(
+        DecryptedRecord(
+          id: tombstone.id,
+          kind: kind,
+          updatedAt: tombstone.updatedAt,
+          deviceId: tombstone.deviceId,
+          deleted: true,
+        ),
+      );
     }
     final hostKeys = await hostKeyStore.all();
     final negativePins = await pinVerdicts?.negativePins() ?? const {};
@@ -584,13 +587,15 @@ class SyncCoordinator {
         // address publishable merely by disappearing from local policy.
         continue;
       }
-      await stage(DecryptedRecord(
-        id: hk.recordId,
-        kind: RecordKind.hostKey,
-        updatedAt: hk.pinnedAt,
-        deviceId: deviceId,
-        data: hk.toJson(),
-      ));
+      await stage(
+        DecryptedRecord(
+          id: hk.recordId,
+          kind: RecordKind.hostKey,
+          updatedAt: hk.pinnedAt,
+          deviceId: deviceId,
+          data: hk.toJson(),
+        ),
+      );
     }
     // The contract reserves null for "the keys could not be vouched for this
     // round", but the real store backs onto an OS keyring, and a locked or
@@ -628,25 +633,29 @@ class SyncCoordinator {
     // the exact harm the switch-on guard exists to prevent; guarding the
     // stamp bump alone left this path open.
     if (assistant != null && _isViableAssistantRecord(assistant)) {
-      await stage(DecryptedRecord(
-        id: AssistantSettings.recordId,
-        kind: RecordKind.assistantSettings,
-        // The settings' own timestamp, not the round's: collectLocal runs
-        // every five minutes, and a moving one would make each round a fresh
-        // winning write and set two devices trading the record forever.
-        updatedAt: assistant.updatedAt,
-        deviceId: deviceId,
-        data: assistant.toJson(),
-      ));
+      await stage(
+        DecryptedRecord(
+          id: AssistantSettings.recordId,
+          kind: RecordKind.assistantSettings,
+          // The settings' own timestamp, not the round's: collectLocal runs
+          // every five minutes, and a moving one would make each round a fresh
+          // winning write and set two devices trading the record forever.
+          updatedAt: assistant.updatedAt,
+          deviceId: deviceId,
+          data: assistant.toJson(),
+        ),
+      );
     }
     for (final s in snippetList) {
-      await stage(DecryptedRecord(
-        id: '$_snippetIdPrefix${s.id}',
-        kind: RecordKind.snippet,
-        updatedAt: s.updatedAt,
-        deviceId: deviceId,
-        data: s.toJson(),
-      ));
+      await stage(
+        DecryptedRecord(
+          id: '$_snippetIdPrefix${s.id}',
+          kind: RecordKind.snippet,
+          updatedAt: s.updatedAt,
+          deviceId: deviceId,
+          data: s.toJson(),
+        ),
+      );
     }
     if (inboxAppStore != null) {
       // FileInboxAppStore withholds a live app when its vault key is damaged.
@@ -660,15 +669,16 @@ class SyncCoordinator {
         }
       }
     }
-    for (final app
-        in await inboxAppStore?.listApps() ?? const <InboxApp>[]) {
-      await stage(DecryptedRecord(
-        id: app.recordId,
-        kind: RecordKind.inboxApp,
-        updatedAt: app.updatedAt,
-        deviceId: deviceId,
-        data: app.toJson(),
-      ));
+    for (final app in await inboxAppStore?.listApps() ?? const <InboxApp>[]) {
+      await stage(
+        DecryptedRecord(
+          id: app.recordId,
+          kind: RecordKind.inboxApp,
+          updatedAt: app.updatedAt,
+          deviceId: deviceId,
+          data: app.toJson(),
+        ),
+      );
     }
     final statusCutoff = _statusCutoff();
     final statuses =
@@ -691,13 +701,15 @@ class SyncCoordinator {
       // Past retention a status names nothing any server still holds, and
       // publishing it every round would only grow every device's mirror.
       if (status.updatedAt < statusCutoff) continue;
-      await stage(DecryptedRecord(
-        id: status.recordId,
-        kind: RecordKind.inboxStatus,
-        updatedAt: status.updatedAt,
-        deviceId: deviceId,
-        data: status.toJson(),
-      ));
+      await stage(
+        DecryptedRecord(
+          id: status.recordId,
+          kind: RecordKind.inboxStatus,
+          updatedAt: status.updatedAt,
+          deviceId: deviceId,
+          data: status.toJson(),
+        ),
+      );
     }
     if (cancelMissing) await _cancelUncollectedDirty(collectedIds);
     return changed;
@@ -835,13 +847,15 @@ class SyncCoordinator {
   }
 
   Future<bool> _tombstone(String id, RecordKind kind, int updatedAt) {
-    return _stageLocal(DecryptedRecord(
-      id: id,
-      kind: kind,
-      updatedAt: updatedAt,
-      deviceId: deviceId,
-      deleted: true,
-    ));
+    return _stageLocal(
+      DecryptedRecord(
+        id: id,
+        kind: kind,
+        updatedAt: updatedAt,
+        deviceId: deviceId,
+        deleted: true,
+      ),
+    );
   }
 
   /// Re-date a credential this device retracted and then opted back in to,
@@ -894,13 +908,15 @@ class SyncCoordinator {
         // [_revive]: a failed store write is retried identically next round,
         // while a failed stage after a successful store write would leave the
         // guard above dropping this credential forever.
-        await _stageLocal(DecryptedRecord(
-          id: '$_secretIdPrefix$ref',
-          kind: RecordKind.secret,
-          updatedAt: bumped.updatedAt,
-          deviceId: deviceId,
-          data: bumped.toJson(),
-        ));
+        await _stageLocal(
+          DecryptedRecord(
+            id: '$_secretIdPrefix$ref',
+            kind: RecordKind.secret,
+            updatedAt: bumped.updatedAt,
+            deviceId: deviceId,
+            data: bumped.toJson(),
+          ),
+        );
         await vault.putSecret(bumped);
         bumpedCount++;
       } catch (error, stackTrace) {
@@ -1038,8 +1054,10 @@ class SyncCoordinator {
           if (routedKind == RecordKind.unknown || dec.kind != routedKind) {
             skip(
               dec.id,
-              StateError('tombstone kind ${dec.kind.name} does not match '
-                  'record id ${dec.id}'),
+              StateError(
+                'tombstone kind ${dec.kind.name} does not match '
+                'record id ${dec.id}',
+              ),
               StackTrace.current,
               permanent: true,
             );
@@ -1101,8 +1119,9 @@ class SyncCoordinator {
           if (snippets != null &&
               dec.id.length > _snippetIdPrefix.length &&
               dec.id.startsWith(_snippetIdPrefix)) {
-            await snippets
-                .deleteSnippet(dec.id.substring(_snippetIdPrefix.length));
+            await snippets.deleteSnippet(
+              dec.id.substring(_snippetIdPrefix.length),
+            );
           }
           continue;
         }
@@ -1228,7 +1247,8 @@ class SyncCoordinator {
             // sharing its stamp, which is the narrow price of convergence and
             // why the edit stamp is minted as fine-grained as the clock
             // allows.
-            if (assistant.updatedAt < await store.assistantSettingsUpdatedAt()) {
+            if (assistant.updatedAt <
+                await store.assistantSettingsUpdatedAt()) {
               continue;
             }
 
@@ -1245,8 +1265,10 @@ class SyncCoordinator {
             if (dec.id != app.recordId) {
               skip(
                 dec.id,
-                StateError('inbox app ${app.id} does not match record id '
-                    '${dec.id}'),
+                StateError(
+                  'inbox app ${app.id} does not match record id '
+                  '${dec.id}',
+                ),
                 StackTrace.current,
                 permanent: true,
               );
@@ -1268,17 +1290,23 @@ class SyncCoordinator {
               // the removal never moves backwards.
               if (!app.removed) {
                 final redated = existing.asRemoved(
-                  updatedAt: [dec.updatedAt, app.updatedAt, existing.updatedAt]
-                          .reduce(max) +
+                  updatedAt:
+                      [
+                        dec.updatedAt,
+                        app.updatedAt,
+                        existing.updatedAt,
+                      ].reduce(max) +
                       1,
                 );
-                await _stageLocal(DecryptedRecord(
-                  id: redated.recordId,
-                  kind: RecordKind.inboxApp,
-                  updatedAt: redated.updatedAt,
-                  deviceId: deviceId,
-                  data: redated.toJson(),
-                ));
+                await _stageLocal(
+                  DecryptedRecord(
+                    id: redated.recordId,
+                    kind: RecordKind.inboxApp,
+                    updatedAt: redated.updatedAt,
+                    deviceId: deviceId,
+                    data: redated.toJson(),
+                  ),
+                );
                 await store.putApp(redated);
                 redatedRemovals++;
               }
@@ -1302,8 +1330,10 @@ class SyncCoordinator {
             if (dec.id != status.recordId) {
               skip(
                 dec.id,
-                StateError('inbox status ${status.recordId} does not match '
-                    'record id ${dec.id}'),
+                StateError(
+                  'inbox status ${status.recordId} does not match '
+                  'record id ${dec.id}',
+                ),
                 StackTrace.current,
                 permanent: true,
               );
@@ -1336,7 +1366,8 @@ class SyncCoordinator {
     // the log line, not after it: a tombstone that could not be minted or a
     // revival that could not be staged was landing in `skippedIds` a moment
     // after the only reader of `skippedIds` had already spoken.
-    final redated = redatedRemovals +
+    final redated =
+        redatedRemovals +
         await rescheduleOutranked(outranked, skip) +
         await _revive(revived, skip) +
         await _reviveSecrets(
@@ -1448,13 +1479,15 @@ class SyncCoordinator {
         // would never reach a peer, while the losing pre-bump record still
         // would, and the next pull's tombstone would delete the config the
         // user had just brought back.
-        await _stageLocal(DecryptedRecord(
-          id: bumped.id,
-          kind: RecordKind.serverConfig,
-          updatedAt: bumped.updatedAt,
-          deviceId: deviceId,
-          data: bumped.toJson(),
-        ));
+        await _stageLocal(
+          DecryptedRecord(
+            id: bumped.id,
+            kind: RecordKind.serverConfig,
+            updatedAt: bumped.updatedAt,
+            deviceId: deviceId,
+            data: bumped.toJson(),
+          ),
+        );
         await configStore.putServer(bumped);
         bumpedCount++;
       } catch (error, stackTrace) {
@@ -1514,8 +1547,9 @@ class SyncCoordinator {
     // One predicate, computed once: the two loops below have to agree with
     // each other and with the check above on what a secret record *is*, and a
     // copy each would let one be edited without the others.
-    final prefixed =
-        records.where((d) => d.id.startsWith(_secretIdPrefix)).toList();
+    final prefixed = records
+        .where((d) => d.id.startsWith(_secretIdPrefix))
+        .toList();
     final Set<String> shielded;
     try {
       shielded = await _shieldedSecretIds();
@@ -1615,10 +1649,10 @@ class SyncCoordinator {
         if (server.excludeFromSync && server.secretRef != null)
           '$_secretIdPrefix${server.secretRef}',
     }..removeAll(<String>{
-        for (final server in servers)
-          if (!server.excludeFromSync && server.secretRef != null)
-            '$_secretIdPrefix${server.secretRef}',
-      });
+      for (final server in servers)
+        if (!server.excludeFromSync && server.secretRef != null)
+          '$_secretIdPrefix${server.secretRef}',
+    });
   }
 
   /// Re-date retractions the server outranked, and report how many.
@@ -1691,10 +1725,12 @@ class SyncCoordinator {
     // returns `unknown` for one), so the kind check already refuses it; the
     // flag is the invariant stated in its own words.
     final configs = records
-        .where((dec) =>
-            dec.kind == RecordKind.serverConfig &&
-            !dec.deleted &&
-            excluded.contains(dec.id))
+        .where(
+          (dec) =>
+              dec.kind == RecordKind.serverConfig &&
+              !dec.deleted &&
+              excluded.contains(dec.id),
+        )
         .toList();
     var mintedCount = 0;
     for (final dec in configs) {
@@ -1731,16 +1767,13 @@ class SyncCoordinator {
       final recoverable = local is RecoverableSyncCursorStore
           ? local as RecoverableSyncCursorStore
           : null;
-      return recoverable != null &&
-          await recoverable.cursorRecoveryPending();
+      return recoverable != null && await recoverable.cursorRecoveryPending();
     });
     // Refresh present values, tombstones, and policy before a resumed zero
     // pull, but never infer deletion from absence until the recovered mirror
     // has been applied. This preserves a quarantined source while ensuring an
     // edit or deletion made after the phase was persisted still wins.
-    await runLocal(
-      () => collectLocal(cancelMissing: !resumingRecovery),
-    );
+    await runLocal(() => collectLocal(cancelMissing: !resumingRecovery));
     await migrateLegacyEnvelopes(
       api,
       store: local,
@@ -1808,8 +1841,9 @@ class SyncCoordinator {
       // conflict tuple, rather than the stale pre-request snapshot, decides.
       await collectLocal();
       final recoveringCollections = _failedCollectionSources.isNotEmpty;
-      final changed =
-          await applyToStores(requireComplete: recoveringCollections);
+      final changed = await applyToStores(
+        requireComplete: recoveringCollections,
+      );
       if (recoveringCollections) {
         await collectLocal(cancelMissing: false);
         await _markCollectionSourcesRecovered();
@@ -1837,9 +1871,7 @@ class SyncCoordinator {
       await collectLocal();
       if (ranSecondPass) await applyToStores();
       await _pruneConfirmedTombstones();
-      return [
-        for (final record in refused) await _describeRefused(record.id),
-      ];
+      return [for (final record in refused) await _describeRefused(record.id)];
     });
     if (describedRefusals.isEmpty && awaitingSpace.isEmpty) return outcome;
     // Waiting records are reported by count, so they are not read back and
@@ -1886,7 +1918,8 @@ class SyncCoordinator {
     }
   }
 
-  bool _eligibleLegacyMigration(DecryptedRecord record) => switch (record.kind) {
+  bool _eligibleLegacyMigration(DecryptedRecord record) =>
+      switch (record.kind) {
         RecordKind.serverConfig || RecordKind.hostKey => true,
         RecordKind.secret => syncSecrets && secretVault != null,
         RecordKind.snippet => snippetStore != null,
@@ -1895,7 +1928,6 @@ class SyncCoordinator {
         RecordKind.inboxStatus => inboxStatusStore != null,
         RecordKind.bookmark ||
         RecordKind.klabautermann ||
-        RecordKind.unknown =>
-          false,
+        RecordKind.unknown => false,
       };
 }

@@ -71,17 +71,15 @@ String _endpointTooltip(SyncEndpoint endpoint) => switch (endpoint) {
 /// The confirm dialog's one-line description of a fired guard trigger
 /// (02 §3's list) — exhaustive over the registry's kinds so a trigger
 /// added for a later slice fails to compile here, not silently unlabeled.
-String tabCloseTriggerLabel(
-  AppLocalizations l10n,
-  TabCloseTrigger trigger,
-) => switch (trigger) {
-  TabCloseTrigger.navigation => l10n.tabCloseTriggerNavigation,
-  TabCloseTrigger.inlineRename => l10n.tabCloseTriggerInlineRename,
-  TabCloseTrigger.folderSize => l10n.tabCloseTriggerFolderSize,
-  TabCloseTrigger.applyToEnclosed => l10n.tabCloseTriggerApplyToEnclosed,
-  TabCloseTrigger.batchRename => l10n.tabCloseTriggerBatchRename,
-  TabCloseTrigger.syncAnchor => l10n.tabCloseTriggerSyncAnchor,
-};
+String tabCloseTriggerLabel(AppLocalizations l10n, TabCloseTrigger trigger) =>
+    switch (trigger) {
+      TabCloseTrigger.navigation => l10n.tabCloseTriggerNavigation,
+      TabCloseTrigger.inlineRename => l10n.tabCloseTriggerInlineRename,
+      TabCloseTrigger.folderSize => l10n.tabCloseTriggerFolderSize,
+      TabCloseTrigger.applyToEnclosed => l10n.tabCloseTriggerApplyToEnclosed,
+      TabCloseTrigger.batchRename => l10n.tabCloseTriggerBatchRename,
+      TabCloseTrigger.syncAnchor => l10n.tabCloseTriggerSyncAnchor,
+    };
 
 /// One pane (02 §1) as a tabbed surface: the strip over the active tab's
 /// browsing view — or over the launcher while the pane has no tabs. The
@@ -161,10 +159,8 @@ class PaneTabsView extends StatelessWidget {
 
   /// The pair/rules editor — the shell opens the options surface for
   /// the session's pair.
-  final void Function(
-    SyncPlanController session,
-    SyncRulesEditRequest request,
-  )? onSyncEditRules;
+  final void Function(SyncPlanController session, SyncRulesEditRequest request)?
+  onSyncEditRules;
 
   /// The ssh_config import offer on the §2.7 launcher (D22) — the shell
   /// routes it through the registered command so enablement and the
@@ -346,10 +342,9 @@ class _TabStripState extends State<_TabStrip> {
     for (var i = 0; i < tabs.length; i++) {
       final chip = _chipKeys[tabs[i]]?.currentContext?.findRenderObject();
       if (chip is! RenderBox || !chip.hasSize) continue;
-      final chipRect =
-          (chip.localToGlobal(Offset.zero) & chip.size).intersect(
-            scrollRect,
-          );
+      final chipRect = (chip.localToGlobal(Offset.zero) & chip.size).intersect(
+        scrollRect,
+      );
       if (chipRect.isEmpty) continue;
       x = stripBox.globalToLocal(chipRect.topRight).dx;
       if (global.dx < chipRect.center.dx) {
@@ -387,8 +382,7 @@ class _TabStripState extends State<_TabStrip> {
         // A tab only ever lands on the OTHER pane's strip (02 §3): this
         // strip's own residents are refused, so a drop back here is the
         // cancelled case rather than a within-strip reorder.
-        onWillAcceptWithDetails: (details) =>
-            !tabs.tabs.contains(details.data),
+        onWillAcceptWithDetails: (details) => !tabs.tabs.contains(details.data),
         onMove: (details) => _updateDropPosition(details.offset),
         onLeave: (_) => _clearDropTarget(),
         onAcceptWithDetails: (details) {
@@ -413,8 +407,9 @@ class _TabStripState extends State<_TabStrip> {
                       listenable: tabs,
                       builder: (context, _) {
                         final active = tabs.activeTab;
-                        final activeIndex =
-                            active == null ? -1 : tabs.tabs.indexOf(active);
+                        final activeIndex = active == null
+                            ? -1
+                            : tabs.tabs.indexOf(active);
                         // Identity OR position change: inserting or
                         // removing a tab before the active one shifts
                         // its rendered offset without an activation.
@@ -428,16 +423,14 @@ class _TabStripState extends State<_TabStrip> {
                               // time, so activations coalescing in one
                               // frame scroll to the latest one.
                               final chipContext =
-                                  _chipKeys[tabs.activeTab]
-                                      ?.currentContext;
+                                  _chipKeys[tabs.activeTab]?.currentContext;
                               if (chipContext == null) return;
                               // Scroll only when the chip is actually
                               // offscreen — an already-visible
                               // activation shouldn't animate. (There is
                               // no "only-if-offscreen" alignmentPolicy
                               // constant; the rect check is the guard.)
-                              final chipObject =
-                                  chipContext.findRenderObject();
+                              final chipObject = chipContext.findRenderObject();
                               final viewObject = Scrollable.of(
                                 chipContext,
                               ).context.findRenderObject();
@@ -449,15 +442,11 @@ class _TabStripState extends State<_TabStrip> {
                                 // (contains is half-open and would
                                 // recenter it).
                                 final chipRect =
-                                    chipObject.localToGlobal(
-                                          Offset.zero,
-                                        ) &
-                                        chipObject.size;
+                                    chipObject.localToGlobal(Offset.zero) &
+                                    chipObject.size;
                                 final viewRect =
-                                    viewObject.localToGlobal(
-                                          Offset.zero,
-                                        ) &
-                                        viewObject.size;
+                                    viewObject.localToGlobal(Offset.zero) &
+                                    viewObject.size;
                                 // Half-logical-pixel tolerance:
                                 // localToGlobal can drift a fraction of
                                 // a pixel after a settled scroll
@@ -465,11 +454,9 @@ class _TabStripState extends State<_TabStrip> {
                                 // which would still recenter a visually
                                 // flush chip.
                                 if (chipRect.left >= viewRect.left - 0.5 &&
-                                    chipRect.right <=
-                                        viewRect.right + 0.5 &&
+                                    chipRect.right <= viewRect.right + 0.5 &&
                                     chipRect.top >= viewRect.top - 0.5 &&
-                                    chipRect.bottom <=
-                                        viewRect.bottom + 0.5) {
+                                    chipRect.bottom <= viewRect.bottom + 0.5) {
                                   return;
                                 }
                               }
@@ -1016,9 +1003,7 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
     final delegate = widget.delegate;
     final destination = _destination;
     var allowed = false;
-    if (delegate != null &&
-        destination != null &&
-        !drag.cancelled.value) {
+    if (delegate != null && destination != null && !drag.cancelled.value) {
       final modifiers = paneDropModifiers(context);
       final verb = paneDropVerb(
         source: drag.source,
@@ -1074,9 +1059,7 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
     final delegate = widget.delegate;
     final destination = _destination;
     drag.verb.value = null;
-    if (delegate == null ||
-        destination == null ||
-        drag.cancelled.value) {
+    if (delegate == null || destination == null || drag.cancelled.value) {
       return;
     }
     final modifiers = paneDropModifiers(context);
@@ -1202,8 +1185,10 @@ class PaneConnectionDot extends StatelessWidget {
     // A bound remote tab always shows a dot: a watch that has not
     // answered yet reads as idle, never blank.
     return switch (appearance.glyph) {
-      ServerIndicatorGlyph.none ||
-      ServerIndicatorGlyph.probe => (ServerIndicatorGlyph.idle, appearance.label),
+      ServerIndicatorGlyph.none || ServerIndicatorGlyph.probe => (
+        ServerIndicatorGlyph.idle,
+        appearance.label,
+      ),
       _ => (appearance.glyph, appearance.label),
     };
   }
@@ -1311,9 +1296,7 @@ class _PaneLauncherState extends State<_PaneLauncher> {
                     as RenderBox?;
             if (formBox != null &&
                 formBox.hasSize &&
-                formBox.size.contains(
-                  formBox.globalToLocal(event.position),
-                )) {
+                formBox.size.contains(formBox.globalToLocal(event.position))) {
               return;
             }
             widget.focusNode.requestFocus();
@@ -1327,9 +1310,7 @@ class _PaneLauncherState extends State<_PaneLauncher> {
               // remote-connect seam: the tab opens immediately on the
               // launcher target and the connect flow owns prompts,
               // errors, and banner behavior from there.
-              final tab = widget.tabs.newTab(
-                target: NewTabTarget.launcher,
-              );
+              final tab = widget.tabs.newTab(target: NewTabTarget.launcher);
               unawaited(
                 tab.controller.connectRemote(
                   bookmark,

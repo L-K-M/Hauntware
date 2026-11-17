@@ -37,7 +37,9 @@ void main() {
         return null;
       });
 
-      CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks').setMenus([
+      CheckedPlatformMenuDelegate(
+        channelName: 'poltergeist/menu_checks',
+      ).setMenus([
         PlatformMenu(
           label: 'View',
           menus: [
@@ -88,12 +90,17 @@ void main() {
     'new menu pushes use new IDs, including across window switches',
     () async {
       final updates = <Map<dynamic, dynamic>>[];
-      messenger.setMockMethodCallHandler(SystemChannels.menu, (_) async => null);
+      messenger.setMockMethodCallHandler(
+        SystemChannels.menu,
+        (_) async => null,
+      );
       messenger.setMockMethodCallHandler(checks, (call) async {
         updates.add(call.arguments as Map<dynamic, dynamic>);
         return null;
       });
-      final delegate = CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks');
+      final delegate = CheckedPlatformMenuDelegate(
+        channelName: 'poltergeist/menu_checks',
+      );
       for (final checked in [false, true]) {
         delegate.setMenus([
           PlatformMenu(

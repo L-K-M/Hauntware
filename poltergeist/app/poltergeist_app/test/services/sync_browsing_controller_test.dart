@@ -26,12 +26,8 @@ void main() {
     String name, {
     String parent = '/x',
     RemoteFileType type = RemoteFileType.file,
-  }) => RemoteFileEntry(
-    path: '$parent/$name',
-    name: name,
-    type: type,
-    size: 10,
-  );
+  }) =>
+      RemoteFileEntry(path: '$parent/$name', name: name, type: type, size: 10);
 
   Bookmark remoteBookmark({String remotePath = '/srv/home'}) => Bookmark(
     id: 'srv-1',
@@ -98,10 +94,7 @@ void main() {
         entry('deep.txt', parent: '/right/home/docs/deep'),
       ];
     final left = PaneController(paneTabId: 'pane.left.tab1', lanes: lanes);
-    final right = PaneController(
-      paneTabId: 'pane.right.tab1',
-      lanes: lanes,
-    );
+    final right = PaneController(paneTabId: 'pane.right.tab1', lanes: lanes);
     final leftStrip = testPaneStrip(
       left,
       lanes: lanes,
@@ -146,22 +139,24 @@ void main() {
   }
 
   group('enable / drop (02 §7)', () {
-    test('toggling on records both current directories as the anchor pair',
-        () async {
-      final r = rig();
-      await openHomes(r);
+    test(
+      'toggling on records both current directories as the anchor pair',
+      () async {
+        final r = rig();
+        await openHomes(r);
 
-      expect(r.sync.enabled, isFalse);
-      expect(r.sync.canLink, isTrue);
+        expect(r.sync.enabled, isFalse);
+        expect(r.sync.canLink, isTrue);
 
-      r.sync.toggle();
-      expect(r.sync.enabled, isTrue);
-      expect(r.sync.suspended, isFalse);
-      expect(r.sync.leftAnchor, const LocalPaneLocation('/left/home'));
-      expect(r.sync.rightAnchor, const LocalPaneLocation('/right/home'));
-      expect(r.left.syncAnchorActive, isTrue);
-      expect(r.right.syncAnchorActive, isTrue);
-    });
+        r.sync.toggle();
+        expect(r.sync.enabled, isTrue);
+        expect(r.sync.suspended, isFalse);
+        expect(r.sync.leftAnchor, const LocalPaneLocation('/left/home'));
+        expect(r.sync.rightAnchor, const LocalPaneLocation('/right/home'));
+        expect(r.left.syncAnchorActive, isTrue);
+        expect(r.right.syncAnchorActive, isTrue);
+      },
+    );
 
     test('toggling off drops the link and clears the anchor flags', () async {
       final r = rig();
@@ -271,10 +266,7 @@ void main() {
           entry('inner.txt', parent: '/srv/home/docs'),
         ];
       final left = PaneController(paneTabId: 'pane.left.tab1', lanes: lanes);
-      final right = PaneController(
-        paneTabId: 'pane.right.tab1',
-        lanes: lanes,
-      );
+      final right = PaneController(paneTabId: 'pane.right.tab1', lanes: lanes);
       final workspace = WorkspaceController(
         left: testPaneStrip(left, lanes: lanes),
         right: testPaneStrip(right, lanes: lanes),
@@ -443,10 +435,7 @@ void main() {
       // rows, and selection — still browsing the OLD channel while only
       // the candidate retires.
       expect(r.right.location, const LocalPaneLocation('/right/home'));
-      expect(
-        r.right.committedLocation,
-        const LocalPaneLocation('/right/home'),
-      );
+      expect(r.right.committedLocation, const LocalPaneLocation('/right/home'));
       expect(r.right.entries.map((e) => e.name), ['docs', 'notes.txt']);
       expect(r.right.loading, isFalse);
       expect(r.right.cursorIndex, 1);
@@ -473,10 +462,7 @@ void main() {
       // restored pane or the link.
       held.complete();
       await settle();
-      expect(
-        r.right.location,
-        const LocalPaneLocation('/right/home/docs'),
-      );
+      expect(r.right.location, const LocalPaneLocation('/right/home/docs'));
       expect(r.right.entries.map((e) => e.name), ['inner.txt']);
       expect(candidate.listCalls, ['/srv/home']);
       // The restored binding outlives the late candidate answer.
@@ -510,20 +496,15 @@ void main() {
 
       expect(r.right.phase, PanePhase.browsing);
       expect(r.right.location, const LocalPaneLocation('/right/home'));
-      expect(
-        r.right.committedLocation,
-        const LocalPaneLocation('/right/home'),
-      );
+      expect(r.right.committedLocation, const LocalPaneLocation('/right/home'));
       expect(r.right.entries.map((e) => e.name), ['docs', 'notes.txt']);
       expect(r.right.cursorIndex, 1);
       expect(r.sync.enabled, isTrue);
       expect(r.sync.suspended, isFalse);
       expect(oldChannel.closeCalls, 0);
-      expect(
-        r.lanes.disconnects,
-        ['srv-1'],
-        reason: 'the cancelled server reference still drops',
-      );
+      expect(r.lanes.disconnects, [
+        'srv-1',
+      ], reason: 'the cancelled server reference still drops');
 
       // The late open retires the candidate only: its channel closes
       // unlisted and the restored pane is untouched.
@@ -573,10 +554,7 @@ void main() {
       probeHold.complete();
       await settle();
       expect(candidate.listCalls, ['/srv/home']);
-      expect(
-        r.right.location,
-        const RemotePaneLocation('srv-1', '/srv/home'),
-      );
+      expect(r.right.location, const RemotePaneLocation('srv-1', '/srv/home'));
       expect(r.sync.enabled, isTrue);
       expect(r.sync.suspended, isFalse);
 
@@ -622,10 +600,7 @@ void main() {
       expect(r.sync.enabled, isTrue);
       expect(r.sync.cause, isNull);
       expect(candidate.listCalls, ['/srv/home']);
-      expect(
-        r.right.location,
-        const RemotePaneLocation('srv-1', '/srv/home'),
-      );
+      expect(r.right.location, const RemotePaneLocation('srv-1', '/srv/home'));
 
       landingHold.complete();
       await settle();
@@ -672,10 +647,7 @@ void main() {
       navHold.complete();
       await settle();
       await settle();
-      expect(
-        r.right.committedLocation?.path,
-        '/right/home/alt',
-      );
+      expect(r.right.committedLocation?.path, '/right/home/alt');
       expect(r.left.location?.path, '/left/home/docs');
       expect(r.sync.cause?.kind, SyncBrowseSuspension.mirrorMissing);
       expect(r.sync.cause?.missingName, 'alt');
@@ -718,9 +690,7 @@ void main() {
       await openHomes(r);
       r.sync.toggle();
 
-      final outcome = await r.leftStrip.requestCloseTab(
-        r.leftStrip.activeTab!,
-      );
+      final outcome = await r.leftStrip.requestCloseTab(r.leftStrip.activeTab!);
 
       expect(outcome, TabCloseOutcome.declined);
       expect(seen.single, contains(TabCloseTrigger.syncAnchor));
@@ -728,15 +698,12 @@ void main() {
       expect(r.left.syncAnchorActive, isTrue);
     });
 
-    test('a confirmed close removes the anchor and drops the link',
-        () async {
+    test('a confirmed close removes the anchor and drops the link', () async {
       final r = rig(leftConfirmClose: (tab, triggers) async => true);
       await openHomes(r);
       r.sync.toggle();
 
-      final outcome = await r.leftStrip.requestCloseTab(
-        r.leftStrip.activeTab!,
-      );
+      final outcome = await r.leftStrip.requestCloseTab(r.leftStrip.activeTab!);
 
       expect(outcome, TabCloseOutcome.closed);
       expect(r.sync.enabled, isFalse);

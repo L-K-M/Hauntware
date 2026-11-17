@@ -338,10 +338,7 @@ void main() {
       expect(find.byKey(const ValueKey('delete.dialog')), findsNothing);
 
       await press(tester, listing, LogicalKeyboardKey.delete);
-      expect(
-        queue.enqueuedDeletes.single.disposition,
-        DeleteDisposition.trash,
-      );
+      expect(queue.enqueuedDeletes.single.disposition, DeleteDisposition.trash);
       expect(queue.enqueuedDeletes.single.rootPaths, ['/home/tester/a.txt']);
     });
 
@@ -373,9 +370,7 @@ void main() {
       expect(queue.enqueuedDeletes, hasLength(1));
     });
 
-    testWidgets('holding Ctrl+D duplicates the selection once', (
-      tester,
-    ) async {
+    testWidgets('holding Ctrl+D duplicates the selection once', (tester) async {
       await pumpShell(tester, TargetPlatform.linux);
 
       await hold(
@@ -387,9 +382,7 @@ void main() {
       expect(queue.enqueuedSpecs, hasLength(1));
     });
 
-    testWidgets('Cmd-Backspace and Opt-Cmd-Backspace on macOS', (
-      tester,
-    ) async {
+    testWidgets('Cmd-Backspace and Opt-Cmd-Backspace on macOS', (tester) async {
       await pumpShell(tester, TargetPlatform.macOS);
 
       await press(
@@ -419,10 +412,7 @@ void main() {
         LogicalKeyboardKey.backspace,
         modifiers: [LogicalKeyboardKey.metaLeft],
       );
-      expect(
-        queue.enqueuedDeletes.single.disposition,
-        DeleteDisposition.trash,
-      );
+      expect(queue.enqueuedDeletes.single.disposition, DeleteDisposition.trash);
     });
   });
 }

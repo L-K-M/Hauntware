@@ -83,7 +83,8 @@ Future<SecretVault?> openSettledVault(
 class VaultLockedException implements Exception {
   final String message;
   const VaultLockedException([
-    this.message = 'Saved secrets are unavailable: the OS keyring is locked '
+    this.message =
+        'Saved secrets are unavailable: the OS keyring is locked '
         'or missing. Unlock the login keyring (or install gnome-keyring), '
         'then retry.',
   ]);

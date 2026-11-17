@@ -25,7 +25,8 @@ import '../../services/sync_plan_controller.dart';
 import '../../theme/app_theme.dart';
 import '../panes/pane_format.dart' show formatPaneModified;
 import 'sync_plan_format.dart';
-import 'sync_policy_sentence.dart' show syncEndpointFolderName, syncEndpointFolderNames;
+import 'sync_policy_sentence.dart'
+    show syncEndpointFolderName, syncEndpointFolderNames;
 
 /// The review's sections, in display order.
 enum SyncSection { copy, update, delete, conflicts, skipped }
@@ -218,9 +219,7 @@ class _SyncPlanTableState extends State<SyncPlanTable> {
     for (final group in syncSections(widget.items)) {
       top += _sectionHeaderExtent;
       if (widget.collapsed.contains(group.section)) continue;
-      final index = group.items.indexWhere(
-        (item) => identical(item, focused),
-      );
+      final index = group.items.indexWhere((item) => identical(item, focused));
       if (index >= 0) {
         top += index * rowExtent;
         _scrollToShow(top, top + rowExtent, attempt: attempt);
@@ -284,8 +283,8 @@ class _SyncPlanTableState extends State<SyncPlanTable> {
                 key: const ValueKey('sync.plan.table'),
                 controller: _scroll,
                 itemCount: entries.length,
-                itemExtentBuilder: (index, _) => index < entries.length &&
-                        entries[index] is SyncItem
+                itemExtentBuilder: (index, _) =>
+                    index < entries.length && entries[index] is SyncItem
                     ? rowExtent
                     : _sectionHeaderExtent,
                 itemBuilder: (context, index) => switch (entries[index]) {

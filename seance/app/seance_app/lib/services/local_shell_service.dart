@@ -23,9 +23,9 @@ class LocalShellService {
     LocalShellPlatform? platform,
     Map<String, String>? environment,
     LocalPtyLauncher? launch,
-  })  : platform = platform ?? hostPlatform(),
-        environment = environment ?? Platform.environment,
-        launch = launch ?? _startFlutterPty;
+  }) : platform = platform ?? hostPlatform(),
+       environment = environment ?? Platform.environment,
+       launch = launch ?? _startFlutterPty;
 
   /// This build's platform, as the core's transport-agnostic enum.
   ///
@@ -98,15 +98,14 @@ class LocalShellService {
   /// where the surprising `cd ~` is about to happen.
   String? get sandboxNotice => sandboxed
       ? 'Séance: this shell runs inside the macOS App Sandbox. '
-          "\$HOME is Séance's container, files outside it are unreadable, "
-          'and job control is unavailable.\r\n'
+            "\$HOME is Séance's container, files outside it are unreadable, "
+            'and job control is unavailable.\r\n'
       : null;
 
   static Future<LocalPty> _startFlutterPty(
     LocalShellCommand command,
     TerminalSize size,
-  ) async =>
-      FlutterPtyLocalPty(command, size);
+  ) async => FlutterPtyLocalPty(command, size);
 }
 
 /// [LocalPty] over `flutter_pty`.
@@ -119,17 +118,17 @@ class FlutterPtyLocalPty implements LocalPty {
   /// the fork fails; [LocalShellSession.start] turns that into a
   /// [LocalShellException] carrying a user-facing line.
   FlutterPtyLocalPty(LocalShellCommand command, TerminalSize size)
-      : _pty = Pty.start(
-          command.executable,
-          arguments: command.arguments,
-          workingDirectory: command.workingDirectory,
-          // Passed whole, not as a delta — the plugin builds the child's
-          // environment from a fixed six names plus this map, so anything
-          // omitted here simply would not exist in the shell.
-          environment: command.environment,
-          rows: size.rows,
-          columns: size.cols,
-        ) {
+    : _pty = Pty.start(
+        command.executable,
+        arguments: command.arguments,
+        workingDirectory: command.workingDirectory,
+        // Passed whole, not as a delta — the plugin builds the child's
+        // environment from a fixed six names plus this map, so anything
+        // omitted here simply would not exist in the shell.
+        environment: command.environment,
+        rows: size.rows,
+        columns: size.cols,
+      ) {
     // Exit observation is registered at spawn, not at kill time: by the
     // time close() runs, a child that already died has been reaped and its
     // pid is recyclable — signalling then could hit an unrelated process.

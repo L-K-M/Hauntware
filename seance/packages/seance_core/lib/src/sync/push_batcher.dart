@@ -55,7 +55,8 @@ List<List<EncryptedRecord>> batchForPush(
       recordBytes: batchRecordBytes + recordBytes,
       refusalScope: _sentRefusalScope,
     );
-    final full = bodyWithRecord > limits.maxBodyBytes ||
+    final full =
+        bodyWithRecord > limits.maxBodyBytes ||
         batch.length + 1 > limits.maxRecordsPerPush;
     // The emptiness check is what guarantees progress: a batch is never closed
     // empty, so every record lands in exactly one batch however the limits are

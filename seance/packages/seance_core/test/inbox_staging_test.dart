@@ -84,14 +84,14 @@ class _FakeFs implements RemoteFileSystem {
 }
 
 InboxProposal _proposal(String script) => InboxProposal(
-      id: 'p1',
-      host: 'h',
-      title: 't',
-      reason: '',
-      script: script,
-      created: 1,
-      expires: 2,
-    );
+  id: 'p1',
+  host: 'h',
+  title: 't',
+  reason: '',
+  script: script,
+  created: 1,
+  expires: 2,
+);
 
 void main() {
   test('stages the reviewed bytes under their hash, owner-only', () async {
@@ -150,9 +150,7 @@ void main() {
     });
 
     test('escapes bidi, zero-width and control characters', () {
-      final r = revealInvisibles(
-        'rm -rf /tmp/x\u202E#\u200B\r\x1b[2J\u2066',
-      );
+      final r = revealInvisibles('rm -rf /tmp/x\u202E#\u200B\r\x1b[2J\u2066');
       expect(
         r.text,
         'rm -rf /tmp/x<U+202E>#<U+200B><U+000D><U+001B>[2J<U+2066>',

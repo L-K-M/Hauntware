@@ -1,4 +1,3 @@
-
 /// One pane's bound location (02 §2): a local folder or a remote
 /// bookmark's path, browsed through the one VFS (D3 — both sides are
 /// `RemoteFileSystem` listings, so panes never model the difference in

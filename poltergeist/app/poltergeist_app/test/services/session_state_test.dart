@@ -205,11 +205,12 @@ void main() {
 
   test('rejects a malformed document and malformed present fields', () {
     expect(() => SessionState.fromJson('nope'), throwsFormatException);
-    expect(() => SessionState.fromJson(<String, Object?>{}),
-        throwsFormatException);
+    expect(
+      () => SessionState.fromJson(<String, Object?>{}),
+      throwsFormatException,
+    );
 
-    final fixturePanes =
-        _fixture().toJson()['panes']! as List<Object?>;
+    final fixturePanes = _fixture().toJson()['panes']! as List<Object?>;
     for (final mutation in <Map<String, Object?>>[
       {..._fixture().toJson(), 'activePane': 7},
       {..._fixture().toJson(), 'secondPaneHidden': 'yes'},
@@ -299,10 +300,7 @@ void main() {
         ..._fixture().toJson(),
         'panes': [fixturePanes[0]],
       },
-      {
-        ..._fixture().toJson(),
-        'activePane': 'pane.middle',
-      },
+      {..._fixture().toJson(), 'activePane': 'pane.middle'},
       // A foreign pane id is corrupt even when it isn't the active
       // pane, and a duplicated pane id is not a pane pair.
       {
@@ -394,10 +392,7 @@ void main() {
     test('one malformed window fails the whole document', () {
       final json = SessionWindowsState(windows: [_fixture()]).toJson();
       (json['windows']! as List).add({'version': 1});
-      expect(
-        () => SessionWindowsState.fromJson(json),
-        throwsFormatException,
-      );
+      expect(() => SessionWindowsState.fromJson(json), throwsFormatException);
     });
 
     test('an unknown schema or a malformed root fails closed', () {

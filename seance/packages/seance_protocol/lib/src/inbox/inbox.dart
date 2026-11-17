@@ -124,7 +124,9 @@ class InboxCrypto {
       throw const FormatException('Inbox item is too short to be sealed');
     }
     if (blob.length > kInboxMaxBlobBytes) {
-      throw const FormatException('Inbox item is larger than any producer sends');
+      throw const FormatException(
+        'Inbox item is larger than any producer sends',
+      );
     }
     final box = SecretBox.fromConcatenation(
       blob,
@@ -160,15 +162,20 @@ class InboxPairing {
 
   String get docsUrl => '${url.replaceAll(RegExp(r'/+$'), '')}/llms.txt';
 
-  String encode() => kInboxPairingPrefix +
-      _b64(utf8.encode(jsonEncode({
-        'v': version,
-        'url': url,
-        'app': appId,
-        'token': token,
-        'key': _b64(key),
-        'docs': docsUrl,
-      })));
+  String encode() =>
+      kInboxPairingPrefix +
+      _b64(
+        utf8.encode(
+          jsonEncode({
+            'v': version,
+            'url': url,
+            'app': appId,
+            'token': token,
+            'key': _b64(key),
+            'docs': docsUrl,
+          }),
+        ),
+      );
 
   /// Throws [FormatException] for anything that is not a version-1 pairing
   /// string with well-formed fields.
@@ -248,15 +255,15 @@ class InboxProposal {
       now.millisecondsSinceEpoch ~/ 1000 >= expires;
 
   Map<String, dynamic> toJson() => {
-        'v': version,
-        'id': id,
-        'host': host,
-        'title': title,
-        if (reason.isNotEmpty) 'reason': reason,
-        'script': script,
-        'created': created,
-        'expires': expires,
-      };
+    'v': version,
+    'id': id,
+    'host': host,
+    'title': title,
+    if (reason.isNotEmpty) 'reason': reason,
+    'script': script,
+    'created': created,
+    'expires': expires,
+  };
 
   /// Parse and validate decrypted proposal bytes. [now] bounds `created`.
   /// Unknown fields are ignored. Throws [InboxProposalException].
@@ -394,36 +401,35 @@ class InboxApp {
     String? name,
     List<String>? allowedServerIds,
     int? updatedAt,
-  }) =>
-      InboxApp(
-        id: id,
-        name: name ?? this.name,
-        key: key,
-        allowedServerIds: allowedServerIds ?? this.allowedServerIds,
-        createdAt: createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-        removed: removed,
-      );
+  }) => InboxApp(
+    id: id,
+    name: name ?? this.name,
+    key: key,
+    allowedServerIds: allowedServerIds ?? this.allowedServerIds,
+    createdAt: createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    removed: removed,
+  );
 
   /// The removal marker: same id, no key, no server list.
   InboxApp asRemoved({required int updatedAt}) => InboxApp(
-        id: id,
-        name: name,
-        key: null,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-        removed: true,
-      );
+    id: id,
+    name: name,
+    key: null,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    removed: true,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        if (key != null) 'key': _b64(key!),
-        if (allowedServerIds.isNotEmpty) 'servers': allowedServerIds,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        if (removed) 'removed': true,
-      };
+    'id': id,
+    'name': name,
+    if (key != null) 'key': _b64(key!),
+    if (allowedServerIds.isNotEmpty) 'servers': allowedServerIds,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    if (removed) 'removed': true,
+  };
 
   /// Throws [FormatException] for a record that is not a usable app: a live
   /// app needs a 32-byte key, a removed one must not carry any.
@@ -488,11 +494,11 @@ class InboxStatus {
   String get recordId => recordIdFor(appId, proposalId);
 
   Map<String, dynamic> toJson() => {
-        'app': appId,
-        'proposal': proposalId,
-        'state': state.name,
-        'updatedAt': updatedAt,
-      };
+    'app': appId,
+    'proposal': proposalId,
+    'state': state.name,
+    'updatedAt': updatedAt,
+  };
 
   factory InboxStatus.fromJson(Map<String, dynamic> json) {
     final app = json['app'];
@@ -554,15 +560,19 @@ class InboxAppInfo {
     required this.pending,
   });
 
-  Map<String, dynamic> toJson() =>
-      {'app': appId, 'name': name, 'created': created, 'pending': pending};
+  Map<String, dynamic> toJson() => {
+    'app': appId,
+    'name': name,
+    'created': created,
+    'pending': pending,
+  };
 
   factory InboxAppInfo.fromJson(Map<String, dynamic> json) => InboxAppInfo(
-        appId: json['app'] as String,
-        name: json['name'] as String? ?? '',
-        created: (json['created'] as num?)?.toInt() ?? 0,
-        pending: (json['pending'] as num?)?.toInt() ?? 0,
-      );
+    appId: json['app'] as String,
+    name: json['name'] as String? ?? '',
+    created: (json['created'] as num?)?.toInt() ?? 0,
+    pending: (json['pending'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// GET /v1/inbox — one pending sealed item.
@@ -582,11 +592,11 @@ class InboxItem {
   });
 
   Map<String, dynamic> toJson() => {
-        'app': appId,
-        'item': itemId,
-        'received': received,
-        'blob': base64.encode(blob),
-      };
+    'app': appId,
+    'item': itemId,
+    'received': received,
+    'blob': base64.encode(blob),
+  };
 
   /// Exact UTF-8 byte length of [toJson] after `jsonEncode`.
   int encodedJsonBytes() =>
@@ -607,7 +617,10 @@ class InboxItem {
     final item = json['item'];
     final received = json['received'];
     final blob = json['blob'];
-    if (app is! String || item is! String || received is! int || blob is! String) {
+    if (app is! String ||
+        item is! String ||
+        received is! int ||
+        blob is! String) {
       throw const FormatException('Inbox item is malformed');
     }
     return InboxItem(
@@ -639,22 +652,21 @@ class InboxPage {
   });
 
   Map<String, dynamic> toJson() => {
-        'items': [for (final item in items) item.toJson()],
-        if (throughReceived != null) ...{
-          'throughReceived': throughReceived,
-          'nextReceived': nextReceived,
-          'hasMore': hasMore,
-        },
-      };
+    'items': [for (final item in items) item.toJson()],
+    if (throughReceived != null) ...{
+      'throughReceived': throughReceived,
+      'nextReceived': nextReceived,
+      'hasMore': hasMore,
+    },
+  };
 
   int encodedSizeBytes() => bodyBytesFor(
-        itemCount: items.length,
-        itemBytes:
-            items.fold(0, (sum, item) => sum + item.encodedJsonBytes()),
-        throughReceived: throughReceived,
-        nextReceived: nextReceived,
-        hasMore: hasMore,
-      );
+    itemCount: items.length,
+    itemBytes: items.fold(0, (sum, item) => sum + item.encodedJsonBytes()),
+    throughReceived: throughReceived,
+    nextReceived: nextReceived,
+    hasMore: hasMore,
+  );
 
   static int bodyBytesFor({
     required int itemCount,
@@ -670,21 +682,21 @@ class InboxPage {
         itemBytes +
         (paged
             ? jsonKeyBytes('throughReceived') +
-                jsonIntBytes(throughReceived) +
-                jsonKeyBytes('nextReceived') +
-                (nextReceived == null ? 4 : jsonIntBytes(nextReceived)) +
-                jsonKeyBytes('hasMore') +
-                jsonBoolBytes(hasMore)
+                  jsonIntBytes(throughReceived) +
+                  jsonKeyBytes('nextReceived') +
+                  (nextReceived == null ? 4 : jsonIntBytes(nextReceived)) +
+                  jsonKeyBytes('hasMore') +
+                  jsonBoolBytes(hasMore)
             : 0);
   }
 
   factory InboxPage.fromJson(Map<String, dynamic> json) => InboxPage(
-        items: [
-          for (final raw in json['items'] as List)
-            InboxItem.fromJson((raw as Map).cast<String, dynamic>()),
-        ],
-        throughReceived: (json['throughReceived'] as num?)?.toInt(),
-        nextReceived: (json['nextReceived'] as num?)?.toInt(),
-        hasMore: json['hasMore'] as bool? ?? false,
-      );
+    items: [
+      for (final raw in json['items'] as List)
+        InboxItem.fromJson((raw as Map).cast<String, dynamic>()),
+    ],
+    throughReceived: (json['throughReceived'] as num?)?.toInt(),
+    nextReceived: (json['nextReceived'] as num?)?.toInt(),
+    hasMore: json['hasMore'] as bool? ?? false,
+  );
 }

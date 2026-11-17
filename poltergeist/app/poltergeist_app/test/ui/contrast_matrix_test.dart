@@ -85,11 +85,7 @@ void main() {
             chrome.selectionFill,
           ),
           // D32 §8's menu rows: the shortcut hint on the menu panel.
-          (
-            'menu shortcut hint',
-            chrome.secondaryText,
-            scheme.surfaceContainer,
-          ),
+          ('menu shortcut hint', chrome.secondaryText, scheme.surfaceContainer),
         ];
         for (final (name, fg, bg) in pairs) {
           expect(

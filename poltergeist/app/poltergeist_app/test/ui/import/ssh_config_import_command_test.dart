@@ -256,10 +256,7 @@ void main() {
     await tester.tap(find.text('Import 2'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Could not save the imported favorites.'),
-      findsOneWidget,
-    );
+    expect(find.text('Could not save the imported favorites.'), findsOneWidget);
     expect(find.textContaining('Imported'), findsNothing);
     expect(tester.takeException(), isA<FileSystemException>());
   });

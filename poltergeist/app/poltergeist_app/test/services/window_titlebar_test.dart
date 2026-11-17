@@ -48,11 +48,12 @@ void main() {
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-  Future<void> bandChanged(Object? arguments) => messenger.handlePlatformMessage(
-    channel.name,
-    codec.encodeMethodCall(MethodCall('toolbarBandChanged', arguments)),
-    (_) {},
-  );
+  Future<void> bandChanged(Object? arguments) =>
+      messenger.handlePlatformMessage(
+        channel.name,
+        codec.encodeMethodCall(MethodCall('toolbarBandChanged', arguments)),
+        (_) {},
+      );
 
   test("a window's band starts from the runner's answer and follows its "
       'reports', () async {
@@ -159,9 +160,7 @@ void main() {
       );
       await tester.pumpWidget(
         wrapWithView: viewId == 0,
-        viewId == 0
-            ? content
-            : View(view: extraView, child: content),
+        viewId == 0 ? content : View(view: extraView, child: content),
       );
       await tester.pump();
     }

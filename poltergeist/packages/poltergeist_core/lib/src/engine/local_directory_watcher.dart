@@ -79,9 +79,11 @@ final class LocalDirectoryWatcher {
   /// after the last event.
   static const Duration debounceInterval = Duration(milliseconds: 300);
 
-  static const _backendClosedDetail = 'The directory watcher closed '
+  static const _backendClosedDetail =
+      'The directory watcher closed '
       'unexpectedly.';
-  static const _unexpectedStopDetail = 'The directory watcher stopped '
+  static const _unexpectedStopDetail =
+      'The directory watcher stopped '
       'unexpectedly.';
 
   LocalDirectoryWatcher({LocalWatchBackend? backend})
@@ -154,11 +156,13 @@ final class LocalDirectoryWatcher {
 
     late final StreamSubscription<FileSystemEvent> subscription;
     try {
-      subscription = _backend.watch(path).listen(
-        (event) => _onEvent(epoch, event),
-        onError: (Object error) => _lost(epoch, _failureDetail(error)),
-        onDone: () => _lost(epoch, _backendClosedDetail),
-      );
+      subscription = _backend
+          .watch(path)
+          .listen(
+            (event) => _onEvent(epoch, event),
+            onError: (Object error) => _lost(epoch, _failureDetail(error)),
+            onDone: () => _lost(epoch, _backendClosedDetail),
+          );
     } on Object catch (error) {
       // A backend that throws at subscribe time cannot be trusted to
       // deliver anything later — fail the watch loud and immediately.
@@ -211,10 +215,10 @@ final class LocalDirectoryWatcher {
     // change the listing's reachability) qualify; so does a move whose
     // destination is a direct child. Deeper events — a backend reporting
     // subtrees — are dropped: the watch is non-recursive.
-    if (!_isDirectChild(watched, path) &&
-        !p.equals(path, watched)) {
-      final destination =
-          event is FileSystemMoveEvent ? event.destination : null;
+    if (!_isDirectChild(watched, path) && !p.equals(path, watched)) {
+      final destination = event is FileSystemMoveEvent
+          ? event.destination
+          : null;
       if (destination == null || !_isDirectChild(watched, destination)) {
         return;
       }
@@ -262,7 +266,6 @@ final class LocalDirectoryWatcher {
   /// Failure detail for a lost signal: OS text from the backend where the
   /// backend produced any, a fixed sentence otherwise — never arbitrary
   /// exception internals.
-  static String _failureDetail(Object error) => error is FileSystemException
-      ? error.toString()
-      : _unexpectedStopDetail;
+  static String _failureDetail(Object error) =>
+      error is FileSystemException ? error.toString() : _unexpectedStopDetail;
 }

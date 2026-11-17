@@ -111,10 +111,7 @@ void main() {
     test('a version-1 decode flags for favorite migration; the current '
         'schema does not', () {
       final legacy = _fixture.toJson()..['version'] = 1;
-      expect(
-        WorkspaceListDocument.fromJson(legacy).legacySchema,
-        isTrue,
-      );
+      expect(WorkspaceListDocument.fromJson(legacy).legacySchema, isTrue);
       expect(
         WorkspaceListDocument.fromJson(_fixture.toJson()).legacySchema,
         isFalse,

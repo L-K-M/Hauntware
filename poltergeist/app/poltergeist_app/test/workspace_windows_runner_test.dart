@@ -174,7 +174,11 @@ void main() {
       expect(runners['windows'], contains('"${windowDropInChannel.name}"'));
       for (final MapEntry(key: platform, value: source) in dropIn.entries) {
         for (final method in WindowDropInMethod.values) {
-          expect(source, contains('"${method.name}"'), reason: '$platform $method');
+          expect(
+            source,
+            contains('"${method.name}"'),
+            reason: '$platform $method',
+          );
         }
         for (final key in WindowDropInKey.values) {
           expect(source, contains('"${key.name}"'), reason: '$platform $key');
@@ -195,7 +199,9 @@ void main() {
         'out', () {
       expect(
         runners['linux'],
-        contains('drag_out_channel_add_view(view);\n  drop_in_channel_add_view(view);'),
+        contains(
+          'drag_out_channel_add_view(view);\n  drop_in_channel_add_view(view);',
+        ),
       );
       expect(runners['windows'], contains('ViewDropTarget::Register('));
       // Revoked before the view goes, which RevokeDragDrop needs.
@@ -209,7 +215,10 @@ void main() {
         _read('windows/runner/flutter_window.cpp'),
         contains('drag_out_->SetViewResolver('),
       );
-      expect(runners['macos'], contains('controller.view.addSubview(DropInView('));
+      expect(
+        runners['macos'],
+        contains('controller.view.addSubview(DropInView('),
+      );
       expect(runners['macos'], contains('dragOut?.controllerForView = '));
       expect(
         _read('macos/Runner/DragOutChannel.swift'),
@@ -278,7 +287,10 @@ void main() {
       final controller = _read(
         'macos/Runner/PoltergeistFlutterViewController.m',
       );
-      expect(controller, contains('- (void)updateSemantics:(const void*)update {'));
+      expect(
+        controller,
+        contains('- (void)updateSemantics:(const void*)update {'),
+      );
       // A late view has no bridge until told semantics are on.
       final notify = controller.indexOf(
         '[target notifySemanticsEnabledChanged];',
@@ -287,7 +299,10 @@ void main() {
       expect(notify, isNonNegative, reason: 'the notify call is missing');
       expect(update, isNonNegative, reason: 'the forwarding call is missing');
       expect(notify, lessThan(update));
-      expect(controller, contains('offsetof(PoltergeistSemanticsUpdate, view_id)'));
+      expect(
+        controller,
+        contains('offsetof(PoltergeistSemanticsUpdate, view_id)'),
+      );
     });
   });
 }

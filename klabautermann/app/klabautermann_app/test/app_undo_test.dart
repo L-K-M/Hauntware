@@ -257,9 +257,7 @@ void main() {
     );
   });
 
-  testWidgets('a menu Undo goes to a focused text field first', (
-    tester,
-  ) async {
+  testWidgets('a menu Undo goes to a focused text field first', (tester) async {
     final history = GhostUndoHistory();
     var undone = 0;
     history.record(

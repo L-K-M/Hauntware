@@ -127,94 +127,88 @@ class _AlertRow extends StatelessWidget {
       AlertSeverity.info => (Icons.info, palette.glyph(FamilyHue.blue)),
     };
 
-    final (String title, String? detail, List<(String, VoidCallback)> verbs) =
-        switch (alert) {
-          TransferFailedAlert(:final task) => (
-            l10n.alertTransferFailed(transferTaskTitle(task, l10n)),
-            task.error ??
-                task.items
-                    .map((item) => item.error)
-                    .whereType<String>()
-                    .firstOrNull,
-            [
-              (l10n.alertActionRetry, () => actions.retryTask(task)),
-              (l10n.alertActionShow, actions.showTransfers),
-            ],
-          ),
-          ConflictsPendingAlert(:final count) => (
-            l10n.alertConflictsPending(count),
-            null,
-            [(l10n.alertActionResolve, actions.showTransfers)],
-          ),
-          RestoredQueueAlert(:final count) => (
-            l10n.alertRestoredQueue(count),
-            null,
-            [
-              (l10n.activityRestoredResume, actions.resumeRestored),
-              (l10n.alertActionShow, actions.showTransfers),
-            ],
-          ),
-          ConnectionAlert(:final server, :final blocked) => (
-            blocked
-                ? l10n.alertHostKeyChanged(server.label)
-                : l10n.alertConnectionFailed(server.label),
-            (alert as ConnectionAlert).detail,
-            [
-              if (blocked && actions.reviewHostKey != null)
-                (
-                  l10n.alertActionReview,
-                  () => actions.reviewHostKey!(server.serverId),
-                ),
-            ],
-          ),
-          LocalEditsAlert(:final serverId, :final count) => (
-            l10n.alertLocalEdits(count, serverName(serverId)),
-            null,
-            [
-              if (actions.reviewLocalEdits != null)
-                (
-                  l10n.alertActionReview,
-                  () => actions.reviewLocalEdits!(serverId),
-                ),
-            ],
-          ),
-          DragOutAlert(:final notice) => (
-            l10n.alertDragOutFailed(notice.itemName),
-            switch (notice.kind) {
-              DragOutNoticeKind.paused => l10n.alertDragOutPaused(
-                notice.destinationDir,
-              ),
-              DragOutNoticeKind.pausedMidway => l10n.alertDragOutPausedMidway(
-                notice.destinationDir,
-              ),
-              DragOutNoticeKind.renamed => l10n.alertDragOutRenamed(
-                notice.destinationDir,
-              ),
-              DragOutNoticeKind.unavailable => l10n.alertDragOutUnavailable,
-            },
-            [
-              if (notice.kind == DragOutNoticeKind.paused ||
-                  notice.kind == DragOutNoticeKind.pausedMidway)
-                (l10n.alertActionShow, actions.showTransfers),
-            ],
-          ),
-          UpdateAvailableAlert(:final info, apk: null) => (
-            l10n.alertUpdateAvailable(info.latestVersion),
-            null,
-            [
-              if (actions.openRelease != null)
-                (l10n.alertActionViewRelease, () => actions.openRelease!(info)),
-            ],
-          ),
-          UpdateAvailableAlert(:final info, :final apk?, :final download) =>
-            _updateRow(
-              l10n,
-              theme.platform,
-              info.latestVersion,
-              apk,
-              download,
+    final (
+      String title,
+      String? detail,
+      List<(String, VoidCallback)> verbs,
+    ) = switch (alert) {
+      TransferFailedAlert(:final task) => (
+        l10n.alertTransferFailed(transferTaskTitle(task, l10n)),
+        task.error ??
+            task.items
+                .map((item) => item.error)
+                .whereType<String>()
+                .firstOrNull,
+        [
+          (l10n.alertActionRetry, () => actions.retryTask(task)),
+          (l10n.alertActionShow, actions.showTransfers),
+        ],
+      ),
+      ConflictsPendingAlert(:final count) => (
+        l10n.alertConflictsPending(count),
+        null,
+        [(l10n.alertActionResolve, actions.showTransfers)],
+      ),
+      RestoredQueueAlert(:final count) => (
+        l10n.alertRestoredQueue(count),
+        null,
+        [
+          (l10n.activityRestoredResume, actions.resumeRestored),
+          (l10n.alertActionShow, actions.showTransfers),
+        ],
+      ),
+      ConnectionAlert(:final server, :final blocked) => (
+        blocked
+            ? l10n.alertHostKeyChanged(server.label)
+            : l10n.alertConnectionFailed(server.label),
+        (alert as ConnectionAlert).detail,
+        [
+          if (blocked && actions.reviewHostKey != null)
+            (
+              l10n.alertActionReview,
+              () => actions.reviewHostKey!(server.serverId),
             ),
-        };
+        ],
+      ),
+      LocalEditsAlert(:final serverId, :final count) => (
+        l10n.alertLocalEdits(count, serverName(serverId)),
+        null,
+        [
+          if (actions.reviewLocalEdits != null)
+            (l10n.alertActionReview, () => actions.reviewLocalEdits!(serverId)),
+        ],
+      ),
+      DragOutAlert(:final notice) => (
+        l10n.alertDragOutFailed(notice.itemName),
+        switch (notice.kind) {
+          DragOutNoticeKind.paused => l10n.alertDragOutPaused(
+            notice.destinationDir,
+          ),
+          DragOutNoticeKind.pausedMidway => l10n.alertDragOutPausedMidway(
+            notice.destinationDir,
+          ),
+          DragOutNoticeKind.renamed => l10n.alertDragOutRenamed(
+            notice.destinationDir,
+          ),
+          DragOutNoticeKind.unavailable => l10n.alertDragOutUnavailable,
+        },
+        [
+          if (notice.kind == DragOutNoticeKind.paused ||
+              notice.kind == DragOutNoticeKind.pausedMidway)
+            (l10n.alertActionShow, actions.showTransfers),
+        ],
+      ),
+      UpdateAvailableAlert(:final info, apk: null) => (
+        l10n.alertUpdateAvailable(info.latestVersion),
+        null,
+        [
+          if (actions.openRelease != null)
+            (l10n.alertActionViewRelease, () => actions.openRelease!(info)),
+        ],
+      ),
+      UpdateAvailableAlert(:final info, :final apk?, :final download) =>
+        _updateRow(l10n, theme.platform, info.latestVersion, apk, download),
+    };
 
     return Padding(
       key: ValueKey('alert.${alert.key}'),

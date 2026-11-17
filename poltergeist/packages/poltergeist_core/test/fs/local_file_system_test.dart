@@ -52,10 +52,9 @@ Future<Object> failureOf(Future<Object?> future) async {
   fail('expected the operation to fail');
 }
 
-RemoteFileException remoteFailure(Object error) =>
-    error is RemoteFileException
-        ? error
-        : fail('not a RemoteFileException: $error');
+RemoteFileException remoteFailure(Object error) => error is RemoteFileException
+    ? error
+    : fail('not a RemoteFileException: $error');
 
 /// A collecting [StreamSink] with an optional first-chunk hook (the
 /// deterministic mid-download mutation seam).
@@ -178,27 +177,32 @@ void main() {
   }
 
   group('canonicalize', () {
-    testWithSymbolicLinks('resolves an existing path through symlinks', () async {
-      final file = await putFile('real.txt');
-      await putLink('alias', file.path);
-      expect(
-        await fs.canonicalize(pathOf('alias')),
-        await File(file.path).resolveSymbolicLinks(),
-      );
-    });
+    testWithSymbolicLinks(
+      'resolves an existing path through symlinks',
+      () async {
+        final file = await putFile('real.txt');
+        await putLink('alias', file.path);
+        expect(
+          await fs.canonicalize(pathOf('alias')),
+          await File(file.path).resolveSymbolicLinks(),
+        );
+      },
+    );
 
-    test('never throws for a missing path — normalized absolute form', () async {
-      expect(
-        await fs.canonicalize('${root.path}/gone/../child/x'),
-        p.join(root.path, 'child', 'x'),
-      );
-    });
+    test(
+      'never throws for a missing path — normalized absolute form',
+      () async {
+        expect(
+          await fs.canonicalize('${root.path}/gone/../child/x'),
+          p.join(root.path, 'child', 'x'),
+        );
+      },
+    );
 
     test('expands ~ through the injected home', () async {
-      final homeFs = LocalFileSystem(environment: {
-        'HOME': root.path,
-        'USERPROFILE': root.path,
-      });
+      final homeFs = LocalFileSystem(
+        environment: {'HOME': root.path, 'USERPROFILE': root.path},
+      );
       final realRoot = await Directory(root.path).resolveSymbolicLinks();
       expect(await homeFs.canonicalize('~'), realRoot);
       // Missing paths normalize lexically (the plan's rule): the home
@@ -233,122 +237,154 @@ void main() {
       expect(file.size, 5);
       expect(file.modifiedAt, isNotNull);
       // Windows synthesizes mode bits; compare to its native stat, not chmod.
-      expect(file.mode! & permissionsMask,
-          Platform.isWindows ? modeOf(pathOf('b.txt')) : oct('644'));
+      expect(
+        file.mode! & permissionsMask,
+        Platform.isWindows ? modeOf(pathOf('b.txt')) : oct('644'),
+      );
       final dir = entries.singleWhere((e) => e.name == 'a-dir');
       expect(dir.type, RemoteFileType.directory);
       expect(dir.isDirectory, isTrue);
     });
 
-    testWithSymbolicLinks('symlinks report as links with null metadata, targets not leaked', () async {
-      final file = await putFile('target.txt', '1234567890');
-      await putLink('alias', file.path);
-      await putLink('broken', pathOf('nowhere'));
-      final entries = await fs.listDirectory(root.path);
-      expect(
-        entries.map((e) => e.name),
-        unorderedEquals(['target.txt', 'alias', 'broken']),
-      );
-      for (final name in ['alias', 'broken']) {
-        final link = entries.singleWhere((e) => e.name == name);
-        expect(link.type, RemoteFileType.symbolicLink);
-        expect(link.isSymbolicLink, isTrue);
-        expect(link.size, isNull);
-        expect(link.modifiedAt, isNull);
-        expect(link.accessedAt, isNull);
-        expect(link.mode, isNull);
-      }
-    });
+    testWithSymbolicLinks(
+      'symlinks report as links with null metadata, targets not leaked',
+      () async {
+        final file = await putFile('target.txt', '1234567890');
+        await putLink('alias', file.path);
+        await putLink('broken', pathOf('nowhere'));
+        final entries = await fs.listDirectory(root.path);
+        expect(
+          entries.map((e) => e.name),
+          unorderedEquals(['target.txt', 'alias', 'broken']),
+        );
+        for (final name in ['alias', 'broken']) {
+          final link = entries.singleWhere((e) => e.name == name);
+          expect(link.type, RemoteFileType.symbolicLink);
+          expect(link.isSymbolicLink, isTrue);
+          expect(link.size, isNull);
+          expect(link.modifiedAt, isNull);
+          expect(link.accessedAt, isNull);
+          expect(link.mode, isNull);
+        }
+      },
+    );
 
     test('an empty directory lists empty', () async {
       expect(await fs.listDirectory(root.path), isEmpty);
     });
 
-    test('missing directory fails notFound with the funnel message shape', () async {
-      final error = remoteFailure(
-        await failureOf(fs.listDirectory(pathOf('gone'))),
-      );
-      expect(error.kind, RemoteFileErrorKind.notFound);
-      expect(error.message, startsWith('Could not list "${pathOf('gone')}": '));
-    });
-
-    test('a file path fails other ("Not a directory"), never a silent list', () async {
-      final file = await putFile('plain');
-      final error = remoteFailure(await failureOf(fs.listDirectory(file.path)));
-      expect(error.kind, RemoteFileErrorKind.other);
-      // OS diagnostics differ (ENOTDIR versus Windows ERROR_DIRECTORY).
-      expect(error.message, startsWith('Could not list "${file.path}": '));
-      expect(error.cause, isA<FileSystemException>());
-      if (!Platform.isWindows) {
-        expect(error.message, contains('Not a directory'));
-      }
-    });
-
-    testWithPosixTools('an unreadable directory fails permissionDenied', () async {
-      if (runningAsRoot) {
-        markTestSkipped('root bypasses mode-bit read denial');
-        return;
-      }
-      final dir = await putDir('locked');
-      await putFile('locked/inside');
-      chmodSync('000', dir.path);
-      try {
-        final error = remoteFailure(await failureOf(fs.listDirectory(dir.path)));
-        expect(error.kind, RemoteFileErrorKind.permissionDenied);
-      } finally {
-        // Restore before teardowns run: the fixture teardown must be
-        // able to recurse through this directory.
-        chmodSync('755', dir.path);
-      }
-    });
-
-    testWithPosixTools('a path under an unreadable directory stats permissionDenied, not notFound', () async {
-      // dart:io's stat folds EACCES into notFound; the re-probe must
-      // surface the real errno (same for download and the attribute
-      // writes) — the SFTP adapter answers permission-denied here.
-      if (runningAsRoot) {
-        markTestSkipped('root bypasses mode-bit read denial');
-        return;
-      }
-      final dir = await putDir('locked');
-      await putFile('locked/inside');
-      chmodSync('000', dir.path);
-      try {
-        final statError = remoteFailure(
-          await failureOf(fs.stat(pathOf('locked/inside'))),
+    test(
+      'missing directory fails notFound with the funnel message shape',
+      () async {
+        final error = remoteFailure(
+          await failureOf(fs.listDirectory(pathOf('gone'))),
         );
-        expect(statError.kind, RemoteFileErrorKind.permissionDenied);
-        final downloadError = remoteFailure(
-          await failureOf(fs.download(pathOf('locked/inside'), _CollectingSink())),
+        expect(error.kind, RemoteFileErrorKind.notFound);
+        expect(
+          error.message,
+          startsWith('Could not list "${pathOf('gone')}": '),
         );
-        expect(downloadError.kind, RemoteFileErrorKind.permissionDenied);
-      } finally {
-        chmodSync('755', dir.path);
-      }
-    });
+      },
+    );
+
+    test(
+      'a file path fails other ("Not a directory"), never a silent list',
+      () async {
+        final file = await putFile('plain');
+        final error = remoteFailure(
+          await failureOf(fs.listDirectory(file.path)),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        // OS diagnostics differ (ENOTDIR versus Windows ERROR_DIRECTORY).
+        expect(error.message, startsWith('Could not list "${file.path}": '));
+        expect(error.cause, isA<FileSystemException>());
+        if (!Platform.isWindows) {
+          expect(error.message, contains('Not a directory'));
+        }
+      },
+    );
+
+    testWithPosixTools(
+      'an unreadable directory fails permissionDenied',
+      () async {
+        if (runningAsRoot) {
+          markTestSkipped('root bypasses mode-bit read denial');
+          return;
+        }
+        final dir = await putDir('locked');
+        await putFile('locked/inside');
+        chmodSync('000', dir.path);
+        try {
+          final error = remoteFailure(
+            await failureOf(fs.listDirectory(dir.path)),
+          );
+          expect(error.kind, RemoteFileErrorKind.permissionDenied);
+        } finally {
+          // Restore before teardowns run: the fixture teardown must be
+          // able to recurse through this directory.
+          chmodSync('755', dir.path);
+        }
+      },
+    );
+
+    testWithPosixTools(
+      'a path under an unreadable directory stats permissionDenied, not notFound',
+      () async {
+        // dart:io's stat folds EACCES into notFound; the re-probe must
+        // surface the real errno (same for download and the attribute
+        // writes) — the SFTP adapter answers permission-denied here.
+        if (runningAsRoot) {
+          markTestSkipped('root bypasses mode-bit read denial');
+          return;
+        }
+        final dir = await putDir('locked');
+        await putFile('locked/inside');
+        chmodSync('000', dir.path);
+        try {
+          final statError = remoteFailure(
+            await failureOf(fs.stat(pathOf('locked/inside'))),
+          );
+          expect(statError.kind, RemoteFileErrorKind.permissionDenied);
+          final downloadError = remoteFailure(
+            await failureOf(
+              fs.download(pathOf('locked/inside'), _CollectingSink()),
+            ),
+          );
+          expect(downloadError.kind, RemoteFileErrorKind.permissionDenied);
+        } finally {
+          chmodSync('755', dir.path);
+        }
+      },
+    );
   });
 
   group('stat', () {
-    testWithSymbolicLinks('follows links by default (target identity)', () async {
-      final file = await putFile('target', 'xyz');
-      await putLink('alias', file.path);
-      final entry = await fs.stat(pathOf('alias'));
-      expect(entry.type, RemoteFileType.file);
-      expect(entry.size, 3);
-      expect(entry.name, 'alias');
-    });
+    testWithSymbolicLinks(
+      'follows links by default (target identity)',
+      () async {
+        final file = await putFile('target', 'xyz');
+        await putLink('alias', file.path);
+        final entry = await fs.stat(pathOf('alias'));
+        expect(entry.type, RemoteFileType.file);
+        expect(entry.size, 3);
+        expect(entry.name, 'alias');
+      },
+    );
 
-    testWithSymbolicLinks('followLinks: false reports the link itself with null metadata', () async {
-      final file = await putFile('target', 'xyz');
-      await putLink('alias', file.path);
-      final entry = await fs.stat(pathOf('alias'), followLinks: false);
-      expect(entry.type, RemoteFileType.symbolicLink);
-      expect(entry.size, isNull);
-      expect(entry.modifiedAt, isNull);
-      expect(entry.mode, isNull);
-      expect(entry.uid, isNull);
-      expect(entry.gid, isNull);
-    });
+    testWithSymbolicLinks(
+      'followLinks: false reports the link itself with null metadata',
+      () async {
+        final file = await putFile('target', 'xyz');
+        await putLink('alias', file.path);
+        final entry = await fs.stat(pathOf('alias'), followLinks: false);
+        expect(entry.type, RemoteFileType.symbolicLink);
+        expect(entry.size, isNull);
+        expect(entry.modifiedAt, isNull);
+        expect(entry.mode, isNull);
+        expect(entry.uid, isNull);
+        expect(entry.gid, isNull);
+      },
+    );
 
     test('missing path fails notFound in both modes', () async {
       for (final follow in [true, false]) {
@@ -377,37 +413,46 @@ void main() {
       final error = remoteFailure(
         await failureOf(fs.setMode(pathOf('gone'), oct('644'))),
       );
-      expect(error.kind, Platform.isWindows
-          ? RemoteFileErrorKind.unsupported
-          : RemoteFileErrorKind.notFound);
+      expect(
+        error.kind,
+        Platform.isWindows
+            ? RemoteFileErrorKind.unsupported
+            : RemoteFileErrorKind.notFound,
+      );
     });
 
-    testWithSymbolicLinks('refuses symlinks (unsupported) — the target keeps its mode', () async {
-      final file = await putFile('target');
-      final link = await putLink('alias', file.path);
-      final error = remoteFailure(
-        await failureOf(fs.setMode(link.path, oct('600'))),
-      );
-      expect(error.kind, RemoteFileErrorKind.unsupported);
-      if (!Platform.isWindows) {
-        expect(error.message, contains('Symbolic link'));
-        expect(modeOf(file.path), oct('644'));
-      }
-    });
+    testWithSymbolicLinks(
+      'refuses symlinks (unsupported) — the target keeps its mode',
+      () async {
+        final file = await putFile('target');
+        final link = await putLink('alias', file.path);
+        final error = remoteFailure(
+          await failureOf(fs.setMode(link.path, oct('600'))),
+        );
+        expect(error.kind, RemoteFileErrorKind.unsupported);
+        if (!Platform.isWindows) {
+          expect(error.message, contains('Symbolic link'));
+          expect(modeOf(file.path), oct('644'));
+        }
+      },
+    );
 
-    testWithPosixTools('maps a chmod EPERM stderr line to permissionDenied', () async {
-      final file = await putFile('f');
-      final (fakeFs, bin) = fakeBinFs();
-      installFake(
-        bin,
-        'chmod',
-        "echo \"chmod: changing permissions of 'x': Operation not permitted\" >&2; exit 1",
-      );
-      final error = remoteFailure(
-        await failureOf(fakeFs.setMode(file.path, oct('600'))),
-      );
-      expect(error.kind, RemoteFileErrorKind.permissionDenied);
-    });
+    testWithPosixTools(
+      'maps a chmod EPERM stderr line to permissionDenied',
+      () async {
+        final file = await putFile('f');
+        final (fakeFs, bin) = fakeBinFs();
+        installFake(
+          bin,
+          'chmod',
+          "echo \"chmod: changing permissions of 'x': Operation not permitted\" >&2; exit 1",
+        );
+        final error = remoteFailure(
+          await failureOf(fakeFs.setMode(file.path, oct('600'))),
+        );
+        expect(error.kind, RemoteFileErrorKind.permissionDenied);
+      },
+    );
 
     testWithPosixTools('maps a chmod ENOENT stderr line to notFound', () async {
       await putFile('f');
@@ -423,80 +468,97 @@ void main() {
       expect(error.kind, RemoteFileErrorKind.notFound);
     });
 
-    testWithPosixTools('an unmapped chmod stderr fails other with the line as detail', () async {
-      await putFile('f');
-      final (fakeFs, bin) = fakeBinFs();
-      installFake(bin, 'chmod', "echo \"chmod: something novel\" >&2; exit 1");
-      final error = remoteFailure(
-        await failureOf(fakeFs.setMode(pathOf('f'), oct('600'))),
-      );
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(error.message, contains('something novel'));
-    });
+    testWithPosixTools(
+      'an unmapped chmod stderr fails other with the line as detail',
+      () async {
+        await putFile('f');
+        final (fakeFs, bin) = fakeBinFs();
+        installFake(
+          bin,
+          'chmod',
+          "echo \"chmod: something novel\" >&2; exit 1",
+        );
+        final error = remoteFailure(
+          await failureOf(fakeFs.setMode(pathOf('f'), oct('600'))),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(error.message, contains('something novel'));
+      },
+    );
 
-    testWithPosixTools('classifies by the trailing stderr segment, never a substring match', () async {
-      await putFile('f');
-      // The path legally embeds "Operation not permitted"; the real
-      // failure is ENOENT. A substring scan would misclassify.
-      final (fakeFs, bin) = fakeBinFs();
-      installFake(
-        bin,
-        'chmod',
-        "echo \"chmod: cannot access '/tmp/x/Operation not permitted': No such file or directory\" >&2; exit 1",
-      );
-      final error = remoteFailure(
-        await failureOf(fakeFs.setMode(pathOf('f'), oct('600'))),
-      );
-      expect(error.kind, RemoteFileErrorKind.notFound);
-    });
+    testWithPosixTools(
+      'classifies by the trailing stderr segment, never a substring match',
+      () async {
+        await putFile('f');
+        // The path legally embeds "Operation not permitted"; the real
+        // failure is ENOENT. A substring scan would misclassify.
+        final (fakeFs, bin) = fakeBinFs();
+        installFake(
+          bin,
+          'chmod',
+          "echo \"chmod: cannot access '/tmp/x/Operation not permitted': No such file or directory\" >&2; exit 1",
+        );
+        final error = remoteFailure(
+          await failureOf(fakeFs.setMode(pathOf('f'), oct('600'))),
+        );
+        expect(error.kind, RemoteFileErrorKind.notFound);
+      },
+    );
 
-    testWithPosixTools('a path swapped to a symlink mid-write fails with the landing site', () async {
-      final file = await putFile('f');
-      final elsewhere = await putFile('elsewhere', 'secret');
-      // Fake chmod: perform the swap ($3 is the path — `--` $2 is the
-      // mode), then exit 0. The refuse-first check saw a regular file;
-      // the write lands through a fresh link.
-      final bin = Directory.systemTemp.createTempSync('pg-swapbin');
-      addTearDown(() => bin.deleteSync(recursive: true));
-      final script = File('${bin.path}/chmod');
-      script.writeAsStringSync(
-        '#!/bin/sh\nrm -f "\$3"\nln -s "\$SWAP_TARGET" "\$3"\nexit 0\n',
-      );
-      chmodSync('755', script.path);
-      final swapFs = LocalFileSystem(
-        environment: {
-          'PATH': '${bin.path}:${Platform.environment['PATH'] ?? ''}',
-          'SWAP_TARGET': elsewhere.path,
-        },
-      );
-      final error = remoteFailure(
-        await failureOf(swapFs.setMode(file.path, oct('600'))),
-      );
-      expect(error, isA<LocalPathTypeChangedException>());
-      final changed = error as LocalPathTypeChangedException;
-      expect(
-        changed.targetPath,
-        await File(elsewhere.path).resolveSymbolicLinks(),
-      );
-      expect(changed.kind, isNot(RemoteFileErrorKind.conflict));
-    });
+    testWithPosixTools(
+      'a path swapped to a symlink mid-write fails with the landing site',
+      () async {
+        final file = await putFile('f');
+        final elsewhere = await putFile('elsewhere', 'secret');
+        // Fake chmod: perform the swap ($3 is the path — `--` $2 is the
+        // mode), then exit 0. The refuse-first check saw a regular file;
+        // the write lands through a fresh link.
+        final bin = Directory.systemTemp.createTempSync('pg-swapbin');
+        addTearDown(() => bin.deleteSync(recursive: true));
+        final script = File('${bin.path}/chmod');
+        script.writeAsStringSync(
+          '#!/bin/sh\nrm -f "\$3"\nln -s "\$SWAP_TARGET" "\$3"\nexit 0\n',
+        );
+        chmodSync('755', script.path);
+        final swapFs = LocalFileSystem(
+          environment: {
+            'PATH': '${bin.path}:${Platform.environment['PATH'] ?? ''}',
+            'SWAP_TARGET': elsewhere.path,
+          },
+        );
+        final error = remoteFailure(
+          await failureOf(swapFs.setMode(file.path, oct('600'))),
+        );
+        expect(error, isA<LocalPathTypeChangedException>());
+        final changed = error as LocalPathTypeChangedException;
+        expect(
+          changed.targetPath,
+          await File(elsewhere.path).resolveSymbolicLinks(),
+        );
+        expect(changed.kind, isNot(RemoteFileErrorKind.conflict));
+      },
+    );
   });
 
-  test('Windows mode and owner writes fail unsupported without changing bytes', () async {
-    final file = await putFile('windows-attributes', 'unchanged');
-    final modeBefore = modeOf(file.path);
-    for (final operation in <Future<void> Function()>[
-      () => fs.setMode(file.path, oct('600')),
-      () => fs.setOwner(file.path, uid: 1),
-    ]) {
-      final error = remoteFailure(await failureOf(operation()));
-      expect(error.kind, RemoteFileErrorKind.unsupported);
-      expect(error.path, file.path);
-      expect(error.message, contains('not supported on Windows'));
-      expect(await file.readAsString(), 'unchanged');
-      expect(modeOf(file.path), modeBefore);
-    }
-  }, skip: Platform.isWindows ? false : 'Windows-only unsupported contract');
+  test(
+    'Windows mode and owner writes fail unsupported without changing bytes',
+    () async {
+      final file = await putFile('windows-attributes', 'unchanged');
+      final modeBefore = modeOf(file.path);
+      for (final operation in <Future<void> Function()>[
+        () => fs.setMode(file.path, oct('600')),
+        () => fs.setOwner(file.path, uid: 1),
+      ]) {
+        final error = remoteFailure(await failureOf(operation()));
+        expect(error.kind, RemoteFileErrorKind.unsupported);
+        expect(error.path, file.path);
+        expect(error.message, contains('not supported on Windows'));
+        expect(await file.readAsString(), 'unchanged');
+        expect(modeOf(file.path), modeBefore);
+      }
+    },
+    skip: Platform.isWindows ? false : 'Windows-only unsupported contract',
+  );
 
   group('setTimes', () {
     test('sets the modification time and preserves the access time', () async {
@@ -506,7 +568,11 @@ void main() {
       await fs.setTimes(file.path, modifiedAt: when);
       final entry = await fs.stat(file.path);
       expect(entry.modifiedAt, when);
-      expect(entry.accessedAt, accessBefore, reason: 'the omitted half keeps its current value');
+      expect(
+        entry.accessedAt,
+        accessBefore,
+        reason: 'the omitted half keeps its current value',
+      );
     });
 
     test('sets the access time and preserves the modification time', () async {
@@ -516,7 +582,11 @@ void main() {
       await fs.setTimes(file.path, accessedAt: when);
       final entry = await fs.stat(file.path);
       expect(entry.accessedAt, when);
-      expect(entry.modifiedAt, modifyBefore, reason: 'the omitted half keeps its current value');
+      expect(
+        entry.modifiedAt,
+        modifyBefore,
+        reason: 'the omitted half keeps its current value',
+      );
     });
 
     test('sets both halves independently of each other', () async {
@@ -533,42 +603,50 @@ void main() {
       expect(() => fs.setTimes(pathOf('f')), throwsArgumentError);
     });
 
-    test('directories and FIFOs fail unsupported (dart:io cannot set them)', () async {
-      final dir = await putDir('d');
-      final error = remoteFailure(
-        await failureOf(
-          fs.setTimes(dir.path, modifiedAt: DateTime.utc(2024)),
-        ),
-      );
-      expect(error.kind, RemoteFileErrorKind.unsupported);
-      if (Platform.isLinux) {
-        // A FIFO would block dart:io's open-for-writing forever — the
-        // pre-check must refuse it before any open.
-        final fifo = Directory.systemTemp.createTempSync('pg-fifo');
-        addTearDown(() => fifo.deleteSync(recursive: true));
-        final mkfifo = await Process.run('mkfifo', ['${fifo.path}/pipe']);
-        if (mkfifo.exitCode != 0) {
-          fail('mkfifo fixture failed: ${mkfifo.stderr}');
-        }
-        final fifoError = remoteFailure(
+    test(
+      'directories and FIFOs fail unsupported (dart:io cannot set them)',
+      () async {
+        final dir = await putDir('d');
+        final error = remoteFailure(
           await failureOf(
-            fs.setTimes('${fifo.path}/pipe', modifiedAt: DateTime.utc(2024)),
+            fs.setTimes(dir.path, modifiedAt: DateTime.utc(2024)),
           ),
         );
-        expect(fifoError.kind, RemoteFileErrorKind.unsupported);
-      }
-    });
+        expect(error.kind, RemoteFileErrorKind.unsupported);
+        if (Platform.isLinux) {
+          // A FIFO would block dart:io's open-for-writing forever — the
+          // pre-check must refuse it before any open.
+          final fifo = Directory.systemTemp.createTempSync('pg-fifo');
+          addTearDown(() => fifo.deleteSync(recursive: true));
+          final mkfifo = await Process.run('mkfifo', ['${fifo.path}/pipe']);
+          if (mkfifo.exitCode != 0) {
+            fail('mkfifo fixture failed: ${mkfifo.stderr}');
+          }
+          final fifoError = remoteFailure(
+            await failureOf(
+              fs.setTimes('${fifo.path}/pipe', modifiedAt: DateTime.utc(2024)),
+            ),
+          );
+          expect(fifoError.kind, RemoteFileErrorKind.unsupported);
+        }
+      },
+    );
 
-    testWithSymbolicLinks('refuses symlinks — the target keeps its times', () async {
-      final file = await putFile('target');
-      final before = (await fs.stat(file.path)).modifiedAt;
-      final link = await putLink('alias', file.path);
-      final error = remoteFailure(
-        await failureOf(fs.setTimes(link.path, modifiedAt: DateTime.utc(2024))),
-      );
-      expect(error.kind, RemoteFileErrorKind.unsupported);
-      expect((await fs.stat(file.path)).modifiedAt, before);
-    });
+    testWithSymbolicLinks(
+      'refuses symlinks — the target keeps its times',
+      () async {
+        final file = await putFile('target');
+        final before = (await fs.stat(file.path)).modifiedAt;
+        final link = await putLink('alias', file.path);
+        final error = remoteFailure(
+          await failureOf(
+            fs.setTimes(link.path, modifiedAt: DateTime.utc(2024)),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.unsupported);
+        expect((await fs.stat(file.path)).modifiedAt, before);
+      },
+    );
 
     test('missing path fails notFound', () async {
       final error = remoteFailure(
@@ -581,20 +659,26 @@ void main() {
   });
 
   group('setOwner', () {
-    testWithPosixTools('chown to the current owner succeeds and leaves the file intact', () async {
-      final file = await putFile('f');
-      final uid = int.parse(
-        Process.runSync('id', ['-u']).stdout.toString().trim(),
-      );
-      await fs.setOwner(file.path, uid: uid);
-      expect(file.existsSync(), isTrue);
-      expect(modeOf(file.path), oct('644'));
-    });
+    testWithPosixTools(
+      'chown to the current owner succeeds and leaves the file intact',
+      () async {
+        final file = await putFile('f');
+        final uid = int.parse(
+          Process.runSync('id', ['-u']).stdout.toString().trim(),
+        );
+        await fs.setOwner(file.path, uid: uid);
+        expect(file.existsSync(), isTrue);
+        expect(modeOf(file.path), oct('644'));
+      },
+    );
 
     test('requires at least one id (ArgumentError) and range-checks both', () {
       expect(() => fs.setOwner(pathOf('f')), throwsArgumentError);
       expect(() => fs.setOwner(pathOf('f'), uid: -1), throwsRangeError);
-      expect(() => fs.setOwner(pathOf('f'), gid: 0x100000000), throwsRangeError);
+      expect(
+        () => fs.setOwner(pathOf('f'), gid: 0x100000000),
+        throwsRangeError,
+      );
     });
 
     testWithPosixTools('refuses symlinks before chown ever runs', () async {
@@ -625,57 +709,66 @@ void main() {
       );
     });
 
-    testWithPosixTools('maps a chown EPERM stderr line to permissionDenied', () async {
-      await putFile('f');
-      final (fakeFs, bin) = fakeBinFs();
-      installFake(
-        bin,
-        'chown',
-        "echo \"chown: changing ownership of 'x': Operation not permitted\" >&2; exit 1",
-      );
-      final error = remoteFailure(
-        await failureOf(fakeFs.setOwner(pathOf('f'), uid: 0)),
-      );
-      expect(error.kind, RemoteFileErrorKind.permissionDenied);
-    });
+    testWithPosixTools(
+      'maps a chown EPERM stderr line to permissionDenied',
+      () async {
+        await putFile('f');
+        final (fakeFs, bin) = fakeBinFs();
+        installFake(
+          bin,
+          'chown',
+          "echo \"chown: changing ownership of 'x': Operation not permitted\" >&2; exit 1",
+        );
+        final error = remoteFailure(
+          await failureOf(fakeFs.setOwner(pathOf('f'), uid: 0)),
+        );
+        expect(error.kind, RemoteFileErrorKind.permissionDenied);
+      },
+    );
 
-    testWithPosixTools('the utility argv is option-guarded before any operand', () async {
-      // Pins the `--` end-of-options guard centrally inserted by
-      // _runUtility: a dash-prefixed path operand can never parse as
-      // an option, absolute or relative.
-      final file = await putFile('-R');
-      final bin = Directory.systemTemp.createTempSync('pg-argvbin');
-      addTearDown(() => bin.deleteSync(recursive: true));
-      final record = File('${bin.path}/argv');
-      final script = File('${bin.path}/chmod');
-      script.writeAsStringSync(
-        '#!/bin/sh\nfor a in "\$@"; do echo "\$a" >> "\$RECORD"; done\nexit 0\n',
-      );
-      chmodSync('755', script.path);
-      final fakeFs = LocalFileSystem(
-        environment: {
-          'PATH': '${bin.path}:${Platform.environment['PATH'] ?? ''}',
-          'RECORD': record.path,
-        },
-      );
-      await fakeFs.setMode(file.path, oct('600'));
-      final argv = record
-          .readAsStringSync()
-          .split('\n')
-          .where((l) => l.isNotEmpty)
-          .toList();
-      expect(argv, ['--', '600', file.path]);
-    });
+    testWithPosixTools(
+      'the utility argv is option-guarded before any operand',
+      () async {
+        // Pins the `--` end-of-options guard centrally inserted by
+        // _runUtility: a dash-prefixed path operand can never parse as
+        // an option, absolute or relative.
+        final file = await putFile('-R');
+        final bin = Directory.systemTemp.createTempSync('pg-argvbin');
+        addTearDown(() => bin.deleteSync(recursive: true));
+        final record = File('${bin.path}/argv');
+        final script = File('${bin.path}/chmod');
+        script.writeAsStringSync(
+          '#!/bin/sh\nfor a in "\$@"; do echo "\$a" >> "\$RECORD"; done\nexit 0\n',
+        );
+        chmodSync('755', script.path);
+        final fakeFs = LocalFileSystem(
+          environment: {
+            'PATH': '${bin.path}:${Platform.environment['PATH'] ?? ''}',
+            'RECORD': record.path,
+          },
+        );
+        await fakeFs.setMode(file.path, oct('600'));
+        final argv = record
+            .readAsStringSync()
+            .split('\n')
+            .where((l) => l.isNotEmpty)
+            .toList();
+        expect(argv, ['--', '600', file.path]);
+      },
+    );
   });
 
   group('readSymbolicLink', () {
-    testWithSymbolicLinks('returns the target verbatim (absolute and relative)', () async {
-      final file = await putFile('target');
-      final link = await putLink('abs', file.path);
-      final rel = await putLink('rel', 'target');
-      expect(await fs.readSymbolicLink(link.path), file.path);
-      expect(await fs.readSymbolicLink(rel.path), 'target');
-    });
+    testWithSymbolicLinks(
+      'returns the target verbatim (absolute and relative)',
+      () async {
+        final file = await putFile('target');
+        final link = await putLink('abs', file.path);
+        final rel = await putLink('rel', 'target');
+        expect(await fs.readSymbolicLink(link.path), file.path);
+        expect(await fs.readSymbolicLink(rel.path), 'target');
+      },
+    );
 
     test('missing path fails notFound', () async {
       final error = remoteFailure(
@@ -686,28 +779,37 @@ void main() {
   });
 
   group('createSymbolicLink', () {
-    testWithSymbolicLinks('creates the link and round-trips through readSymbolicLink', () async {
-      await fs.createSymbolicLink(pathOf('lnk'), pathOf('dest'));
-      expect(await fs.readSymbolicLink(pathOf('lnk')), pathOf('dest'));
-    });
+    testWithSymbolicLinks(
+      'creates the link and round-trips through readSymbolicLink',
+      () async {
+        await fs.createSymbolicLink(pathOf('lnk'), pathOf('dest'));
+        expect(await fs.readSymbolicLink(pathOf('lnk')), pathOf('dest'));
+      },
+    );
 
-    test('an existing item at the link path conflicts before any change', () async {
-      final file = await putFile('occupied');
-      final error = remoteFailure(
-        await failureOf(fs.createSymbolicLink(file.path, 'x')),
-      );
-      expect(error.kind, RemoteFileErrorKind.conflict);
-      expect(error.message, contains('already exists'));
-      expect(file.existsSync(), isTrue);
-      expect(Link(file.path).existsSync(), isFalse);
-    });
+    test(
+      'an existing item at the link path conflicts before any change',
+      () async {
+        final file = await putFile('occupied');
+        final error = remoteFailure(
+          await failureOf(fs.createSymbolicLink(file.path, 'x')),
+        );
+        expect(error.kind, RemoteFileErrorKind.conflict);
+        expect(error.message, contains('already exists'));
+        expect(file.existsSync(), isTrue);
+        expect(Link(file.path).existsSync(), isFalse);
+      },
+    );
 
-    testWithSymbolicLinks('a missing parent fails notFound (never auto-parents)', () async {
-      final error = remoteFailure(
-        await failureOf(fs.createSymbolicLink(pathOf('gone/lnk'), 'x')),
-      );
-      expect(error.kind, RemoteFileErrorKind.notFound);
-    });
+    testWithSymbolicLinks(
+      'a missing parent fails notFound (never auto-parents)',
+      () async {
+        final error = remoteFailure(
+          await failureOf(fs.createSymbolicLink(pathOf('gone/lnk'), 'x')),
+        );
+        expect(error.kind, RemoteFileErrorKind.notFound);
+      },
+    );
   });
 
   group('createDirectory', () {
@@ -716,16 +818,23 @@ void main() {
       expect(Directory(pathOf('new')).existsSync(), isTrue);
     });
 
-    test('an existing directory conflicts (dart:io create() is a no-op there)', () async {
-      final dir = await putDir('exists');
-      final error = remoteFailure(await failureOf(fs.createDirectory(dir.path)));
-      expect(error.kind, RemoteFileErrorKind.conflict);
-      expect(error.message, contains('already exists'));
-    });
+    test(
+      'an existing directory conflicts (dart:io create() is a no-op there)',
+      () async {
+        final dir = await putDir('exists');
+        final error = remoteFailure(
+          await failureOf(fs.createDirectory(dir.path)),
+        );
+        expect(error.kind, RemoteFileErrorKind.conflict);
+        expect(error.message, contains('already exists'));
+      },
+    );
 
     test('an existing file conflicts', () async {
       final file = await putFile('occupied');
-      final error = remoteFailure(await failureOf(fs.createDirectory(file.path)));
+      final error = remoteFailure(
+        await failureOf(fs.createDirectory(file.path)),
+      );
       expect(error.kind, RemoteFileErrorKind.conflict);
     });
 
@@ -754,24 +863,30 @@ void main() {
       expect(File(pathOf('dir2/inside')).existsSync(), isTrue);
     });
 
-    testWithSymbolicLinks('renames a symlink itself — the target stays put and reachable', () async {
-      final file = await putFile('target');
-      final link = await putLink('lnk', file.path);
-      await fs.rename(link.path, pathOf('lnk2'));
-      expect(Link(link.path).existsSync(), isFalse);
-      expect(await Link(pathOf('lnk2')).target(), file.path);
-      expect(file.existsSync(), isTrue);
-    });
+    testWithSymbolicLinks(
+      'renames a symlink itself — the target stays put and reachable',
+      () async {
+        final file = await putFile('target');
+        final link = await putLink('lnk', file.path);
+        await fs.rename(link.path, pathOf('lnk2'));
+        expect(Link(link.path).existsSync(), isFalse);
+        expect(await Link(pathOf('lnk2')).target(), file.path);
+        expect(file.existsSync(), isTrue);
+      },
+    );
 
-    test('an existing destination conflicts without overwrite, both intact', () async {
-      final a = await putFile('a', 'A');
-      final b = await putFile('b', 'B');
-      final error = remoteFailure(await failureOf(fs.rename(a.path, b.path)));
-      expect(error.kind, RemoteFileErrorKind.conflict);
-      expect(error.path, b.path);
-      expect(File(a.path).readAsStringSync(), 'A');
-      expect(File(b.path).readAsStringSync(), 'B');
-    });
+    test(
+      'an existing destination conflicts without overwrite, both intact',
+      () async {
+        final a = await putFile('a', 'A');
+        final b = await putFile('b', 'B');
+        final error = remoteFailure(await failureOf(fs.rename(a.path, b.path)));
+        expect(error.kind, RemoteFileErrorKind.conflict);
+        expect(error.path, b.path);
+        expect(File(a.path).readAsStringSync(), 'A');
+        expect(File(b.path).readAsStringSync(), 'B');
+      },
+    );
 
     test('overwrite replaces the destination', () async {
       await putFile('a', 'A');
@@ -779,80 +894,96 @@ void main() {
       await fs.rename(pathOf('a'), b.path, overwrite: true);
       expect(b.readAsStringSync(), 'A');
       expect(File(pathOf('a')).existsSync(), isFalse);
-      expect(siblingLitter(), isEmpty, reason: 'no backup litter after replace');
-    });
-
-    test('a missing source fails notFound and the destination is untouched', () async {
-      final untouched = await putFile('dest', 'D');
-      final error = remoteFailure(
-        await failureOf(fs.rename(pathOf('gone'), untouched.path)),
-      );
-      expect(error.kind, RemoteFileErrorKind.notFound);
-      expect(untouched.readAsStringSync(), 'D');
-    });
-
-    test('case-only rename succeeds via the two-step and leaves no siblings', () async {
-      // Runs on every host — the two-step exists exactly for the
-      // case-insensitive ones; only the vanished-old-spelling assert
-      // needs a case-sensitive volume (a case-insensitive stat still
-      // finds the renamed entry).
-      final file = await putFile('a.txt', 'data');
-      await fs.rename(file.path, pathOf('A.TXT'));
-      if (caseSensitiveFs) {
-        expect(File(pathOf('a.txt')).existsSync(), isFalse);
-      }
-      expect(File(pathOf('A.TXT')).readAsStringSync(), 'data');
       expect(
-        Directory(root.path)
-            .listSync()
-            .map((entity) => basenameOf(entity.path)),
-        ['A.TXT'],
+        siblingLitter(),
+        isEmpty,
+        reason: 'no backup litter after replace',
       );
     });
 
-    test('same-lowercase but distinct entries are two files, not one rename', () async {
-      // Needs a case-sensitive host: elsewhere the two names are one
-      // entry and the fixture below would silently collapse.
-      if (!caseSensitiveFs) {
-        markTestSkipped('volume is case-insensitive: a and A are one entry');
-        return;
-      }
-      final lower = await putFile('a', 'lower');
-      final upper = await putFile('A', 'upper');
-      final error = remoteFailure(
-        await failureOf(fs.rename(lower.path, upper.path)),
-      );
-      expect(error.kind, RemoteFileErrorKind.conflict);
-      expect(File(lower.path).readAsStringSync(), 'lower');
-      expect(File(upper.path).readAsStringSync(), 'upper');
-    });
+    test(
+      'a missing source fails notFound and the destination is untouched',
+      () async {
+        final untouched = await putFile('dest', 'D');
+        final error = remoteFailure(
+          await failureOf(fs.rename(pathOf('gone'), untouched.path)),
+        );
+        expect(error.kind, RemoteFileErrorKind.notFound);
+        expect(untouched.readAsStringSync(), 'D');
+      },
+    );
 
-    test('cross-device detection covers POSIX EXDEV and Win32 NOT_SAME_DEVICE', () {
-      // POSIX EXDEV (18) means cross-device on every host.
-      expect(
-        LocalFileSystem.isCrossDeviceRenameError(18, windows: false),
-        isTrue,
-      );
-      expect(
-        LocalFileSystem.isCrossDeviceRenameError(18, windows: true),
-        isTrue,
-      );
-      // Windows surfaces a cross-volume rename as raw Win32
-      // ERROR_NOT_SAME_DEVICE (17) — unmapped by dart:io.
-      expect(
-        LocalFileSystem.isCrossDeviceRenameError(17, windows: true),
-        isTrue,
-      );
-      // …but 17 on POSIX is EEXIST — a name collision, never EXDEV.
-      expect(
-        LocalFileSystem.isCrossDeviceRenameError(17, windows: false),
-        isFalse,
-      );
-      expect(
-        LocalFileSystem.isCrossDeviceRenameError(null, windows: true),
-        isFalse,
-      );
-    });
+    test(
+      'case-only rename succeeds via the two-step and leaves no siblings',
+      () async {
+        // Runs on every host — the two-step exists exactly for the
+        // case-insensitive ones; only the vanished-old-spelling assert
+        // needs a case-sensitive volume (a case-insensitive stat still
+        // finds the renamed entry).
+        final file = await putFile('a.txt', 'data');
+        await fs.rename(file.path, pathOf('A.TXT'));
+        if (caseSensitiveFs) {
+          expect(File(pathOf('a.txt')).existsSync(), isFalse);
+        }
+        expect(File(pathOf('A.TXT')).readAsStringSync(), 'data');
+        expect(
+          Directory(
+            root.path,
+          ).listSync().map((entity) => basenameOf(entity.path)),
+          ['A.TXT'],
+        );
+      },
+    );
+
+    test(
+      'same-lowercase but distinct entries are two files, not one rename',
+      () async {
+        // Needs a case-sensitive host: elsewhere the two names are one
+        // entry and the fixture below would silently collapse.
+        if (!caseSensitiveFs) {
+          markTestSkipped('volume is case-insensitive: a and A are one entry');
+          return;
+        }
+        final lower = await putFile('a', 'lower');
+        final upper = await putFile('A', 'upper');
+        final error = remoteFailure(
+          await failureOf(fs.rename(lower.path, upper.path)),
+        );
+        expect(error.kind, RemoteFileErrorKind.conflict);
+        expect(File(lower.path).readAsStringSync(), 'lower');
+        expect(File(upper.path).readAsStringSync(), 'upper');
+      },
+    );
+
+    test(
+      'cross-device detection covers POSIX EXDEV and Win32 NOT_SAME_DEVICE',
+      () {
+        // POSIX EXDEV (18) means cross-device on every host.
+        expect(
+          LocalFileSystem.isCrossDeviceRenameError(18, windows: false),
+          isTrue,
+        );
+        expect(
+          LocalFileSystem.isCrossDeviceRenameError(18, windows: true),
+          isTrue,
+        );
+        // Windows surfaces a cross-volume rename as raw Win32
+        // ERROR_NOT_SAME_DEVICE (17) — unmapped by dart:io.
+        expect(
+          LocalFileSystem.isCrossDeviceRenameError(17, windows: true),
+          isTrue,
+        );
+        // …but 17 on POSIX is EEXIST — a name collision, never EXDEV.
+        expect(
+          LocalFileSystem.isCrossDeviceRenameError(17, windows: false),
+          isFalse,
+        );
+        expect(
+          LocalFileSystem.isCrossDeviceRenameError(null, windows: true),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('delete', () {
@@ -862,13 +993,16 @@ void main() {
       expect(file.existsSync(), isFalse);
     });
 
-    testWithSymbolicLinks('deletes a symlink without touching its target', () async {
-      final file = await putFile('target');
-      final link = await putLink('lnk', file.path);
-      await fs.delete(await fs.stat(link.path, followLinks: false));
-      expect(Link(link.path).existsSync(), isFalse);
-      expect(file.existsSync(), isTrue);
-    });
+    testWithSymbolicLinks(
+      'deletes a symlink without touching its target',
+      () async {
+        final file = await putFile('target');
+        final link = await putLink('lnk', file.path);
+        await fs.delete(await fs.stat(link.path, followLinks: false));
+        expect(Link(link.path).existsSync(), isFalse);
+        expect(file.existsSync(), isTrue);
+      },
+    );
 
     test('deletes an empty directory', () async {
       final dir = await putDir('empty');
@@ -876,16 +1010,24 @@ void main() {
       expect(dir.existsSync(), isFalse);
     });
 
-    test("a non-empty directory keeps Séance's wording and stays intact", () async {
-      final dir = await putDir('full');
-      await putFile('full/inside');
-      final error = remoteFailure(
-        await failureOf(fs.delete(await fs.stat(dir.path, followLinks: false))),
-      );
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(error.message, contains('Only an empty directory can be deleted.'));
-      expect(File(pathOf('full/inside')).existsSync(), isTrue);
-    });
+    test(
+      "a non-empty directory keeps Séance's wording and stays intact",
+      () async {
+        final dir = await putDir('full');
+        await putFile('full/inside');
+        final error = remoteFailure(
+          await failureOf(
+            fs.delete(await fs.stat(dir.path, followLinks: false)),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(
+          error.message,
+          contains('Only an empty directory can be deleted.'),
+        );
+        expect(File(pathOf('full/inside')).existsSync(), isTrue);
+      },
+    );
 
     test('a missing path fails notFound', () async {
       final entry = RemoteFileEntry(
@@ -899,25 +1041,37 @@ void main() {
   });
 
   group('download', () {
-    test('streams the bytes and returns the digest of exactly what streamed', () async {
-      final file = await putFile('f', 'hello world');
-      final sink = _CollectingSink();
-      final entry = await fs.download(file.path, sink);
-      expect(String.fromCharCodes(sink.bytes), 'hello world');
-      expect(entry.contentSha256, sha256Of('hello world'));
-      expect(entry.size, 11);
-      expect(entry.type, RemoteFileType.file);
-    });
+    test(
+      'streams the bytes and returns the digest of exactly what streamed',
+      () async {
+        final file = await putFile('f', 'hello world');
+        final sink = _CollectingSink();
+        final entry = await fs.download(file.path, sink);
+        expect(String.fromCharCodes(sink.bytes), 'hello world');
+        expect(entry.contentSha256, sha256Of('hello world'));
+        expect(entry.size, 11);
+        expect(entry.type, RemoteFileType.file);
+      },
+    );
 
-    test('the digest oracle is UTF-8, not UTF-16 code units (non-ASCII)', () async {
-      // writeAsString encodes UTF-8; the streamed digest must match a
-      // UTF-8 oracle — a codeUnits oracle would silently disagree here.
-      final file = await putFile('f', 'héllo wörld');
-      final sink = _CollectingSink();
-      final entry = await fs.download(file.path, sink);
-      expect(entry.contentSha256, sha256.convert(utf8.encode('héllo wörld')).toString());
-      expect(entry.contentSha256, isNot(sha256.convert('héllo wörld'.codeUnits).toString()));
-    });
+    test(
+      'the digest oracle is UTF-8, not UTF-16 code units (non-ASCII)',
+      () async {
+        // writeAsString encodes UTF-8; the streamed digest must match a
+        // UTF-8 oracle — a codeUnits oracle would silently disagree here.
+        final file = await putFile('f', 'héllo wörld');
+        final sink = _CollectingSink();
+        final entry = await fs.download(file.path, sink);
+        expect(
+          entry.contentSha256,
+          sha256.convert(utf8.encode('héllo wörld')).toString(),
+        );
+        expect(
+          entry.contentSha256,
+          isNot(sha256.convert('héllo wörld'.codeUnits).toString()),
+        );
+      },
+    );
 
     test('reports progress with a known total', () async {
       final file = await putFile('f', '0123456789');
@@ -952,48 +1106,61 @@ void main() {
       expect(error.kind, RemoteFileErrorKind.notFound);
     });
 
-    testWithSymbolicLinks('a symlink and a directory fail unsupported — links are never followed down', () async {
-      final file = await putFile('target');
-      final link = await putLink('lnk', file.path);
-      final dir = await putDir('d');
-      final linkError = remoteFailure(
-        await failureOf(fs.download(link.path, _CollectingSink())),
-      );
-      final dirError = remoteFailure(
-        await failureOf(fs.download(dir.path, _CollectingSink())),
-      );
-      expect(linkError.kind, RemoteFileErrorKind.unsupported);
-      expect(dirError.kind, RemoteFileErrorKind.unsupported);
-      expect(linkError.message, contains('Only regular local files'));
-    });
+    testWithSymbolicLinks(
+      'a symlink and a directory fail unsupported — links are never followed down',
+      () async {
+        final file = await putFile('target');
+        final link = await putLink('lnk', file.path);
+        final dir = await putDir('d');
+        final linkError = remoteFailure(
+          await failureOf(fs.download(link.path, _CollectingSink())),
+        );
+        final dirError = remoteFailure(
+          await failureOf(fs.download(dir.path, _CollectingSink())),
+        );
+        expect(linkError.kind, RemoteFileErrorKind.unsupported);
+        expect(dirError.kind, RemoteFileErrorKind.unsupported);
+        expect(linkError.message, contains('Only regular local files'));
+      },
+    );
 
     test('an out-of-band change during the stream fails conflict', () async {
       final file = await putFile('f', 'first-content');
       final sink = _CollectingSink(
-        onFirstChunk: (_) => file.writeAsStringSync('replaced-different-length'),
+        onFirstChunk: (_) =>
+            file.writeAsStringSync('replaced-different-length'),
       );
-      final error = remoteFailure(await failureOf(fs.download(file.path, sink)));
+      final error = remoteFailure(
+        await failureOf(fs.download(file.path, sink)),
+      );
       expect(error.kind, RemoteFileErrorKind.conflict);
       expect(error.message, contains('changed while it was downloading'));
     });
 
-    test('cancellation before the start throws cancelled and streams nothing', () async {
-      final file = await putFile('f', 'data');
-      final cancellation = RemoteTransferCancellation()..cancel();
-      final sink = _CollectingSink();
-      final error = remoteFailure(
-        await failureOf(fs.download(file.path, sink, cancellation: cancellation)),
-      );
-      expect(error.kind, RemoteFileErrorKind.cancelled);
-      expect(sink.bytes, isEmpty);
-    });
+    test(
+      'cancellation before the start throws cancelled and streams nothing',
+      () async {
+        final file = await putFile('f', 'data');
+        final cancellation = RemoteTransferCancellation()..cancel();
+        final sink = _CollectingSink();
+        final error = remoteFailure(
+          await failureOf(
+            fs.download(file.path, sink, cancellation: cancellation),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.cancelled);
+        expect(sink.bytes, isEmpty);
+      },
+    );
 
     test('cancellation mid-stream throws cancelled (sticky)', () async {
       final file = await putFile('f', 'a-fairly-longer-payload-to-stream');
       final cancellation = RemoteTransferCancellation();
       final sink = _CollectingSink(onFirstChunk: (_) => cancellation.cancel());
       final error = remoteFailure(
-        await failureOf(fs.download(file.path, sink, cancellation: cancellation)),
+        await failureOf(
+          fs.download(file.path, sink, cancellation: cancellation),
+        ),
       );
       expect(error.kind, RemoteFileErrorKind.cancelled);
     });
@@ -1001,7 +1168,10 @@ void main() {
 
   group('upload', () {
     test('writes the content and returns the digested entry', () async {
-      final entry = await fs.upload(pathOf('out'), Stream.value(utf8.encode('payload')));
+      final entry = await fs.upload(
+        pathOf('out'),
+        Stream.value(utf8.encode('payload')),
+      );
       expect(File(pathOf('out')).readAsStringSync(), 'payload');
       expect(entry.contentSha256, sha256Of('payload'));
       expect(entry.size, 7);
@@ -1019,68 +1189,114 @@ void main() {
     }
 
     testWithPosixTools('honors preserveMode', () async {
-      await fs.upload(pathOf('out'), Stream.value([1]), preserveMode: oct('755'));
+      await fs.upload(
+        pathOf('out'),
+        Stream.value([1]),
+        preserveMode: oct('755'),
+      );
       expect(modeOf(pathOf('out')), oct('755') & umaskAllowed());
     });
 
-    testWithPosixTools('a preserved mode never brings setuid, setgid, sticky or bits the umask withholds', () async {
-      final allowed = umaskAllowed();
+    testWithPosixTools(
+      'a preserved mode never brings setuid, setgid, sticky or bits the umask withholds',
+      () async {
+        final allowed = umaskAllowed();
 
-      await fs.upload(pathOf('tool'), Stream.value([1]), preserveMode: oct('4755'));
-      expect(modeOf(pathOf('tool')), oct('755') & allowed);
-      expect(modeOf(pathOf('tool')) & oct('7000'), 0);
+        await fs.upload(
+          pathOf('tool'),
+          Stream.value([1]),
+          preserveMode: oct('4755'),
+        );
+        expect(modeOf(pathOf('tool')), oct('755') & allowed);
+        expect(modeOf(pathOf('tool')) & oct('7000'), 0);
 
-      await fs.upload(pathOf('shared'), Stream.value([1]), preserveMode: oct('7777'));
-      expect(modeOf(pathOf('shared')), oct('777') & allowed);
-      if (allowed & oct('002') == 0) {
-        expect(modeOf(pathOf('shared')) & oct('002'), 0, reason: 'the umask withholds world write');
-      }
-    });
+        await fs.upload(
+          pathOf('shared'),
+          Stream.value([1]),
+          preserveMode: oct('7777'),
+        );
+        expect(modeOf(pathOf('shared')), oct('777') & allowed);
+        if (allowed & oct('002') == 0) {
+          expect(
+            modeOf(pathOf('shared')) & oct('002'),
+            0,
+            reason: 'the umask withholds world write',
+          );
+        }
+      },
+    );
 
     testWithPosixTools('a replaced file keeps its own setuid bit', () async {
       // setuid, not setgid: BSD gives a new file its directory's group,
       // which the owner need not belong to, and chmod then drops setgid.
       final file = await putFile('existing');
       await fs.setMode(file.path, oct('4750'));
-      await fs.upload(file.path, Stream.value(utf8.encode('new')), overwrite: true);
+      await fs.upload(
+        file.path,
+        Stream.value(utf8.encode('new')),
+        overwrite: true,
+      );
       expect(modeOf(file.path), oct('4750'));
     });
 
-    testWithPosixTools('carries the existing mode over an overwrite by default', () async {
-      final file = await putFile('existing');
-      await fs.setMode(file.path, oct('640'));
-      await fs.upload(file.path, Stream.value(utf8.encode('new')), overwrite: true);
-      expect(modeOf(file.path), oct('640'));
-    });
+    testWithPosixTools(
+      'carries the existing mode over an overwrite by default',
+      () async {
+        final file = await putFile('existing');
+        await fs.setMode(file.path, oct('640'));
+        await fs.upload(
+          file.path,
+          Stream.value(utf8.encode('new')),
+          overwrite: true,
+        );
+        expect(modeOf(file.path), oct('640'));
+      },
+    );
 
-    test('an existing target conflicts without overwrite, content intact', () async {
-      final file = await putFile('existing', 'old');
-      final error = remoteFailure(
-        await failureOf(fs.upload(file.path, Stream.value(utf8.encode('new')))),
-      );
-      expect(error.kind, RemoteFileErrorKind.conflict);
-      expect(file.readAsStringSync(), 'old');
-      expect(siblingLitter(), isEmpty);
-    });
+    test(
+      'an existing target conflicts without overwrite, content intact',
+      () async {
+        final file = await putFile('existing', 'old');
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(file.path, Stream.value(utf8.encode('new'))),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.conflict);
+        expect(file.readAsStringSync(), 'old');
+        expect(siblingLitter(), isEmpty);
+      },
+    );
 
     test('overwrite replaces the target with no leftover backup', () async {
       final file = await putFile('existing', 'old-content');
-      await fs.upload(file.path, Stream.value(utf8.encode('new')), overwrite: true);
+      await fs.upload(
+        file.path,
+        Stream.value(utf8.encode('new')),
+        overwrite: true,
+      );
       expect(file.readAsStringSync(), 'new');
       expect(siblingLitter(), isEmpty);
     });
 
-    test('a declared length mismatch fails other and cleans the temp', () async {
-      final error = remoteFailure(
-        await failureOf(
-          fs.upload(pathOf('out'), Stream.value(utf8.encode('12345')), length: 10),
-        ),
-      );
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(error.message, contains('Upload ended after 5 of 10 bytes.'));
-      expect(siblingLitter(), isEmpty);
-      expect(File(pathOf('out')).existsSync(), isFalse);
-    });
+    test(
+      'a declared length mismatch fails other and cleans the temp',
+      () async {
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(
+              pathOf('out'),
+              Stream.value(utf8.encode('12345')),
+              length: 10,
+            ),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(error.message, contains('Upload ended after 5 of 10 bytes.'));
+        expect(siblingLitter(), isEmpty);
+        expect(File(pathOf('out')).existsSync(), isFalse);
+      },
+    );
 
     test('expectedTarget matching the current snapshot commits', () async {
       final file = await putFile('existing', 'v1');
@@ -1094,35 +1310,38 @@ void main() {
       expect(file.readAsStringSync(), 'v2');
     });
 
-    test('expectedTarget digest mismatch fails conflict even with a matching snapshot', () async {
-      final file = await putFile('existing', 'same-size');
-      final current = await fs.stat(file.path, followLinks: false);
-      final poisoned = RemoteFileEntry(
-        path: current.path,
-        name: current.name,
-        type: current.type,
-        size: current.size,
-        modifiedAt: current.modifiedAt,
-        mode: current.mode,
-        contentSha256: sha256Of('not-the-content'),
-      );
-      final error = remoteFailure(
-        await failureOf(
-          fs.upload(
-            file.path,
-            Stream.value(utf8.encode('x')),
-            overwrite: true,
-            expectedTarget: poisoned,
+    test(
+      'expectedTarget digest mismatch fails conflict even with a matching snapshot',
+      () async {
+        final file = await putFile('existing', 'same-size');
+        final current = await fs.stat(file.path, followLinks: false);
+        final poisoned = RemoteFileEntry(
+          path: current.path,
+          name: current.name,
+          type: current.type,
+          size: current.size,
+          modifiedAt: current.modifiedAt,
+          mode: current.mode,
+          contentSha256: sha256Of('not-the-content'),
+        );
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(
+              file.path,
+              Stream.value(utf8.encode('x')),
+              overwrite: true,
+              expectedTarget: poisoned,
+            ),
           ),
-        ),
-      );
-      expect(error.kind, RemoteFileErrorKind.conflict);
-      expect(
-        error.message,
-        contains('changed on disk before the upload started'),
-      );
-      expect(file.readAsStringSync(), 'same-size');
-    });
+        );
+        expect(error.kind, RemoteFileErrorKind.conflict);
+        expect(
+          error.message,
+          contains('changed on disk before the upload started'),
+        );
+        expect(file.readAsStringSync(), 'same-size');
+      },
+    );
 
     test('a mid-upload replacement fails the post-stream CAS check', () async {
       final file = await putFile('existing', 'v1');
@@ -1158,24 +1377,34 @@ void main() {
         yield [2];
       }
 
-      final error = remoteFailure(await failureOf(fs.upload(pathOf('raced'), content())));
+      final error = remoteFailure(
+        await failureOf(fs.upload(pathOf('raced'), content())),
+      );
       expect(error.kind, RemoteFileErrorKind.conflict);
-      expect(error.message, contains('was created while the upload was running'));
+      expect(
+        error.message,
+        contains('was created while the upload was running'),
+      );
       expect(File(pathOf('raced')).readAsStringSync(), 'appeared');
       expect(siblingLitter(), isEmpty);
     });
 
-    test('a source stream error fails other, cleans the temp, leaves no target', () async {
-      Stream<List<int>> content() async* {
-        yield [1, 2, 3];
-        throw StateError('source broke');
-      }
+    test(
+      'a source stream error fails other, cleans the temp, leaves no target',
+      () async {
+        Stream<List<int>> content() async* {
+          yield [1, 2, 3];
+          throw StateError('source broke');
+        }
 
-      final error = remoteFailure(await failureOf(fs.upload(pathOf('out'), content())));
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(File(pathOf('out')).existsSync(), isFalse);
-      expect(siblingLitter(), isEmpty);
-    });
+        final error = remoteFailure(
+          await failureOf(fs.upload(pathOf('out'), content())),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(File(pathOf('out')).existsSync(), isFalse);
+        expect(siblingLitter(), isEmpty);
+      },
+    );
 
     test('cancellation waits for source cleanup before completing', () async {
       final cancellation = RemoteTransferCancellation();
@@ -1189,17 +1418,18 @@ void main() {
       );
       source.add([1]);
       var completed = false;
-      final operation = failureOf(
-        fs.upload(
-          pathOf('out'),
-          source.stream,
-          cancellation: cancellation,
-          onProgress: (_, _) => cancellation.cancel(),
-        ),
-      ).then((error) {
-        completed = true;
-        return error;
-      });
+      final operation =
+          failureOf(
+            fs.upload(
+              pathOf('out'),
+              source.stream,
+              cancellation: cancellation,
+              onProgress: (_, _) => cancellation.cancel(),
+            ),
+          ).then((error) {
+            completed = true;
+            return error;
+          });
 
       try {
         await cleanupStarted.future;
@@ -1213,90 +1443,124 @@ void main() {
         await source.close();
       }
 
-      expect(remoteFailure(await operation).kind, RemoteFileErrorKind.cancelled);
-      expect(siblingLitter(), isEmpty);
-    });
-
-    test('cancellation mid-stream throws cancelled and cleans the temp', () async {
-      final cancellation = RemoteTransferCancellation();
-      Stream<List<int>> content() async* {
-        yield [1, 2, 3];
-        cancellation.cancel();
-        yield [4, 5, 6];
-      }
-
-      final error = remoteFailure(
-        await failureOf(
-          fs.upload(pathOf('out'), content(), cancellation: cancellation),
-        ),
+      expect(
+        remoteFailure(await operation).kind,
+        RemoteFileErrorKind.cancelled,
       );
-      expect(error.kind, RemoteFileErrorKind.cancelled);
-      expect(File(pathOf('out')).existsSync(), isFalse);
       expect(siblingLitter(), isEmpty);
     });
 
-    test('an overwrite onto an existing directory refuses safely, dir intact', () async {
-      // Adapter parity: the SFTP upload surfaces this as a late `other`
-      // from the final rename, never a conflict — the dance's refusal is
-      // the local equivalent, and it fires before any mutation.
-      final dir = await putDir('occupied');
-      final error = remoteFailure(
-        await failureOf(
-          fs.upload(dir.path, Stream.value(utf8.encode('x')), overwrite: true),
-        ),
-      );
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(error.message, contains('non-regular local file'));
-      expect(Directory(dir.path).existsSync(), isTrue);
-      expect(siblingLitter(), isEmpty);
-    });
+    test(
+      'cancellation mid-stream throws cancelled and cleans the temp',
+      () async {
+        final cancellation = RemoteTransferCancellation();
+        Stream<List<int>> content() async* {
+          yield [1, 2, 3];
+          cancellation.cancel();
+          yield [4, 5, 6];
+        }
 
-    testWithSymbolicLinks('an overwrite onto a symlink target refuses instead of escaping through it', () async {
-      final target = await putFile('target', 'safe');
-      final link = await putLink('lnk', target.path);
-      final error = remoteFailure(
-        await failureOf(
-          fs.upload(link.path, Stream.value(utf8.encode('x')), overwrite: true),
-        ),
-      );
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(error.message, contains('non-regular local file'));
-      expect(target.readAsStringSync(), 'safe');
-      expect(await Link(link.path).target(), target.path);
-      expect(siblingLitter(), isEmpty);
-    });
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(pathOf('out'), content(), cancellation: cancellation),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.cancelled);
+        expect(File(pathOf('out')).existsSync(), isFalse);
+        expect(siblingLitter(), isEmpty);
+      },
+    );
 
-    test('a target name too long for a backup fails the replace, original intact', () async {
-      final longName = 'n' * 250;
-      final file = await putFile(longName, 'original');
-      final error = remoteFailure(
-        await failureOf(
-          fs.upload(file.path, Stream.value(utf8.encode('x')), overwrite: true),
-        ),
-      );
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(error.message, contains('file-name limit'));
-      expect(file.readAsStringSync(), 'original');
-      expect(siblingLitter(), isEmpty);
-    });
+    test(
+      'an overwrite onto an existing directory refuses safely, dir intact',
+      () async {
+        // Adapter parity: the SFTP upload surfaces this as a late `other`
+        // from the final rename, never a conflict — the dance's refusal is
+        // the local equivalent, and it fires before any mutation.
+        final dir = await putDir('occupied');
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(
+              dir.path,
+              Stream.value(utf8.encode('x')),
+              overwrite: true,
+            ),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(error.message, contains('non-regular local file'));
+        expect(Directory(dir.path).existsSync(), isTrue);
+        expect(siblingLitter(), isEmpty);
+      },
+    );
 
-    test('a lone surrogate in the target name hits the byte guard, not the OS', () async {
-      // A lone surrogate has no valid UTF-8 form, but Dart's encoder
-      // still emits it as a 3-byte (WTF-8-style) sequence; the guard
-      // must count those bytes and fail before any rename runs.
-      final name = 'm' * 227 + '\uDC00';
-      final file = File(pathOf(name));
-      await file.writeAsString('original');
-      final error = remoteFailure(
-        await failureOf(
-          fs.upload(file.path, Stream.value(utf8.encode('x')), overwrite: true),
-        ),
-      );
-      expect(error.kind, RemoteFileErrorKind.other);
-      expect(error.message, contains('file-name limit'));
-      expect(file.readAsStringSync(), 'original');
-      expect(siblingLitter(), isEmpty);
-    });
+    testWithSymbolicLinks(
+      'an overwrite onto a symlink target refuses instead of escaping through it',
+      () async {
+        final target = await putFile('target', 'safe');
+        final link = await putLink('lnk', target.path);
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(
+              link.path,
+              Stream.value(utf8.encode('x')),
+              overwrite: true,
+            ),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(error.message, contains('non-regular local file'));
+        expect(target.readAsStringSync(), 'safe');
+        expect(await Link(link.path).target(), target.path);
+        expect(siblingLitter(), isEmpty);
+      },
+    );
+
+    test(
+      'a target name too long for a backup fails the replace, original intact',
+      () async {
+        final longName = 'n' * 250;
+        final file = await putFile(longName, 'original');
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(
+              file.path,
+              Stream.value(utf8.encode('x')),
+              overwrite: true,
+            ),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(error.message, contains('file-name limit'));
+        expect(file.readAsStringSync(), 'original');
+        expect(siblingLitter(), isEmpty);
+      },
+    );
+
+    test(
+      'a lone surrogate in the target name hits the byte guard, not the OS',
+      () async {
+        // A lone surrogate has no valid UTF-8 form, but Dart's encoder
+        // still emits it as a 3-byte (WTF-8-style) sequence; the guard
+        // must count those bytes and fail before any rename runs.
+        final name = 'm' * 227 + '\uDC00';
+        final file = File(pathOf(name));
+        await file.writeAsString('original');
+        final error = remoteFailure(
+          await failureOf(
+            fs.upload(
+              file.path,
+              Stream.value(utf8.encode('x')),
+              overwrite: true,
+            ),
+          ),
+        );
+        expect(error.kind, RemoteFileErrorKind.other);
+        expect(error.message, contains('file-name limit'));
+        expect(file.readAsStringSync(), 'original');
+        expect(siblingLitter(), isEmpty);
+      },
+    );
 
     group('path-traversal rejection at the boundary', () {
       for (final case_ in <(String, String)>[
@@ -1312,19 +1576,23 @@ void main() {
         ('name ', 'trailing space'),
         ('a<b', 'forbidden character'),
       ]) {
-        test('rejects "${case_.$1}" (${case_.$2}) before touching the disk', () async {
-          final target = '${root.path}/${case_.$1}';
-          await expectLater(
-            () => fs.upload(target, Stream.value([1])),
-            throwsFormatException,
-          );
-          expect(siblingLitter(), isEmpty);
-          // Reserved device paths need not stat as absent on Windows.
-          expect(root.listSync(), isEmpty);
-        }, skip: Platform.isWindows && case_.$1.contains('\\')
-            ? 'backslash is a Windows path separator, not a leaf; '
-              'validatePathComponent covers untrusted components'
-            : false);
+        test(
+          'rejects "${case_.$1}" (${case_.$2}) before touching the disk',
+          () async {
+            final target = '${root.path}/${case_.$1}';
+            await expectLater(
+              () => fs.upload(target, Stream.value([1])),
+              throwsFormatException,
+            );
+            expect(siblingLitter(), isEmpty);
+            // Reserved device paths need not stat as absent on Windows.
+            expect(root.listSync(), isEmpty);
+          },
+          skip: Platform.isWindows && case_.$1.contains('\\')
+              ? 'backslash is a Windows path separator, not a leaf; '
+                    'validatePathComponent covers untrusted components'
+              : false,
+        );
       }
     });
   });
@@ -1345,9 +1613,9 @@ void main() {
         final error = remoteFailure(await failureOf(operation()));
         expect(
           error.message,
-          matches(RegExp(
-            '^Could not ${RegExp.escape(error.operation)} "[^"]+": .+',
-          )),
+          matches(
+            RegExp('^Could not ${RegExp.escape(error.operation)} "[^"]+": .+'),
+          ),
           reason: 'bad shape: ${error.message}',
         );
         expect(error.path, isNotNull);

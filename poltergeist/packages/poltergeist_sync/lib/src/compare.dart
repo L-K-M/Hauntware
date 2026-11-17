@@ -124,10 +124,7 @@ final class EntryComparator {
 /// pairs). Rides core's [remoteContentDigest], so an engine-bridged
 /// endpoint hashes engine-side instead of streaming the file across the
 /// isolate port (D8).
-Future<String?> streamedSha256(
-  RemoteFileSystem fileSystem,
-  String path,
-) async {
+Future<String?> streamedSha256(RemoteFileSystem fileSystem, String path) async {
   final entry = await remoteContentDigest(fileSystem, path);
   return entry.contentSha256;
 }
@@ -205,7 +202,8 @@ List<CaseCollision> caseCollisions(
   }
   return [
     for (final paths in groups.values)
-      if (paths.length > 1) CaseCollision(paths.first, List.unmodifiable(paths)),
+      if (paths.length > 1)
+        CaseCollision(paths.first, List.unmodifiable(paths)),
   ];
 }
 

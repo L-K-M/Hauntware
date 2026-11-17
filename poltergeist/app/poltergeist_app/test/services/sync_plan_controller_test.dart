@@ -929,9 +929,9 @@ void main() {
     // the plan view shows none of it, so a per-chunk notify would only
     // rebuild the whole plan table for every chunk of a large file.
     test('byte progress does not notify the plan view', () async {
-      File('${left.path}/big.bin').writeAsBytesSync(
-        List<int>.filled(8 * 1024 * 1024, 7),
-      );
+      File(
+        '${left.path}/big.bin',
+      ).writeAsBytesSync(List<int>.filled(8 * 1024 * 1024, 7));
       final tasks = SyncQueueTasks();
       final controller = realController(const SyncRuleSet(), tasks: tasks);
       addTearDown(controller.dispose);

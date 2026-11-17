@@ -55,9 +55,7 @@ final class MethodChannelQuickLook implements QuickLookChannel {
     _open[viewId] = this;
   }
 
-  static const MethodChannel _channel = MethodChannel(
-    'poltergeist/quicklook',
-  );
+  static const MethodChannel _channel = MethodChannel('poltergeist/quicklook');
 
   /// The open instances by view: the one `closed` goes to.
   static final _open = <int, MethodChannelQuickLook>{};

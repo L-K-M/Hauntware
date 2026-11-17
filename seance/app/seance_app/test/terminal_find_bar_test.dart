@@ -206,8 +206,10 @@ void main() {
     );
     expect(tester.getSize(copy).height, 26);
     expect(tester.widget<PopupMenuItem<String>>(copy).enabled, isFalse);
-    expect(find.descendant(of: copy, matching: find.byIcon(Icons.copy)),
-        findsOneWidget);
+    expect(
+      find.descendant(of: copy, matching: find.byIcon(Icons.copy)),
+      findsOneWidget,
+    );
     expect(find.text(apple ? '⌘C' : 'Ctrl+Shift+C'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);

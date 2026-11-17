@@ -451,39 +451,40 @@ void main() {
     'the production bridge consumes the real engine lanes',
     timeout: const Timeout(Duration(minutes: 2)),
     () async {
-    // The seam against the real EngineClient, not a fake: watchServer must
-    // deliver the engine's current state first (03 §3.2) through the
-    // adapter, and shutdown must close the lane.
-    final client = await EngineClient.spawn(const EngineConfig());
-    addTearDown(() => client.terminated.timeout(const Duration(seconds: 30)));
-    addTearDown(client.shutdown);
+      // The seam against the real EngineClient, not a fake: watchServer must
+      // deliver the engine's current state first (03 §3.2) through the
+      // adapter, and shutdown must close the lane.
+      final client = await EngineClient.spawn(const EngineConfig());
+      addTearDown(() => client.terminated.timeout(const Duration(seconds: 30)));
+      addTearDown(client.shutdown);
 
-    store.bookmarks = [_server('a')];
-    final connections = controller(engine: connectionStateBridgeOf(client));
-    await connections.loadServers();
-    expect(connections.servers.single.status, isNull);
+      store.bookmarks = [_server('a')];
+      final connections = controller(engine: connectionStateBridgeOf(client));
+      await connections.loadServers();
+      expect(connections.servers.single.status, isNull);
 
-    await _pollUntil(
-      () => connections.servers.single.status != null,
-      describe: 'the engine\'s current-state-first watch delivery',
-    );
+      await _pollUntil(
+        () => connections.servers.single.status != null,
+        describe: 'the engine\'s current-state-first watch delivery',
+      );
 
-    final row = connections.servers.single;
-    expect(row.status?.state, ServerConnectionState.disconnected);
-    expect(row.status?.detail, isNull);
+      final row = connections.servers.single;
+      expect(row.status?.state, ServerConnectionState.disconnected);
+      expect(row.status?.detail, isNull);
 
-    // The lane-close half of the comment, asserted rather than promised:
-    // a direct subscription observes done when the engine shuts down.
-    final laneDone = Completer<void>();
-    final lane = client.watchServer('a');
-    final subscription = lane.listen(null, onDone: laneDone.complete);
+      // The lane-close half of the comment, asserted rather than promised:
+      // a direct subscription observes done when the engine shuts down.
+      final laneDone = Completer<void>();
+      final lane = client.watchServer('a');
+      final subscription = lane.listen(null, onDone: laneDone.complete);
 
-    connections.dispose();
-    await client.shutdown();
-    try {
-      await laneDone.future.timeout(const Duration(seconds: 30));
-    } finally {
-      await subscription.cancel();
-    }
-  });
+      connections.dispose();
+      await client.shutdown();
+      try {
+        await laneDone.future.timeout(const Duration(seconds: 30));
+      } finally {
+        await subscription.cancel();
+      }
+    },
+  );
 }

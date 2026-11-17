@@ -2,8 +2,9 @@
 /// (`/Users/<name>/Library/Containers/<bundle-id>/Data`) instead of the real
 /// home directory. Matching that suffix lets us recover the real home without
 /// platform channels or FFI.
-final _macSandboxContainerHome =
-    RegExp(r'^(.+)/Library/Containers/[^/]+/Data/?$');
+final _macSandboxContainerHome = RegExp(
+  r'^(.+)/Library/Containers/[^/]+/Data/?$',
+);
 
 /// Expand a leading `~` in [path] to the user's home directory.
 ///

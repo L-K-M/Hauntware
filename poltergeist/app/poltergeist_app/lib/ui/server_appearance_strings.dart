@@ -2,7 +2,8 @@
 // server mark and colour pickers and ghost_ui's colour picker take string
 // bags, and these fill them.
 import 'package:ghost_marks/ghost_marks.dart';
-import 'package:ghost_ui/ghost_ui.dart' show BadgeImageFailure, ColorPickerStrings;
+import 'package:ghost_ui/ghost_ui.dart'
+    show BadgeImageFailure, ColorPickerStrings;
 
 import '../l10n/app_localizations.dart';
 

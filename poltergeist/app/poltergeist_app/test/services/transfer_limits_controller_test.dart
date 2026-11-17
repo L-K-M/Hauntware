@@ -61,19 +61,22 @@ void main() {
     landed.complete();
   });
 
-  test('a default that fails to write is reported and stays in force', () async {
-    final errors = <Object>[];
-    final limits = TransferLimitsController(
-      persistDefault: (_) async => throw StateError('read-only'),
-      onError: (error, _) => errors.add(error),
-    )..queue = queue;
-    addTearDown(limits.dispose);
+  test(
+    'a default that fails to write is reported and stays in force',
+    () async {
+      final errors = <Object>[];
+      final limits = TransferLimitsController(
+        persistDefault: (_) async => throw StateError('read-only'),
+        onError: (error, _) => errors.add(error),
+      )..queue = queue;
+      addTearDown(limits.dispose);
 
-    limits.setPerServer(const TransferConcurrency.fixed(1));
-    await pumpEventQueue();
-    expect(errors, [isA<StateError>()]);
-    expect(queue.serverTransferLimits.filesFor('any'), 1);
-  });
+      limits.setPerServer(const TransferConcurrency.fixed(1));
+      await pumpEventQueue();
+      expect(errors, [isA<StateError>()]);
+      expect(queue.serverTransferLimits.filesFor('any'), 1);
+    },
+  );
 
   test('an override applies the overrides the store answers with', () async {
     final landed = Completer<Map<String, TransferConcurrency>>();

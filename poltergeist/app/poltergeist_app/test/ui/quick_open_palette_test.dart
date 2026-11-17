@@ -84,8 +84,7 @@ void main() {
                 commands: commands,
                 favorites: favorites,
                 recents: recents,
-                resolveRecentBookmark:
-                    resolveRecentBookmark ?? (_) => null,
+                resolveRecentBookmark: resolveRecentBookmark ?? (_) => null,
                 onCommand: onCommand ?? (_) {},
                 onFavorite: onFavorite ?? (_, _) {},
                 onRecent: onRecent ?? (_, _) {},
@@ -177,9 +176,7 @@ void main() {
 
   // Queries name remote paths and files: a search field must not feed
   // the keyboard's learning.
-  testWidgets('the query field asks the keyboard not to learn', (
-    tester,
-  ) async {
+  testWidgets('the query field asks the keyboard not to learn', (tester) async {
     await pumpPalette(tester, commands: [_command('app.alpha')]);
     final field = tester.widget<TextField>(
       find.byKey(const ValueKey('quickOpen.field')),

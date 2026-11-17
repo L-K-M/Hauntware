@@ -233,50 +233,48 @@ class InfoPanel extends StatelessWidget {
     }
     return switch (session.status) {
       FolderSizeStatus.running => _InfoRow(
-          label: l10n.infoPanelSize,
-          value: l10n.infoPanelSizeProgress(
-            formatPaneSize(session.bytes, platform: platform),
-            session.entries,
-          ),
-          trailing: TextButton(
-            key: const ValueKey('infoPanel.cancelSize'),
-            onPressed: controller.cancelFolderSize,
-            child: Text(l10n.infoPanelCancelSize),
-          ),
+        label: l10n.infoPanelSize,
+        value: l10n.infoPanelSizeProgress(
+          formatPaneSize(session.bytes, platform: platform),
+          session.entries,
         ),
+        trailing: TextButton(
+          key: const ValueKey('infoPanel.cancelSize'),
+          onPressed: controller.cancelFolderSize,
+          child: Text(l10n.infoPanelCancelSize),
+        ),
+      ),
       FolderSizeStatus.done => _InfoRow(
-          label: l10n.infoPanelSize,
-          value: l10n.infoPanelSizeResult(
-            formatPaneSize(session.bytes, platform: platform),
-            session.entries,
-          ),
-          detail: session.unmeasured + session.unreadable > 0
-              ? l10n.infoPanelSizePartial(
-                  session.unmeasured + session.unreadable,
-                )
-              : null,
+        label: l10n.infoPanelSize,
+        value: l10n.infoPanelSizeResult(
+          formatPaneSize(session.bytes, platform: platform),
+          session.entries,
         ),
+        detail: session.unmeasured + session.unreadable > 0
+            ? l10n.infoPanelSizePartial(session.unmeasured + session.unreadable)
+            : null,
+      ),
       FolderSizeStatus.failed => _InfoRow(
-          label: l10n.infoPanelSize,
-          value: l10n.infoPanelSizeFailed,
-          trailing: TextButton(
-            key: const ValueKey('infoPanel.retrySize'),
-            onPressed: controller.startFolderSize,
-            child: Text(l10n.infoPanelCalculateSize),
-          ),
+        label: l10n.infoPanelSize,
+        value: l10n.infoPanelSizeFailed,
+        trailing: TextButton(
+          key: const ValueKey('infoPanel.retrySize'),
+          onPressed: controller.startFolderSize,
+          child: Text(l10n.infoPanelCalculateSize),
         ),
+      ),
       // The controller clears a cancelled session outright, so the
       // panel never observes this state — the Calculate affordance is
       // its rendering.
       FolderSizeStatus.cancelled => _InfoRow(
-          label: l10n.infoPanelSize,
-          value: paneUnevaluated,
-          trailing: TextButton(
-            key: const ValueKey('infoPanel.calculateSize'),
-            onPressed: controller.startFolderSize,
-            child: Text(l10n.infoPanelCalculateSize),
-          ),
+        label: l10n.infoPanelSize,
+        value: paneUnevaluated,
+        trailing: TextButton(
+          key: const ValueKey('infoPanel.calculateSize'),
+          onPressed: controller.startFolderSize,
+          child: Text(l10n.infoPanelCalculateSize),
         ),
+      ),
     };
   }
 
@@ -403,10 +401,7 @@ class _PermissionsEditorState extends State<_PermissionsEditor> {
             width: 86,
             child: Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                l10n.infoPanelPermissions,
-                style: labelStyle,
-              ),
+              child: Text(l10n.infoPanelPermissions, style: labelStyle),
             ),
           ),
           Expanded(
@@ -531,10 +526,7 @@ class _PermissionsEditorState extends State<_PermissionsEditor> {
       height: 28,
       child: Center(
         child: Semantics(
-          label: l10n.infoPanelPermCell(
-            rowLabels[row],
-            columnLabels[column],
-          ),
+          label: l10n.infoPanelPermCell(rowLabels[row], columnLabels[column]),
           child: Checkbox(
             key: ValueKey(
               'infoPanel.permCell.${rowKeys[row]}.${columnKeys[column]}',
@@ -572,10 +564,7 @@ class _PermissionsEditorState extends State<_PermissionsEditor> {
         for (var r = 0; r < 3; r++)
           Row(
             children: [
-              SizedBox(
-                width: 48,
-                child: Text(rowLabels[r], style: headStyle),
-              ),
+              SizedBox(width: 48, child: Text(rowLabels[r], style: headStyle)),
               for (var c = 0; c < 3; c++) cell(r, c),
             ],
           ),
@@ -654,8 +643,7 @@ class _PermissionsEditorState extends State<_PermissionsEditor> {
         l10n.infoPanelEnclosedLinks(session.linksSkipped),
       if (session.unreadable > 0)
         l10n.infoPanelEnclosedUnreadable(session.unreadable),
-      if (session.failed > 0)
-        l10n.infoPanelEnclosedRefused(session.failed),
+      if (session.failed > 0) l10n.infoPanelEnclosedRefused(session.failed),
     ];
     Widget tallyLines() => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -735,8 +723,7 @@ class _PermissionsEditorState extends State<_PermissionsEditor> {
   String _permissionError(AppLocalizations l10n, Object error) {
     if (error is RemoteFileException) {
       return switch (error.kind) {
-        RemoteFileErrorKind.unsupported =>
-          l10n.infoPanelPermErrorUnsupported,
+        RemoteFileErrorKind.unsupported => l10n.infoPanelPermErrorUnsupported,
         RemoteFileErrorKind.permissionDenied => l10n.infoPanelPermErrorDenied,
         RemoteFileErrorKind.notFound => l10n.infoPanelPermErrorNotFound,
         _ => l10n.infoPanelPermError,
@@ -817,65 +804,65 @@ class _EnclosedApplyDialogState extends State<_EnclosedApplyDialog> {
       },
       child: AlertDialog(
         title: Text(l10n.infoPanelEnclosedTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (counting) ...[
-            Text(l10n.infoPanelEnclosedCounting(session.targetName)),
-            const SizedBox(height: 8),
-            const LinearProgressIndicator(),
-          ] else ...[
-            Text(
-              session.flagPassComplete
-                  ? l10n.infoPanelEnclosedBodyCounted(
-                      octal,
-                      session.targetName,
-                      session.counted,
-                    )
-                  : l10n.infoPanelEnclosedBody(octal, session.targetName),
-            ),
-            // The disclosures: the counted forms once the pass saw
-            // every reachable listing, the hedge whenever it did not —
-            // an incomplete pass can never claim zero flagged names.
-            if (session.flagPassComplete) ...[
-              if (session.countedFlagged > 0)
-                Text(
-                  l10n.infoPanelEnclosedFlaggedCounted(
-                    session.countedFlagged,
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              if (session.countedLinks > 0)
-                Text(
-                  l10n.infoPanelEnclosedLinksCounted(session.countedLinks),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-            ] else
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (counting) ...[
+              Text(l10n.infoPanelEnclosedCounting(session.targetName)),
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+            ] else ...[
               Text(
-                l10n.infoPanelEnclosedIncomplete,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
+                session.flagPassComplete
+                    ? l10n.infoPanelEnclosedBodyCounted(
+                        octal,
+                        session.targetName,
+                        session.counted,
+                      )
+                    : l10n.infoPanelEnclosedBody(octal, session.targetName),
               ),
+              // The disclosures: the counted forms once the pass saw
+              // every reachable listing, the hedge whenever it did not —
+              // an incomplete pass can never claim zero flagged names.
+              if (session.flagPassComplete) ...[
+                if (session.countedFlagged > 0)
+                  Text(
+                    l10n.infoPanelEnclosedFlaggedCounted(
+                      session.countedFlagged,
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                if (session.countedLinks > 0)
+                  Text(
+                    l10n.infoPanelEnclosedLinksCounted(session.countedLinks),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+              ] else
+                Text(
+                  l10n.infoPanelEnclosedIncomplete,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          key: const ValueKey('infoPanel.enclosedDecline'),
-          onPressed: () => _answer(false),
-          child: Text(l10n.infoPanelEnclosedCancel),
         ),
-        FilledButton(
-          key: const ValueKey('infoPanel.enclosedConfirm'),
-          onPressed: counting ? null : () => _answer(true),
-          child: Text(l10n.infoPanelEnclosedApply),
-        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('infoPanel.enclosedDecline'),
+            onPressed: () => _answer(false),
+            child: Text(l10n.infoPanelEnclosedCancel),
+          ),
+          FilledButton(
+            key: const ValueKey('infoPanel.enclosedConfirm'),
+            onPressed: counting ? null : () => _answer(true),
+            child: Text(l10n.infoPanelEnclosedApply),
+          ),
         ],
       ),
     );

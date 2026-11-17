@@ -33,8 +33,10 @@ String duplicateServerLabel(String label, Iterable<String> taken) {
 /// recognized as one too — that leaves an empty base, which
 /// [duplicateServerLabel] then numbers as "copy", "copy 2", … rather than
 /// stuttering. `RegExp` has no inline `(?i)`; case-insensitivity is a flag.
-final RegExp _copySuffix =
-    RegExp(r'(^|\s+)copy(\s+\d+)?$', caseSensitive: false);
+final RegExp _copySuffix = RegExp(
+  r'(^|\s+)copy(\s+\d+)?$',
+  caseSensitive: false,
+);
 
 /// Strips repeatedly, because one pass leaves the stutter it exists to
 /// prevent: a server hand-named "web copy 2 copy" reduces to "web copy 2",

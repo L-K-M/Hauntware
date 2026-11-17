@@ -55,8 +55,7 @@ Future<void> _loadRealFonts() async {
     '/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
   );
   if (icons.existsSync()) {
-    await (FontLoader('MaterialIcons')..addFont(_fontBytes(icons.path)))
-        .load();
+    await (FontLoader('MaterialIcons')..addFont(_fontBytes(icons.path))).load();
   }
   if (dir.isEmpty) return; // boxes are still a usable capture
   final sans = FontLoader('DejaVu Sans')
@@ -66,9 +65,9 @@ Future<void> _loadRealFonts() async {
   }
   await sans.load();
   if (File('$dir/DejaVuSansMono.ttf').existsSync()) {
-    await (FontLoader('DejaVu Sans Mono')
-          ..addFont(_fontBytes('$dir/DejaVuSansMono.ttf')))
-        .load();
+    await (FontLoader(
+      'DejaVu Sans Mono',
+    )..addFont(_fontBytes('$dir/DejaVuSansMono.ttf'))).load();
   }
 }
 
@@ -177,7 +176,11 @@ final class _Volumes implements LocalVolumeSource {
       name: 'STICK',
       kind: LocalVolumeKind.removable,
     ),
-    LocalVolume(path: '/mnt/backup', name: 'Backup', kind: LocalVolumeKind.fixed),
+    LocalVolume(
+      path: '/mnt/backup',
+      name: 'Backup',
+      kind: LocalVolumeKind.fixed,
+    ),
   ];
 
   @override

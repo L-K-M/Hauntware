@@ -61,13 +61,14 @@ Future<void> _blockViaGrowth(PoolHarness harness) async {
 
 void main() {
   test('leases retain the key authenticated by their own pool', () async {
-    final harness = PoolHarness(
-      opener: FakeTransportOpener(
-        presentedFingerprints: [_originalKey, _changedKey],
-      ),
-    )
-      ..addServer(_primaryServerId, username: 'first')
-      ..addServer(_siblingServerId, username: 'second');
+    final harness =
+        PoolHarness(
+            opener: FakeTransportOpener(
+              presentedFingerprints: [_originalKey, _changedKey],
+            ),
+          )
+          ..addServer(_primaryServerId, username: 'first')
+          ..addServer(_siblingServerId, username: 'second');
     addTearDown(() => _disconnectAll(harness));
     await harness.store.put(
       const HostKey(

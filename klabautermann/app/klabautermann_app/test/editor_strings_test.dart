@@ -39,11 +39,8 @@ class _Marked extends AppLocalizationsEn {
   String editorTextToolNoticeSentence(String name, String sentence) =>
       '$name :: $sentence';
   @override
-  String editorTextToolChangedSortLines(
-    int changed,
-    int scope,
-    String where,
-  ) => '[moved $changed/$scope $where]';
+  String editorTextToolChangedSortLines(int changed, int scope, String where) =>
+      '[moved $changed/$scope $where]';
   @override
   String get editorTextToolWhereDocument => '[everywhere]';
   @override
@@ -181,10 +178,7 @@ void main() {
 
     await tester.tap(find.text('[apply]'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('[sort] :: [moved 2/2 [everywhere]]'),
-      findsOneWidget,
-    );
+    expect(find.text('[sort] :: [moved 2/2 [everywhere]]'), findsOneWidget);
   });
 
   testWidgets('the find bar extras come from the ARB copy', (tester) async {
@@ -321,11 +315,9 @@ void main() {
       TextProblemKind.jsonTrailingComma: 'editorProblemJsonTrailingComma',
       TextProblemKind.unterminatedQuote: 'editorProblemUnterminatedQuote',
       TextProblemKind.tabIndentation: 'editorProblemTabIndentation',
-      TextProblemKind.mismatchedClosingTag:
-          'editorProblemMismatchedClosingTag',
+      TextProblemKind.mismatchedClosingTag: 'editorProblemMismatchedClosingTag',
       TextProblemKind.unclosedElement: 'editorProblemUnclosedElement',
-      TextProblemKind.unexpectedClosingTag:
-          'editorProblemUnexpectedClosingTag',
+      TextProblemKind.unexpectedClosingTag: 'editorProblemUnexpectedClosingTag',
       TextProblemKind.mergeConflict: 'editorProblemMergeConflict',
     };
     expect(keys.keys, unorderedEquals(TextProblemKind.values));
@@ -389,29 +381,46 @@ void main() {
     final choiceIds = <String>{};
     for (final tool in textToolCatalog) {
       if (!selfNamed.contains(tool.id)) {
-        expect(strings.textToolName(tool.id), isNot(tool.id),
-          reason: '${tool.id} has no ARB name');
+        expect(
+          strings.textToolName(tool.id),
+          isNot(tool.id),
+          reason: '${tool.id} has no ARB name',
+        );
       }
-      expect(strings.textToolDescription(tool.id), isNotEmpty,
-        reason: '${tool.id} has no ARB description');
-      expect(strings.textToolKeywords(tool.id), isNotEmpty,
-        reason: '${tool.id} has no ARB keywords');
+      expect(
+        strings.textToolDescription(tool.id),
+        isNotEmpty,
+        reason: '${tool.id} has no ARB description',
+      );
+      expect(
+        strings.textToolKeywords(tool.id),
+        isNotEmpty,
+        reason: '${tool.id} has no ARB keywords',
+      );
       for (final option in tool.options) {
         if (!tool.usesFindBar) {
-          expect(strings.textToolOptionName(tool.id, option.id),
+          expect(
+            strings.textToolOptionName(tool.id, option.id),
             isNot(option.id),
-            reason: '${tool.id}/${option.id} has no ARB label');
+            reason: '${tool.id}/${option.id} has no ARB label',
+          );
         }
         if (option is ChoiceOption) choiceIds.addAll(option.choices);
       }
     }
     for (final choiceId in choiceIds) {
-      expect(strings.textToolChoiceName(choiceId), isNot(choiceId),
-        reason: '$choiceId has no ARB label');
+      expect(
+        strings.textToolChoiceName(choiceId),
+        isNot(choiceId),
+        reason: '$choiceId has no ARB label',
+      );
     }
     for (final group in TextToolGroup.values) {
-      expect(strings.textToolGroupName(group), isNotEmpty,
-        reason: '$group has no ARB label');
+      expect(
+        strings.textToolGroupName(group),
+        isNotEmpty,
+        reason: '$group has no ARB label',
+      );
     }
   });
   test('text tool notices and previews say what the shared editor says', () {

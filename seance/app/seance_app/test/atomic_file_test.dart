@@ -58,53 +58,64 @@ void main() {
       expect(await dir.list().toList(), hasLength(1));
     });
 
-    test('overlapping writes preserve the last requested complete snapshot',
-        () async {
-      final file = File('${dir.path}/data.json');
-      final snapshots = [
-        for (var i = 0; i < 16; i++) '{"snapshot":"$i${'x' * (4096 + i)}"}',
-      ];
-      await Future.wait([
-        for (final snapshot in snapshots)
-          writeStringAtomically(File(file.path), snapshot),
-      ]);
-      expect(await file.readAsString(), snapshots.last);
-      expect(await dir.list().toList(), hasLength(1));
-    });
+    test(
+      'overlapping writes preserve the last requested complete snapshot',
+      () async {
+        final file = File('${dir.path}/data.json');
+        final snapshots = [
+          for (var i = 0; i < 16; i++) '{"snapshot":"$i${'x' * (4096 + i)}"}',
+        ];
+        await Future.wait([
+          for (final snapshot in snapshots)
+            writeStringAtomically(File(file.path), snapshot),
+        ]);
+        expect(await file.readAsString(), snapshots.last);
+        expect(await dir.list().toList(), hasLength(1));
+      },
+    );
 
-    test('a failed write does not block later saves to the same path', () async {
-      final file = File('${dir.path}/data.json');
-      final blocked = await AtomicWriteBlocker(file).create();
-      await expectLater(writeStringAtomically(file, 'first'),
-          throwsA(isA<FileSystemException>()));
-      await blocked.delete();
+    test(
+      'a failed write does not block later saves to the same path',
+      () async {
+        final file = File('${dir.path}/data.json');
+        final blocked = await AtomicWriteBlocker(file).create();
+        await expectLater(
+          writeStringAtomically(file, 'first'),
+          throwsA(isA<FileSystemException>()),
+        );
+        await blocked.delete();
 
-      await writeStringAtomically(file, 'second');
-      expect(await file.readAsString(), 'second');
-    });
+        await writeStringAtomically(file, 'second');
+        expect(await file.readAsString(), 'second');
+      },
+    );
 
-    test('case-variant paths preserve write order and filesystem identity',
-        () async {
-      final file = File('${dir.path}/data.json');
-      final alias = File('${dir.path}/DATA.json');
-      await file.writeAsString('initial');
-      // Windows and ordinary macOS volumes alias these names; Linux usually
-      // keeps two files. The queue must protect either filesystem's behavior.
-      final aliasesSameFile = await alias.exists();
-      final snapshots = [
-        for (var i = 0; i < 16; i++) '$i:${'x' * (4096 + i)}',
-      ];
+    test(
+      'case-variant paths preserve write order and filesystem identity',
+      () async {
+        final file = File('${dir.path}/data.json');
+        final alias = File('${dir.path}/DATA.json');
+        await file.writeAsString('initial');
+        // Windows and ordinary macOS volumes alias these names; Linux usually
+        // keeps two files. The queue must protect either filesystem's behavior.
+        final aliasesSameFile = await alias.exists();
+        final snapshots = [
+          for (var i = 0; i < 16; i++) '$i:${'x' * (4096 + i)}',
+        ];
 
-      await Future.wait([
-        for (var i = 0; i < snapshots.length; i++)
-          writeStringAtomically(i.isEven ? file : alias, snapshots[i]),
-      ]);
+        await Future.wait([
+          for (var i = 0; i < snapshots.length; i++)
+            writeStringAtomically(i.isEven ? file : alias, snapshots[i]),
+        ]);
 
-      expect(await file.readAsString(),
-          aliasesSameFile ? snapshots.last : snapshots[snapshots.length - 2]);
-      expect(await alias.readAsString(), snapshots.last);
-      expect(await dir.list().toList(), hasLength(aliasesSameFile ? 1 : 2));
-    });
+        expect(
+          await file.readAsString(),
+          aliasesSameFile ? snapshots.last : snapshots[snapshots.length - 2],
+        );
+        expect(await alias.readAsString(), snapshots.last);
+        expect(await dir.list().toList(), hasLength(aliasesSameFile ? 1 : 2));
+      },
+    );
   });
 
   group('quarantineCorruptFile', () {
@@ -128,25 +139,29 @@ void main() {
       expect(await File('${file.path}.corrupt').exists(), isTrue);
     });
 
-    test('a valid round-trip still works after the atomic-write change',
-        () async {
-      final file = File('${dir.path}/servers.json');
-      final store = FileConfigStore(file);
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await store.putServer(ServerConfig(
-        id: 'a',
-        label: 'box',
-        host: 'example.com',
-        username: 'me',
-        authMethod: AuthMethod.password,
-        createdAt: now,
-        updatedAt: now,
-      ));
-      final reloaded = FileConfigStore(file);
-      final servers = await reloaded.listServers();
-      expect(servers, hasLength(1));
-      expect(servers.single.host, 'example.com');
-    });
+    test(
+      'a valid round-trip still works after the atomic-write change',
+      () async {
+        final file = File('${dir.path}/servers.json');
+        final store = FileConfigStore(file);
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await store.putServer(
+          ServerConfig(
+            id: 'a',
+            label: 'box',
+            host: 'example.com',
+            username: 'me',
+            authMethod: AuthMethod.password,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        final reloaded = FileConfigStore(file);
+        final servers = await reloaded.listServers();
+        expect(servers, hasLength(1));
+        expect(servers.single.host, 'example.com');
+      },
+    );
 
     test(
       'a quarantined partial rewrite heals from the durable sync mirror',
@@ -250,8 +265,10 @@ void main() {
     await Future.wait(keys.map(store.put));
 
     final restored = await FileHostKeyStore(file).all();
-    expect(restored.map((key) => key.fingerprintSha256),
-        unorderedEquals(keys.map((key) => key.fingerprintSha256)));
+    expect(
+      restored.map((key) => key.fingerprintSha256),
+      unorderedEquals(keys.map((key) => key.fingerprintSha256)),
+    );
   });
 
   test('a failed host-key write cannot leak into a later snapshot', () async {

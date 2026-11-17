@@ -11,8 +11,9 @@ void main() {
   // re-fires onResize and recurses until the stack overflows, which left the
   // grid stuck at its initial 80 columns (blank space on wide screens, cut-off
   // text on narrow ones).
-  testWidgets('autoResize reaches the remote once, without recursing',
-      (tester) async {
+  testWidgets('autoResize reaches the remote once, without recursing', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -21,7 +22,9 @@ void main() {
     final remote = <TerminalSize>[];
     // Mirror SshSession's wiring exactly.
     engine.terminal.onResize = (w, h, pw, ph) {
-      engine.resize(TerminalSize(w, h)); // engine bookkeeping — must not recurse
+      engine.resize(
+        TerminalSize(w, h),
+      ); // engine bookkeeping — must not recurse
       remote.add(TerminalSize(w, h)); // stand-in for shell.resizeTerminal
     };
 

@@ -56,8 +56,7 @@ void main() {
     );
   });
 
-  test('a scripted id without wasRestored throws instead of no-opping',
-      () {
+  test('a scripted id without wasRestored throws instead of no-opping', () {
     // TransferTask mints its own id for a live task; a scripted id the
     // fake cannot honor used to drop silently, leaving tests keyed on
     // an id no task carries.

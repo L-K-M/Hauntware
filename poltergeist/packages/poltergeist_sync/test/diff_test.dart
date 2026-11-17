@@ -8,11 +8,8 @@ import 'package:poltergeist_sync/poltergeist_sync.dart';
 import 'package:test/test.dart';
 
 void main() {
-  EntrySnapshot file({int size = 10, int? mtime = 100}) => EntrySnapshot(
-    kind: EntryKind.file,
-    size: size,
-    mtimeSecs: mtime,
-  );
+  EntrySnapshot file({int size = 10, int? mtime = 100}) =>
+      EntrySnapshot(kind: EntryKind.file, size: size, mtimeSecs: mtime);
   const dir = EntrySnapshot(kind: EntryKind.directory);
   const link = EntrySnapshot(kind: EntryKind.symlink, symlinkTarget: 'x');
 
@@ -187,7 +184,10 @@ void main() {
           ),
         ),
       );
-      expect(itemOf(keepLeft, 'a.txt').effective, SyncActionType.updateLeftToRight);
+      expect(
+        itemOf(keepLeft, 'a.txt').effective,
+        SyncActionType.updateLeftToRight,
+      );
       final keepRight = await diffScans(
         left: scan({'a.txt': file(size: 1)}),
         right: scan({'a.txt': file(size: 2)}),
@@ -198,30 +198,36 @@ void main() {
           ),
         ),
       );
-      expect(itemOf(keepRight, 'a.txt').effective, SyncActionType.updateRightToLeft);
+      expect(
+        itemOf(keepRight, 'a.txt').effective,
+        SyncActionType.updateRightToLeft,
+      );
     });
   });
 
   group('typeDiffers (05 §6 rule 4)', () {
-    test('a no-delete mode auto-resolves to skip, suggested conflict', () async {
-      final plan = await diffScans(
-        left: scan({'p': file()}),
-        right: scan({'p': dir, 'p/inner.txt': file()}),
-        pair: pair(
-          const SyncRuleSet(
-            direction: SyncDirection.leftToRight,
-            conflictDefault: ConflictDefault.keepLeft,
+    test(
+      'a no-delete mode auto-resolves to skip, suggested conflict',
+      () async {
+        final plan = await diffScans(
+          left: scan({'p': file()}),
+          right: scan({'p': dir, 'p/inner.txt': file()}),
+          pair: pair(
+            const SyncRuleSet(
+              direction: SyncDirection.leftToRight,
+              conflictDefault: ConflictDefault.keepLeft,
+            ),
           ),
-        ),
-      );
-      final item = itemOf(plan, 'p');
-      expect(item.reason, SyncReason.typeDiffers);
-      expect(item.suggested, SyncActionType.conflict);
-      expect(item.effective, SyncActionType.skip);
-      // The replaced dir's contents are captured for the executor's
-      // set-match and the per-file deletion count.
-      expect(item.destinationSubtree, contains('p/inner.txt'));
-    });
+        );
+        final item = itemOf(plan, 'p');
+        expect(item.reason, SyncReason.typeDiffers);
+        expect(item.suggested, SyncActionType.conflict);
+        expect(item.effective, SyncActionType.skip);
+        // The replaced dir's contents are captured for the executor's
+        // set-match and the per-file deletion count.
+        expect(item.destinationSubtree, contains('p/inner.txt'));
+      },
+    );
 
     test('a Mirror conflictDefault resolves to the create verb', () async {
       final plan = await diffScans(
@@ -265,51 +271,55 @@ void main() {
         'p/sub/deep.txt': file(size: 4),
       });
 
-      test('a resolved replace is one row whose toll counts each file once',
-          () async {
-        final plan = await diffScans(
-          left: scan({'p': file()}),
-          right: right,
-          pair: pair(
-            const SyncRuleSet(
-              direction: SyncDirection.leftToRight,
-              deletions: DeletionPolicy.trash,
-              conflictDefault: ConflictDefault.keepLeft,
+      test(
+        'a resolved replace is one row whose toll counts each file once',
+        () async {
+          final plan = await diffScans(
+            left: scan({'p': file()}),
+            right: right,
+            pair: pair(
+              const SyncRuleSet(
+                direction: SyncDirection.leftToRight,
+                deletions: DeletionPolicy.trash,
+                conflictDefault: ConflictDefault.keepLeft,
+              ),
             ),
-          ),
-        );
-        // No separate rows: the parent's pre-delete removes the tree,
-        // so a child row would double-count on the rails and then flip
-        // to a spurious changed-since-preview conflict (05 §6 rule 4).
-        expect(plan.items.map((i) => i.relativePath), ['p']);
-        final item = itemOf(plan, 'p');
-        expect(item.effective, SyncActionType.copyLeftToRight);
-        expect(
-          item.destinationSubtree!.keys,
-          unorderedEquals(['p/inner.txt', 'p/sub', 'p/sub/deep.txt']),
-        );
-        expect(plan.totals.replacedFiles, 2);
-        expect(assessDeletions(plan).removals[SyncSide.right], 2);
-      });
+          );
+          // No separate rows: the parent's pre-delete removes the tree,
+          // so a child row would double-count on the rails and then flip
+          // to a spurious changed-since-preview conflict (05 §6 rule 4).
+          expect(plan.items.map((i) => i.relativePath), ['p']);
+          final item = itemOf(plan, 'p');
+          expect(item.effective, SyncActionType.copyLeftToRight);
+          expect(
+            item.destinationSubtree!.keys,
+            unorderedEquals(['p/inner.txt', 'p/sub', 'p/sub/deep.txt']),
+          );
+          expect(plan.totals.replacedFiles, 2);
+          expect(assessDeletions(plan).removals[SyncSide.right], 2);
+        },
+      );
 
-      test('an unresolved kind conflict plans nothing under the directory',
-          () async {
-        final plan = await diffScans(
-          left: scan({'p': file()}),
-          right: right,
-          pair: pair(
-            const SyncRuleSet(
-              direction: SyncDirection.leftToRight,
-              deletions: DeletionPolicy.permanent,
+      test(
+        'an unresolved kind conflict plans nothing under the directory',
+        () async {
+          final plan = await diffScans(
+            left: scan({'p': file()}),
+            right: right,
+            pair: pair(
+              const SyncRuleSet(
+                direction: SyncDirection.leftToRight,
+                deletions: DeletionPolicy.permanent,
+              ),
             ),
-          ),
-        );
-        // Leaving the row undecided must keep the folder whole — its
-        // contents must not delete as orphans of their own.
-        expect(plan.items.map((i) => i.relativePath), ['p']);
-        expect(itemOf(plan, 'p').effective, SyncActionType.conflict);
-        expect(assessDeletions(plan).removals[SyncSide.right], 0);
-      });
+          );
+          // Leaving the row undecided must keep the folder whole — its
+          // contents must not delete as orphans of their own.
+          expect(plan.items.map((i) => i.relativePath), ['p']);
+          expect(itemOf(plan, 'p').effective, SyncActionType.conflict);
+          expect(assessDeletions(plan).removals[SyncSide.right], 0);
+        },
+      );
 
       test('keeping the destination directory keeps its contents', () async {
         final plan = await diffScans(
@@ -331,17 +341,14 @@ void main() {
         final plan = await diffScans(
           left: scan({'p': file()}),
           right: right,
-          pair: pair(
-            const SyncRuleSet(direction: SyncDirection.bidirectional),
-          ),
+          pair: pair(const SyncRuleSet(direction: SyncDirection.bidirectional)),
         );
         // Copies into a path the other side holds as a file could
         // never run; the kind decision on `p` owns the whole tree.
         expect(plan.items.map((i) => i.relativePath), ['p']);
       });
 
-      test('the subtree follows the directory side\'s own spelling',
-          () async {
+      test('the subtree follows the directory side\'s own spelling', () async {
         // NFC on the left, NFD on the right: one match key, but the
         // right's descendants were scanned under the NFD form.
         final plan = await diffScans(
@@ -355,14 +362,12 @@ void main() {
           ),
         );
         expect(plan.items.map((i) => i.relativePath), ['caf\u00e9']);
-        expect(
-          plan.items.single.destinationSubtree!.keys,
-          ['cafe\u0301/x.txt'],
-        );
+        expect(plan.items.single.destinationSubtree!.keys, [
+          'cafe\u0301/x.txt',
+        ]);
       });
 
-      test('a source-side directory keeps its children as copy rows',
-          () async {
+      test('a source-side directory keeps its children as copy rows', () async {
         // One-way pairs never replace their source: the tree is what a
         // resolved mkdir fills, so its entries plan as usual.
         final plan = await diffScans(
@@ -394,9 +399,7 @@ void main() {
       'the clean side\'s subtree under a failed listing is skip rows',
       () async {
         final plan = await diffScans(
-          left: scan({
-            'ok.txt': file(),
-          }, warnings: [listingFailure('logs')]),
+          left: scan({'ok.txt': file()}, warnings: [listingFailure('logs')]),
           right: scan({'logs/a.txt': file(), 'logs/b.txt': file()}),
           pair: pair(
             const SyncRuleSet(
@@ -412,20 +415,26 @@ void main() {
           expect(item.effective, SyncActionType.skip, reason: path);
           expect(item.reason, SyncReason.scanError, reason: path);
         }
-        expect(itemOf(plan, 'ok.txt').effective, SyncActionType.copyLeftToRight);
+        expect(
+          itemOf(plan, 'ok.txt').effective,
+          SyncActionType.copyLeftToRight,
+        );
       },
     );
 
     test('non-listing warnings do not trigger the mirror', () async {
       final plan = await diffScans(
-        left: scan({}, warnings: [
-          ScanWarning(
-            relativePath: 'logs',
-            side: SyncSide.left,
-            message: 'informational',
-            kind: ScanWarningKind.malformedName,
-          ),
-        ]),
+        left: scan(
+          {},
+          warnings: [
+            ScanWarning(
+              relativePath: 'logs',
+              side: SyncSide.left,
+              message: 'informational',
+              kind: ScanWarningKind.malformedName,
+            ),
+          ],
+        ),
         right: scan({'logs/a.txt': file()}),
         pair: pair(
           const SyncRuleSet(
@@ -488,8 +497,11 @@ void main() {
           pair: pair(const SyncRuleSet()),
         );
         for (final path in ['Foo.txt', 'foo.txt']) {
-          expect(itemOf(plan, path).effective, SyncActionType.skip,
-              reason: path);
+          expect(
+            itemOf(plan, path).effective,
+            SyncActionType.skip,
+            reason: path,
+          );
         }
       },
     );
@@ -526,7 +538,10 @@ void main() {
       final item = itemOf(plan, 'con.txt');
       expect(item.reason, SyncReason.invalidNameOnDestination);
       expect(item.effective, SyncActionType.skip);
-      expect(itemOf(plan, 'fine.txt').effective, SyncActionType.copyLeftToRight);
+      expect(
+        itemOf(plan, 'fine.txt').effective,
+        SyncActionType.copyLeftToRight,
+      );
     });
 
     test(
@@ -537,7 +552,10 @@ void main() {
           right: scan({'con.txt': file(mtime: 100)}),
           pair: pair(const SyncRuleSet()),
         );
-        expect(itemOf(plan, 'con.txt').effective, SyncActionType.updateLeftToRight);
+        expect(
+          itemOf(plan, 'con.txt').effective,
+          SyncActionType.updateLeftToRight,
+        );
       },
     );
 
@@ -599,34 +617,36 @@ void main() {
       deletions: DeletionPolicy.trash,
     );
 
-    test('the real directory under a source-side link is never an orphan',
-        () async {
-      final plan = await diffScans(
-        left: scan({'data': link, 'keep.txt': file()}),
-        right: scan({
-          'data': dir,
-          'data/photo1.jpg': file(),
-          'data/sub': dir,
-          'data/sub/photo2.jpg': file(),
-          'keep.txt': file(),
-        }),
-        pair: pair(mirror),
-      );
-      // The link is excluded on both sides like a scan error: its
-      // counterpart tree is skip rows a Mirror can never delete.
-      expect(itemOf(plan, 'data').reason, SyncReason.typeDiffers);
-      expect(itemOf(plan, 'data').effective, SyncActionType.skip);
-      for (final path in [
-        'data/photo1.jpg',
-        'data/sub',
-        'data/sub/photo2.jpg',
-      ]) {
-        final item = itemOf(plan, path);
-        expect(item.effective, SyncActionType.skip, reason: path);
-        expect(item.reason, SyncReason.excluded, reason: path);
-      }
-      expect(assessDeletions(plan).removals[SyncSide.right], 0);
-    });
+    test(
+      'the real directory under a source-side link is never an orphan',
+      () async {
+        final plan = await diffScans(
+          left: scan({'data': link, 'keep.txt': file()}),
+          right: scan({
+            'data': dir,
+            'data/photo1.jpg': file(),
+            'data/sub': dir,
+            'data/sub/photo2.jpg': file(),
+            'keep.txt': file(),
+          }),
+          pair: pair(mirror),
+        );
+        // The link is excluded on both sides like a scan error: its
+        // counterpart tree is skip rows a Mirror can never delete.
+        expect(itemOf(plan, 'data').reason, SyncReason.typeDiffers);
+        expect(itemOf(plan, 'data').effective, SyncActionType.skip);
+        for (final path in [
+          'data/photo1.jpg',
+          'data/sub',
+          'data/sub/photo2.jpg',
+        ]) {
+          final item = itemOf(plan, path);
+          expect(item.effective, SyncActionType.skip, reason: path);
+          expect(item.reason, SyncReason.excluded, reason: path);
+        }
+        expect(assessDeletions(plan).removals[SyncSide.right], 0);
+      },
+    );
 
     test('a destination-side link is never written through', () async {
       final plan = await diffScans(
@@ -646,10 +666,10 @@ void main() {
     test('the exclusion follows the match key across case folding', () async {
       final plan = await diffScans(
         left: scan({'Data': link}),
-        right: scan(
-          {'data': dir, 'data/photo.jpg': file()},
-          caseSensitive: false,
-        ),
+        right: scan({
+          'data': dir,
+          'data/photo.jpg': file(),
+        }, caseSensitive: false),
         pair: pair(mirror),
       );
       expect(itemOf(plan, 'Data').effective, SyncActionType.skip);
@@ -665,10 +685,11 @@ void main() {
         right: scan({'m.txt': file()}),
         pair: pair(const SyncRuleSet()),
       );
-      expect(
-        plan.items.map((i) => i.relativePath).toList(),
-        ['a.txt', 'm.txt', 'z.txt'],
-      );
+      expect(plan.items.map((i) => i.relativePath).toList(), [
+        'a.txt',
+        'm.txt',
+        'z.txt',
+      ]);
       expect(plan.totals.counts[SyncActionType.copyLeftToRight], 2);
       expect(plan.totals.bytes[SyncActionType.copyLeftToRight], 8);
       expect(plan.totals.counts[SyncActionType.skip], 1);
@@ -692,9 +713,7 @@ void main() {
         diffScans(
           left: scan({'a.txt': file()}),
           right: scan({'a.txt': file()}),
-          pair: pair(
-            const SyncRuleSet(comparison: ComparisonMode.contentHash),
-          ),
+          pair: pair(const SyncRuleSet(comparison: ComparisonMode.contentHash)),
         ),
         throwsA(isA<ArgumentError>()),
       );
@@ -712,9 +731,7 @@ void main() {
       final plan = await diffScans(
         left: scan({'a.txt': file(size: 3)}, rootPath: leftDir.path),
         right: scan({'a.txt': file(size: 3)}, rootPath: rightDir.path),
-        pair: pair(
-          const SyncRuleSet(comparison: ComparisonMode.contentHash),
-        ),
+        pair: pair(const SyncRuleSet(comparison: ComparisonMode.contentHash)),
         leftFileSystem: LocalFileSystem(),
         rightFileSystem: LocalFileSystem(),
       );
@@ -734,11 +751,13 @@ void main() {
       await File('${rightDir.path}/a.txt').writeAsBytes([4, 5, 6]);
       final plan = await diffScans(
         // Deliberately different mtimes: content decides, not the clock.
-        left: scan({'a.txt': file(size: 3, mtime: 100)}, rootPath: leftDir.path),
-        right: scan({'a.txt': file(size: 3, mtime: 999)}, rootPath: rightDir.path),
-        pair: pair(
-          const SyncRuleSet(comparison: ComparisonMode.contentHash),
-        ),
+        left: scan({
+          'a.txt': file(size: 3, mtime: 100),
+        }, rootPath: leftDir.path),
+        right: scan({
+          'a.txt': file(size: 3, mtime: 999),
+        }, rootPath: rightDir.path),
+        pair: pair(const SyncRuleSet(comparison: ComparisonMode.contentHash)),
         leftFileSystem: LocalFileSystem(),
         rightFileSystem: LocalFileSystem(),
       );

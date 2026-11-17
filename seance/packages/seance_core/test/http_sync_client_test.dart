@@ -26,9 +26,10 @@ void main() {
         return http.Response(jsonEncode({'token': 't'}), 200);
       });
       final sync = HttpSyncClient(
-          baseUrl: 'https://seance.example.ch/', client: client);
-      await sync.login(
-          const LoginRequest(username: 'u', authVerifier: 'v'));
+        baseUrl: 'https://seance.example.ch/',
+        client: client,
+      );
+      await sync.login(const LoginRequest(username: 'u', authVerifier: 'v'));
       expect(seen, Uri.parse('https://seance.example.ch/v1/login'));
     });
 
@@ -45,19 +46,25 @@ void main() {
 
   group('HttpSyncClient error surfaces', () {
     HttpSyncClient failingWith(String body, int status) => HttpSyncClient(
-          baseUrl: 'https://host',
-          client: MockClient((req) async => http.Response(body, status)),
-        );
+      baseUrl: 'https://host',
+      client: MockClient((req) async => http.Response(body, status)),
+    );
 
     test("the server's own JSON errors pass through untouched", () async {
       final sync = failingWith(
-          jsonEncode({'error': 'registration_closed', 'message': 'Registration is disabled'}),
-          403);
+        jsonEncode({
+          'error': 'registration_closed',
+          'message': 'Registration is disabled',
+        }),
+        403,
+      );
       await expectLater(
         sync.pull(since: 0),
-        throwsA(isA<ApiError>()
-            .having((e) => e.code, 'code', 'registration_closed')
-            .having((e) => e.message, 'message', 'Registration is disabled')),
+        throwsA(
+          isA<ApiError>()
+              .having((e) => e.code, 'code', 'registration_closed')
+              .having((e) => e.message, 'message', 'Registration is disabled'),
+        ),
       );
     });
 
@@ -82,24 +89,32 @@ void main() {
       );
     });
 
-    test('a 502 (proxy could not reach the server) is explained, not echoed',
-        () async {
-      // Cloudflare-style plain-text body for API clients.
-      final sync = failingWith('error code: 502', 502);
-      await expectLater(
-        sync.pull(since: 0),
-        throwsA(isA<ApiError>()
-            .having((e) => e.code, 'code', 'http_502')
-            .having((e) => e.message, 'message',
-                contains('could not reach the sync server'))),
-      );
-    });
+    test(
+      'a 502 (proxy could not reach the server) is explained, not echoed',
+      () async {
+        // Cloudflare-style plain-text body for API clients.
+        final sync = failingWith('error code: 502', 502);
+        await expectLater(
+          sync.pull(since: 0),
+          throwsA(
+            isA<ApiError>()
+                .having((e) => e.code, 'code', 'http_502')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('could not reach the sync server'),
+                ),
+          ),
+        );
+      },
+    );
 
     test('an HTML error page never reaches the UI as raw markup', () async {
       final sync = failingWith(
-          '<html>\n<head><title>404 Not Found</title></head>\n'
-          '<body><h1>Not Found</h1><hr><center>nginx</center></body>\n</html>',
-          404);
+        '<html>\n<head><title>404 Not Found</title></head>\n'
+        '<body><h1>Not Found</h1><hr><center>nginx</center></body>\n</html>',
+        404,
+      );
       try {
         await sync.pull(since: 0);
         fail('expected an ApiError');
@@ -121,28 +136,43 @@ void main() {
       }
     });
 
-    test('a JSON body that is not an object still maps to http_<status>',
-        () async {
-      // jsonDecode succeeds here; the old cast-based path threw a TypeError.
-      final sync = failingWith('"boom"', 500);
-      await expectLater(
-        sync.pull(since: 0),
-        throwsA(isA<ApiError>()
-            .having((e) => e.code, 'code', 'http_500')
-            .having((e) => e.message, 'message', contains('boom'))),
-      );
-    });
+    test(
+      'a JSON body that is not an object still maps to http_<status>',
+      () async {
+        // jsonDecode succeeds here; the old cast-based path threw a TypeError.
+        final sync = failingWith('"boom"', 500);
+        await expectLater(
+          sync.pull(since: 0),
+          throwsA(
+            isA<ApiError>()
+                .having((e) => e.code, 'code', 'http_500')
+                .having((e) => e.message, 'message', contains('boom')),
+          ),
+        );
+      },
+    );
 
-    test('a JSON object without an error code is not mistaken for the server',
-        () async {
-      final sync = failingWith(jsonEncode({'detail': 'gateway exploded'}), 500);
-      await expectLater(
-        sync.pull(since: 0),
-        throwsA(isA<ApiError>()
-            .having((e) => e.code, 'code', 'http_500')
-            .having((e) => e.message, 'message', contains('gateway exploded'))),
-      );
-    });
+    test(
+      'a JSON object without an error code is not mistaken for the server',
+      () async {
+        final sync = failingWith(
+          jsonEncode({'detail': 'gateway exploded'}),
+          500,
+        );
+        await expectLater(
+          sync.pull(since: 0),
+          throwsA(
+            isA<ApiError>()
+                .having((e) => e.code, 'code', 'http_500')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('gateway exploded'),
+                ),
+          ),
+        );
+      },
+    );
   });
 
   group('HttpSyncClient timeout', () {
@@ -157,10 +187,7 @@ void main() {
         client: client,
         timeout: const Duration(milliseconds: 20),
       );
-      await expectLater(
-        sync.pull(since: 0),
-        throwsA(isA<TimeoutException>()),
-      );
+      await expectLater(sync.pull(since: 0), throwsA(isA<TimeoutException>()));
     });
 
     // A page of up to 8 MiB on a slow link takes longer than the per-request
@@ -249,13 +276,15 @@ void main() {
         client: MockClient((request) async {
           sent = jsonDecode(request.body) as Map<String, dynamic>;
           return http.Response(
-            jsonEncode(const PushResponse(
-              results: [PushResult(id: 'a', seq: 3, accepted: true)],
-              refused: [
-                PushRefusal(id: 'b', reason: PushRefusalReason.accountQuota),
-              ],
-              latestSeq: 3,
-            ).toJson()),
+            jsonEncode(
+              const PushResponse(
+                results: [PushResult(id: 'a', seq: 3, accepted: true)],
+                refused: [
+                  PushRefusal(id: 'b', reason: PushRefusalReason.accountQuota),
+                ],
+                latestSeq: 3,
+              ).toJson(),
+            ),
             200,
           );
         }),
@@ -374,50 +403,57 @@ void main() {
     });
   });
 
-  test('session revocation uses the scoped routes and clears the token',
-      () async {
-    final paths = <String>[];
-    final client = MockClient((req) async {
-      paths.add(req.url.path);
-      expect(req.method, 'DELETE');
-      expect(req.headers['authorization'], 'Bearer secret');
-      return http.Response('', 204);
-    });
-    final sync = HttpSyncClient(baseUrl: 'https://host', client: client);
+  test(
+    'session revocation uses the scoped routes and clears the token',
+    () async {
+      final paths = <String>[];
+      final client = MockClient((req) async {
+        paths.add(req.url.path);
+        expect(req.method, 'DELETE');
+        expect(req.headers['authorization'], 'Bearer secret');
+        return http.Response('', 204);
+      });
+      final sync = HttpSyncClient(baseUrl: 'https://host', client: client);
 
-    sync.token = 'secret';
-    await sync.revokeSession();
-    expect(sync.token, isNull);
-    sync.token = 'secret';
-    await sync.revokeAllSessions();
-    expect(sync.token, isNull);
-    expect(paths, ['/v1/session', '/v1/sessions']);
-  });
+      sync.token = 'secret';
+      await sync.revokeSession();
+      expect(sync.token, isNull);
+      sync.token = 'secret';
+      await sync.revokeAllSessions();
+      expect(sync.token, isNull);
+      expect(paths, ['/v1/session', '/v1/sessions']);
+    },
+  );
 
-  test('legacy key-check initialization authenticates and returns the winner',
-      () async {
-    final client = MockClient((req) async {
-      expect(req.method, 'PUT');
-      expect(req.url.path, '/v1/account/vault-key-check');
-      expect(req.headers['authorization'], 'Bearer secret');
-      expect(jsonDecode(req.body)['vaultKeyCheck'], 'proposed');
-      return http.Response(jsonEncode({'vaultKeyCheck': 'winner'}), 200);
-    });
-    final sync = HttpSyncClient(baseUrl: 'https://host', client: client)
-      ..token = 'secret';
-    expect(await sync.initializeVaultKeyCheck('proposed'), 'winner');
-  });
+  test(
+    'legacy key-check initialization authenticates and returns the winner',
+    () async {
+      final client = MockClient((req) async {
+        expect(req.method, 'PUT');
+        expect(req.url.path, '/v1/account/vault-key-check');
+        expect(req.headers['authorization'], 'Bearer secret');
+        expect(jsonDecode(req.body)['vaultKeyCheck'], 'proposed');
+        return http.Response(jsonEncode({'vaultKeyCheck': 'winner'}), 200);
+      });
+      final sync = HttpSyncClient(baseUrl: 'https://host', client: client)
+        ..token = 'secret';
+      expect(await sync.initializeVaultKeyCheck('proposed'), 'winner');
+    },
+  );
 
-  test('listItems skips a malformed item instead of failing the list', () async {
-    final good = {
-      'app': 'AAAAAAAAAAAAAAAAAAAAAA',
-      'item': 'i1',
-      'received': 1,
-      'blob': base64.encode(List<int>.filled(48, 0)),
-    };
-    final sync = HttpSyncClient(
-      baseUrl: 'https://host',
-      client: MockClient((req) async => http.Response(
+  test(
+    'listItems skips a malformed item instead of failing the list',
+    () async {
+      final good = {
+        'app': 'AAAAAAAAAAAAAAAAAAAAAA',
+        'item': 'i1',
+        'received': 1,
+        'blob': base64.encode(List<int>.filled(48, 0)),
+      };
+      final sync = HttpSyncClient(
+        baseUrl: 'https://host',
+        client: MockClient(
+          (req) async => http.Response(
             jsonEncode({
               'items': [
                 {'app': 'x'},
@@ -426,11 +462,13 @@ void main() {
               ],
             }),
             200,
-          )),
-    );
-    final items = await sync.listItems(since: 0);
-    expect(items.map((i) => i.itemId), ['i1']);
-  });
+          ),
+        ),
+      );
+      final items = await sync.listItems(since: 0);
+      expect(items.map((i) => i.itemId), ['i1']);
+    },
+  );
 
   test('listItems aggregates bounded inbox pages', () async {
     final queries = <Map<String, String>>[];
@@ -509,9 +547,10 @@ void main() {
     test('listItems rejects incomplete page metadata $metadata', () async {
       final sync = HttpSyncClient(
         baseUrl: 'https://host',
-        client: MockClient((_) async => http.Response(
-          jsonEncode({'items': [], ...metadata}), 200,
-        )),
+        client: MockClient(
+          (_) async =>
+              http.Response(jsonEncode({'items': [], ...metadata}), 200),
+        ),
       );
       await expectLater(sync.listItems(since: 0), throwsFormatException);
     });

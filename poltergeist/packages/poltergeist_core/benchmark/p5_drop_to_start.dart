@@ -421,8 +421,7 @@ Future<P5RunOutcome> collectDropToStartSamples({
   /// root (once, `followLinks: false` per 03 §4.2's scan semantics) and
   /// `listDirectory` while resolving the first regular file.
   required Future<RemoteFileEntry> Function(String path) stat,
-  required Future<List<RemoteFileEntry>> Function(String path)
-  listDirectory,
+  required Future<List<RemoteFileEntry>> Function(String path) listDirectory,
 
   /// The transfer-start side: `download` of the first file into the
   /// leg's counting sink. The production wiring leases a transfer channel
@@ -550,7 +549,8 @@ Future<P5RunOutcome> collectDropToStartSamples({
       kind: RemoteFileErrorKind.notFound,
       operation: 'drop scan',
       path: rootPath,
-      message: 'the dropped directory tree contains no regular file — '
+      message:
+          'the dropped directory tree contains no regular file — '
           'there is nothing whose first byte could start the transfer',
     );
   }
@@ -591,7 +591,8 @@ Future<P5RunOutcome> collectDropToStartSamples({
           kind: RemoteFileErrorKind.unsupported,
           operation: 'drop',
           path: droppedPath,
-          message: 'a dropped ${dropped.type.name} is not transferable — '
+          message:
+              'a dropped ${dropped.type.name} is not transferable — '
               'the drop→start path only starts regular files '
               '(followLinks: false, per the scan semantics of 03 §4.2)',
         );
@@ -620,8 +621,7 @@ Future<P5RunOutcome> collectDropToStartSamples({
       // The collector's own first-byte cancellation is the expected leg
       // end; a cancellation observed before any byte, or any other
       // failure, is an honest leg failure.
-      if (error.kind != RemoteFileErrorKind.cancelled ||
-          firstByteAt == null) {
+      if (error.kind != RemoteFileErrorKind.cancelled || firstByteAt == null) {
         rethrow;
       }
     }

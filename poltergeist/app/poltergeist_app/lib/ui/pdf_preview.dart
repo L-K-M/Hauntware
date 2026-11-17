@@ -20,9 +20,8 @@ const previewPdfPageLimit = 20;
 // Typed as the seam itself so the binding is assignability-checked
 // against [PreviewPdfBuilder], not just structurally compatible.
 // ignore: prefer_function_declarations_over_variables
-final PreviewPdfBuilder pdfPreviewBuilder =
-    (context, file, {onOpenExternal}) =>
-        PdfPreviewView(file: file, onOpenExternal: onOpenExternal);
+final PreviewPdfBuilder pdfPreviewBuilder = (context, file, {onOpenExternal}) =>
+    PdfPreviewView(file: file, onOpenExternal: onOpenExternal);
 
 /// The docked panel's PDF surface: a vertical strip of rasterized
 /// pages with the `Page 1–N of M` header and the external-Open
@@ -30,11 +29,7 @@ final PreviewPdfBuilder pdfPreviewBuilder =
 /// launches the real file — never the cache path — through the panel's
 /// own open seam).
 class PdfPreviewView extends StatelessWidget {
-  const PdfPreviewView({
-    super.key,
-    required this.file,
-    this.onOpenExternal,
-  });
+  const PdfPreviewView({super.key, required this.file, this.onOpenExternal});
 
   final File file;
 
@@ -55,9 +50,7 @@ class PdfPreviewView extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final total = document.pages.length;
-        final shown = total < previewPdfPageLimit
-            ? total
-            : previewPdfPageLimit;
+        final shown = total < previewPdfPageLimit ? total : previewPdfPageLimit;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -101,7 +94,7 @@ class PdfPreviewView extends StatelessWidget {
                     aspectRatio: document.pages[index].height <= 0
                         ? 1.0
                         : document.pages[index].width /
-                            document.pages[index].height,
+                              document.pages[index].height,
                     child: PdfPageView(
                       document: document,
                       pageNumber: index + 1,
@@ -129,5 +122,4 @@ class PdfPreviewView extends StatelessWidget {
       ),
     );
   }
-
 }

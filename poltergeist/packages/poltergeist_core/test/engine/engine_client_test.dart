@@ -414,40 +414,42 @@ void main() {
       );
     });
 
-    test('rename crosses the boundary and a refused name answers typed',
-        () async {
-      final client = await EngineClient.spawn(const EngineConfig());
-      addTearDown(client.shutdown);
+    test(
+      'rename crosses the boundary and a refused name answers typed',
+      () async {
+        final client = await EngineClient.spawn(const EngineConfig());
+        addTearDown(client.shutdown);
 
-      final root = Directory.systemTemp.createTempSync('pg-engine-rename');
-      addTearDown(() => root.deleteSync(recursive: true));
-      File('${root.path}/a.txt').writeAsStringSync('alpha');
-      File('${root.path}/b.txt').writeAsStringSync('beta');
+        final root = Directory.systemTemp.createTempSync('pg-engine-rename');
+        addTearDown(() => root.deleteSync(recursive: true));
+        File('${root.path}/a.txt').writeAsStringSync('alpha');
+        File('${root.path}/b.txt').writeAsStringSync('beta');
 
-      final channel = await client.openLocalChannel(rootPath: root.path);
-      await channel.rename(
-        '${channel.homePath}/a.txt',
-        '${channel.homePath}/renamed.txt',
-      );
-      expect(File('${root.path}/renamed.txt').existsSync(), isTrue);
-      expect(File('${root.path}/a.txt').existsSync(), isFalse);
-
-      // A rename onto an existing name refuses typed — never a silent
-      // overwrite (02 §2.6).
-      await expectLater(
-        channel.rename(
+        final channel = await client.openLocalChannel(rootPath: root.path);
+        await channel.rename(
+          '${channel.homePath}/a.txt',
           '${channel.homePath}/renamed.txt',
-          '${channel.homePath}/b.txt',
-        ),
-        throwsA(
-          isA<RemoteFileException>().having(
-            (error) => error.kind,
-            'kind',
-            RemoteFileErrorKind.conflict,
+        );
+        expect(File('${root.path}/renamed.txt').existsSync(), isTrue);
+        expect(File('${root.path}/a.txt').existsSync(), isFalse);
+
+        // A rename onto an existing name refuses typed — never a silent
+        // overwrite (02 §2.6).
+        await expectLater(
+          channel.rename(
+            '${channel.homePath}/renamed.txt',
+            '${channel.homePath}/b.txt',
           ),
-        ),
-      );
-    });
+          throwsA(
+            isA<RemoteFileException>().having(
+              (error) => error.kind,
+              'kind',
+              RemoteFileErrorKind.conflict,
+            ),
+          ),
+        );
+      },
+    );
 
     test('setPermissions crosses the boundary and a missing path answers '
         'typed', () async {
@@ -563,11 +565,7 @@ void main() {
                   RemoteFileErrorKind.permissionDenied,
                 )
                 .having((error) => error.operation, 'operation', 'open')
-                .having(
-                  (error) => error.path,
-                  'path',
-                  '/home/test/a.denied',
-                ),
+                .having((error) => error.path, 'path', '/home/test/a.denied'),
           ),
         );
       },
@@ -599,8 +597,7 @@ void main() {
     /// started — a documented dart:io limitation. Real-backend tests
     /// drain that fixture-setup backlog past the debounce before staging
     /// the events they actually assert on.
-    Future<void> drainSetupBacklog() =>
-        Future<void>.delayed(_watchQuietWindow);
+    Future<void> drainSetupBacklog() => Future<void>.delayed(_watchQuietWindow);
 
     test(
       'a real local change crosses the engine boundary, debounced',
@@ -665,9 +662,7 @@ void main() {
       // A grandchild edit and a sibling-of-root edit: neither is a direct
       // child of the watched directory on any of the three backends.
       File('${root.path}/sub/deep.txt').writeAsStringSync('deep');
-      final sibling = Directory.systemTemp.createTempSync(
-        'pg-watch-sibling',
-      );
+      final sibling = Directory.systemTemp.createTempSync('pg-watch-sibling');
       addTearDown(() => sibling.deleteSync(recursive: true));
       File('${sibling.path}/x.txt').writeAsStringSync('x');
 
@@ -691,10 +686,7 @@ void main() {
       await channel.watchDirectory(channel.homePath);
       final subPath = await channel
           .listDirectory(channel.homePath)
-          .then(
-            (entries) =>
-                entries.singleWhere((e) => e.name == 'sub').path,
-          );
+          .then((entries) => entries.singleWhere((e) => e.name == 'sub').path);
       await channel.watchDirectory(subPath);
       await drainSetupBacklog();
 
@@ -709,25 +701,22 @@ void main() {
       expect(event.signal, DirectoryWatchSignal.changed);
     });
 
-    test(
-      'deleting the watched directory signals lost immediately',
-      () async {
-        final (_, channel, root) = await localFixture('pg-watch-vanish');
+    test('deleting the watched directory signals lost immediately', () async {
+      final (_, channel, root) = await localFixture('pg-watch-vanish');
 
-        await channel.watchDirectory(channel.homePath);
-        await drainSetupBacklog();
-        root.deleteSync(recursive: true);
+      await channel.watchDirectory(channel.homePath);
+      await drainSetupBacklog();
+      root.deleteSync(recursive: true);
 
-        // Windows delivers the children's removal events first, so a
-        // debounced changed may legitimately precede the loss; the contract
-        // is that the loss arrives and nothing was swallowed.
-        final event = await channel.directoryChanges
-            .firstWhere((e) => e.signal == DirectoryWatchSignal.lost)
-            .timeout(_watchCrossingTimeout);
-        expect(event.path, channel.homePath);
-        expect(event.detail, isNotNull);
-      },
-    );
+      // Windows delivers the children's removal events first, so a
+      // debounced changed may legitimately precede the loss; the contract
+      // is that the loss arrives and nothing was swallowed.
+      final event = await channel.directoryChanges
+          .firstWhere((e) => e.signal == DirectoryWatchSignal.lost)
+          .timeout(_watchCrossingTimeout);
+      expect(event.path, channel.homePath);
+      expect(event.detail, isNotNull);
+    });
 
     test('deleting an empty watched directory signals lost', () async {
       final (_, channel, root) = await localFixture('pg-watch-empty-vanish');
@@ -747,71 +736,81 @@ void main() {
       expect(event.detail, isNotNull);
     });
 
-    testWithSymbolicLinks('watch resolves linked directories before subscribing',
-        () async {
-      final (_, channel, root) = await localFixture('pg-watch-linked-root');
-      final target = '${root.path}/sub';
-      final alias = '${root.path}/alias';
-      Link(alias).createSync(target);
+    testWithSymbolicLinks(
+      'watch resolves linked directories before subscribing',
+      () async {
+        final (_, channel, root) = await localFixture('pg-watch-linked-root');
+        final target = '${root.path}/sub';
+        final alias = '${root.path}/alias';
+        Link(alias).createSync(target);
 
-      // The backend receives a real directory, even when the requested
-      // location is a link. Rejecting a later link replacement stays safe.
-      await channel.watchDirectory(alias);
-      await drainSetupBacklog();
-      final changed = channel.directoryChanges.first.timeout(
-        _watchCrossingTimeout,
-      );
-      File('$target/new.txt').writeAsStringSync('through the canonical root');
+        // The backend receives a real directory, even when the requested
+        // location is a link. Rejecting a later link replacement stays safe.
+        await channel.watchDirectory(alias);
+        await drainSetupBacklog();
+        final changed = channel.directoryChanges.first.timeout(
+          _watchCrossingTimeout,
+        );
+        File('$target/new.txt').writeAsStringSync('through the canonical root');
 
-      final event = await changed;
-      expect(event.signal, DirectoryWatchSignal.changed);
-      expect(event.path, '${channel.homePath}${Platform.pathSeparator}sub');
-    });
+        final event = await changed;
+        expect(event.signal, DirectoryWatchSignal.changed);
+        expect(event.path, '${channel.homePath}${Platform.pathSeparator}sub');
+      },
+    );
 
-    test('deleting an already-emptied watched directory signals lost', () async {
-      final (_, channel, root) = await localFixture('pg-watch-drained-vanish');
-      await channel.watchDirectory(channel.homePath);
-      await drainSetupBacklog();
+    test(
+      'deleting an already-emptied watched directory signals lost',
+      () async {
+        final (_, channel, root) = await localFixture(
+          'pg-watch-drained-vanish',
+        );
+        await channel.watchDirectory(channel.homePath);
+        await drainSetupBacklog();
 
-      final emptied = channel.directoryChanges
-          .firstWhere((event) => event.signal == DirectoryWatchSignal.changed)
-          .timeout(_watchCrossingTimeout);
-      File('${root.path}/a.txt').deleteSync();
-      Directory('${root.path}/sub').deleteSync();
-      await emptied;
+        final emptied = channel.directoryChanges
+            .firstWhere((event) => event.signal == DirectoryWatchSignal.changed)
+            .timeout(_watchCrossingTimeout);
+        File('${root.path}/a.txt').deleteSync();
+        Directory('${root.path}/sub').deleteSync();
+        await emptied;
 
-      final lost = channel.directoryChanges
-          .firstWhere((event) => event.signal == DirectoryWatchSignal.lost)
-          .timeout(_watchCrossingTimeout);
-      root.deleteSync();
-      expect((await lost).path, channel.homePath);
-    });
+        final lost = channel.directoryChanges
+            .firstWhere((event) => event.signal == DirectoryWatchSignal.lost)
+            .timeout(_watchCrossingTimeout);
+        root.deleteSync();
+        expect((await lost).path, channel.homePath);
+      },
+    );
 
-    test('renaming and recreating a watched path loses its old binding', () async {
-      final (_, channel, root) = await localFixture('pg-watch-renamed-root');
-      final watchedPath = '${channel.homePath}${Platform.pathSeparator}sub';
-      await channel.watchDirectory(watchedPath);
-      await drainSetupBacklog();
+    test(
+      'renaming and recreating a watched path loses its old binding',
+      () async {
+        final (_, channel, root) = await localFixture('pg-watch-renamed-root');
+        final watchedPath = '${channel.homePath}${Platform.pathSeparator}sub';
+        await channel.watchDirectory(watchedPath);
+        await drainSetupBacklog();
 
-      // A type check alone would see the replacement directory and miss
-      // that the native subscription still follows the renamed one.
-      final lost = channel.directoryChanges
-          .firstWhere((event) => event.signal == DirectoryWatchSignal.lost)
-          .timeout(_watchCrossingTimeout);
-      Directory('${root.path}/sub').renameSync('${root.path}/renamed');
-      Directory('${root.path}/sub').createSync();
-      expect((await lost).path, watchedPath);
+        // A type check alone would see the replacement directory and miss
+        // that the native subscription still follows the renamed one.
+        final lost = channel.directoryChanges
+            .firstWhere((event) => event.signal == DirectoryWatchSignal.lost)
+            .timeout(_watchCrossingTimeout);
+        Directory('${root.path}/sub').renameSync('${root.path}/renamed');
+        Directory('${root.path}/sub').createSync();
+        expect((await lost).path, watchedPath);
 
-      await channel.watchDirectory(watchedPath);
-      await drainSetupBacklog();
-      final changed = channel.directoryChanges.first.timeout(
-        _watchCrossingTimeout,
-      );
-      File('${root.path}/sub/new.txt').writeAsStringSync('new binding');
-      final event = await changed;
-      expect(event.path, watchedPath);
-      expect(event.signal, DirectoryWatchSignal.changed);
-    });
+        await channel.watchDirectory(watchedPath);
+        await drainSetupBacklog();
+        final changed = channel.directoryChanges.first.timeout(
+          _watchCrossingTimeout,
+        );
+        File('${root.path}/sub/new.txt').writeAsStringSync('new binding');
+        final event = await changed;
+        expect(event.path, watchedPath);
+        expect(event.signal, DirectoryWatchSignal.changed);
+      },
+    );
 
     test('unwatchDirectory releases the engine-side watch', () async {
       final (_, channel, root) = await localFixture('pg-watch-release');
@@ -838,44 +837,36 @@ void main() {
       expect(changes, isEmpty);
     });
 
-    test(
-      'closing the channel closes directoryChanges',
-      () async {
-        final (_, channel, root) = await localFixture('pg-watch-close');
-
-        final done = Completer<void>();
-        channel.directoryChanges.listen(
-          (_) {},
-          onDone: done.complete,
-        );
-        await channel.watchDirectory(channel.homePath);
-        await drainSetupBacklog();
-        // Positive control: the stream is live before the close, so the
-        // onDone below proves closing ended a live stream (the noise
-        // test's vacuous-pass trap).
-        File('${root.path}/pre-close.txt').writeAsStringSync('pre');
-        await channel.directoryChanges.first.timeout(_watchCrossingTimeout);
-        await channel.close();
-
-        await done.future.timeout(_watchCrossingTimeout);
-        // The engine-side release is pinned by the host test observing the
-        // backend cancel; here, post-close access must yield the same
-        // closed stream, not a fresh never-completing one.
-        await channel.directoryChanges
-            .drain<void>()
-            .timeout(_watchCrossingTimeout);
-      },
-    );
-
-    test('engine death closes directoryChanges', () async {
-      final (client, channel, root) =
-          await localFixture('pg-watch-engine-death');
+    test('closing the channel closes directoryChanges', () async {
+      final (_, channel, root) = await localFixture('pg-watch-close');
 
       final done = Completer<void>();
-      channel.directoryChanges.listen(
-        (_) {},
-        onDone: done.complete,
+      channel.directoryChanges.listen((_) {}, onDone: done.complete);
+      await channel.watchDirectory(channel.homePath);
+      await drainSetupBacklog();
+      // Positive control: the stream is live before the close, so the
+      // onDone below proves closing ended a live stream (the noise
+      // test's vacuous-pass trap).
+      File('${root.path}/pre-close.txt').writeAsStringSync('pre');
+      await channel.directoryChanges.first.timeout(_watchCrossingTimeout);
+      await channel.close();
+
+      await done.future.timeout(_watchCrossingTimeout);
+      // The engine-side release is pinned by the host test observing the
+      // backend cancel; here, post-close access must yield the same
+      // closed stream, not a fresh never-completing one.
+      await channel.directoryChanges.drain<void>().timeout(
+        _watchCrossingTimeout,
       );
+    });
+
+    test('engine death closes directoryChanges', () async {
+      final (client, channel, root) = await localFixture(
+        'pg-watch-engine-death',
+      );
+
+      final done = Completer<void>();
+      channel.directoryChanges.listen((_) {}, onDone: done.complete);
       await channel.watchDirectory(channel.homePath);
       await drainSetupBacklog();
       // Positive control: events flow before death, so onDone proves the

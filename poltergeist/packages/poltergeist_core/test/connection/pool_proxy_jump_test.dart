@@ -226,9 +226,7 @@ void main() {
 
   test('a jump-host keyboard challenge caps route growth', () async {
     final harness = PoolHarness(
-      opener: FakeTransportOpener(
-        keyboardChallengeServerId: _outerId,
-      ),
+      opener: FakeTransportOpener(keyboardChallengeServerId: _outerId),
       policy: const PoolPolicy(
         maxTransports: 2,
         maxTransferChannelsPerTransport: 1,
@@ -319,10 +317,7 @@ void main() {
       expect(pane.fs, isA<RemoteFileSystem>());
 
       completeWithoutTimers(time, pane.close());
-      completeWithoutTimers(
-        time,
-        harness.manager.disconnectServer(_targetId),
-      );
+      completeWithoutTimers(time, harness.manager.disconnectServer(_targetId));
       expect(time.pendingTimers, isEmpty);
     });
   });

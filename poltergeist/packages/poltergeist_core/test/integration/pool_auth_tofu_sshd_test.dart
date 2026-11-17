@@ -37,228 +37,262 @@ void main() {
       environment[_hostVariable] != null &&
       environment[_authmatrixPortVariable] != null;
 
-  group('keyboard-interactive auth against real sshd', () {
-    late _Fixture fixture;
+  group(
+    'keyboard-interactive auth against real sshd',
+    () {
+      late _Fixture fixture;
 
-    setUpAll(() async {
-      fixture = await _Fixture.load(_FixtureService.authmatrix);
-    });
+      setUpAll(() async {
+        fixture = await _Fixture.load(_FixtureService.authmatrix);
+      });
 
-    test(
-      'answers one challenge, then caps the pool at one transport',
-      () async {
-        final harness = fixture.manager(
-          username: _interactiveUsername,
-          method: AuthMethod.password,
-          credentials: SshCredentials.password(fixture.password),
-          // The keyboard-interactive suite pre-seeds the shared fixture pin
-          // (08 §5): only the TOFU suite manages pin state deliberately.
-          pinStore: await fixture.preSeededStore(),
-          review: _decliningReview('a pre-seeded fixture must never prompt'),
-        );
-        final manager = harness._manager;
-        final serverId = harness._server.id;
-
-        final pane = await manager.openBrowseChannel(
-          serverId,
-          paneTabId: 'left',
-        );
-        // The auxiliary fixture users own empty homes; canonicalization is
-        // the end-to-end SFTP proof over the interactive transport.
-        expect(await pane.fs.canonicalize('.'), pane.homePath);
-        // Guard the everyElement below against a vacuous empty pass.
-        expect(harness._authKinds, isNotEmpty);
-        expect(harness._authKinds, everyElement(isIn(_interactiveKinds)));
-        // PAM may append an empty follow-up round after the password is
-        // accepted; only prompt-bearing rounds are user interaction (D5).
-        final answered = [
-          for (final challenge in harness._challenges)
-            if (challenge.prompts.isNotEmpty) challenge,
-        ];
-        expect(answered, hasLength(1));
-        expect(answered.single.prompts, hasLength(1));
-        expect(
-          harness._decisions,
-          isEmpty,
-          reason: 'a pre-seeded pin verifies without any host-key review',
-        );
-
-        // Leases up to the single transport's transfer budget.
-        final capacity = _defaultPolicy.maxTransferChannelsPerTransport;
-        final leases = <TransferChannelLease>[];
-        for (var index = 0; index < capacity; index++) {
-          leases.add(
-            await manager
-                .leaseTransferChannel(serverId)
-                .timeout(_operationTimeout),
+      test(
+        'answers one challenge, then caps the pool at one transport',
+        () async {
+          final harness = fixture.manager(
+            username: _interactiveUsername,
+            method: AuthMethod.password,
+            credentials: SshCredentials.password(fixture.password),
+            // The keyboard-interactive suite pre-seeds the shared fixture pin
+            // (08 §5): only the TOFU suite manages pin state deliberately.
+            pinStore: await fixture.preSeededStore(),
+            review: _decliningReview('a pre-seeded fixture must never prompt'),
           );
-        }
+          final manager = harness._manager;
+          final serverId = harness._server.id;
 
-        // The queued fifth lease must not grow the pool: a second connect
-        // would re-run authentication on an interactive-auth server (D5).
-        final waiting = manager.leaseTransferChannel(serverId);
-        await expectLater(
-          waiting.timeout(_queueObservation),
-          throwsA(isA<TimeoutException>()),
-        );
-        expect(harness._opens, hasLength(1));
-        expect(
-          harness._challenges.where((challenge) => challenge.prompts.isNotEmpty),
-          hasLength(1),
-        );
+          final pane = await manager.openBrowseChannel(
+            serverId,
+            paneTabId: 'left',
+          );
+          // The auxiliary fixture users own empty homes; canonicalization is
+          // the end-to-end SFTP proof over the interactive transport.
+          expect(await pane.fs.canonicalize('.'), pane.homePath);
+          // Guard the everyElement below against a vacuous empty pass.
+          expect(harness._authKinds, isNotEmpty);
+          expect(harness._authKinds, everyElement(isIn(_interactiveKinds)));
+          // PAM may append an empty follow-up round after the password is
+          // accepted; only prompt-bearing rounds are user interaction (D5).
+          final answered = [
+            for (final challenge in harness._challenges)
+              if (challenge.prompts.isNotEmpty) challenge,
+          ];
+          expect(answered, hasLength(1));
+          expect(answered.single.prompts, hasLength(1));
+          expect(
+            harness._decisions,
+            isEmpty,
+            reason: 'a pre-seeded pin verifies without any host-key review',
+          );
 
-        final returnedFs = leases.first.fs;
-        await leases.first.release();
-        final acquired = await waiting.timeout(_operationTimeout);
-        expect(acquired.fs, same(returnedFs));
-        expect(await pane.fs.canonicalize('.'), pane.homePath);
-        await acquired.release();
-      },
-    );
-  }, skip: authmatrixEnabled ? false : 'Set $_hostVariable and '
-        '$_authmatrixPortVariable to enable.');
+          // Leases up to the single transport's transfer budget.
+          final capacity = _defaultPolicy.maxTransferChannelsPerTransport;
+          final leases = <TransferChannelLease>[];
+          for (var index = 0; index < capacity; index++) {
+            leases.add(
+              await manager
+                  .leaseTransferChannel(serverId)
+                  .timeout(_operationTimeout),
+            );
+          }
 
-  group('TOFU against real sshd', () {
-    late _Fixture fixture;
+          // The queued fifth lease must not grow the pool: a second connect
+          // would re-run authentication on an interactive-auth server (D5).
+          final waiting = manager.leaseTransferChannel(serverId);
+          await expectLater(
+            waiting.timeout(_queueObservation),
+            throwsA(isA<TimeoutException>()),
+          );
+          expect(harness._opens, hasLength(1));
+          expect(
+            harness._challenges.where(
+              (challenge) => challenge.prompts.isNotEmpty,
+            ),
+            hasLength(1),
+          );
 
-    setUpAll(() async {
-      fixture = await _Fixture.load(_FixtureService.modern);
-    });
-
-    test('first use prompts once, pins, and verifies silently after', () async {
-      // The TOFU suite owns a private, empty store per test (08 §5).
-      final store = InMemoryHostKeyStore();
-      final harness = fixture.manager(pinStore: store, review: _firstUseOnly);
-      final manager = harness._manager;
-      final serverId = harness._server.id;
-
-      // Two panes opening concurrently fold into one first connect: one
-      // host-key prompt for the whole pool (03 §3.2 rule 1).
-      final panes = await Future.wait([
-        manager.openBrowseChannel(serverId, paneTabId: 'left'),
-        manager.openBrowseChannel(serverId, paneTabId: 'right'),
-      ]);
-      for (final pane in panes) {
-        expect(await pane.fs.listDirectory(pane.homePath), isNotEmpty);
-      }
-      expect(harness._decisions.map((decision) => decision.verdict), [
-        HostKeyVerdict.firstUse,
-      ]);
-      final pinned = await store.all();
-      expect(pinned, hasLength(1));
-      expect(pinned.single.type, fixture.hostKey.type);
-      expect(
-        pinned.single.fingerprintSha256,
-        fixture.hostKey.fingerprintSha256,
+          final returnedFs = leases.first.fs;
+          await leases.first.release();
+          final acquired = await waiting.timeout(_operationTimeout);
+          expect(acquired.fs, same(returnedFs));
+          expect(await pane.fs.canonicalize('.'), pane.homePath);
+          await acquired.release();
+        },
       );
+    },
+    skip: authmatrixEnabled
+        ? false
+        : 'Set $_hostVariable and '
+              '$_authmatrixPortVariable to enable.',
+  );
 
-      // Pool growth verifies the pinned key silently (no second prompt):
-      // the fifth lease grows transport two, the cap fills both.
-      final capacity =
-          _defaultPolicy.maxTransports *
-          _defaultPolicy.maxTransferChannelsPerTransport;
-      final leases = <TransferChannelLease>[];
-      for (var index = 0; index < capacity; index++) {
-        leases.add(
-          await manager
-              .leaseTransferChannel(serverId)
-              .timeout(_operationTimeout),
-        );
-      }
-      expect(harness._opens, hasLength(2));
-      expect(
-        harness._opens.last.prompting,
-        ConnectPrompting.disabled,
-        reason: 'growth never prompts (03 §3.2 rule 3)',
-      );
-      expect(harness._decisions, hasLength(1));
+  group(
+    'TOFU against real sshd',
+    () {
+      late _Fixture fixture;
 
-      // A second connect on a fresh pool verifies the pin silently too.
-      for (final lease in leases) {
-        await lease.release();
-      }
-      for (final pane in panes) {
-        await pane.close();
-      }
-      await manager.disconnectServer(serverId);
-      final revisited = await manager.openBrowseChannel(
-        serverId,
-        paneTabId: 'left',
+      setUpAll(() async {
+        fixture = await _Fixture.load(_FixtureService.modern);
+      });
+
+      test(
+        'first use prompts once, pins, and verifies silently after',
+        () async {
+          // The TOFU suite owns a private, empty store per test (08 §5).
+          final store = InMemoryHostKeyStore();
+          final harness = fixture.manager(
+            pinStore: store,
+            review: _firstUseOnly,
+          );
+          final manager = harness._manager;
+          final serverId = harness._server.id;
+
+          // Two panes opening concurrently fold into one first connect: one
+          // host-key prompt for the whole pool (03 §3.2 rule 1).
+          final panes = await Future.wait([
+            manager.openBrowseChannel(serverId, paneTabId: 'left'),
+            manager.openBrowseChannel(serverId, paneTabId: 'right'),
+          ]);
+          for (final pane in panes) {
+            expect(await pane.fs.listDirectory(pane.homePath), isNotEmpty);
+          }
+          expect(harness._decisions.map((decision) => decision.verdict), [
+            HostKeyVerdict.firstUse,
+          ]);
+          final pinned = await store.all();
+          expect(pinned, hasLength(1));
+          expect(pinned.single.type, fixture.hostKey.type);
+          expect(
+            pinned.single.fingerprintSha256,
+            fixture.hostKey.fingerprintSha256,
+          );
+
+          // Pool growth verifies the pinned key silently (no second prompt):
+          // the fifth lease grows transport two, the cap fills both.
+          final capacity =
+              _defaultPolicy.maxTransports *
+              _defaultPolicy.maxTransferChannelsPerTransport;
+          final leases = <TransferChannelLease>[];
+          for (var index = 0; index < capacity; index++) {
+            leases.add(
+              await manager
+                  .leaseTransferChannel(serverId)
+                  .timeout(_operationTimeout),
+            );
+          }
+          expect(harness._opens, hasLength(2));
+          expect(
+            harness._opens.last.prompting,
+            ConnectPrompting.disabled,
+            reason: 'growth never prompts (03 §3.2 rule 3)',
+          );
+          expect(harness._decisions, hasLength(1));
+
+          // A second connect on a fresh pool verifies the pin silently too.
+          for (final lease in leases) {
+            await lease.release();
+          }
+          for (final pane in panes) {
+            await pane.close();
+          }
+          await manager.disconnectServer(serverId);
+          final revisited = await manager.openBrowseChannel(
+            serverId,
+            paneTabId: 'left',
+          );
+          expect(
+            await revisited.fs.listDirectory(revisited.homePath),
+            isNotEmpty,
+          );
+          expect(harness._decisions, hasLength(1));
+          expect(await store.all(), hasLength(1));
+          await revisited.close();
+        },
       );
-      expect(await revisited.fs.listDirectory(revisited.homePath), isNotEmpty);
-      expect(harness._decisions, hasLength(1));
-      expect(await store.all(), hasLength(1));
-      await revisited.close();
-    });
-  }, skip: modernEnabled ? false : 'Set $_hostVariable and '
-        '$_modernPortVariable to enable.');
+    },
+    skip: modernEnabled
+        ? false
+        : 'Set $_hostVariable and '
+              '$_modernPortVariable to enable.',
+  );
 
   // Declined changed keys must stay blocked; this group stops sshd-modern,
   // so it runs last and restores the original service in teardown.
-  group('changed key against real sshd', () {
-    late _Fixture fixture;
-    Future<void> Function()? restore;
+  group(
+    'changed key against real sshd',
+    () {
+      late _Fixture fixture;
+      Future<void> Function()? restore;
 
-    setUpAll(() async {
-      fixture = await _Fixture.load(_FixtureService.modern);
-    });
-    // A failed assertion after the swap must not strand later suites.
-    tearDownAll(() => restore?.call());
+      setUpAll(() async {
+        fixture = await _Fixture.load(_FixtureService.modern);
+      });
+      // A failed assertion after the swap must not strand later suites.
+      tearDownAll(() => restore?.call());
 
-    // A slow swap that still succeeds plus a full blocked-wait budget can
-    // exceed the library default; budget the named inner waits explicitly.
-    test(
-      'hard-blocks every operation without re-pinning',
-      timeout: Timeout(
-        _blockedTimeout + _serviceTimeout + _operationTimeout,
-      ),
-      () async {
-      final store = await fixture.preSeededStore();
-      final harness = fixture.manager(pinStore: store, review: _firstUseOnly);
-      final manager = harness._manager;
-      final serverId = harness._server.id;
+      // A slow swap that still succeeds plus a full blocked-wait budget can
+      // exceed the library default; budget the named inner waits explicitly.
+      test(
+        'hard-blocks every operation without re-pinning',
+        timeout: Timeout(_blockedTimeout + _serviceTimeout + _operationTimeout),
+        () async {
+          final store = await fixture.preSeededStore();
+          final harness = fixture.manager(
+            pinStore: store,
+            review: _firstUseOnly,
+          );
+          final manager = harness._manager;
+          final serverId = harness._server.id;
 
-      final pane = await manager.openBrowseChannel(serverId, paneTabId: 'left');
-      expect(await pane.fs.listDirectory(pane.homePath), isNotEmpty);
+          final pane = await manager.openBrowseChannel(
+            serverId,
+            paneTabId: 'left',
+          );
+          expect(await pane.fs.listDirectory(pane.homePath), isNotEmpty);
 
-      // Arm restore first: a swap that fails midway must still unwind.
-      restore = () => fixture.control(_FixtureAction.restoreModern);
-      await fixture.control(_FixtureAction.swap);
+          // Arm restore first: a swap that fails midway must still unwind.
+          restore = () => fixture.control(_FixtureAction.restoreModern);
+          await fixture.control(_FixtureAction.swap);
 
-      // Recovery reconnects without prompting; the changed key blocks it.
-      await _until(
-        () => harness._states.contains(ServerConnectionState.blocked),
-        'the changed key to block the pool',
-        timeout: _blockedTimeout,
+          // Recovery reconnects without prompting; the changed key blocks it.
+          await _until(
+            () => harness._states.contains(ServerConnectionState.blocked),
+            'the changed key to block the pool',
+            timeout: _blockedTimeout,
+          );
+          expect(
+            harness._details.whereType<String>(),
+            anyElement(contains(_changedKeyDetail)),
+          );
+
+          // Every operation on the existing pane fails with the block reason.
+          expect(() => pane.fs, throwsA(_blockedError()));
+
+          // A fresh acquisition reviews the change and, declined, stays blocked.
+          await expectLater(
+            manager.openBrowseChannel(serverId, paneTabId: 'fresh'),
+            throwsA(_blockedError()),
+          );
+          expect(
+            harness._decisions.map((decision) => decision.verdict),
+            contains(HostKeyVerdict.changed),
+          );
+
+          // No auto-repin: the store still holds only the original key (D18).
+          final pinned = await store.all();
+          expect(pinned, hasLength(1));
+          expect(
+            pinned.single.fingerprintSha256,
+            fixture.hostKey.fingerprintSha256,
+          );
+        },
       );
-      expect(
-        harness._details.whereType<String>(),
-        anyElement(contains(_changedKeyDetail)),
-      );
-
-      // Every operation on the existing pane fails with the block reason.
-      expect(() => pane.fs, throwsA(_blockedError()));
-
-      // A fresh acquisition reviews the change and, declined, stays blocked.
-      await expectLater(
-        manager.openBrowseChannel(serverId, paneTabId: 'fresh'),
-        throwsA(_blockedError()),
-      );
-      expect(
-        harness._decisions.map((decision) => decision.verdict),
-        contains(HostKeyVerdict.changed),
-      );
-
-      // No auto-repin: the store still holds only the original key (D18).
-      final pinned = await store.all();
-      expect(pinned, hasLength(1));
-      expect(
-        pinned.single.fingerprintSha256,
-        fixture.hostKey.fingerprintSha256,
-      );
-    });
-  }, skip: modernEnabled ? false : 'Set $_hostVariable and '
-        '$_modernPortVariable to enable.');
+    },
+    skip: modernEnabled
+        ? false
+        : 'Set $_hostVariable and '
+              '$_modernPortVariable to enable.',
+  );
 }
 
 Future<void> _until(
@@ -449,10 +483,7 @@ class _AuthHarness {
       return _review(decision);
     },
     onKeyboardInteractive: (challenge) async {
-      _challenges.add((
-        prompts: challenge.prompts,
-        name: challenge.name,
-      ));
+      _challenges.add((prompts: challenge.prompts, name: challenge.name));
       return [for (final _ in challenge.prompts) _challengeAnswer];
     },
     policy: _defaultPolicy,

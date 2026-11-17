@@ -15,10 +15,10 @@ Future<void> _rewriteOwnerOnly(File file, String contents) async {
 }
 
 IdentityAuditLog _log(File file, {int maxEntries = 500}) => IdentityAuditLog(
-      file,
-      rewriteOwnerOnly: _rewriteOwnerOnly,
-      maxEntries: maxEntries,
-    );
+  file,
+  rewriteOwnerOnly: _rewriteOwnerOnly,
+  maxEntries: maxEntries,
+);
 
 void main() {
   late Directory dir;
@@ -76,25 +76,20 @@ void main() {
     expect(entries.last.serverId, 'srv-10');
   });
 
-  test(
-      'a fresh audit log is created owner-only on desktop POSIX', () async {
+  test('a fresh audit log is created owner-only on desktop POSIX', () async {
     // A traversable app directory must not yield a traversable log: the
     // file carries private-key paths.
     posix.chmod(dir.path, _permissiveDirectoryPermissions);
     await _log(file).record(event(1));
-    expect(
-        (await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
-  },
-      skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
+    expect((await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
+  }, skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
 
   test('recording repairs a permissive existing log', () async {
     await file.create();
     posix.chmod(file.path, _permissiveFilePermissions);
     await _log(file).record(event(1));
-    expect(
-        (await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
-  },
-      skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
+    expect((await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
+  }, skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
 
   test('reading repairs a permissive existing log', () async {
     final log = _log(file);
@@ -104,10 +99,8 @@ void main() {
     final entries = await log.readAll();
 
     expect(entries.map((e) => e.serverId), ['srv-1']);
-    expect(
-        (await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
-  },
-      skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
+    expect((await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
+  }, skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
 
   // Linux procfs provides read-side fixtures no fake can: files owned by
   // this process that chmod cannot touch (EPERM) without any host change.
@@ -115,49 +108,60 @@ void main() {
   // kernel/scheduler status — never environ or memory. Rootless and
   // mountless; they run in the Ubuntu CI Dart job and skip elsewhere
   // because no other desktop platform has /proc.
-  test('an already-private chmod-incapable file reads without repair',
-      () async {
-    final file = File(_procSelfIoPath);
-    final modeBefore = (await file.stat()).mode;
-    // Fixture prerequisites, asserted loudly: readable and owner-only.
-    expect(modeBefore & _groupOtherBits, 0);
-    expect(await file.readAsString(), isNotEmpty);
+  test(
+    'an already-private chmod-incapable file reads without repair',
+    () async {
+      final file = File(_procSelfIoPath);
+      final modeBefore = (await file.stat()).mode;
+      // Fixture prerequisites, asserted loudly: readable and owner-only.
+      expect(modeBefore & _groupOtherBits, 0);
+      expect(await file.readAsString(), isNotEmpty);
 
-    final entries = await _log(file).readAll();
+      final entries = await _log(file).readAll();
 
-    // The counters are not JSON records; the point is that no repair
-    // chmod fires (it would fail EPERM here), so a private trail on a
-    // chmod-incapable mount stays readable and its mode untouched.
-    expect(entries, isEmpty);
-    expect((await file.stat()).mode, modeBefore);
-  },
-      skip: !Platform.isLinux || !File(_procSelfIoPath).existsSync()
-          ? 'needs Linux procfs'
-          : false);
+      // The counters are not JSON records; the point is that no repair
+      // chmod fires (it would fail EPERM here), so a private trail on a
+      // chmod-incapable mount stays readable and its mode untouched.
+      expect(entries, isEmpty);
+      expect((await file.stat()).mode, modeBefore);
+    },
+    skip: !Platform.isLinux || !File(_procSelfIoPath).existsSync()
+        ? 'needs Linux procfs'
+        : false,
+  );
 
-  test('a permissive chmod-incapable file fails the read closed', () async {
-    final file = File(_procSelfStatusPath);
-    final modeBefore = (await file.stat()).mode;
-    // Fixture prerequisites, asserted loudly: readable with group/other
-    // bits set, so the read-side repair must fire.
-    expect(modeBefore & _groupOtherBits, isNot(0));
-    expect(await file.readAsString(), isNotEmpty);
+  test(
+    'a permissive chmod-incapable file fails the read closed',
+    () async {
+      final file = File(_procSelfStatusPath);
+      final modeBefore = (await file.stat()).mode;
+      // Fixture prerequisites, asserted loudly: readable with group/other
+      // bits set, so the read-side repair must fire.
+      expect(modeBefore & _groupOtherBits, isNot(0));
+      expect(await file.readAsString(), isNotEmpty);
 
-    // The repair chmod fails EPERM on procfs; failing the read beats
-    // returning a world-readable trail. Pinning EPERM — not just the
-    // exception type — proves the throw is the repair chmod itself, and
-    // the throw (not empty entries; the status text is not JSON) proves
-    // the rejection ran.
-    final read = _log(file).readAll();
-    await expectLater(
+      // The repair chmod fails EPERM on procfs; failing the read beats
+      // returning a world-readable trail. Pinning EPERM — not just the
+      // exception type — proves the throw is the repair chmod itself, and
+      // the throw (not empty entries; the status text is not JSON) proves
+      // the rejection ran.
+      final read = _log(file).readAll();
+      await expectLater(
         read,
-        throwsA(isA<posix.PosixException>()
-            .having((e) => e.code, 'errno', equals(posix.EPERM))));
-    expect((await file.stat()).mode, modeBefore);
-  },
-      skip: !Platform.isLinux || !File(_procSelfStatusPath).existsSync()
-          ? 'needs Linux procfs'
-          : false);
+        throwsA(
+          isA<posix.PosixException>().having(
+            (e) => e.code,
+            'errno',
+            equals(posix.EPERM),
+          ),
+        ),
+      );
+      expect((await file.stat()).mode, modeBefore);
+    },
+    skip: !Platform.isLinux || !File(_procSelfStatusPath).existsSync()
+        ? 'needs Linux procfs'
+        : false,
+  );
 
   test('audit storage stays owner-only on desktop POSIX', () async {
     await file.create();
@@ -171,18 +175,18 @@ void main() {
     }
 
     // Privacy belongs to the file, even under a traversable app directory.
-    expect((await dir.stat()).mode & _permissionBits,
-        _permissiveDirectoryMode);
-    expect(
-        (await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
-  },
-      skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
+    expect((await dir.stat()).mode & _permissionBits, _permissiveDirectoryMode);
+    expect((await file.stat()).mode & _permissionBits, _ownerOnlyFileMode);
+  }, skip: !Platform.isLinux && !Platform.isMacOS ? 'POSIX only' : false);
 
   test('malformed lines are skipped, not fatal', () async {
     final log = _log(file);
     await log.record(event(1));
-    await file.writeAsString('not json\n{"at": 7}\n',
-        mode: FileMode.append, flush: true);
+    await file.writeAsString(
+      'not json\n{"at": 7}\n',
+      mode: FileMode.append,
+      flush: true,
+    );
     await log.record(event(2));
 
     final entries = await log.readAll();
@@ -195,10 +199,11 @@ void main() {
     final log = _log(file);
     await log.record(event(1));
     await file.writeAsString(
-        '{"at":"2026-07-19T08:00:03.000Z","serverId":"srv-3",'
-        '"path":"/Users/ada/.ssh/id_3","ok":"yes"}\n',
-        mode: FileMode.append,
-        flush: true);
+      '{"at":"2026-07-19T08:00:03.000Z","serverId":"srv-3",'
+      '"path":"/Users/ada/.ssh/id_3","ok":"yes"}\n',
+      mode: FileMode.append,
+      flush: true,
+    );
     await log.record(event(2));
 
     final entries = await log.readAll();
@@ -207,9 +212,10 @@ void main() {
 
   test('absent optional fields fall back to their defaults', () async {
     await file.writeAsString(
-        '{"at":"2026-07-19T08:00:03.000Z","serverId":"srv-3",'
-        '"path":"/Users/ada/.ssh/id_3"}\n',
-        flush: true);
+      '{"at":"2026-07-19T08:00:03.000Z","serverId":"srv-3",'
+      '"path":"/Users/ada/.ssh/id_3"}\n',
+      flush: true,
+    );
 
     final entries = await _log(file).readAll();
 

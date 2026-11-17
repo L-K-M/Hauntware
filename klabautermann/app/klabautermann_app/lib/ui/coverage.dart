@@ -70,10 +70,7 @@ class CoverageHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (updates != null && openRelease != null)
-              UpdateNoticeBanner(
-                updates: updates!,
-                openRelease: openRelease!,
-              ),
+              UpdateNoticeBanner(updates: updates!, openRelease: openRelease!),
             if (coverage.showsFirstRunCard)
               ConstrainedBox(
                 constraints: BoxConstraints(

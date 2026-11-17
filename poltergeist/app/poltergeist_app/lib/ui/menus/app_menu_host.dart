@@ -187,8 +187,7 @@ class _AppMenuHostState extends State<AppMenuHost> {
     final focusContext = focus?.context;
     if (intent != null &&
         focusContext != null &&
-        focusContext.findAncestorWidgetOfExactType<EditableText>() !=
-            null) {
+        focusContext.findAncestorWidgetOfExactType<EditableText>() != null) {
       final action = Actions.maybeFind(focusContext, intent: intent);
       if (action != null && action.isEnabled(intent)) {
         Actions.invoke(focusContext, intent);
@@ -254,10 +253,7 @@ class AppMainMenuButton extends StatelessWidget {
         activate: (spec) => unawaited(onRun(ghostRowCommand(spec))),
         trailingFor: (spec) => spec.activators.isEmpty
             ? null
-            : MenuShortcutHint(
-                spec.activators.first,
-                enabled: spec.enabled,
-              ),
+            : MenuShortcutHint(spec.activators.first, enabled: spec.enabled),
       ),
       builder: (context, controller, _) => IconButton(
         key: const ValueKey('menu.main'),

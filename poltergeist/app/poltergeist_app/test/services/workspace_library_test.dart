@@ -82,9 +82,7 @@ void main() {
   late WorkspaceLibrary library;
 
   WorkspaceLibrary freshLibrary() => WorkspaceLibrary(
-    store: WorkspaceListStore(
-      store: SettingsStore(path: settingsFile.path),
-    ),
+    store: WorkspaceListStore(store: SettingsStore(path: settingsFile.path)),
     bookmarks: bookmarks,
   );
 
@@ -179,7 +177,10 @@ void main() {
 
     test('a launcher pane records the home endpoint', () async {
       await library.load();
-      await library.save(label: 'Empty', snapshot: _snapshot(const [], const []));
+      await library.save(
+        label: 'Empty',
+        snapshot: _snapshot(const [], const []),
+      );
 
       final favorite = (await bookmarks.load()).single;
       expect(favorite.left!.path, '~');
@@ -317,7 +318,8 @@ void main() {
     test('rejects a blank label before persisting', () async {
       await library.load();
       expect(
-        () => library.save(label: '   ', snapshot: _snapshot(const [], const [])),
+        () =>
+            library.save(label: '   ', snapshot: _snapshot(const [], const [])),
         throwsArgumentError,
       );
       expect(
@@ -452,10 +454,7 @@ void main() {
       expect(endpoint.server!.identity!.host, 'shared.example.com');
       expect(endpoint.server!.identity!.secretRef, 'vault://shared');
       expect(ws.snapshot.right.tabs.single.session.path, '/tmp/out');
-      expect(
-        ws.snapshot.right.tabs.single.session.kind,
-        SessionTabKind.local,
-      );
+      expect(ws.snapshot.right.tabs.single.session.kind, SessionTabKind.local);
       // A placeholder is still openable: markOpened finds no detail and
       // stays a no-op.
       await library.markOpened('ws-foreign');
@@ -490,97 +489,99 @@ void main() {
   });
 
   group('migration', () {
-    test('a version-1 document mints its favorites once, keyed by id', () async {
-      // Pre-M5 state: the saved list lived alone in settings.json.
-      final legacy = WorkspaceListDocument(
-        workspaces: [
-          SavedWorkspace(
-            id: 'ws-1',
-            label: 'Client X',
-            savedAt: _now,
-            lastOpenedAt: null,
-            snapshot: _snapshot(
-              [_localTab('/home/a')],
-              [_remoteTab('b1', '/srv/b1')],
+    test(
+      'a version-1 document mints its favorites once, keyed by id',
+      () async {
+        // Pre-M5 state: the saved list lived alone in settings.json.
+        final legacy = WorkspaceListDocument(
+          workspaces: [
+            SavedWorkspace(
+              id: 'ws-1',
+              label: 'Client X',
+              savedAt: _now,
+              lastOpenedAt: null,
+              snapshot: _snapshot(
+                [_localTab('/home/a')],
+                [_remoteTab('b1', '/srv/b1')],
+              ),
             ),
-          ),
-          SavedWorkspace(
-            id: 'ws-2',
-            label: 'Archive',
-            savedAt: _now,
-            lastOpenedAt: null,
-            snapshot: _snapshot(const [], const []),
-          ),
-        ],
-      ).toJson()
-        ..['version'] = 1;
-      settingsFile.writeAsStringSync(
-        jsonEncode({'workspaces.saved': legacy}),
-      );
+            SavedWorkspace(
+              id: 'ws-2',
+              label: 'Archive',
+              savedAt: _now,
+              lastOpenedAt: null,
+              snapshot: _snapshot(const [], const []),
+            ),
+          ],
+        ).toJson()..['version'] = 1;
+        settingsFile.writeAsStringSync(
+          jsonEncode({'workspaces.saved': legacy}),
+        );
 
-      await library.load();
+        await library.load();
 
-      // Every record minted its favorite under the same id — the detail
-      // doc stayed linked — with the panes' endpoints on the record.
-      final stored = await bookmarks.load();
-      expect(stored, hasLength(2));
-      expect(stored.map((b) => b.id), containsAll(['ws-1', 'ws-2']));
-      final first = stored.singleWhere((b) => b.id == 'ws-1');
-      expect(first.kind, BookmarkKind.workspace);
-      expect(first.label, 'Client X');
-      expect(first.left!.path, '/home/a');
-      expect(first.right!.server!.identity!.host, 'web-b1.example.com');
-      expect(first.createdAt, _now);
-      // The detail doc rewrote at the current schema — the migration
-      // runs once.
-      await settingsStore.flush();
-      expect(detailDoc()!['version'], WorkspaceListDocument.schemaVersion);
-      // The join still serves the full tab sets.
-      expect(
-        library.workspaces
-            .firstWhere((w) => w.id == 'ws-1')
-            .snapshot
-            .left
-            .tabs
-            .single
-            .session
-            .path,
-        '/home/a',
-      );
+        // Every record minted its favorite under the same id — the detail
+        // doc stayed linked — with the panes' endpoints on the record.
+        final stored = await bookmarks.load();
+        expect(stored, hasLength(2));
+        expect(stored.map((b) => b.id), containsAll(['ws-1', 'ws-2']));
+        final first = stored.singleWhere((b) => b.id == 'ws-1');
+        expect(first.kind, BookmarkKind.workspace);
+        expect(first.label, 'Client X');
+        expect(first.left!.path, '/home/a');
+        expect(first.right!.server!.identity!.host, 'web-b1.example.com');
+        expect(first.createdAt, _now);
+        // The detail doc rewrote at the current schema — the migration
+        // runs once.
+        await settingsStore.flush();
+        expect(detailDoc()!['version'], WorkspaceListDocument.schemaVersion);
+        // The join still serves the full tab sets.
+        expect(
+          library.workspaces
+              .firstWhere((w) => w.id == 'ws-1')
+              .snapshot
+              .left
+              .tabs
+              .single
+              .session
+              .path,
+          '/home/a',
+        );
 
-      // A second load mints nothing new.
-      final reloaded = freshLibrary();
-      await reloaded.load();
-      addTearDown(reloaded.dispose);
-      expect(await bookmarks.load(), hasLength(2));
-      expect(reloaded.workspaces, hasLength(2));
-    });
+        // A second load mints nothing new.
+        final reloaded = freshLibrary();
+        await reloaded.load();
+        addTearDown(reloaded.dispose);
+        expect(await bookmarks.load(), hasLength(2));
+        expect(reloaded.workspaces, hasLength(2));
+      },
+    );
 
-    test('a v2 detail without its favorite is pruned, not resurrected', () async {
-      // A workspace deleted on this device (or tombstoned by sync)
-      // leaves its detail behind — the load reconciles it away.
-      final doc = WorkspaceListDocument(
-        workspaces: [
-          SavedWorkspace(
-            id: 'ws-orphan',
-            label: 'Gone',
-            savedAt: _now,
-            lastOpenedAt: null,
-            snapshot: _snapshot(const [], const []),
-          ),
-        ],
-      );
-      await WorkspaceListStore(store: settingsStore).save(doc);
-      // Force a v2 write (the ctor's own version) — the orphan prune is
-      // the v2 posture, not the v1 migration.
-      await library.load();
-      expect(library.workspaces, isEmpty);
-      await settingsStore.flush();
-      expect(
-        (detailDoc()!['workspaces'] as List),
-        isEmpty,
-      );
-    });
+    test(
+      'a v2 detail without its favorite is pruned, not resurrected',
+      () async {
+        // A workspace deleted on this device (or tombstoned by sync)
+        // leaves its detail behind — the load reconciles it away.
+        final doc = WorkspaceListDocument(
+          workspaces: [
+            SavedWorkspace(
+              id: 'ws-orphan',
+              label: 'Gone',
+              savedAt: _now,
+              lastOpenedAt: null,
+              snapshot: _snapshot(const [], const []),
+            ),
+          ],
+        );
+        await WorkspaceListStore(store: settingsStore).save(doc);
+        // Force a v2 write (the ctor's own version) — the orphan prune is
+        // the v2 posture, not the v1 migration.
+        await library.load();
+        expect(library.workspaces, isEmpty);
+        await settingsStore.flush();
+        expect((detailDoc()!['workspaces'] as List), isEmpty);
+      },
+    );
   });
 
   group('dispose', () {

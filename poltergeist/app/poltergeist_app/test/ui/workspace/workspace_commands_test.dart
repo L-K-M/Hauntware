@@ -156,45 +156,50 @@ void main() {
       ]);
     });
 
-    test('saved workspaces list in favorites order under the submenu', () async {
-      await library.save(
-        label: 'First',
-        snapshot: WorkspaceSnapshot(
-          left: _pane('pane.left', const []),
-          right: _pane('pane.right', const []),
-        ),
-      );
-      await library.save(
-        label: 'Second',
-        snapshot: WorkspaceSnapshot(
-          left: _pane('pane.left', const []),
-          right: _pane('pane.right', const []),
-        ),
-      );
+    test(
+      'saved workspaces list in favorites order under the submenu',
+      () async {
+        await library.save(
+          label: 'First',
+          snapshot: WorkspaceSnapshot(
+            left: _pane('pane.left', const []),
+            right: _pane('pane.right', const []),
+          ),
+        );
+        await library.save(
+          label: 'Second',
+          snapshot: WorkspaceSnapshot(
+            left: _pane('pane.left', const []),
+            right: _pane('pane.right', const []),
+          ),
+        );
 
-      final menus = buildAppMenus(
-        commands: commands(),
-        l10n: l10n,
-        platform: TargetPlatform.linux,
-      );
-      final submenu = menus
-          .singleWhere((menu) => menu.id == AppMenuId.server)
-          .groups
-          .expand((group) => group)
-          .whereType<GhostSubmenuRow>()
-          .single;
-      // The submenu renders the favorites' own order (the sidebar's
-      // sortKey sequence — appended rows land at the tail), so the menu
-      // and the sidebar can never disagree about sequence.
-      expect(submenu.items.map((item) => ghostRowCommand(item.command).label(l10n)), [
-        'First',
-        'Second',
-      ]);
-      expect(submenu.items.map((item) => ghostRowCommand(item.command).id), [
-        'workspace.open.${library.workspaces[0].id}',
-        'workspace.open.${library.workspaces[1].id}',
-      ]);
-    });
+        final menus = buildAppMenus(
+          commands: commands(),
+          l10n: l10n,
+          platform: TargetPlatform.linux,
+        );
+        final submenu = menus
+            .singleWhere((menu) => menu.id == AppMenuId.server)
+            .groups
+            .expand((group) => group)
+            .whereType<GhostSubmenuRow>()
+            .single;
+        // The submenu renders the favorites' own order (the sidebar's
+        // sortKey sequence — appended rows land at the tail), so the menu
+        // and the sidebar can never disagree about sequence.
+        expect(
+          submenu.items.map(
+            (item) => ghostRowCommand(item.command).label(l10n),
+          ),
+          ['First', 'Second'],
+        );
+        expect(submenu.items.map((item) => ghostRowCommand(item.command).id), [
+          'workspace.open.${library.workspaces[0].id}',
+          'workspace.open.${library.workspaces[1].id}',
+        ]);
+      },
+    );
   });
 
   group('save flow', () {

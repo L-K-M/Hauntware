@@ -180,11 +180,7 @@ class _Panel extends StatelessWidget {
 /// The title bar's kind glyph: a folder once the path proves to be one,
 /// else the glyph the name's kind implies.
 class _HeaderIcon extends StatefulWidget {
-  const _HeaderIcon({
-    super.key,
-    required this.path,
-    required this.name,
-  });
+  const _HeaderIcon({super.key, required this.path, required this.name});
 
   final String path;
   final String name;
@@ -348,7 +344,10 @@ class _BodyState extends State<_Body> {
             child: Text(
               l10n.previewTruncatedLabel,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: PoltergeistChrome.of(context, poltergeistThemeStyle).secondaryText,
+                color: PoltergeistChrome.of(
+                  context,
+                  poltergeistThemeStyle,
+                ).secondaryText,
               ),
             ),
           ),
@@ -418,9 +417,7 @@ class _BodyState extends State<_Body> {
                 RemoteFileEntry(
                   path: widget.path,
                   name: widget.name,
-                  type: folder
-                      ? RemoteFileType.directory
-                      : RemoteFileType.file,
+                  type: folder ? RemoteFileType.directory : RemoteFileType.file,
                 ),
               ),
               size: 96,

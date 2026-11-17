@@ -41,123 +41,134 @@ void main() {
       environment[_hostVariable] != null &&
       environment[_authmatrixPortVariable] != null;
 
-  group('auth failure summaries against real sshd', () {
-    late _Fixture fixture;
+  group(
+    'auth failure summaries against real sshd',
+    () {
+      late _Fixture fixture;
 
-    setUpAll(() async {
-      fixture = await _Fixture.load();
-    });
+      setUpAll(() async {
+        fixture = await _Fixture.load();
+      });
 
-    test('a rejected key is named and points at authorized_keys', () async {
-      final result = await _failingConnect(
-        fixture,
-        username: _rejectedKeyUsername,
-        method: AuthMethod.privateKey,
-        credentials: SshCredentials.privateKey(fixture.privateKey),
-      );
-      final message = result.failure.message;
+      test('a rejected key is named and points at authorized_keys', () async {
+        final result = await _failingConnect(
+          fixture,
+          username: _rejectedKeyUsername,
+          method: AuthMethod.privateKey,
+          credentials: SshCredentials.privateKey(fixture.privateKey),
+        );
+        final message = result.failure.message;
 
-      await _expectSummarized(
-        result,
-        prefix:
-            'Authentication failed for $_rejectedKeyUsername@'
-            '${fixture.host}:${fixture.port} (tried public key)',
-      );
-      expect(message, contains(' The server accepts: publickey.'));
-      expect(message, contains(_rejectedKeyPhrase));
-      expect(message, contains('Add its public half'));
-      expect(message, contains('authorized_keys'));
+        await _expectSummarized(
+          result,
+          prefix:
+              'Authentication failed for $_rejectedKeyUsername@'
+              '${fixture.host}:${fixture.port} (tried public key)',
+        );
+        expect(message, contains(' The server accepts: publickey.'));
+        expect(message, contains(_rejectedKeyPhrase));
+        expect(message, contains('Add its public half'));
+        expect(message, contains('authorized_keys'));
 
-      // The summary names the exact key this client offered: its fingerprint
-      // also appears in the transcript's real "Offering key:" trace line.
-      final fingerprint = RegExp(
-        r'SHA256:[A-Za-z0-9+/]+={0,2}',
-      ).firstMatch(message)?.group(0);
-      expect(fingerprint, isNotNull, reason: 'the summary must name the key');
-      expect(
-        result.failure.log.lines.where(
-          (line) => line.contains('Offering key: '),
-        ),
-        anyElement(contains(fingerprint!)),
-      );
+        // The summary names the exact key this client offered: its fingerprint
+        // also appears in the transcript's real "Offering key:" trace line.
+        final fingerprint = RegExp(
+          r'SHA256:[A-Za-z0-9+/]+={0,2}',
+        ).firstMatch(message)?.group(0);
+        expect(fingerprint, isNotNull, reason: 'the summary must name the key');
+        expect(
+          result.failure.log.lines.where(
+            (line) => line.contains('Offering key: '),
+          ),
+          anyElement(contains(fingerprint!)),
+        );
 
-      // Branch separation: neither other cause is claimed.
-      expect(message, isNot(contains(_switchMethodPhrase)));
-      expect(message, isNot(contains(_prohibitPasswordPhrase)));
-      expect(result.harness._challenges, isEmpty,
-          reason: 'a public-key-only flow never reaches a prompt');
-    });
+        // Branch separation: neither other cause is claimed.
+        expect(message, isNot(contains(_switchMethodPhrase)));
+        expect(message, isNot(contains(_prohibitPasswordPhrase)));
+        expect(
+          result.harness._challenges,
+          isEmpty,
+          reason: 'a public-key-only flow never reaches a prompt',
+        );
+      });
 
-    test('a method-not-accepted user is told to switch methods', () async {
-      final result = await _failingConnect(
-        fixture,
-        username: _passwordOnlyUsername,
-        method: AuthMethod.privateKey,
-        credentials: SshCredentials.privateKey(fixture.privateKey),
-      );
-      final message = result.failure.message;
+      test('a method-not-accepted user is told to switch methods', () async {
+        final result = await _failingConnect(
+          fixture,
+          username: _passwordOnlyUsername,
+          method: AuthMethod.privateKey,
+          credentials: SshCredentials.privateKey(fixture.privateKey),
+        );
+        final message = result.failure.message;
 
-      await _expectSummarized(
-        result,
-        prefix:
-            'Authentication failed for $_passwordOnlyUsername@'
-            '${fixture.host}:${fixture.port} (tried public key)',
-      );
-      // That user's Match block leaves password as the only offered method.
-      expect(message, contains(' The server accepts: password.'));
-      expect(message, contains(_switchMethodPhrase));
-      expect(result.harness._challenges, isEmpty,
-          reason: 'a public-key-only flow never reaches a prompt');
+        await _expectSummarized(
+          result,
+          prefix:
+              'Authentication failed for $_passwordOnlyUsername@'
+              '${fixture.host}:${fixture.port} (tried public key)',
+        );
+        // That user's Match block leaves password as the only offered method.
+        expect(message, contains(' The server accepts: password.'));
+        expect(message, contains(_switchMethodPhrase));
+        expect(
+          result.harness._challenges,
+          isEmpty,
+          reason: 'a public-key-only flow never reaches a prompt',
+        );
 
-      expect(message, isNot(contains(_rejectedKeyPhrase)));
-      expect(message, isNot(contains(_prohibitPasswordPhrase)));
-    });
+        expect(message, isNot(contains(_rejectedKeyPhrase)));
+        expect(message, isNot(contains(_prohibitPasswordPhrase)));
+      });
 
-    test('a root password rejection explains prohibit-password', () async {
-      // The fixture password is root's real password: the rejection is
-      // PermitRootLogin prohibit-password, not a wrong credential.
-      final result = await _failingConnect(
-        fixture,
-        username: _rootUsername,
-        method: AuthMethod.password,
-        credentials: SshCredentials.password(fixture.password),
-      );
-      final message = result.failure.message;
+      test('a root password rejection explains prohibit-password', () async {
+        // The fixture password is root's real password: the rejection is
+        // PermitRootLogin prohibit-password, not a wrong credential.
+        final result = await _failingConnect(
+          fixture,
+          username: _rootUsername,
+          method: AuthMethod.password,
+          credentials: SshCredentials.password(fixture.password),
+        );
+        final message = result.failure.message;
 
-      await _expectSummarized(
-        result,
-        prefix:
-            'Authentication failed for $_rootUsername@'
-            '${fixture.host}:${fixture.port} (tried password)',
-      );
-      expect(message, contains(_prohibitPasswordPhrase));
-      expect(
-        message,
-        contains('Use a key, or log in as a non-root user and escalate.'),
-      );
+        await _expectSummarized(
+          result,
+          prefix:
+              'Authentication failed for $_rootUsername@'
+              '${fixture.host}:${fixture.port} (tried password)',
+        );
+        expect(message, contains(_prohibitPasswordPhrase));
+        expect(
+          message,
+          contains('Use a key, or log in as a non-root user and escalate.'),
+        );
 
-      // Under UsePAM, sshd still drives one keyboard-interactive round for
-      // root (auth-pam.c answers it with a faked password, so PAM always
-      // fails); a real client answers the prompt and still receives the
-      // root-specific summary. dartssh2 reaches that round after the
-      // password method fails.
-      final answeredRounds = [
-        for (final challenge in result.harness._challenges)
-          if (challenge.prompts.isNotEmpty) challenge,
-      ];
-      expect(answeredRounds, hasLength(1));
+        // Under UsePAM, sshd still drives one keyboard-interactive round for
+        // root (auth-pam.c answers it with a faked password, so PAM always
+        // fails); a real client answers the prompt and still receives the
+        // root-specific summary. dartssh2 reaches that round after the
+        // password method fails.
+        final answeredRounds = [
+          for (final challenge in result.harness._challenges)
+            if (challenge.prompts.isNotEmpty) challenge,
+        ];
+        expect(answeredRounds, hasLength(1));
 
-      expect(message, isNot(contains(_rejectedKeyPhrase)));
-      expect(message, isNot(contains(_switchMethodPhrase)));
-    });
-  }, skip: authmatrixEnabled ? false : 'Set $_hostVariable and '
-        '$_authmatrixPortVariable to enable.');
+        expect(message, isNot(contains(_rejectedKeyPhrase)));
+        expect(message, isNot(contains(_switchMethodPhrase)));
+      });
+    },
+    skip: authmatrixEnabled
+        ? false
+        : 'Set $_hostVariable and '
+              '$_authmatrixPortVariable to enable.',
+  );
 }
 
 /// Drives one browse open that must fail, capturing the typed connect
 /// failure plus the harness that observed it.
-Future<({SshConnectException failure, _AuthHarness harness})>
-_failingConnect(
+Future<({SshConnectException failure, _AuthHarness harness})> _failingConnect(
   _Fixture fixture, {
   required String username,
   required AuthMethod method,
@@ -169,8 +180,7 @@ _failingConnect(
     credentials: credentials,
   );
   try {
-    await harness
-        ._manager
+    await harness._manager
         .openBrowseChannel(harness._server.id, paneTabId: 'left')
         .timeout(_operationTimeout);
     fail('The rejected credential must not open a browse channel.');
@@ -206,10 +216,13 @@ Future<void> _expectSummarized(
     reason: 'the pre-seeded fixture pin verifies without a host-key review',
   );
 
-  expect(result.harness._states, containsAllInOrder([
-    ServerConnectionState.connecting,
-    ServerConnectionState.disconnected,
-  ]));
+  expect(
+    result.harness._states,
+    containsAllInOrder([
+      ServerConnectionState.connecting,
+      ServerConnectionState.disconnected,
+    ]),
+  );
   expect(result.harness._details.whereType<String>(), contains(message));
 }
 
@@ -225,13 +238,7 @@ class _Fixture {
   final String password;
   final HostKey hostKey;
 
-  _Fixture(
-    this.host,
-    this.port,
-    this.privateKey,
-    this.password,
-    this.hostKey,
-  );
+  _Fixture(this.host, this.port, this.privateKey, this.password, this.hostKey);
 
   static Future<_Fixture> load() async {
     final package = await Isolate.resolvePackageUri(
@@ -343,10 +350,7 @@ class _AuthHarness {
     // letting the failure summarize. Per-test assertions pin how many
     // prompt-bearing rounds each case reaches.
     onKeyboardInteractive: (challenge) {
-      _challenges.add((
-        prompts: challenge.prompts,
-        name: challenge.name,
-      ));
+      _challenges.add((prompts: challenge.prompts, name: challenge.name));
       return Future.value([
         for (final _ in challenge.prompts) _challengeAnswer,
       ]);

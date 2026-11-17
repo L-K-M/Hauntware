@@ -64,17 +64,14 @@ Bookmark _remote(
 
 Future<ByteData> _fontBytes(String path) async {
   final bytes = File(path).readAsBytesSync();
-  return ByteData.view(
-    bytes.buffer,
-    bytes.offsetInBytes,
-    bytes.lengthInBytes,
-  );
+  return ByteData.view(bytes.buffer, bytes.offsetInBytes, bytes.lengthInBytes);
 }
 
 /// Registers a readable face under the names the theme resolves: the
 /// default family name for body text plus the mono fallback chain.
 Future<void> _loadRealFonts() async {
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       '${Platform.environment['HOME']}/.local/share/fonts';
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -93,8 +90,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -317,9 +313,7 @@ void main() {
     );
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme: base.primaryTextTheme.apply(
-        fontFamily: 'DejaVu Sans',
-      ),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       // The boundary wraps the app, not the sidebar: a context-menu

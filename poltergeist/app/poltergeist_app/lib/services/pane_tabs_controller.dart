@@ -119,11 +119,7 @@ final class TabReplacementPermit {
 /// override, view mode, Quick Select session), so switching tabs is an
 /// atomic pointer change — nothing is copied or drained.
 final class PaneTab {
-  const PaneTab({
-    required this.id,
-    required this.controller,
-    this.syncSession,
-  });
+  const PaneTab({required this.id, required this.controller, this.syncSession});
 
   /// The strip's stable id — doubles as the engine channel's paneTabId
   /// (`pane.left.tab3`), so channels and strip keys share one identity.
@@ -420,7 +416,7 @@ class PaneTabsController extends ChangeNotifier {
         } else if (location is LocalPaneLocation) {
           unawaited(controller.openLocalAt(location.path));
         }
-        // An unbound source duplicates to an unbound tab.
+      // An unbound source duplicates to an unbound tab.
       case NewTabTarget.home:
         final bookmark = source?.controller.remoteBookmark;
         if (bookmark != null) {
@@ -484,8 +480,10 @@ class PaneTabsController extends ChangeNotifier {
     );
   }
 
-  List<PaneTab> _browsableTabs() =>
-      [for (final tab in _tabs) if (tab.syncSession == null) tab];
+  List<PaneTab> _browsableTabs() => [
+    for (final tab in _tabs)
+      if (tab.syncSession == null) tab,
+  ];
 
   int _browsableActiveIndex(List<PaneTab> restorable) {
     final active = activeTab;

@@ -56,31 +56,30 @@ Future<void> showBackupSettingsDialog(
   required BackupSettingsModel service,
   RecoverySettingsModel? recovery,
   SyncAccountGate gate = const SyncAccountGate.production(),
-}) =>
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final l10n = AppLocalizations.of(dialogContext);
-        return AlertDialog(
-          key: const ValueKey('backup.settings.dialog'),
-          title: Text(l10n.settingsTitle),
-          content: SizedBox(
-            width: 560,
-            child: SingleChildScrollView(
-              child: BackupSettingsSection(
-                service: service,
-                recovery: recovery,
-                gate: gate,
-              ),
-            ),
+}) => showDialog<void>(
+  context: context,
+  builder: (dialogContext) {
+    final l10n = AppLocalizations.of(dialogContext);
+    return AlertDialog(
+      key: const ValueKey('backup.settings.dialog'),
+      title: Text(l10n.settingsTitle),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: BackupSettingsSection(
+            service: service,
+            recovery: recovery,
+            gate: gate,
           ),
-          actions: [
-            TextButton(
-              key: const ValueKey('backup.settings.close'),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.backupClose),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('backup.settings.close'),
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: Text(l10n.backupClose),
+        ),
+      ],
     );
+  },
+);

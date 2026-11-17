@@ -68,11 +68,15 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
     registerCalls++;
     if (registrationClosed) {
       throw const ApiError(
-          code: 'registration_closed', message: 'Registration is disabled');
+        code: 'registration_closed',
+        message: 'Registration is disabled',
+      );
     }
     if (_accounts.containsKey(request.username)) {
       throw const ApiError(
-          code: 'account_exists', message: 'Username already registered');
+        code: 'account_exists',
+        message: 'Username already registered',
+      );
     }
     _accounts[request.username] = _FakeAccount(
       salt: base64.decode(request.argonSalt),
@@ -107,7 +111,9 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
     final account = _accounts[request.username];
     if (account == null || account.authVerifier != request.authVerifier) {
       throw const ApiError(
-          code: 'invalid_credentials', message: 'Invalid credentials');
+        code: 'invalid_credentials',
+        message: 'Invalid credentials',
+      );
     }
     token = 'token-${++_tokenCounter}';
     return LoginResponse(
@@ -129,7 +135,10 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
   }) async {
     final salt = secureRandomBytes(16);
     final keys = await VaultCrypto.deriveKeys(
-        passphrase: password, salt: salt, params: params);
+      passphrase: password,
+      salt: salt,
+      params: params,
+    );
     _accounts[username] = _FakeAccount(
       salt: salt,
       params: params,
@@ -150,9 +159,7 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
       nextPullError = null;
       throw error;
     }
-    final list = records.values
-        .where((r) => (r.seq ?? 0) > since)
-        .toList()
+    final list = records.values.where((r) => (r.seq ?? 0) > since).toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
     return PullResponse(
       records: list,
@@ -175,8 +182,13 @@ final class FakeEnrollmentApi implements SyncEnrollmentApi {
       if (existing != null) {
         final winner = Lww.resolve(existing, incoming);
         if (!identical(winner, incoming)) {
-          results.add(PushResult(
-              id: incoming.id, seq: existing.seq ?? 0, accepted: false));
+          results.add(
+            PushResult(
+              id: incoming.id,
+              seq: existing.seq ?? 0,
+              accepted: false,
+            ),
+          );
           continue;
         }
       }

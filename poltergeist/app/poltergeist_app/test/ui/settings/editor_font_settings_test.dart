@@ -52,12 +52,14 @@ void main() {
     ),
   );
 
-  String menu(WidgetTester tester) => tester.widget<Text>(
-    find.descendant(
-      of: find.byKey(const ValueKey('editor.font')),
-      matching: find.byType(Text),
-    ),
-  ).data!;
+  String menu(WidgetTester tester) => tester
+      .widget<Text>(
+        find.descendant(
+          of: find.byKey(const ValueKey('editor.font')),
+          matching: find.byType(Text),
+        ),
+      )
+      .data!;
 
   Future<void> choose(WidgetTester tester, String family) async {
     await tester.enterText(find.byKey(const ValueKey('font.search')), family);

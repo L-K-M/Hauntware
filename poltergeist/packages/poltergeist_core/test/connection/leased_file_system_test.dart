@@ -113,19 +113,24 @@ void main() {
       );
     final second = FakeTreeFileSystem()..addFile('/srv/b.txt', [1]);
     var currentIdentity = firstIdentity;
-    final manager = FakeQueueConnectionManager(
-      {'srv': first},
-      endpointIdentityFor: (_) => currentIdentity,
-    );
+    final manager = FakeQueueConnectionManager({
+      'srv': first,
+    }, endpointIdentityFor: (_) => currentIdentity);
     final fs = LeasedRemoteFileSystem(manager, 'srv', idleRelease: null);
 
     await fs.withAuthenticatedFileSystem((bound, identity) async {
       expect(identity.host, firstIdentity.host);
-      await expectLater(bound.stat('/srv/a.txt'), throwsA(isA<RemoteFileException>()));
+      await expectLater(
+        bound.stat('/srv/a.txt'),
+        throwsA(isA<RemoteFileException>()),
+      );
       manager.filesystems['srv'] = second;
       currentIdentity = secondIdentity;
 
-      await expectLater(bound.stat('/srv/b.txt'), throwsA(isA<RemoteFileException>()));
+      await expectLater(
+        bound.stat('/srv/b.txt'),
+        throwsA(isA<RemoteFileException>()),
+      );
       expect(manager.leaseCalls, 1);
       expect(second.statCalls, 0);
     });

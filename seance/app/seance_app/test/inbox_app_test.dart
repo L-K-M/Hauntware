@@ -186,8 +186,9 @@ void main() {
       final app = _app(servers: ['s1']);
       await store.putApp(app);
 
-      final onDisk = await File('${directory.path}/inbox_apps.json')
-          .readAsString();
+      final onDisk = await File(
+        '${directory.path}/inbox_apps.json',
+      ).readAsString();
       expect(onDisk, contains(app.id));
       expect(onDisk, isNot(contains('"key"')));
       final secret = await vault.getSecret('inbox-key:${app.id}');
@@ -213,10 +214,7 @@ void main() {
       await store.putApp(other);
       await vault.deleteSecret('inbox-key:${other.id}');
       expect(await store.getApp(other.id), isNull);
-      expect(
-        [for (final a in await store.listApps()) a.id],
-        [app.id],
-      );
+      expect([for (final a in await store.listApps()) a.id], [app.id]);
     });
   });
 
@@ -235,16 +233,11 @@ void main() {
 
     tearDown(() => directory.delete(recursive: true));
 
-    test('discards a legacy cache whose account cannot be proven',
-        () async {
-      await file.writeAsString(jsonEncode(const InboxCache(
-        cursor: 7,
-        failures: {'app': 2},
-      ).toJson()));
-      final store = FileInboxCacheStore(
-        file,
-        scope: account,
+    test('discards a legacy cache whose account cannot be proven', () async {
+      await file.writeAsString(
+        jsonEncode(const InboxCache(cursor: 7, failures: {'app': 2}).toJson()),
       );
+      final store = FileInboxCacheStore(file, scope: account);
 
       final loaded = await store.load();
       final document = jsonDecode(await file.readAsString()) as Map;
@@ -256,55 +249,63 @@ void main() {
       expect((document['cache'] as Map)['cursor'], 0);
     });
 
-    test('a different account clears cursor, proposals, and failures',
-        () async {
-      final first = FileInboxCacheStore(file, scope: account);
-      await first.initialize();
-      final app = _app();
-      await first.save(InboxCache(
-        cursor: 9,
-        proposals: [_cached(app)],
-        failures: const {'app': 3},
-      ));
+    test(
+      'a different account clears cursor, proposals, and failures',
+      () async {
+        final first = FileInboxCacheStore(file, scope: account);
+        await first.initialize();
+        final app = _app();
+        await first.save(
+          InboxCache(
+            cursor: 9,
+            proposals: [_cached(app)],
+            failures: const {'app': 3},
+          ),
+        );
 
-      final switched = FileInboxCacheStore(
-        file,
-        scope: SyncAccountScope(
-          baseUrl: 'https://sync.example',
-          username: 'bob',
-        ),
-      );
-      final loaded = await switched.load();
+        final switched = FileInboxCacheStore(
+          file,
+          scope: SyncAccountScope(
+            baseUrl: 'https://sync.example',
+            username: 'bob',
+          ),
+        );
+        final loaded = await switched.load();
 
-      expect(loaded.cursor, 0);
-      expect(loaded.proposals, isEmpty);
-      expect(loaded.failures, isEmpty);
-      expect(
-        (jsonDecode(await file.readAsString()) as Map)['account'],
-        {'baseUrl': 'https://sync.example', 'username': 'bob'},
-      );
-    });
+        expect(loaded.cursor, 0);
+        expect(loaded.proposals, isEmpty);
+        expect(loaded.failures, isEmpty);
+        expect((jsonDecode(await file.readAsString()) as Map)['account'], {
+          'baseUrl': 'https://sync.example',
+          'username': 'bob',
+        });
+      },
+    );
 
-    test('does not assign a disconnected legacy cache during enrollment',
-        () async {
-      await file.writeAsString(jsonEncode(const InboxCache(
-        cursor: 11,
-        failures: {'old': 4},
-      ).toJson()));
+    test(
+      'does not assign a disconnected legacy cache during enrollment',
+      () async {
+        await file.writeAsString(
+          jsonEncode(
+            const InboxCache(cursor: 11, failures: {'old': 4}).toJson(),
+          ),
+        );
 
-      final enrolled = FileInboxCacheStore(
-        file,
-        scope: account,
-        resetExisting: true,
-      );
-      final loaded = await enrolled.load();
+        final enrolled = FileInboxCacheStore(
+          file,
+          scope: account,
+          resetExisting: true,
+        );
+        final loaded = await enrolled.load();
 
-      expect(loaded.cursor, 0);
-      expect(loaded.failures, isEmpty);
-    });
+        expect(loaded.cursor, 0);
+        expect(loaded.failures, isEmpty);
+      },
+    );
 
     test('a future cache version fails closed without rewriting it', () async {
-      const original = '{"version":2,"account":{'
+      const original =
+          '{"version":2,"account":{'
           '"baseUrl":"https://sync.example","username":"alice"},'
           '"cache":{"cursor":9,"proposals":[]}}';
       await file.writeAsString(original);
@@ -328,7 +329,10 @@ void main() {
     setUp(() async {
       directory = await Directory.systemTemp.createTemp('seance-inbox-app-');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(_pathChannel, (call) async => directory.path);
+          .setMockMethodCallHandler(
+            _pathChannel,
+            (call) async => directory.path,
+          );
       FlutterSecureStorage.setMockInitialValues({});
     });
 
@@ -353,14 +357,16 @@ void main() {
       await services.inboxCache.save(
         InboxCache(cursor: 1, proposals: [cached]),
       );
-      await services.configStore.putServer(ServerConfig(
-        id: 's1',
-        label: 'prod-db-1',
-        host: '10.0.0.5',
-        username: 'deploy',
-        createdAt: 1,
-        updatedAt: 1,
-      ));
+      await services.configStore.putServer(
+        ServerConfig(
+          id: 's1',
+          label: 'prod-db-1',
+          host: '10.0.0.5',
+          username: 'deploy',
+          createdAt: 1,
+          updatedAt: 1,
+        ),
+      );
       state = buildState?.call(services) ?? AppState(services);
       await state.load();
       return (app, cached);
@@ -428,12 +434,14 @@ void main() {
       expect(state.inboxApps.single.id, app.id);
       expect(state.inboxPending.single.proposal.id, 'p1');
 
-      await services.inboxStatuses.putStatus(InboxStatus(
-        appId: app.id,
-        proposalId: 'p1',
-        state: InboxStatusState.ran,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
-      ));
+      await services.inboxStatuses.putStatus(
+        InboxStatus(
+          appId: app.id,
+          proposalId: 'p1',
+          state: InboxStatusState.ran,
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
       await state.load();
       expect(state.inboxPending, isEmpty);
     });
@@ -442,15 +450,17 @@ void main() {
       tester.view.physicalSize = const Size(900, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: ProposalReview(
-            state: state,
-            pending: state.inboxPending.single,
-            onBack: () {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProposalReview(
+              state: state,
+              pending: state.inboxPending.single,
+              onBack: () {},
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
     }
 
@@ -472,8 +482,10 @@ void main() {
       );
       expect(script.data, contains('<U+202E>'));
       expect(script.data, isNot(contains('\u202E')));
-      expect(find.textContaining('1 invisible or control character'),
-          findsOneWidget);
+      expect(
+        find.textContaining('1 invisible or control character'),
+        findsOneWidget,
+      );
       expect(find.textContaining('Line 2:'), findsWidgets);
       final run = tester.widget<FilledButton>(
         find.byKey(const ValueKey('inbox.run')),
@@ -482,8 +494,9 @@ void main() {
       expect(find.text('Stage on prod-db-1'), findsOneWidget);
     });
 
-    testWidgets('a command continued over lines is checked as one',
-        (tester) async {
+    testWidgets('a command continued over lines is checked as one', (
+      tester,
+    ) async {
       await tester.runAsync(
         () => seed(script: 'echo ok\nuserdel \\\n  -r deploy'),
       );
@@ -502,8 +515,10 @@ void main() {
       addTearDown(() => tester.runAsync(disposeState));
       await pumpReview(tester);
 
-      expect(find.textContaining('No server is named "nowhere"'),
-          findsOneWidget);
+      expect(
+        find.textContaining('No server is named "nowhere"'),
+        findsOneWidget,
+      );
       final run = tester.widget<FilledButton>(
         find.byKey(const ValueKey('inbox.run')),
       );
@@ -521,10 +536,7 @@ void main() {
         createdAt: 1,
         updatedAt: 1,
       );
-      final result = await state.runProposal(
-        state.inboxPending.single,
-        other,
-      );
+      final result = await state.runProposal(state.inboxPending.single, other);
       expect(result, isA<ProposalRunFailed>());
       expect((result as ProposalRunFailed).error, contains('may not run'));
 
@@ -564,188 +576,179 @@ void main() {
       );
     }
 
-    test('a handled-elsewhere retry preserves the shared staged script',
-        () async {
-      final sessions = <_ProposalSshSession>[];
-      var claims = 0;
-      await seed(
-        buildState: (services) => AppState(
-          services,
-          openSshSession:
-              (
-                manager, {
-                required config,
-                required credentials,
-                required engine,
-                log,
-              }) async {
-                final session = _ProposalSshSession(
-                  engine,
-                  _ProposalFileSystem(),
-                );
-                sessions.add(session);
-                return session;
-              },
-          claimInboxProposal: (_) async => switch (claims++) {
-            0 => InboxClaim.claimed,
-            1 => InboxClaim.handledElsewhere,
-            _ => throw StateError('Unexpected extra claim'),
-          },
-        ),
-      );
-      addTearDown(disposeState);
-      await state.newTab(state.servers.single);
-      final pending = state.inboxPending.single;
-      final original = sessions.single;
-
-      final first = await state.runProposal(pending, state.servers.single);
-      await Future<void>.delayed(Duration.zero);
-      expect(first, isA<ProposalPlaced>());
-      expect(state.inboxPending, isEmpty);
-      final path = original.fs.files.keys.single;
-      final bytes = List<int>.of(original.fs.files[path]!);
-      final commandLine = "sh '$path'";
-      expect((first as ProposalPlaced).commandLine, commandLine);
-      expect(original.inputText, commandLine);
-
-      final retry = await state.runProposal(pending, state.servers.single);
-      expect(retry, isA<ProposalRunFailed>());
-      expect(
-        (retry as ProposalRunFailed).error,
-        contains('Another device already ran or dismissed'),
-      );
-      expect(original.inputText, commandLine);
-      expect(original.fs.deleted, isEmpty);
-      expect(original.fs.files[path], orderedEquals(bytes));
-    });
-
-    testWidgets(
-      'recovery survives review close and clipboard failure',
-      (tester) async {
-        await tester.runAsync(() => seed());
-        addTearDown(() => tester.runAsync(disposeState));
-        const commandLine =
-            "sh '/home/deploy/.seance/inbox/proposal-item-1.sh'";
-        final result = Completer<ProposalRunResult>();
-        final navigatorKey = GlobalKey<NavigatorState>();
-
-        String? copied;
-        var failCopy = true;
-        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          SystemChannels.platform,
-          (call) async {
-            if (call.method == 'Clipboard.setData') {
-              if (failCopy) {
-                throw PlatformException(code: 'clipboard-unavailable');
-              }
-              copied = (call.arguments as Map)['text'] as String?;
-            }
-            return null;
-          },
-        );
-        addTearDown(
-          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-            SystemChannels.platform,
-            null,
+    test(
+      'a handled-elsewhere retry preserves the shared staged script',
+      () async {
+        final sessions = <_ProposalSshSession>[];
+        var claims = 0;
+        await seed(
+          buildState: (services) => AppState(
+            services,
+            openSshSession:
+                (
+                  manager, {
+                  required config,
+                  required credentials,
+                  required engine,
+                  log,
+                }) async {
+                  final session = _ProposalSshSession(
+                    engine,
+                    _ProposalFileSystem(),
+                  );
+                  sessions.add(session);
+                  return session;
+                },
+            claimInboxProposal: (_) async => switch (claims++) {
+              0 => InboxClaim.claimed,
+              1 => InboxClaim.handledElsewhere,
+              _ => throw StateError('Unexpected extra claim'),
+            },
           ),
         );
+        addTearDown(disposeState);
+        await state.newTab(state.servers.single);
+        final pending = state.inboxPending.single;
+        final original = sessions.single;
 
-        await tester.pumpWidget(
-          MaterialApp(
-            navigatorKey: navigatorKey,
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => FilledButton(
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (dialogContext) => Dialog(
-                      child: ProposalReview(
-                        state: state,
-                        pending: state.inboxPending.single,
-                        onBack: () => Navigator.pop(dialogContext),
-                        runProposal: (_, _) => result.future,
-                      ),
+        final first = await state.runProposal(pending, state.servers.single);
+        await Future<void>.delayed(Duration.zero);
+        expect(first, isA<ProposalPlaced>());
+        expect(state.inboxPending, isEmpty);
+        final path = original.fs.files.keys.single;
+        final bytes = List<int>.of(original.fs.files[path]!);
+        final commandLine = "sh '$path'";
+        expect((first as ProposalPlaced).commandLine, commandLine);
+        expect(original.inputText, commandLine);
+
+        final retry = await state.runProposal(pending, state.servers.single);
+        expect(retry, isA<ProposalRunFailed>());
+        expect(
+          (retry as ProposalRunFailed).error,
+          contains('Another device already ran or dismissed'),
+        );
+        expect(original.inputText, commandLine);
+        expect(original.fs.deleted, isEmpty);
+        expect(original.fs.files[path], orderedEquals(bytes));
+      },
+    );
+
+    testWidgets('recovery survives review close and clipboard failure', (
+      tester,
+    ) async {
+      await tester.runAsync(() => seed());
+      addTearDown(() => tester.runAsync(disposeState));
+      const commandLine = "sh '/home/deploy/.seance/inbox/proposal-item-1.sh'";
+      final result = Completer<ProposalRunResult>();
+      final navigatorKey = GlobalKey<NavigatorState>();
+
+      String? copied;
+      var failCopy = true;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            if (failCopy) {
+              throw PlatformException(code: 'clipboard-unavailable');
+            }
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => FilledButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => Dialog(
+                    child: ProposalReview(
+                      state: state,
+                      pending: state.inboxPending.single,
+                      onBack: () => Navigator.pop(dialogContext),
+                      runProposal: (_, _) => result.future,
                     ),
                   ),
-                  child: const Text('Review proposal'),
                 ),
+                child: const Text('Review proposal'),
               ),
             ),
           ),
-        );
-        await tester.tap(find.text('Review proposal'));
-        await tester.pumpAndSettle();
-        expect(find.byType(ProposalReview), findsOneWidget);
+        ),
+      );
+      await tester.tap(find.text('Review proposal'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ProposalReview), findsOneWidget);
 
-        await tester.tap(find.byKey(const ValueKey('inbox.run')));
-        await tester.pump();
-        navigatorKey.currentState!.pop();
-        await tester.pumpAndSettle();
-        expect(find.byType(ProposalReview), findsNothing);
-        expect(
-          find.byKey(const ValueKey('inbox.recovery.dialog')),
-          findsNothing,
-        );
+      await tester.tap(find.byKey(const ValueKey('inbox.run')));
+      await tester.pump();
+      navigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(ProposalReview), findsNothing);
+      expect(find.byKey(const ValueKey('inbox.recovery.dialog')), findsNothing);
 
-        result.complete(
-          const ProposalRunResult.needsRecovery(commandLine),
-        );
-        await tester.pumpAndSettle();
+      result.complete(const ProposalRunResult.needsRecovery(commandLine));
+      await tester.pumpAndSettle();
 
-        expect(find.byType(ProposalReview), findsNothing);
-        expect(
-          find.byKey(const ValueKey('inbox.recovery.dialog')),
-          findsOneWidget,
-        );
-        expect(find.textContaining('Reconnect to prod-db-1'), findsOneWidget);
-        expect(find.textContaining('paste this command'), findsOneWidget);
-        expect(find.textContaining('press Enter'), findsOneWidget);
-        final command = tester.widget<SelectableText>(
-          find.byKey(const ValueKey('inbox.recovery.command')),
-        );
-        expect(command.data, commandLine);
-        expect(find.textContaining('Placed in the prompt'), findsNothing);
-        expect(find.text('Copy command'), findsOneWidget);
+      expect(find.byType(ProposalReview), findsNothing);
+      expect(
+        find.byKey(const ValueKey('inbox.recovery.dialog')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Reconnect to prod-db-1'), findsOneWidget);
+      expect(find.textContaining('paste this command'), findsOneWidget);
+      expect(find.textContaining('press Enter'), findsOneWidget);
+      final command = tester.widget<SelectableText>(
+        find.byKey(const ValueKey('inbox.recovery.command')),
+      );
+      expect(command.data, commandLine);
+      expect(find.textContaining('Placed in the prompt'), findsNothing);
+      expect(find.text('Copy command'), findsOneWidget);
 
-        await tester.tap(find.text('Copy command'));
-        await tester.pumpAndSettle();
-        expect(
-          find.textContaining('Could not copy the command'),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('inbox.recovery.dialog')),
-          findsOneWidget,
-        );
-        expect(command.data, commandLine);
-        expect(copied, isNull);
+      await tester.tap(find.text('Copy command'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Could not copy the command'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('inbox.recovery.dialog')),
+        findsOneWidget,
+      );
+      expect(command.data, commandLine);
+      expect(copied, isNull);
 
-        failCopy = false;
-        await tester.tap(find.text('Copy command'));
-        await tester.pumpAndSettle();
-        expect(copied, commandLine);
-        expect(find.text('Copied.'), findsOneWidget);
-        await tester.pump(const Duration(minutes: 1));
-        expect(
-          find.byKey(const ValueKey('inbox.recovery.dialog')),
-          findsOneWidget,
-        );
+      failCopy = false;
+      await tester.tap(find.text('Copy command'));
+      await tester.pumpAndSettle();
+      expect(copied, commandLine);
+      expect(find.text('Copied.'), findsOneWidget);
+      await tester.pump(const Duration(minutes: 1));
+      expect(
+        find.byKey(const ValueKey('inbox.recovery.dialog')),
+        findsOneWidget,
+      );
 
-        await tester.tap(find.text('Close'));
-        await tester.pumpAndSettle();
-        expect(
-          find.byKey(const ValueKey('inbox.recovery.dialog')),
-          findsNothing,
-        );
-      },
-    );
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('inbox.recovery.dialog')), findsNothing);
+    });
 
     testWidgets('the banner counts what waits', (tester) async {
       await tester.runAsync(() => seed());
       addTearDown(() => tester.runAsync(disposeState));
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: InboxBanner(state: state)),
-      ));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: InboxBanner(state: state)),
+        ),
+      );
       expect(find.text('1 proposed command'), findsOneWidget);
     });
   });

@@ -4,8 +4,4 @@
 library;
 
 export 'package:ghost_theme/ghost_theme.dart'
-    show
-        ThemeSlot,
-        ThemePalette,
-        parseThemeColor,
-        formatThemeColor;
+    show ThemeSlot, ThemePalette, parseThemeColor, formatThemeColor;

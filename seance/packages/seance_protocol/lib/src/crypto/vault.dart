@@ -34,10 +34,10 @@ class Argon2Params {
 
   /// Deliberately weak parameters for fast unit tests. Never use in production.
   const Argon2Params.fast()
-      : memory = 256,
-        iterations = 1,
-        parallelism = 1,
-        hashLength = _keyLength;
+    : memory = 256,
+      iterations = 1,
+      parallelism = 1,
+      hashLength = _keyLength;
 
   /// The minimum work factors a client will accept when deriving its vault key
   /// from a passphrase — the v1 defaults. Parameters may be *raised* over time
@@ -54,11 +54,11 @@ class Argon2Params {
       hashLength >= floor.hashLength;
 
   Map<String, dynamic> toJson() => {
-        'memory': memory,
-        'iterations': iterations,
-        'parallelism': parallelism,
-        'hashLength': hashLength,
-      };
+    'memory': memory,
+    'iterations': iterations,
+    'parallelism': parallelism,
+    'hashLength': hashLength,
+  };
 
   factory Argon2Params.fromJson(Map<String, dynamic> json) {
     final params = Argon2Params(
@@ -147,8 +147,7 @@ class VaultCrypto {
       await (await argon.deriveKey(
         secretKey: SecretKey(utf8.encode(passphrase)),
         nonce: salt,
-      ))
-          .extractBytes(),
+      )).extractBytes(),
     );
 
     final vaultKey = await hkdfSubkey(master, _kVaultKeyDomain);
@@ -180,12 +179,15 @@ class VaultCrypto {
 
   /// Convenience: seal a JSON-encodable map.
   static Future<Uint8List> sealJson(
-          List<int> key, Map<String, dynamic> value) =>
-      seal(key, utf8.encode(jsonEncode(value)));
+    List<int> key,
+    Map<String, dynamic> value,
+  ) => seal(key, utf8.encode(jsonEncode(value)));
 
   /// Convenience: open a blob back into a JSON map.
   static Future<Map<String, dynamic>> openJson(
-      List<int> key, Uint8List blob) async {
+    List<int> key,
+    Uint8List blob,
+  ) async {
     final clear = await open(key, blob);
     return jsonDecode(utf8.decode(clear)) as Map<String, dynamic>;
   }

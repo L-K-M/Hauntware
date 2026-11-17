@@ -338,49 +338,69 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('Save All rechecks editors saved earlier in the batch', (tester) async {
+  testWidgets('Save All rechecks editors saved earlier in the batch', (
+    tester,
+  ) async {
     final navigator = GlobalKey<NavigatorState>();
     final firstKey = GlobalKey<BuiltInTextEditorScreenState>();
     final secondKey = GlobalKey<BuiltInTextEditorScreenState>();
     TextEditingController? firstBuffer;
-    await tester.pumpWidget(MaterialApp(
-      navigatorKey: navigator,
-      home: Column(children: [
-        Expanded(child: BuiltInTextEditorScreen(
-          key: firstKey,
-          file: File('/tmp/seance-quit-first.txt'),
-          remotePath: '/first.txt',
-          initialText: 'first',
-          saveDocument: (_, _) async {},
-        )),
-        Expanded(child: BuiltInTextEditorScreen(
-          key: secondKey,
-          file: File('/tmp/seance-quit-second.txt'),
-          remotePath: '/second.txt',
-          initialText: 'second',
-          saveDocument: (_, _) async {
-            firstBuffer!.text = 'new edits while the second save waits';
-          },
-        )),
-      ]),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        home: Column(
+          children: [
+            Expanded(
+              child: BuiltInTextEditorScreen(
+                key: firstKey,
+                file: File('/tmp/seance-quit-first.txt'),
+                remotePath: '/first.txt',
+                initialText: 'first',
+                saveDocument: (_, _) async {},
+              ),
+            ),
+            Expanded(
+              child: BuiltInTextEditorScreen(
+                key: secondKey,
+                file: File('/tmp/seance-quit-second.txt'),
+                remotePath: '/second.txt',
+                initialText: 'second',
+                saveDocument: (_, _) async {
+                  firstBuffer!.text = 'new edits while the second save waits';
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
     await tester.pump();
-    final firstField = find.descendant(
-      of: find.byKey(firstKey), matching: find.byType(TextField),
-    ).first;
-    final secondField = find.descendant(
-      of: find.byKey(secondKey), matching: find.byType(TextField),
-    ).first;
+    final firstField = find
+        .descendant(of: find.byKey(firstKey), matching: find.byType(TextField))
+        .first;
+    final secondField = find
+        .descendant(of: find.byKey(secondKey), matching: find.byType(TextField))
+        .first;
     firstBuffer = tester.widget<TextField>(firstField).controller;
     await tester.enterText(firstField, 'first changed');
     await tester.enterText(secondField, 'second changed');
     await tester.pump();
     final guard = AppQuitGuard(
       navigatorKey: navigator,
-      snapshotOverride: () => QuitRiskSnapshot(dirtyEditors: [
-        QuitDirtyEditor(server: 'server', path: '/first.txt', editorKey: firstKey),
-        QuitDirtyEditor(server: 'server', path: '/second.txt', editorKey: secondKey),
-      ]),
+      snapshotOverride: () => QuitRiskSnapshot(
+        dirtyEditors: [
+          QuitDirtyEditor(
+            server: 'server',
+            path: '/first.txt',
+            editorKey: firstKey,
+          ),
+          QuitDirtyEditor(
+            server: 'server',
+            path: '/second.txt',
+            editorKey: secondKey,
+          ),
+        ],
+      ),
     );
 
     final decision = guard.confirmClose();

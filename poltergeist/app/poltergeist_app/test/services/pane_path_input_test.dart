@@ -112,18 +112,27 @@ void main() {
       expect(resolve('D:'), 'D:\\');
       expect(resolve('D:\\games'), 'D:\\games');
       expect(resolve('d:\\games'), 'd:\\games');
-      expect(resolve('D:/games'), 'D:\\games',
-          reason: 'forward slashes normalize to the volume separator');
+      expect(
+        resolve('D:/games'),
+        'D:\\games',
+        reason: 'forward slashes normalize to the volume separator',
+      );
     });
 
     test('UNC paths need a server AND a share', () {
       expect(resolve('\\\\nas\\media'), '\\\\nas\\media');
       expect(resolve('\\\\nas\\media\\4k'), '\\\\nas\\media\\4k');
-      expect(resolve('\\\\nas'), isNull,
-          reason: 'a bare server names no listable share');
+      expect(
+        resolve('\\\\nas'),
+        isNull,
+        reason: 'a bare server names no listable share',
+      );
       expect(resolve('\\\\'), isNull);
-      expect(resolve('\\\\nas\\media\\..'), isNull,
-          reason: 'popping above the share root leaves no UNC');
+      expect(
+        resolve('\\\\nas\\media\\..'),
+        isNull,
+        reason: 'popping above the share root leaves no UNC',
+      );
     });
 
     test('~ and relative input join their anchors', () {
@@ -140,8 +149,11 @@ void main() {
       expect(resolve('C:name'), isNull);
       expect(resolve('\\name'), isNull);
       expect(resolve('/'), isNull);
-      expect(resolve('C:', current: null), 'C:\\',
-          reason: 'a drive root needs no current location');
+      expect(
+        resolve('C:', current: null),
+        'C:\\',
+        reason: 'a drive root needs no current location',
+      );
       expect(resolve('sub', current: null), isNull);
     });
 

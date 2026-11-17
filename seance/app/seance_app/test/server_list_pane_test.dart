@@ -170,9 +170,7 @@ void main() {
       .toList();
 
   testWidgets('the phone home draws the Android list; compact density keeps '
-      'one-line touch rows; a desktop window stays rail-drawn', (
-    tester,
-  ) async {
+      'one-line touch rows; a desktop window stays rail-drawn', (tester) async {
     await boot(tester, [server('web')]);
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;

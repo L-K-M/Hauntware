@@ -99,7 +99,8 @@ void main() {
             display: display,
             child: Builder(
               builder: (context) {
-                final scope = EditorDisplayScope.maybeOf(context) ??
+                final scope =
+                    EditorDisplayScope.maybeOf(context) ??
                     EditorDisplay.standard;
                 return PlanchetteEditor(
                   controller: controller,

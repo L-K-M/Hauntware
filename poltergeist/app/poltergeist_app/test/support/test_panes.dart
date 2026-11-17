@@ -20,8 +20,7 @@ PaneTabsController testPaneStrip(
   String? paneId,
   PaneEngineLanes? lanes,
   TabCloseConfirm? confirmClose,
-  bool Function(String serverId, PaneController excluding)?
-  serverStillShared,
+  bool Function(String serverId, PaneController excluding)? serverStillShared,
 }) {
   final strip = PaneTabsController(
     paneId: paneId ?? controller.paneTabId.split('.').take(2).join('.'),

@@ -219,10 +219,7 @@ void main() {
     });
 
     await tester.pumpWidget(
-      PoltergeistApp(
-        engineSession: session,
-        navigatorKey: navigatorKey,
-      ),
+      PoltergeistApp(engineSession: session, navigatorKey: navigatorKey),
     );
     await tester.pump();
 

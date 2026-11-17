@@ -213,27 +213,37 @@ void main() {
           TargetPlatform.android,
           TargetPlatform.iOS,
         ]) {
-          final command = buildAppCommands(
-            platform: platform,
-            fleet: fleet(sshConfig: FakeSshConfigSource.text(_config)),
-            onOpenSettings: () {},
-            appVersion: _version,
-            updates: controllerWith(null),
-            onOpenRelease: (_) async {},
-          ).singleWhere(
-            (command) => command.id == kAppCheckForUpdatesCommandId,
+          final command =
+              buildAppCommands(
+                platform: platform,
+                fleet: fleet(sshConfig: FakeSshConfigSource.text(_config)),
+                onOpenSettings: () {},
+                appVersion: _version,
+                updates: controllerWith(null),
+                onOpenRelease: (_) async {},
+              ).singleWhere(
+                (command) => command.id == kAppCheckForUpdatesCommandId,
+              );
+          expect(
+            command.menuPlacement.menu,
+            AppMenuId.help,
+            reason: '$platform',
           );
-          expect(command.menuPlacement.menu, AppMenuId.help, reason: '$platform');
           expect(command.menuPlacement.order, 30, reason: '$platform');
-          expect(command.menuPlacement.appMenuOnMac, isTrue, reason: '$platform');
+          expect(
+            command.menuPlacement.appMenuOnMac,
+            isTrue,
+            reason: '$platform',
+          );
           expect(command.enabled(), isTrue, reason: '$platform');
         }
       });
 
       test('is absent without an update check', () {
         expect(
-          commands(TargetPlatform.linux)
-              .where((command) => command.id == kAppCheckForUpdatesCommandId),
+          commands(
+            TargetPlatform.linux,
+          ).where((command) => command.id == kAppCheckForUpdatesCommandId),
           isEmpty,
         );
       });

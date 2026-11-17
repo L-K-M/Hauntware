@@ -15,9 +15,9 @@ import 'settings_store.dart';
 /// and the kept-verdict's rejected fingerprints.
 final class SettingsPinVerdictStore implements PinVerdictStore {
   SettingsPinVerdictStore({required SettingsStore store})
-      : // Keep the collaborator private.
-        // ignore: prefer_initializing_formals
-        _store = store;
+    : // Keep the collaborator private.
+      // ignore: prefer_initializing_formals
+      _store = store;
 
   final SettingsStore _store;
 
@@ -54,24 +54,24 @@ final class SettingsPinVerdictStore implements PinVerdictStore {
 
   @override
   Future<void> addNegativePin(String locator) => _mutate(() async {
-        // Forgetting the host also forgets its kept verdict: a host the
-        // user re-pins later must warn on the same pulled fingerprint
-        // again — the verdict belonged to the forgotten trust decision.
-        final next = await _negativeSet();
-        next.add(locator);
-        await _store.set(_negativePinsKey, next.toList()..sort());
-        final kept = await _keptMap();
-        if (kept.remove(locator) != null) {
-          await _store.set(_keptVerdictsKey, kept);
-        }
-      });
+    // Forgetting the host also forgets its kept verdict: a host the
+    // user re-pins later must warn on the same pulled fingerprint
+    // again — the verdict belonged to the forgotten trust decision.
+    final next = await _negativeSet();
+    next.add(locator);
+    await _store.set(_negativePinsKey, next.toList()..sort());
+    final kept = await _keptMap();
+    if (kept.remove(locator) != null) {
+      await _store.set(_keptVerdictsKey, kept);
+    }
+  });
 
   @override
   Future<void> removeNegativePin(String locator) => _mutate(() async {
-        final next = await _negativeSet();
-        if (!next.remove(locator)) return;
-        await _store.set(_negativePinsKey, next.toList()..sort());
-      });
+    final next = await _negativeSet();
+    if (!next.remove(locator)) return;
+    await _store.set(_negativePinsKey, next.toList()..sort());
+  });
 
   @override
   Future<String?> rejectedFingerprintFor(String locator) async =>
@@ -81,8 +81,7 @@ final class SettingsPinVerdictStore implements PinVerdictStore {
   /// stored record still carries it the conflict reads as resolved, and
   /// a genuinely different conflicting fingerprint must still warn.
   @override
-  Future<void> recordKeptVerdict(
-          String locator, String rejectedFingerprint) =>
+  Future<void> recordKeptVerdict(String locator, String rejectedFingerprint) =>
       _mutate(() async {
         final next = await _keptMap();
         if (next[locator] == rejectedFingerprint) return;
@@ -97,9 +96,9 @@ final class SettingsPinVerdictStore implements PinVerdictStore {
 /// dismissal.
 final class SettingsSyncTripwireStore implements SyncTripwireStore {
   SettingsSyncTripwireStore({required SettingsStore store})
-      : // Keep the collaborator private.
-        // ignore: prefer_initializing_formals
-        _store = store;
+    : // Keep the collaborator private.
+      // ignore: prefer_initializing_formals
+      _store = store;
 
   final SettingsStore _store;
 

@@ -110,22 +110,22 @@ class AssistantSettings {
     bool? redactSecrets,
     Map<String, String>? apiKeys,
     int? updatedAt,
-  }) =>
-      AssistantSettings(
-        providerKind: providerKind ?? this.providerKind,
-        baseUrl: baseUrl ?? this.baseUrl,
-        model: model ?? this.model,
-        llmApiKeyRef: llmApiKeyRef ?? this.llmApiKeyRef,
-        searxngUrl: clearSearxngUrl ? null : (searxngUrl ?? this.searxngUrl),
-        braveApiKeyRef: clearBraveApiKeyRef
-            ? null
-            : (braveApiKeyRef ?? this.braveApiKeyRef),
-        zaiApiKeyRef:
-            clearZaiApiKeyRef ? null : (zaiApiKeyRef ?? this.zaiApiKeyRef),
-        redactSecrets: redactSecrets ?? this.redactSecrets,
-        apiKeys: apiKeys ?? this.apiKeys,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+  }) => AssistantSettings(
+    providerKind: providerKind ?? this.providerKind,
+    baseUrl: baseUrl ?? this.baseUrl,
+    model: model ?? this.model,
+    llmApiKeyRef: llmApiKeyRef ?? this.llmApiKeyRef,
+    searxngUrl: clearSearxngUrl ? null : (searxngUrl ?? this.searxngUrl),
+    braveApiKeyRef: clearBraveApiKeyRef
+        ? null
+        : (braveApiKeyRef ?? this.braveApiKeyRef),
+    zaiApiKeyRef: clearZaiApiKeyRef
+        ? null
+        : (zaiApiKeyRef ?? this.zaiApiKeyRef),
+    redactSecrets: redactSecrets ?? this.redactSecrets,
+    apiKeys: apiKeys ?? this.apiKeys,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   Map<String, dynamic> toJson() {
     // Filtered once. The whole design rests on the reader and the writer
@@ -152,35 +152,35 @@ class AssistantSettings {
         if (referenced.contains(entry.key)) entry.key: entry.value,
     };
     return {
-        // Trimmed on the way out for the same reason [_blankToNull] trims on
-        // the way in, and [_stringMap] trims in both directions: the reader
-        // normalizes, so a padded value written verbatim makes the collecting
-        // device hold `' anthropic '` while every device that adopts the
-        // record holds `'anthropic'` — a record that does not describe the
-        // settings it was built from, and does not survive its own round trip.
-        'providerKind': providerKind.trim(),
-        'baseUrl': baseUrl.trim(),
-        'model': model.trim(),
-        // Blank reads as empty (see [fromJson]); written the same way so the
-        // record round-trips.
-        'llmApiKeyRef': _isSet(llmApiKeyRef) ? llmApiKeyRef.trim() : '',
-        // Blank is the same as absent on the way *in* (see [_blankToNull]),
-        // so writing one out would be a field the writer calls set and every
-        // reader — including this class re-reading its own record — calls
-        // unset. A cleared text box is the ordinary way to produce one.
-        // `_isSet` is false for null, so the `!` is what the guard already
-        // proved.
-        if (_isSet(searxngUrl)) 'searxngUrl': searxngUrl!.trim(),
-        if (_isSet(braveApiKeyRef)) 'braveApiKeyRef': braveApiKeyRef!.trim(),
-        if (_isSet(zaiApiKeyRef)) 'zaiApiKeyRef': zaiApiKeyRef!.trim(),
-        'redactSecrets': redactSecrets,
-        // Omitted rather than written empty, so a record from a device that
-        // does not sync keys is byte-identical to one that has none.
-        // Through the same filter [fromJson] applies, so a degenerate entry
-        // a caller built by hand is not written as set and read back as gone.
-        if (keys.isNotEmpty) 'apiKeys': keys,
-        'updatedAt': updatedAt,
-      };
+      // Trimmed on the way out for the same reason [_blankToNull] trims on
+      // the way in, and [_stringMap] trims in both directions: the reader
+      // normalizes, so a padded value written verbatim makes the collecting
+      // device hold `' anthropic '` while every device that adopts the
+      // record holds `'anthropic'` — a record that does not describe the
+      // settings it was built from, and does not survive its own round trip.
+      'providerKind': providerKind.trim(),
+      'baseUrl': baseUrl.trim(),
+      'model': model.trim(),
+      // Blank reads as empty (see [fromJson]); written the same way so the
+      // record round-trips.
+      'llmApiKeyRef': _isSet(llmApiKeyRef) ? llmApiKeyRef.trim() : '',
+      // Blank is the same as absent on the way *in* (see [_blankToNull]),
+      // so writing one out would be a field the writer calls set and every
+      // reader — including this class re-reading its own record — calls
+      // unset. A cleared text box is the ordinary way to produce one.
+      // `_isSet` is false for null, so the `!` is what the guard already
+      // proved.
+      if (_isSet(searxngUrl)) 'searxngUrl': searxngUrl!.trim(),
+      if (_isSet(braveApiKeyRef)) 'braveApiKeyRef': braveApiKeyRef!.trim(),
+      if (_isSet(zaiApiKeyRef)) 'zaiApiKeyRef': zaiApiKeyRef!.trim(),
+      'redactSecrets': redactSecrets,
+      // Omitted rather than written empty, so a record from a device that
+      // does not sync keys is byte-identical to one that has none.
+      // Through the same filter [fromJson] applies, so a degenerate entry
+      // a caller built by hand is not written as set and read back as gone.
+      if (keys.isNotEmpty) 'apiKeys': keys,
+      'updatedAt': updatedAt,
+    };
   }
 
   factory AssistantSettings.fromJson(Map<String, dynamic> json) =>
@@ -199,8 +199,9 @@ class AssistantSettings {
         zaiApiKeyRef: _blankToNull(json['zaiApiKeyRef']),
         // Absent means "an older writer that had no such field"; the safe
         // reading of that is the default the app ships with, which is on.
-        redactSecrets:
-            json['redactSecrets'] is bool ? json['redactSecrets'] as bool : true,
+        redactSecrets: json['redactSecrets'] is bool
+            ? json['redactSecrets'] as bool
+            : true,
         // Unmodifiable so a decoded record cannot have its key material
         // rewritten through the field it exposes. The const constructor still
         // aliases a caller-supplied map; callers treat it as read-only.
@@ -212,7 +213,8 @@ class AssistantSettings {
         // its default rather than throwing. A stamp of zero loses to every
         // real one, which is the safe reading of a timestamp that is not a
         // number.
-        updatedAt: json['updatedAt'] is num && (json['updatedAt'] as num).isFinite
+        updatedAt:
+            json['updatedAt'] is num && (json['updatedAt'] as num).isFinite
             ? (json['updatedAt'] as num).toInt()
             : 0,
       );

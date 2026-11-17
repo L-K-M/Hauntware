@@ -68,7 +68,9 @@ void main() {
         FileSystemEntityType.link,
       );
     },
-    skip: Platform.isWindows ? 'symbolic links need extra rights on Windows' : null,
+    skip: Platform.isWindows
+        ? 'symbolic links need extra rights on Windows'
+        : null,
   );
 }
 

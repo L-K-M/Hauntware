@@ -103,28 +103,30 @@ LocalCopyPump platformLocalCopyPump() =>
 
 final class _LinuxCopyBindings {
   _LinuxCopyBindings(DynamicLibrary libc)
-    : open = libc.lookupFunction<
-        Int32 Function(Pointer<Utf8>, Int32, Int32),
-        int Function(Pointer<Utf8>, int, int)
-      >('open'),
+    : open = libc
+          .lookupFunction<
+            Int32 Function(Pointer<Utf8>, Int32, Int32),
+            int Function(Pointer<Utf8>, int, int)
+          >('open'),
       close = libc.lookupFunction<Int32 Function(Int32), int Function(int)>(
         'close',
       ),
-      copyFileRange = libc.lookupFunction<
-        Int64 Function(
-          Int32,
-          Pointer<Void>,
-          Int32,
-          Pointer<Void>,
-          Int64,
-          Uint32,
-        ),
-        int Function(int, Pointer<Void>, int, Pointer<Void>, int, int)
-      >('copy_file_range'),
-      errnoLocation = libc.lookupFunction<
-        Pointer<Int32> Function(),
-        Pointer<Int32> Function()
-      >('__errno_location');
+      copyFileRange = libc
+          .lookupFunction<
+            Int64 Function(
+              Int32,
+              Pointer<Void>,
+              Int32,
+              Pointer<Void>,
+              Int64,
+              Uint32,
+            ),
+            int Function(int, Pointer<Void>, int, Pointer<Void>, int, int)
+          >('copy_file_range'),
+      errnoLocation = libc
+          .lookupFunction<Pointer<Int32> Function(), Pointer<Int32> Function()>(
+            '__errno_location',
+          );
 
   final int Function(Pointer<Utf8>, int, int) open;
   final int Function(int) close;

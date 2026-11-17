@@ -50,8 +50,7 @@ void main() {
     expect(loaded.caseProbe['/root']!.normalizationInsensitive, isTrue);
   });
 
-  test('a corrupt document loads defaults rather than throwing',
-      () async {
+  test('a corrupt document loads defaults rather than throwing', () async {
     File('${dir.path}/a1b2c3d4e5f6a7b8.json')
       ..createSync(recursive: true)
       ..writeAsStringSync('{not json');
@@ -60,9 +59,6 @@ void main() {
   });
 
   test('a non-canonical pairId is rejected', () async {
-    expect(
-      () => store.load('../escape'),
-      throwsA(isA<ArgumentError>()),
-    );
+    expect(() => store.load('../escape'), throwsA(isA<ArgumentError>()));
   });
 }

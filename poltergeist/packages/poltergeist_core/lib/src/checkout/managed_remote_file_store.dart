@@ -364,11 +364,7 @@ class ManagedRemoteFileStore {
           );
         }
         if (nameSegments.length != 1) {
-          throw ArgumentError.value(
-            name,
-            'name',
-            'Must be a single file name',
-          );
+          throw ArgumentError.value(name, 'name', 'Must be a single file name');
         }
         final dirName = dirSegments.single;
         final fileName = nameSegments.single;

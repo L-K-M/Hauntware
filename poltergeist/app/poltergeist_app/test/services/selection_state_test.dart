@@ -4,8 +4,10 @@ import 'package:poltergeist_app/services/selection_state.dart';
 
 const _rows = [1, 2, 3, 4, 5];
 
-SelectionState<int> _begin({Iterable<int> rows = _rows, Iterable<int> selected = const []}) =>
-    SelectionState.begin(rows: rows, selectedKeys: selected);
+SelectionState<int> _begin({
+  Iterable<int> rows = _rows,
+  Iterable<int> selected = const [],
+}) => SelectionState.begin(rows: rows, selectedKeys: selected);
 
 void main() {
   test('starts with copied, immutable rows and selection', () {
@@ -23,15 +25,20 @@ void main() {
     expect(() => state.selectedKeys.clear(), throwsUnsupportedError);
   });
 
-  test('an empty listing accepts wholesale transitions and rejects targets', () {
-    final state = _begin(rows: const []);
+  test(
+    'an empty listing accepts wholesale transitions and rejects targets',
+    () {
+      final state = _begin(rows: const []);
 
-    expect(state.selectAll().selectedKeys, isEmpty);
-    expect(state.invert().selectedKeys, isEmpty);
-    expect(state.withRows(const [1, 2]).selectedKeys, isEmpty);
-    expect(() => state.activate(1, SelectionUpdate.single),
-        throwsArgumentError);
-  });
+      expect(state.selectAll().selectedKeys, isEmpty);
+      expect(state.invert().selectedKeys, isEmpty);
+      expect(state.withRows(const [1, 2]).selectedKeys, isEmpty);
+      expect(
+        () => state.activate(1, SelectionUpdate.single),
+        throwsArgumentError,
+      );
+    },
+  );
 
   test('a single-row listing selects, toggles, and ranges onto itself', () {
     final state = _begin(rows: const [7]);
@@ -46,7 +53,9 @@ void main() {
   });
 
   test('single selection moves cursor and anchor and drops the rest', () {
-    final state = _begin(selected: const [1, 5]).activate(3, SelectionUpdate.single);
+    final state = _begin(
+      selected: const [1, 5],
+    ).activate(3, SelectionUpdate.single);
 
     expect(state.selectedKeys, {3});
     expect(state.cursorKey, 3);
@@ -65,58 +74,68 @@ void main() {
     expect(off.anchorKey, 2);
   });
 
-  test('range keeps the anchor while extending and shrinking, both directions', () {
-    // Forward: anchor 2, extend to 4, shrink to 3, extend past to 5.
-    final forward = _begin(selected: const [2]).activate(2, SelectionUpdate.single);
-    final extended = forward.activate(4, SelectionUpdate.range);
-    final shrunk = extended.activate(3, SelectionUpdate.range);
-    final regrown = shrunk.activate(5, SelectionUpdate.range);
+  test(
+    'range keeps the anchor while extending and shrinking, both directions',
+    () {
+      // Forward: anchor 2, extend to 4, shrink to 3, extend past to 5.
+      final forward = _begin(
+        selected: const [2],
+      ).activate(2, SelectionUpdate.single);
+      final extended = forward.activate(4, SelectionUpdate.range);
+      final shrunk = extended.activate(3, SelectionUpdate.range);
+      final regrown = shrunk.activate(5, SelectionUpdate.range);
 
-    expect(extended.selectedKeys, {2, 3, 4});
-    expect(extended.anchorKey, 2);
-    expect(shrunk.selectedKeys, {2, 3});
-    expect(shrunk.anchorKey, 2);
-    expect(regrown.selectedKeys, {2, 3, 4, 5});
-    expect(regrown.anchorKey, 2);
-    expect(regrown.cursorKey, 5);
+      expect(extended.selectedKeys, {2, 3, 4});
+      expect(extended.anchorKey, 2);
+      expect(shrunk.selectedKeys, {2, 3});
+      expect(shrunk.anchorKey, 2);
+      expect(regrown.selectedKeys, {2, 3, 4, 5});
+      expect(regrown.anchorKey, 2);
+      expect(regrown.cursorKey, 5);
 
-    // Backward: anchor 4, target before it.
-    final backward = _begin().activate(4, SelectionUpdate.single)
-        .activate(2, SelectionUpdate.range);
-    expect(backward.selectedKeys, {2, 3, 4});
-    expect(backward.cursorKey, 2);
-    expect(backward.anchorKey, 4);
-  });
+      // Backward: anchor 4, target before it.
+      final backward = _begin()
+          .activate(4, SelectionUpdate.single)
+          .activate(2, SelectionUpdate.range);
+      expect(backward.selectedKeys, {2, 3, 4});
+      expect(backward.cursorKey, 2);
+      expect(backward.anchorKey, 4);
+    },
+  );
 
   test('range replaces a discontiguous selection with the span', () {
-    final state = _begin(selected: const [1, 5]).activate(3, SelectionUpdate.single)
-        .activate(5, SelectionUpdate.range);
+    final state = _begin(
+      selected: const [1, 5],
+    ).activate(3, SelectionUpdate.single).activate(5, SelectionUpdate.range);
 
     // A shift-click recomputes from the anchor; row 1 does not survive.
     expect(state.selectedKeys, {3, 4, 5});
     expect(state.anchorKey, 3);
   });
 
-  test('range without an anchor adopts the cursor, then degenerates to single', () {
-    // Cursor without anchor: an anchored range whose anchor row disappears.
-    final cursorOnly = _begin()
-        .activate(2, SelectionUpdate.single)
-        .activate(5, SelectionUpdate.range)
-        .withRows(const [1, 3, 4, 5]);
-    expect(cursorOnly.cursorKey, 5);
-    expect(cursorOnly.anchorKey, isNull);
+  test(
+    'range without an anchor adopts the cursor, then degenerates to single',
+    () {
+      // Cursor without anchor: an anchored range whose anchor row disappears.
+      final cursorOnly = _begin()
+          .activate(2, SelectionUpdate.single)
+          .activate(5, SelectionUpdate.range)
+          .withRows(const [1, 3, 4, 5]);
+      expect(cursorOnly.cursorKey, 5);
+      expect(cursorOnly.anchorKey, isNull);
 
-    final fromCursor = cursorOnly.activate(3, SelectionUpdate.range);
-    expect(fromCursor.selectedKeys, {3, 4, 5});
-    expect(fromCursor.cursorKey, 3);
-    expect(fromCursor.anchorKey, 5);
+      final fromCursor = cursorOnly.activate(3, SelectionUpdate.range);
+      expect(fromCursor.selectedKeys, {3, 4, 5});
+      expect(fromCursor.cursorKey, 3);
+      expect(fromCursor.anchorKey, 5);
 
-    // No anchor and no cursor: the range degenerates to the target row.
-    final fromNothing = _begin().activate(4, SelectionUpdate.range);
-    expect(fromNothing.selectedKeys, {4});
-    expect(fromNothing.cursorKey, 4);
-    expect(fromNothing.anchorKey, 4);
-  });
+      // No anchor and no cursor: the range degenerates to the target row.
+      final fromNothing = _begin().activate(4, SelectionUpdate.range);
+      expect(fromNothing.selectedKeys, {4});
+      expect(fromNothing.cursorKey, 4);
+      expect(fromNothing.anchorKey, 4);
+    },
+  );
 
   test('an adopted anchor stays stable across repeated ranges', () {
     // Regression (supervisor probe): the first range after anchor pruning
@@ -176,8 +195,9 @@ void main() {
   });
 
   test('select all and invert complement within rows, keeping position', () {
-    final state = _begin(selected: const [2, 4]).activate(2, SelectionUpdate.single)
-        .activate(4, SelectionUpdate.toggle);
+    final state = _begin(
+      selected: const [2, 4],
+    ).activate(2, SelectionUpdate.single).activate(4, SelectionUpdate.toggle);
 
     final all = state.selectAll();
     expect(all.selectedKeys, {1, 2, 3, 4, 5});
@@ -195,7 +215,9 @@ void main() {
   });
 
   test('reordering rows keeps selected identities, never index-following', () {
-    final state = _begin(selected: const [1, 3]).activate(3, SelectionUpdate.single);
+    final state = _begin(
+      selected: const [1, 3],
+    ).activate(3, SelectionUpdate.single);
 
     final reordered = state.withRows(const [5, 4, 3, 2, 1]);
     expect(reordered.selectedKeys, {3});
@@ -203,12 +225,18 @@ void main() {
     expect(reordered.anchorKey, 3);
 
     // A range on the reordered list spans the new order's indices.
-    expect(reordered.activate(1, SelectionUpdate.range).selectedKeys, {3, 2, 1});
+    expect(reordered.activate(1, SelectionUpdate.range).selectedKeys, {
+      3,
+      2,
+      1,
+    });
   });
 
   test('row replacement prunes selection, cursor, and anchor', () {
     // Toggle keeps row 2 selected while moving cursor and anchor to row 4.
-    final state = _begin(selected: const [2, 4]).activate(4, SelectionUpdate.toggle);
+    final state = _begin(
+      selected: const [2, 4],
+    ).activate(4, SelectionUpdate.toggle);
 
     final pruned = state.withRows(const [1, 2, 3]);
     expect(pruned.selectedKeys, {2});
@@ -229,31 +257,43 @@ void main() {
     expect(state.selectedKeys, {sameName});
     final toggled = state.activate(otherSameName, SelectionUpdate.toggle);
     expect(toggled.selectedKeys, {sameName, otherSameName});
-    expect(toggled.activate(sameName, SelectionUpdate.toggle).selectedKeys,
-        {otherSameName});
+    expect(toggled.activate(sameName, SelectionUpdate.toggle).selectedKeys, {
+      otherSameName,
+    });
   });
 
   test('duplicate row identities are rejected at begin and at replacement', () {
-    expect(() => SelectionState<int>.begin(rows: const [1, 1]),
-        throwsArgumentError);
+    expect(
+      () => SelectionState<int>.begin(rows: const [1, 1]),
+      throwsArgumentError,
+    );
     expect(() => _begin().withRows(const [3, 3]), throwsArgumentError);
   });
 
   test('unknown targets and snapshot keys are rejected explicitly', () {
     final state = _begin(selected: const [2]);
 
-    expect(() => state.activate(9, SelectionUpdate.single), throwsArgumentError);
-    expect(() => state.activate(9, SelectionUpdate.toggle), throwsArgumentError);
+    expect(
+      () => state.activate(9, SelectionUpdate.single),
+      throwsArgumentError,
+    );
+    expect(
+      () => state.activate(9, SelectionUpdate.toggle),
+      throwsArgumentError,
+    );
     expect(() => state.activate(9, SelectionUpdate.range), throwsArgumentError);
     expect(() => state.withSelectedKeys(const [2, 9]), throwsArgumentError);
-    expect(() => SelectionState.begin(rows: _rows, selectedKeys: const [9]),
-        throwsArgumentError);
+    expect(
+      () => SelectionState.begin(rows: _rows, selectedKeys: const [9]),
+      throwsArgumentError,
+    );
   });
 
   test('withSelectedKeys copies the snapshot and keeps the cursor', () {
     final keys = [1, 4];
-    final state = _begin(selected: const [2]).activate(2, SelectionUpdate.single)
-        .withSelectedKeys(keys);
+    final state = _begin(
+      selected: const [2],
+    ).activate(2, SelectionUpdate.single).withSelectedKeys(keys);
     keys.clear();
 
     expect(state.selectedKeys, {1, 4});
@@ -261,25 +301,30 @@ void main() {
     expect(state.anchorKey, 2);
   });
 
-  test('QuickSelectState confirmed and cancelled selections apply as snapshots', () {
-    const names = {1: 'report.txt', 2: 'report.csv', 3: 'notes.txt'};
-    final session = QuickSelectState<int>.begin(
-      namesByKey: names,
-      selectedKeys: const [3],
-    );
+  test(
+    'QuickSelectState confirmed and cancelled selections apply as snapshots',
+    () {
+      const names = {1: 'report.txt', 2: 'report.csv', 3: 'notes.txt'};
+      final session = QuickSelectState<int>.begin(
+        namesByKey: names,
+        selectedKeys: const [3],
+      );
 
-    final confirmed = _begin(selected: const [3])
-        .withSelectedKeys(session.changeQuery('report').confirm().selectedKeys);
-    expect(confirmed.selectedKeys, {1, 2, 3});
+      final confirmed = _begin(
+        selected: const [3],
+      ).withSelectedKeys(session.changeQuery('report').confirm().selectedKeys);
+      expect(confirmed.selectedKeys, {1, 2, 3});
 
-    final cancelled = _begin(selected: const [3])
-        .withSelectedKeys(session.changeQuery('report').cancel().selectedKeys);
-    expect(cancelled.selectedKeys, {3});
+      final cancelled = _begin(
+        selected: const [3],
+      ).withSelectedKeys(session.changeQuery('report').cancel().selectedKeys);
+      expect(cancelled.selectedKeys, {3});
 
-    // The session's contract: cancel before replacing rows, then prune.
-    expect(cancelled.withRows(const [1, 2]).selectedKeys, isEmpty);
-    expect(confirmed.withRows(const [3]).selectedKeys, {3});
-  });
+      // The session's contract: cancel before replacing rows, then prune.
+      expect(cancelled.withRows(const [1, 2]).selectedKeys, isEmpty);
+      expect(confirmed.withRows(const [3]).selectedKeys, {3});
+    },
+  );
 
   test('withCursor moves cursor and anchor, keeping the selection', () {
     final state = _begin(

@@ -59,13 +59,10 @@ Future<SshConfigImportPreview> _load(
   _FakeSource? source,
   List<Bookmark> existing = const [],
 }) {
-  final src =
-      source ??
-      _FakeSource(files: {_configPath: text});
-  return _service(src).loadPreview(
-    configPath: _configPath,
-    existingBookmarks: existing,
-  );
+  final src = source ?? _FakeSource(files: {_configPath: text});
+  return _service(
+    src,
+  ).loadPreview(configPath: _configPath, existingBookmarks: existing);
 }
 
 void main() {
@@ -94,10 +91,11 @@ Host nas
     expect(nas.username, '');
   });
 
-  test('IdentityFile maps to reference-style key auth, verbatim path',
-      () async {
-    final now = DateTime.utc(2026, 9, 8);
-    final preview = await _load('''
+  test(
+    'IdentityFile maps to reference-style key auth, verbatim path',
+    () async {
+      final now = DateTime.utc(2026, 9, 8);
+      final preview = await _load('''
 Host keyed
   HostName keyed.example.com
   IdentityFile ~/.ssh/id_ed25519
@@ -110,35 +108,37 @@ Host blankKey
   IdentityFile
 ''');
 
-    final keyed = preview.rows[0].toBookmark(now: now);
-    final identity = keyed.server!.identity!;
-    expect(keyed.kind, BookmarkKind.remotePath);
-    expect(identity.authMethod, AuthMethod.privateKey);
-    // Reference-style: the path travels verbatim ('~' survives, 04 §2.1);
-    // no key material is read at import time.
-    expect(identity.identityFilePath, '~/.ssh/id_ed25519');
-    expect(identity.host, 'keyed.example.com');
-    expect(identity.port, 22);
-    expect(identity.username, '');
+      final keyed = preview.rows[0].toBookmark(now: now);
+      final identity = keyed.server!.identity!;
+      expect(keyed.kind, BookmarkKind.remotePath);
+      expect(identity.authMethod, AuthMethod.privateKey);
+      // Reference-style: the path travels verbatim ('~' survives, 04 §2.1);
+      // no key material is read at import time.
+      expect(identity.identityFilePath, '~/.ssh/id_ed25519');
+      expect(identity.host, 'keyed.example.com');
+      expect(identity.port, 22);
+      expect(identity.username, '');
 
-    expect(
-      preview.rows[1].toBookmark(now: now).server!.identity!.authMethod,
-      AuthMethod.agent,
-    );
-    expect(
-      preview.rows[2].toBookmark(now: now).server!.identity!.authMethod,
-      AuthMethod.agent,
-    );
-    expect(
-      preview.rows[2].toBookmark(now: now).server!.identity!.identityFilePath,
-      isNull,
-    );
-  });
+      expect(
+        preview.rows[1].toBookmark(now: now).server!.identity!.authMethod,
+        AuthMethod.agent,
+      );
+      expect(
+        preview.rows[2].toBookmark(now: now).server!.identity!.authMethod,
+        AuthMethod.agent,
+      );
+      expect(
+        preview.rows[2].toBookmark(now: now).server!.identity!.identityFilePath,
+        isNull,
+      );
+    },
+  );
 
-  test('imported bookmarks round-trip through the 04 §2.1 decode contract',
-      () async {
-    final now = DateTime.utc(2026, 9, 8);
-    final preview = await _load('''
+  test(
+    'imported bookmarks round-trip through the 04 §2.1 decode contract',
+    () async {
+      final now = DateTime.utc(2026, 9, 8);
+      final preview = await _load('''
 Host keyed
   HostName keyed.example.com
   Port 2200
@@ -146,17 +146,18 @@ Host keyed
   IdentityFile ~/.ssh/id_ed25519
 ''');
 
-    final bookmark = preview.rows.single.toBookmark(now: now);
-    final decoded = Bookmark.fromJson(
-      bookmark.toJson(),
-      recordId: 'bookmark:${bookmark.id}',
-    );
-    expect(decoded.server!.identity!.identityFilePath, '~/.ssh/id_ed25519');
-    expect(decoded.server!.identity!.port, 2200);
-    expect(decoded.server!.identity!.username, 'alice');
-    expect(decoded.server!.identity!.authMethod, AuthMethod.privateKey);
-    expect(decoded.label, 'keyed');
-  });
+      final bookmark = preview.rows.single.toBookmark(now: now);
+      final decoded = Bookmark.fromJson(
+        bookmark.toJson(),
+        recordId: 'bookmark:${bookmark.id}',
+      );
+      expect(decoded.server!.identity!.identityFilePath, '~/.ssh/id_ed25519');
+      expect(decoded.server!.identity!.port, 2200);
+      expect(decoded.server!.identity!.username, 'alice');
+      expect(decoded.server!.identity!.authMethod, AuthMethod.privateKey);
+      expect(decoded.label, 'keyed');
+    },
+  );
 
   test('dedupes against existing bookmarks by host+port+username', () async {
     final preview = await _load(
@@ -164,7 +165,14 @@ Host keyed
       'Host other-port\n  HostName web.example.com\n  Port 23\n  User deploy\n'
       'Host other-user\n  HostName web.example.com\n  Port 2222\n  User bob\n'
       'Host other-host\n  HostName other.example.com\n  Port 2222\n  User deploy\n',
-      existing: [_existingBookmark('Prod web', host: 'web.example.com', port: 2222, user: 'deploy')],
+      existing: [
+        _existingBookmark(
+          'Prod web',
+          host: 'web.example.com',
+          port: 2222,
+          user: 'deploy',
+        ),
+      ],
     );
 
     expect(preview.rows[0].matchesExistingBookmark, isTrue);
@@ -351,43 +359,48 @@ Host *
     expect(preview.rows, hasLength(2));
   });
 
-  test('a top-level Include between hosts lands in first-obtained position',
-      () async {
-    final source = _FakeSource(
-      files: {
-        _configPath: '''
+  test(
+    'a top-level Include between hosts lands in first-obtained position',
+    () async {
+      final source = _FakeSource(
+        files: {
+          _configPath:
+              '''
 Include $_home/.ssh/config.d/tail.conf
 
 Host last
 ''',
-        '$_home/.ssh/config.d/tail.conf': 'Host from-include\n',
-      },
-    );
+          '$_home/.ssh/config.d/tail.conf': 'Host from-include\n',
+        },
+      );
 
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['from-include', 'last'],
-    );
-    expect(preview.rows.first.sourcePath, '$_home/.ssh/config.d/tail.conf');
-    expect(preview.notices, isEmpty);
-  });
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      expect(preview.rows.map((r) => r.host.alias).toList(), [
+        'from-include',
+        'last',
+      ]);
+      expect(preview.rows.first.sourcePath, '$_home/.ssh/config.d/tail.conf');
+      expect(preview.notices, isEmpty);
+    },
+  );
 
   test('Include before hosts lands its hosts first', () async {
-    final source = _FakeSource(files: {
-      _configPath: '''
+    final source = _FakeSource(
+      files: {
+        _configPath:
+            '''
 Include $_home/.ssh/config.d/head.conf
 
 Host main
 ''',
-      '$_home/.ssh/config.d/head.conf': 'Host early\n',
-    });
+        '$_home/.ssh/config.d/head.conf': 'Host early\n',
+      },
+    );
 
     final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['early', 'main'],
-    );
+    expect(preview.rows.map((r) => r.host.alias).toList(), ['early', 'main']);
   });
 
   test('Include globs expand in lexical order', () async {
@@ -405,10 +418,7 @@ Host main
     );
 
     final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['alpha', 'bravo'],
-    );
+    expect(preview.rows.map((r) => r.host.alias).toList(), ['alpha', 'bravo']);
   });
 
   test('relative and quoted Include arguments resolve', () async {
@@ -424,10 +434,11 @@ Include work.conf "my configs/main.conf" other.conf
     );
 
     final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['work', 'quoted', 'other'],
-    );
+    expect(preview.rows.map((r) => r.host.alias).toList(), [
+      'work',
+      'quoted',
+      'other',
+    ]);
   });
 
   test('Include arguments split as the pin splits every line', () async {
@@ -450,62 +461,70 @@ Include "#ops.conf" # a trailing comment
   });
 
   test('Include with ~ expansion and nesting', () async {
-    final source = _FakeSource(files: {
-      _configPath: 'Include ~/.ssh/outer.conf\n',
-      '$_home/.ssh/outer.conf': 'Host outer\n\nInclude ~/.ssh/inner.conf\n',
-      '$_home/.ssh/inner.conf': 'Host inner\n',
-    });
-
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['outer', 'inner'],
-    );
-  });
-
-  test('missing, glob-empty, and unresolvable includes are noted, not fatal',
-      () async {
-    final dir = '$_home/.ssh/config.d';
     final source = _FakeSource(
       files: {
-        _configPath: '''
+        _configPath: 'Include ~/.ssh/outer.conf\n',
+        '$_home/.ssh/outer.conf': 'Host outer\n\nInclude ~/.ssh/inner.conf\n',
+        '$_home/.ssh/inner.conf': 'Host inner\n',
+      },
+    );
+
+    final preview = await _service(source).loadPreview(configPath: _configPath);
+    expect(preview.rows.map((r) => r.host.alias).toList(), ['outer', 'inner']);
+  });
+
+  test(
+    'missing, glob-empty, and unresolvable includes are noted, not fatal',
+    () async {
+      final dir = '$_home/.ssh/config.d';
+      final source = _FakeSource(
+        files: {
+          _configPath:
+              '''
 Include $_home/.ssh/missing.conf
 Include $dir/*.conf
 Include ~otheruser/keys.conf
 ''',
-      },
-      dirs: {dir: const []},
-    );
+        },
+        dirs: {dir: const []},
+      );
 
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(preview.rows, isEmpty);
-    // The empty glob is silently nothing (ssh's behavior); only the
-    // literal missing file and the unresolvable user path are noted.
-    expect(preview.notices, hasLength(2));
-    expect(preview.notices[0].note, SshConfigIncludeNote.unreadable);
-    expect(preview.notices[0].path, '$_home/.ssh/missing.conf');
-    expect(preview.notices[1].note, SshConfigIncludeNote.unreadable);
-    expect(preview.notices[1].path, '~otheruser/keys.conf');
-  });
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      expect(preview.rows, isEmpty);
+      // The empty glob is silently nothing (ssh's behavior); only the
+      // literal missing file and the unresolvable user path are noted.
+      expect(preview.notices, hasLength(2));
+      expect(preview.notices[0].note, SshConfigIncludeNote.unreadable);
+      expect(preview.notices[0].path, '$_home/.ssh/missing.conf');
+      expect(preview.notices[1].note, SshConfigIncludeNote.unreadable);
+      expect(preview.notices[1].path, '~otheruser/keys.conf');
+    },
+  );
 
-  test('multi-component include globs are noted unsupported, not silent',
-      () async {
-    final source = _FakeSource(
-      files: {
-        _configPath: 'Include $_home/.ssh/conf.d/*/*.conf\n',
-        '$_home/.ssh/conf.d/a/x.conf': 'Host nested\n',
-      },
-    );
+  test(
+    'multi-component include globs are noted unsupported, not silent',
+    () async {
+      final source = _FakeSource(
+        files: {
+          _configPath: 'Include $_home/.ssh/conf.d/*/*.conf\n',
+          '$_home/.ssh/conf.d/a/x.conf': 'Host nested\n',
+        },
+      );
 
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(preview.rows, isEmpty);
-    // ssh's glob(3) would expand across components; this resolver
-    // cannot, so the whole token must surface as unreadable rather
-    // than silently matching nothing.
-    expect(preview.notices, hasLength(1));
-    expect(preview.notices.single.note, SshConfigIncludeNote.unreadable);
-    expect(preview.notices.single.path, '$_home/.ssh/conf.d/*/*.conf');
-  });
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      expect(preview.rows, isEmpty);
+      // ssh's glob(3) would expand across components; this resolver
+      // cannot, so the whole token must surface as unreadable rather
+      // than silently matching nothing.
+      expect(preview.notices, hasLength(1));
+      expect(preview.notices.single.note, SshConfigIncludeNote.unreadable);
+      expect(preview.notices.single.path, '$_home/.ssh/conf.d/*/*.conf');
+    },
+  );
 
   test('brace include globs are noted unsupported, not silent', () async {
     final dir = '$_home/.ssh/config.d';
@@ -550,51 +569,64 @@ Include ~otheruser/keys.conf
     expect(preview.notices.single.path, '$_home/.ssh/conf{1,2}/*.conf');
   });
 
-  test('an include cycle is detected per branch; diamonds parse twice',
-      () async {
-    final source = _FakeSource(files: {
-      _configPath: '''
+  test(
+    'an include cycle is detected per branch; diamonds parse twice',
+    () async {
+      final source = _FakeSource(
+        files: {
+          _configPath:
+              '''
 Include $_home/.ssh/a.conf
 Include $_home/.ssh/b.conf
 ''',
-      '$_home/.ssh/a.conf': 'Host from-a\n\nInclude $_home/.ssh/shared.conf\n',
-      '$_home/.ssh/b.conf': 'Host from-b\n\nInclude $_home/.ssh/shared.conf\n',
-      '$_home/.ssh/shared.conf': 'Host shared-host\n',
-    });
+          '$_home/.ssh/a.conf':
+              'Host from-a\n\nInclude $_home/.ssh/shared.conf\n',
+          '$_home/.ssh/b.conf':
+              'Host from-b\n\nInclude $_home/.ssh/shared.conf\n',
+          '$_home/.ssh/shared.conf': 'Host shared-host\n',
+        },
+      );
 
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['from-a', 'shared-host', 'from-b', 'shared-host'],
-      reason: 'shared.conf parses once per branch, like ssh',
-    );
-    // A diamond is legal ssh — re-parsing a shared target must not
-    // emit a spurious cycle or unreadable notice.
-    expect(preview.notices, isEmpty);
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      expect(preview.rows.map((r) => r.host.alias).toList(), [
+        'from-a',
+        'shared-host',
+        'from-b',
+        'shared-host',
+      ], reason: 'shared.conf parses once per branch, like ssh');
+      // A diamond is legal ssh — re-parsing a shared target must not
+      // emit a spurious cycle or unreadable notice.
+      expect(preview.notices, isEmpty);
 
-    // A self-including file cycles instead.
-    final cycling = _FakeSource(files: {
-      _configPath: 'Include $_home/.ssh/self.conf\n',
-      '$_home/.ssh/self.conf': 'Include $_home/.ssh/self.conf\n',
-    });
-    final cyclePreview =
-        await _service(cycling).loadPreview(configPath: _configPath);
-    expect(cyclePreview.rows, isEmpty);
-    expect(
-      cyclePreview.notices.single.note,
-      SshConfigIncludeNote.cycle,
-    );
-  });
+      // A self-including file cycles instead.
+      final cycling = _FakeSource(
+        files: {
+          _configPath: 'Include $_home/.ssh/self.conf\n',
+          '$_home/.ssh/self.conf': 'Include $_home/.ssh/self.conf\n',
+        },
+      );
+      final cyclePreview = await _service(
+        cycling,
+      ).loadPreview(configPath: _configPath);
+      expect(cyclePreview.rows, isEmpty);
+      expect(cyclePreview.notices.single.note, SshConfigIncludeNote.cycle);
+    },
+  );
 
   test('nesting beyond the depth cap is noted, not fatal', () async {
     // The cap is 16 (lib's _maximumIncludeDepth); 20 links make the
     // depth check — not a missing l20.conf — the thing that fires.
-    final files = <String, String>{_configPath: 'Include $_home/.ssh/l0.conf\n'};
+    final files = <String, String>{
+      _configPath: 'Include $_home/.ssh/l0.conf\n',
+    };
     for (var i = 0; i < 20; i++) {
       files['$_home/.ssh/l$i.conf'] = 'Include $_home/.ssh/l${i + 1}.conf\n';
     }
-    final preview = await _service(_FakeSource(files: files))
-        .loadPreview(configPath: _configPath);
+    final preview = await _service(
+      _FakeSource(files: files),
+    ).loadPreview(configPath: _configPath);
 
     expect(preview.rows, isEmpty);
     expect(
@@ -603,58 +635,69 @@ Include $_home/.ssh/b.conf
     );
   });
 
-  test('an Include inside a Host block badges the host, resolves after it',
-      () async {
-    final source = _FakeSource(
-      files: {
-        _configPath: '''
+  test(
+    'an Include inside a Host block badges the host, resolves after it',
+    () async {
+      final source = _FakeSource(
+        files: {
+          _configPath:
+              '''
 Host hostwithinclude
   Include $_home/.ssh/extra.conf
 
 Host clean
 ''',
-        '$_home/.ssh/extra.conf': 'Host from-include\n',
-      },
-    );
+          '$_home/.ssh/extra.conf': 'Host from-include\n',
+        },
+      );
 
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    // The enclosing block stays whole (its own row is complete), the
-    // include's hosts import after the file's own, and the badge still
-    // warns that the block's include directives are lost.
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['hostwithinclude', 'clean', 'from-include'],
-    );
-    expect(
-      preview.rows[0].limitations,
-      contains(SshConfigImportLimitation.hostInclude),
-    );
-    expect(preview.rows[1].limitations, isEmpty);
-    expect(preview.rows[2].limitations, isEmpty);
-  });
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      // The enclosing block stays whole (its own row is complete), the
+      // include's hosts import after the file's own, and the badge still
+      // warns that the block's include directives are lost.
+      expect(preview.rows.map((r) => r.host.alias).toList(), [
+        'hostwithinclude',
+        'clean',
+        'from-include',
+      ]);
+      expect(
+        preview.rows[0].limitations,
+        contains(SshConfigImportLimitation.hostInclude),
+      );
+      expect(preview.rows[1].limitations, isEmpty);
+      expect(preview.rows[2].limitations, isEmpty);
+    },
+  );
 
-  test('Include inside a Match block is not resolved and badges everything',
-      () async {
-    final source = _FakeSource(
-      files: {
-        _configPath: '''
+  test(
+    'Include inside a Match block is not resolved and badges everything',
+    () async {
+      final source = _FakeSource(
+        files: {
+          _configPath:
+              '''
 Match host *.internal
   Include $_home/.ssh/internal.conf
 
 Host web
 ''',
-        '$_home/.ssh/internal.conf': 'Host never-imported\n',
-      },
-    );
+          '$_home/.ssh/internal.conf': 'Host never-imported\n',
+        },
+      );
 
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(preview.rows, hasLength(1));
-    expect(preview.rows.single.host.alias, 'web');
-    expect(
-      preview.rows.single.limitations,
-      contains(SshConfigImportLimitation.matchBlock),
-    );
-  });
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      expect(preview.rows, hasLength(1));
+      expect(preview.rows.single.host.alias, 'web');
+      expect(
+        preview.rows.single.limitations,
+        contains(SshConfigImportLimitation.matchBlock),
+      );
+    },
+  );
 
   test('an absolute include resolves without a home directory', () async {
     final source = _FakeSource(
@@ -699,10 +742,7 @@ Host web
     // ssh merges same-pattern blocks; the badge follows the alias into
     // both rows rather than only the block that carried the directive.
     for (final row in preview.rows) {
-      expect(
-        row.limitations,
-        contains(SshConfigImportLimitation.proxyCommand),
-      );
+      expect(row.limitations, contains(SshConfigImportLimitation.proxyCommand));
     }
   });
 
@@ -792,8 +832,7 @@ Host web
     );
   });
 
-  test('glob classes treat backslash literally instead of throwing',
-      () async {
+  test('glob classes treat backslash literally instead of throwing', () async {
     final dir = '$_home/.ssh/config.d';
     // POSIX glob classes have no escapes: `[ab\]` is the class
     // {a, b, backslash} closed by that `]`. A naive regex translation
@@ -869,14 +908,14 @@ Host web
     // x.conf — and `[!]x].conf` is "not ] and not x, then .conf",
     // matching only y.conf. Lexical order puts ].conf before x.conf.
     final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['literal-bracket', 'ex', 'why'],
-    );
+    expect(preview.rows.map((r) => r.host.alias).toList(), [
+      'literal-bracket',
+      'ex',
+      'why',
+    ]);
   });
 
-  test('a reversed character range fails closed instead of throwing',
-      () async {
+  test('a reversed character range fails closed instead of throwing', () async {
     final dir = '$_home/.ssh/config.d';
     final source = _FakeSource(
       files: {
@@ -892,28 +931,28 @@ Host web
     expect(preview.rows, isEmpty);
   });
 
-  test("globs never match dotfiles unless the pattern leads with a dot",
-      () async {
-    final dir = '$_home/.ssh/config.d';
-    final source = _FakeSource(
-      files: {
-        _configPath: 'Include $dir/*.conf\n',
-        '$dir/visible.conf': 'Host visible\n',
-        '$dir/.hidden.conf': 'Host hidden\n',
-        '$dir/.#backup.conf': 'Host backup\n',
-      },
-      dirs: {
-        dir: [
-          '$dir/.#backup.conf',
-          '$dir/.hidden.conf',
-          '$dir/visible.conf',
-        ],
-      },
-    );
+  test(
+    "globs never match dotfiles unless the pattern leads with a dot",
+    () async {
+      final dir = '$_home/.ssh/config.d';
+      final source = _FakeSource(
+        files: {
+          _configPath: 'Include $dir/*.conf\n',
+          '$dir/visible.conf': 'Host visible\n',
+          '$dir/.hidden.conf': 'Host hidden\n',
+          '$dir/.#backup.conf': 'Host backup\n',
+        },
+        dirs: {
+          dir: ['$dir/.#backup.conf', '$dir/.hidden.conf', '$dir/visible.conf'],
+        },
+      );
 
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(preview.rows.map((r) => r.host.alias).toList(), ['visible']);
-  });
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      expect(preview.rows.map((r) => r.host.alias).toList(), ['visible']);
+    },
+  );
 
   test('a leading-dot glob pattern does match dotfiles', () async {
     final dir = '$_home/.ssh/config.d';
@@ -932,77 +971,82 @@ Host web
     expect(preview.rows.map((r) => r.host.alias).toList(), ['hidden']);
   });
 
-  test('block-less proxy defaults in a host-deferred include stay scoped',
-      () async {
-    final source = _FakeSource(
-      files: {
-        _configPath: '''
+  test(
+    'block-less proxy defaults in a host-deferred include stay scoped',
+    () async {
+      final source = _FakeSource(
+        files: {
+          _configPath:
+              '''
 Host hostwithinclude
   Include $_home/.ssh/extra.conf
 
 Host clean
 ''',
-        // The pre-block ProxyJump applies (in ssh) to the enclosing host
-        // only — it must not badge every row as a global default.
-        '$_home/.ssh/extra.conf':
-            'ProxyJump bastion.example.com\n\nHost extra\n',
-      },
-    );
-
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['hostwithinclude', 'clean', 'extra'],
-    );
-    for (final row in preview.rows) {
-      expect(
-        row.limitations,
-        isNot(contains(SshConfigImportLimitation.proxyJump)),
+          // The pre-block ProxyJump applies (in ssh) to the enclosing host
+          // only — it must not badge every row as a global default.
+          '$_home/.ssh/extra.conf':
+              'ProxyJump bastion.example.com\n\nHost extra\n',
+        },
       );
-    }
-    // The enclosing host still wears the hostInclude badge for the lost
-    // directive.
-    expect(
-      preview.rows[0].limitations,
-      contains(SshConfigImportLimitation.hostInclude),
-    );
-  });
 
-  test('a file included from a wildcard block promotes its proxy defaults',
-      () async {
-    final source = _FakeSource(
-      files: {
-        _configPath: '''
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      expect(preview.rows.map((r) => r.host.alias).toList(), [
+        'hostwithinclude',
+        'clean',
+        'extra',
+      ]);
+      for (final row in preview.rows) {
+        expect(
+          row.limitations,
+          isNot(contains(SshConfigImportLimitation.proxyJump)),
+        );
+      }
+      // The enclosing host still wears the hostInclude badge for the lost
+      // directive.
+      expect(
+        preview.rows[0].limitations,
+        contains(SshConfigImportLimitation.hostInclude),
+      );
+    },
+  );
+
+  test(
+    'a file included from a wildcard block promotes its proxy defaults',
+    () async {
+      final source = _FakeSource(
+        files: {
+          _configPath:
+              '''
 Host *
   Include $_home/.ssh/proxy.conf
 
 Host web
   HostName web.example.com
 ''',
-        '$_home/.ssh/proxy.conf':
-            'ProxyJump bastion.example.com\n\nHost extra\n',
-      },
-    );
-
-    final preview = await _service(source).loadPreview(configPath: _configPath);
-    // ssh processes Include in place, so a file pulled in by `Host *`
-    // behaves like the wildcard block's own directives: its block-less
-    // proxy default applies to every connection and must badge every
-    // row (the wildcard block's own lines already do, per _scanUnsupported).
-    // Row order itself stays main-file-first for host-context includes —
-    // the documented chunking deviation in _Resolver.resolveFile; "in
-    // place" here governs directive scope, not row order.
-    expect(
-      preview.rows.map((r) => r.host.alias).toList(),
-      ['web', 'extra'],
-    );
-    for (final row in preview.rows) {
-      expect(
-        row.limitations,
-        contains(SshConfigImportLimitation.proxyJump),
+          '$_home/.ssh/proxy.conf':
+              'ProxyJump bastion.example.com\n\nHost extra\n',
+        },
       );
-    }
-  });
+
+      final preview = await _service(
+        source,
+      ).loadPreview(configPath: _configPath);
+      // ssh processes Include in place, so a file pulled in by `Host *`
+      // behaves like the wildcard block's own directives: its block-less
+      // proxy default applies to every connection and must badge every
+      // row (the wildcard block's own lines already do, per _scanUnsupported).
+      // Row order itself stays main-file-first for host-context includes —
+      // the documented chunking deviation in _Resolver.resolveFile; "in
+      // place" here governs directive scope, not row order.
+      expect(preview.rows.map((r) => r.host.alias).toList(), ['web', 'extra']);
+      for (final row in preview.rows) {
+        expect(row.limitations, contains(SshConfigImportLimitation.proxyJump));
+      }
+    },
+  );
 
   test('multi-pattern Host blocks surface one row per name', () async {
     final preview = await _load('''
@@ -1026,73 +1070,88 @@ Host alpha beta *.corp !gamma
     }
   });
 
-  test('Host pattern separators agree with the pin for every whitespace kind',
-      () async {
-    // The pin splits Host patterns on spaces and tabs only, as ssh's
-    // argv_split() does, so `Host alpha\rbeta` is one pattern there. The
-    // scan reads lines through the pin's own SshConfigLine, so its
-    // per-host badges key by exactly the alias the pin minted.
-    // Regression: `Host alpha\rbeta` once keyed the ProxyCommand badge
-    // under a token the pin never made.
-    const separators = {
-      'space': ' ',
-      'tab': '\t',
-      'carriage-return': '\r',
-      'vertical-tab': '\u000b',
-      'form-feed': '\u000c',
-      // Not a separator for ssh or the pin either.
-      'unicode-space': '\u00a0',
-    };
+  test(
+    'Host pattern separators agree with the pin for every whitespace kind',
+    () async {
+      // The pin splits Host patterns on spaces and tabs only, as ssh's
+      // argv_split() does, so `Host alpha\rbeta` is one pattern there. The
+      // scan reads lines through the pin's own SshConfigLine, so its
+      // per-host badges key by exactly the alias the pin minted.
+      // Regression: `Host alpha\rbeta` once keyed the ProxyCommand badge
+      // under a token the pin never made.
+      const separators = {
+        'space': ' ',
+        'tab': '\t',
+        'carriage-return': '\r',
+        'vertical-tab': '\u000b',
+        'form-feed': '\u000c',
+        // Not a separator for ssh or the pin either.
+        'unicode-space': '\u00a0',
+      };
 
-    for (final separator in separators.entries) {
-      final text = 'Host alpha${separator.value}beta\n'
-          '  ProxyCommand nc %h %p\n';
-      // The pinned importer is the oracle: the preview rows must carry
-      // the aliases the pin minted, not a second host parser's.
-      final pinnedAliases =
-          SshConfigImporter.parse(text).hosts.map((h) => h.alias).toList();
+      for (final separator in separators.entries) {
+        final text =
+            'Host alpha${separator.value}beta\n'
+            '  ProxyCommand nc %h %p\n';
+        // The pinned importer is the oracle: the preview rows must carry
+        // the aliases the pin minted, not a second host parser's.
+        final pinnedAliases = SshConfigImporter.parse(
+          text,
+        ).hosts.map((h) => h.alias).toList();
+        final preview = await _load(text);
+
+        expect(
+          preview.rows.map((r) => r.host.alias).toList(),
+          pinnedAliases,
+          reason: separator.key,
+        );
+        for (final row in preview.rows) {
+          expect(
+            row.limitations,
+            contains(SshConfigImportLimitation.proxyCommand),
+            reason: separator.key,
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'an Include in a whitespace-separated Host block badges the pin alias',
+    () async {
+      // The hostInclude badge rides the same alias key as ProxyCommand;
+      // pin it with a carriage-return separator so neither badge path
+      // can drift from the pin's tokenization again.
+      final text =
+          'Host alpha\rbeta\n'
+          '  Include extra.conf\n';
+      final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
       final preview = await _load(text);
 
-      expect(preview.rows.map((r) => r.host.alias).toList(), pinnedAliases,
-          reason: separator.key);
-      for (final row in preview.rows) {
-        expect(row.limitations,
-            contains(SshConfigImportLimitation.proxyCommand),
-            reason: separator.key);
-      }
-    }
-  });
-
-  test('an Include in a whitespace-separated Host block badges the pin alias',
-      () async {
-    // The hostInclude badge rides the same alias key as ProxyCommand;
-    // pin it with a carriage-return separator so neither badge path
-    // can drift from the pin's tokenization again.
-    final text = 'Host alpha\rbeta\n'
-        '  Include extra.conf\n';
-    final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
-    final preview = await _load(text);
-
-    expect(preview.rows.single.host.alias, pinnedAlias);
-    expect(preview.rows.single.limitations,
-        contains(SshConfigImportLimitation.hostInclude));
-  });
+      expect(preview.rows.single.host.alias, pinnedAlias);
+      expect(
+        preview.rows.single.limitations,
+        contains(SshConfigImportLimitation.hostInclude),
+      );
+    },
+  );
 
   test('quoted Host patterns keep alias parity with the pin', () async {
     // The scan unquotes Host patterns through the pin's SshConfigLine,
     // so the quote rule cannot drift and key badges under a token the
     // pin never minted.
-    final text = 'Host "alpha" "beta"\n'
+    final text =
+        'Host "alpha" "beta"\n'
         '  ProxyCommand nc %h %p\n';
-    final pinnedAliases =
-        SshConfigImporter.parse(text).hosts.map((h) => h.alias).toList();
+    final pinnedAliases = SshConfigImporter.parse(
+      text,
+    ).hosts.map((h) => h.alias).toList();
     final preview = await _load(text);
 
     expect(pinnedAliases, ['alpha', 'beta']);
     expect(preview.rows.map((r) => r.host.alias).toList(), pinnedAliases);
     for (final row in preview.rows) {
-      expect(row.limitations,
-          contains(SshConfigImportLimitation.proxyCommand));
+      expect(row.limitations, contains(SshConfigImportLimitation.proxyCommand));
     }
   });
 
@@ -1156,11 +1215,11 @@ Host web
     expect(preview.rows.single.host.identityFile, '~/.ssh/id_ed25519');
   });
 
-  test('deferred-include defaults stay scoped, like proxy defaults',
-      () async {
+  test('deferred-include defaults stay scoped, like proxy defaults', () async {
     final source = _FakeSource(
       files: {
-        _configPath: '''
+        _configPath:
+            '''
 Host hostwithinclude
   HostName web.example.com
   Include $_home/.ssh/defaults.conf

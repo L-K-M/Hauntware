@@ -38,9 +38,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 /// required values fail fast — a run writing to the default path or
 /// against a guessed fixture would produce evidence pointing nowhere.
 class BenchConfig {
-  static const outputPath = String.fromEnvironment(
-    'POLTERGEIST_BENCH_OUTPUT',
-  );
+  static const outputPath = String.fromEnvironment('POLTERGEIST_BENCH_OUTPUT');
   static const fixtureRoot = String.fromEnvironment(
     'POLTERGEIST_BENCH_FIXTURE_ROOT',
   );
@@ -404,10 +402,7 @@ Future<int> measureTabSwitchMicros(
 /// Navigates the measured pane to [path] and waits for the listing to
 /// settle — the inter-repetition reset that keeps each measured leg
 /// independent of the previous listing's rows.
-Future<void> settlePane(
-  BenchmarkRig rig,
-  String path,
-) async {
+Future<void> settlePane(BenchmarkRig rig, String path) async {
   rig.pane.navigate(path);
   await waitFor(
     rig.tester,
@@ -475,9 +470,7 @@ Future<BenchFingerprint> detectFingerprint() async => BenchFingerprint(
       : BenchConfig.flutterVersion,
   mode: BenchFingerprint.detectMode(),
   cpuModel: await BenchFingerprint.detectCpuModel(
-    BenchConfig.cpuModelOverride.isEmpty
-        ? null
-        : BenchConfig.cpuModelOverride,
+    BenchConfig.cpuModelOverride.isEmpty ? null : BenchConfig.cpuModelOverride,
   ),
 );
 
@@ -489,7 +482,7 @@ Future<void> runBenchScenario(
   WidgetTester tester, {
   required String name,
   required Future<void> Function(BenchmarkRig rig, BenchResults results)
-      measure,
+  measure,
 }) async {
   final fingerprint = await detectFingerprint();
   final results = BenchResults(fingerprint: fingerprint);

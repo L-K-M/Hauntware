@@ -84,7 +84,9 @@ final class InMemoryPinVerdictStore implements PinVerdictStore {
 
   @override
   Future<void> recordKeptVerdict(
-      String locator, String rejectedFingerprint) async {
+    String locator,
+    String rejectedFingerprint,
+  ) async {
     _kept[locator] = rejectedFingerprint;
   }
 }

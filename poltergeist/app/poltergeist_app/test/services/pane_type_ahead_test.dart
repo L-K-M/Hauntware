@@ -5,8 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 
-import 'pane_controller_test.dart'
-    show FakePaneLanes, FakePaneChannel;
+import 'pane_controller_test.dart' show FakePaneLanes, FakePaneChannel;
 
 RemoteFileEntry _entry(
   String name, {
@@ -72,8 +71,11 @@ void main() {
 
       controller.typeAhead('r');
       async.elapse(const Duration(milliseconds: 999));
-      expect(controller.typeAheadBuffer, 'r',
-          reason: 'the reset is inactivity-gated, not a fixed deadline');
+      expect(
+        controller.typeAheadBuffer,
+        'r',
+        reason: 'the reset is inactivity-gated, not a fixed deadline',
+      );
       async.elapse(const Duration(milliseconds: 2));
       expect(controller.typeAheadBuffer, '');
       expect(controller.typeAheadActive, isFalse);
@@ -124,14 +126,20 @@ void main() {
 
       controller.clearTypeAhead();
       controller.typeAhead('E');
-      expect(controller.entries[controller.cursorIndex!].name, 'Étude.doc',
-          reason: 'an uppercase keystroke folds and still matches');
+      expect(
+        controller.entries[controller.cursorIndex!].name,
+        'Étude.doc',
+        reason: 'an uppercase keystroke folds and still matches',
+      );
 
       controller.clearTypeAhead();
       controller.typeAhead('é');
       controller.typeAhead('t');
-      expect(controller.entries[controller.cursorIndex!].name, 'Étude.doc',
-          reason: 'ét folds to et and still prefixes Étude');
+      expect(
+        controller.entries[controller.cursorIndex!].name,
+        'Étude.doc',
+        reason: 'ét folds to et and still prefixes Étude',
+      );
 
       // Prefix-only: 'tt' does not reach settings.json's infix.
       controller.clearTypeAhead();
@@ -183,7 +191,8 @@ void main() {
       expect(
         controller.entries[controller.cursorIndex!].name,
         'apple.txt',
-        reason: 'the flagged row is ineligible for by-name matching — '
+        reason:
+            'the flagged row is ineligible for by-name matching — '
             'no match keeps the cursor where it was',
       );
 
@@ -205,9 +214,13 @@ void main() {
         _entry('visible.txt'),
       ]);
 
-      expect(controller.entries.map((e) => e.name), ['visible.txt'],
-          reason: 'dotfiles are filtered at listing accept — they never '
-              'reach the matcher');
+      expect(
+        controller.entries.map((e) => e.name),
+        ['visible.txt'],
+        reason:
+            'dotfiles are filtered at listing accept — they never '
+            'reach the matcher',
+      );
       controller.typeAhead('h');
       expect(controller.cursorIndex, isNull);
       controller.clearTypeAhead();
@@ -224,9 +237,7 @@ void main() {
       final lanes = FakePaneLanes();
       // Entry names carry the basename; the path's parent segments must
       // not be reachable through type-ahead ('home' would hit every row).
-      final controller = openBrowsing(async, lanes, [
-        _entry('readme.md'),
-      ]);
+      final controller = openBrowsing(async, lanes, [_entry('readme.md')]);
 
       controller.typeAhead('h');
       controller.typeAhead('o');
@@ -259,7 +270,8 @@ void main() {
       expect(
         controller.typeAheadBuffer,
         '',
-        reason: 'the accepted listing replaced the rows the buffer '
+        reason:
+            'the accepted listing replaced the rows the buffer '
             'was matched against',
       );
 
@@ -281,12 +293,18 @@ void main() {
 
       controller.clearTypeAhead();
       expect(controller.typeAheadBuffer, '');
-      expect(controller.entries[controller.cursorIndex!].name, 'beta.txt',
-          reason: 'Esc clears the pending buffer, not the jumped cursor');
+      expect(
+        controller.entries[controller.cursorIndex!].name,
+        'beta.txt',
+        reason: 'Esc clears the pending buffer, not the jumped cursor',
+      );
 
       // The cleared buffer leaves no pending reset timer.
-      expect(async.pendingTimers, isEmpty,
-          reason: 'clearTypeAhead cancels the pending reset');
+      expect(
+        async.pendingTimers,
+        isEmpty,
+        reason: 'clearTypeAhead cancels the pending reset',
+      );
       async.elapse(const Duration(seconds: 2));
       controller.dispose();
       async.flushMicrotasks();

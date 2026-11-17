@@ -75,16 +75,13 @@ void main() {
     final blockedParent = File(p.join(temporaryDirectory.path, 'blocked'));
     await blockedParent.writeAsString('not a directory');
     final preferences = AppPreferences(
-      store: SettingsStore(
-        path: p.join(blockedParent.path, 'settings.json'),
-      ),
+      store: SettingsStore(path: p.join(blockedParent.path, 'settings.json')),
     );
 
     expect(await preferences.loadWindowBounds(), isNull);
   });
 
-  test('persists every Double-click action value and reads it back',
-      () async {
+  test('persists every Double-click action value and reads it back', () async {
     for (final action in DoubleClickAction.values) {
       final preferences = AppPreferences(
         store: SettingsStore(path: settingsFile.path),
@@ -94,8 +91,7 @@ void main() {
     }
   });
 
-  test('the restored-tab reconnect setting defaults ON and persists',
-      () async {
+  test('the restored-tab reconnect setting defaults ON and persists', () async {
     final preferences = AppPreferences(
       store: SettingsStore(path: settingsFile.path),
     );
@@ -108,9 +104,7 @@ void main() {
     // A non-bool stored value reads as the spec default, not a failure.
     // SettingsStore caches after first load, so a fresh store observes
     // the externally written file.
-    await settingsFile.writeAsString(
-      '{"tabs.reconnectRestored":"yes"}',
-    );
+    await settingsFile.writeAsString('{"tabs.reconnectRestored":"yes"}');
     final reloaded = AppPreferences(
       store: SettingsStore(path: settingsFile.path),
     );
@@ -123,18 +117,10 @@ void main() {
       store: SettingsStore(path: settingsFile.path),
     );
 
-    expect(
-      await preferences.loadDoubleClickAction(),
-      DoubleClickAction.open,
-    );
+    expect(await preferences.loadDoubleClickAction(), DoubleClickAction.open);
 
-    await settingsFile.writeAsString(
-      '{"panes.doubleClickAction":"teleport"}',
-    );
-    expect(
-      await preferences.loadDoubleClickAction(),
-      DoubleClickAction.open,
-    );
+    await settingsFile.writeAsString('{"panes.doubleClickAction":"teleport"}');
+    expect(await preferences.loadDoubleClickAction(), DoubleClickAction.open);
   });
 
   test('the sidebar density defaults to comfortable, persists, and falls '
@@ -414,22 +400,24 @@ void main() {
     );
   });
 
-  test('the app lock is off until saved, and reads back what was saved',
-      () async {
-    final preferences = AppPreferences(
-      store: SettingsStore(path: settingsFile.path),
-    );
-
-    expect(await preferences.loadAppLock(), isFalse);
-
-    await preferences.saveAppLock(true);
-    expect(
-      await AppPreferences(
+  test(
+    'the app lock is off until saved, and reads back what was saved',
+    () async {
+      final preferences = AppPreferences(
         store: SettingsStore(path: settingsFile.path),
-      ).loadAppLock(),
-      isTrue,
-    );
-  });
+      );
+
+      expect(await preferences.loadAppLock(), isFalse);
+
+      await preferences.saveAppLock(true);
+      expect(
+        await AppPreferences(
+          store: SettingsStore(path: settingsFile.path),
+        ).loadAppLock(),
+        isTrue,
+      );
+    },
+  );
 
   test('an unreadable store reads the app lock as off', () async {
     await settingsFile.writeAsBytes([0xff]);
@@ -695,12 +683,8 @@ void main() {
     expect(await reread.setServerTransferConcurrency('fast', null), {
       'fussy': const TransferConcurrency.fixed(1),
     });
-    await reread.saveTransferConcurrency(
-      const TransferConcurrency.automatic(),
-    );
-    final again = AppPreferences(
-      store: SettingsStore(path: settingsFile.path),
-    );
+    await reread.saveTransferConcurrency(const TransferConcurrency.automatic());
+    final again = AppPreferences(store: SettingsStore(path: settingsFile.path));
     expect(
       await again.loadTransferConcurrency(),
       const TransferConcurrency.automatic(),
@@ -745,8 +729,7 @@ void main() {
     expect(stored['transfer.serverConcurrency'], {'d': 4, 'e': 'automatic'});
   });
 
-  test('a non-finite persisted transfer limit decodes as unlimited',
-      () async {
+  test('a non-finite persisted transfer limit decodes as unlimited', () async {
     // jsonDecode saturates an over-range literal to Infinity, and
     // toInt() throws on it outside the get's try — a corrupt settings
     // file must not crash the loader (the panel-height loader already

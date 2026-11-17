@@ -158,8 +158,7 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
         // read as "your font is not installed".
         if ((!_monospaceOnly ||
                 family.monospaced ||
-                (current.isNotEmpty &&
-                    family.name.toLowerCase() == current)) &&
+                (current.isNotEmpty && family.name.toLowerCase() == current)) &&
             (query.isEmpty || family.name.toLowerCase().contains(query)))
           family,
     ];
@@ -198,8 +197,7 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
                   label: const Text('Monospace only'),
                   selected: _monospaceOnly,
                   visualDensity: VisualDensity.compact,
-                  onSelected: (value) =>
-                      setState(() => _monospaceOnly = value),
+                  onSelected: (value) => setState(() => _monospaceOnly = value),
                 ),
               ),
             ],

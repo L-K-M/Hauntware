@@ -22,11 +22,7 @@ sealed class ServerMark {
   /// server that has an image *and* a remembered glyph shows the image; the
   /// glyph stays stored as what an older build, or a device that cannot decode
   /// the image, falls back to.
-  factory ServerMark.resolve({
-    ServerIcon? icon,
-    String? emoji,
-    String? image,
-  }) {
+  factory ServerMark.resolve({ServerIcon? icon, String? emoji, String? image}) {
     if (image != null) {
       // Trimmed, then straight to the decoder — not through the normalizer,
       // which would re-run the whole validation (a base64Decode of up to

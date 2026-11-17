@@ -592,11 +592,8 @@ class PoolHarness {
   Object? credentialFailure;
   int keyboardCalls = 0;
   Completer<List<String>>? keyboardGate;
-  final recoveryFailures = <({
-    String serverId,
-    String? paneTabId,
-    RemoteFileException error,
-  })>[];
+  final recoveryFailures =
+      <({String serverId, String? paneTabId, RemoteFileException error})>[];
 
   /// Incident-store failures reported by the manager's observer hook.
   final incidentStoreErrors = <Object>[];
@@ -619,11 +616,10 @@ class PoolHarness {
       credentials: SshCredentials.privateKey('TEST KEY'),
       origin: CredentialOrigin.stored,
     ),
-    FutureOr<ResolvedCredentials> Function(ServerConfig config)?
-    credentialsFor,
+    FutureOr<ResolvedCredentials> Function(ServerConfig config)? credentialsFor,
     void Function(Object error)? onIncidentStoreError,
     void Function(String, RemoteFileException, {String? paneTabId})?
-        onRecoveryFailure,
+    onRecoveryFailure,
   }) {
     this.opener = opener ?? FakeTransportOpener();
     this.incidentStore = incidentStore ?? InMemoryIncidentStore();

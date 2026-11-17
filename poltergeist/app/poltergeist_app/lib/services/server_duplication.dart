@@ -29,7 +29,8 @@ class SourceServerChanged implements Exception {
   const SourceServerChanged(this.label);
 
   @override
-  String toString() => '"$label" changed while it was being copied — it was '
+  String toString() =>
+      '"$label" changed while it was being copied — it was '
       'deleted, or it now holds a different credential. Nothing was created.';
 }
 

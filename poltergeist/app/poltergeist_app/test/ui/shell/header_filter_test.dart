@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,18 +50,12 @@ void main() {
     engine = session_test.FakeAppEngine();
     engine.localChannels.addAll([
       session_test.FakeAppBrowseChannel(homePath: '/home/tester')
-        ..listings['/home/tester'] = [
-          _entry('alpha.txt'),
-          _entry('beta.txt'),
-        ],
+        ..listings['/home/tester'] = [_entry('alpha.txt'), _entry('beta.txt')],
       session_test.FakeAppBrowseChannel(homePath: '/home/tester')
         ..listings['/home/tester'] = [_entry('right.txt')],
       // A ⌘T tab in pane A.
       session_test.FakeAppBrowseChannel(homePath: '/home/tester')
-        ..listings['/home/tester'] = [
-          _entry('gamma.txt'),
-          _entry('delta.txt'),
-        ],
+        ..listings['/home/tester'] = [_entry('gamma.txt'), _entry('delta.txt')],
     ]);
   });
 
@@ -250,9 +245,7 @@ void main() {
       expect(pane.entries[pane.cursorIndex!].name, 'beta.txt');
     }, variant: linux);
 
-    testWidgets('Enter keeps a cursor the query left standing', (
-      tester,
-    ) async {
+    testWidgets('Enter keeps a cursor the query left standing', (tester) async {
       await pumpApp(tester);
       await runShellCommand(tester, kPaneFocusLeftCommandId);
       final pane = activePane(tester);
@@ -265,9 +258,7 @@ void main() {
       expect(pane.entries[pane.cursorIndex!].name, 'beta.txt');
     }, variant: linux);
 
-    testWidgets('Down steps into the first row of the results', (
-      tester,
-    ) async {
+    testWidgets('Down steps into the first row of the results', (tester) async {
       await pumpApp(tester);
       await runShellCommand(tester, kPaneFocusLeftCommandId);
       final pane = activePane(tester);
@@ -312,12 +303,12 @@ void main() {
     testWidgets('the cursor a cleared query leaves is scrolled into view', (
       tester,
     ) async {
-      engine.localChannels[0] = session_test.FakeAppBrowseChannel(
-        homePath: '/home/tester',
-      )..listings['/home/tester'] = [
-          for (var i = 0; i < 200; i++)
-            _entry('file${i.toString().padLeft(3, '0')}.txt'),
-        ];
+      engine.localChannels[0] =
+          session_test.FakeAppBrowseChannel(homePath: '/home/tester')
+            ..listings['/home/tester'] = [
+              for (var i = 0; i < 200; i++)
+                _entry('file${i.toString().padLeft(3, '0')}.txt'),
+            ];
       await pumpApp(tester);
       await typeQuery(tester, 'file150');
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -340,9 +331,7 @@ void main() {
       );
       expect(row, findsOneWidget);
       final viewport = tester.getRect(
-        find
-            .ancestor(of: row, matching: find.byType(Scrollable))
-            .first,
+        find.ancestor(of: row, matching: find.byType(Scrollable)).first,
       );
       final rect = tester.getRect(row);
       expect(rect.top, greaterThanOrEqualTo(viewport.top));
@@ -350,9 +339,7 @@ void main() {
     }, variant: linux);
   });
 
-  testWidgets('Ctrl+F (view.filter) focuses the header field', (
-    tester,
-  ) async {
+  testWidgets('Ctrl+F (view.filter) focuses the header field', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     try {
       await pumpApp(tester);
@@ -366,10 +353,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pumpAndSettle();
-      expect(
-        FocusManager.instance.primaryFocus?.debugLabel,
-        'header.filter',
-      );
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'header.filter');
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

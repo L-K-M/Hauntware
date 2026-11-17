@@ -23,10 +23,8 @@ void main() {
       // toString, so an upgrade that changes the format fails here rather
       // than at the fail-closed branch in production.
       final log = SshConnectionLog();
-      final raw = '${SSH_Message_Userauth_InfoResponse(responses: const [
-        'hunter2',
-        'second-answer',
-      ])}';
+      final raw =
+          '${SSH_Message_Userauth_InfoResponse(responses: const ['hunter2', 'second-answer'])}';
       // The precondition, pinned whole. Through 3.x this read `contains
       // ('hunter2')`: the message printed its answers and the scrubber had
       // to remove them. dartssh2 4.0.0 (#229) prints only how many there
@@ -41,13 +39,15 @@ void main() {
       expect(
         raw,
         allOf(isNot(contains('hunter2')), isNot(contains('second-answer'))),
-        reason: 'dartssh2 prints keyboard-interactive answers again. Scrub '
+        reason:
+            'dartssh2 prints keyboard-interactive answers again. Scrub '
             'them at capture in SshConnectionLog before upgrading.',
       );
       expect(
         raw,
         'SSH_Message_Userauth_InfoResponse(responses: 2)',
-        reason: 'dartssh2 has changed what SSH_Message_Userauth_InfoResponse '
+        reason:
+            'dartssh2 has changed what SSH_Message_Userauth_InfoResponse '
             'prints. That is a dependency change: re-audit the message/ '
             'toStrings and re-base redactConnectionTrace before upgrading.',
       );
@@ -76,10 +76,8 @@ void main() {
       // into bug reports. Built from the real message for the same reason the
       // InfoResponse one is: a hand-written line would pin my reading of
       // dartssh2 rather than dartssh2.
-      final raw = '${SSH_Message_Userauth_Request.password(
-        user: 'deploy',
-        password: 'hunter2',
-      )}';
+      final raw =
+          '${SSH_Message_Userauth_Request.password(user: 'deploy', password: 'hunter2')}';
       // The mechanism, asserted on the message itself rather than through the
       // log: the password is absent because dartssh2 omits it, and an upgrade
       // that started printing it fails here. Asserting it as "the log did not
@@ -89,7 +87,8 @@ void main() {
       expect(
         raw,
         isNot(contains('hunter2')),
-        reason: 'dartssh2 has started printing the password in '
+        reason:
+            'dartssh2 has started printing the password in '
             'SSH_Message_Userauth_Request.toString(). This is a dependency '
             'change, not a redaction regression: scrub it at capture in '
             'SshConnectionLog, or hold the previous dartssh2, before '
@@ -108,15 +107,13 @@ void main() {
       // sends it when a server answers a password login with a change
       // request, and it carries two credentials at once. Asserted on the
       // message itself for the same reason as the password request above.
-      final raw = '${SSH_Message_Userauth_Request.newPassword(
-        user: 'deploy',
-        oldPassword: 'old-hunter2',
-        newPassword: 'new-hunter3',
-      )}';
+      final raw =
+          '${SSH_Message_Userauth_Request.newPassword(user: 'deploy', oldPassword: 'old-hunter2', newPassword: 'new-hunter3')}';
       expect(
         raw,
         allOf(isNot(contains('old-hunter2')), isNot(contains('new-hunter3'))),
-        reason: 'dartssh2 has started printing a password in '
+        reason:
+            'dartssh2 has started printing a password in '
             'SSH_Message_Userauth_Request.toString(). This is a dependency '
             'change, not a redaction regression: scrub it at capture in '
             'SshConnectionLog, or hold the previous dartssh2, before '

@@ -76,41 +76,41 @@ final class BookmarkBackupService extends ChangeNotifier
     SettingsStore? settings,
     String? Function()? recordQuarantinePath,
     DateTime Function()? now,
-  })  : // Collaborator names stay public; the fields stay private.
-        // ignore: prefer_initializing_formals
-        _credentials = credentials,
-        // ignore: prefer_initializing_formals
-        _retainedTokens = retainedTokens,
-        // ignore: prefer_initializing_formals
-        _enrollmentState = enrollmentState,
-        // ignore: prefer_initializing_formals
-        _records = records,
-        // ignore: prefer_initializing_formals
-        _resetRecords = resetRecords,
-        // ignore: prefer_initializing_formals
-        _bookmarks = bookmarks,
-        _bookmarkHandler = BookmarkHandler(bookmarks: bookmarks),
-        // ignore: prefer_initializing_formals
-        _hostKeys = hostKeys,
-        // ignore: prefer_initializing_formals
-        _pinVerdicts = pinVerdicts,
-        // ignore: prefer_initializing_formals
-        _tripwires = tripwires,
-        // ignore: prefer_initializing_formals
-        _transportFactory = transportFactory,
-        // ignore: prefer_initializing_formals
-        _vaultKey = vaultKey,
-        // ignore: prefer_initializing_formals
-        _servers = servers,
-        // ignore: prefer_initializing_formals
-        _vaultStore = vaultStore,
-        // ignore: prefer_initializing_formals
-        _serverCatalogPublisher = serverCatalogPublisher,
-        // ignore: prefer_initializing_formals
-        _settings = settings,
-        // ignore: prefer_initializing_formals
-        _recordQuarantinePath = recordQuarantinePath,
-        _now = now ?? DateTime.now;
+  }) : // Collaborator names stay public; the fields stay private.
+       // ignore: prefer_initializing_formals
+       _credentials = credentials,
+       // ignore: prefer_initializing_formals
+       _retainedTokens = retainedTokens,
+       // ignore: prefer_initializing_formals
+       _enrollmentState = enrollmentState,
+       // ignore: prefer_initializing_formals
+       _records = records,
+       // ignore: prefer_initializing_formals
+       _resetRecords = resetRecords,
+       // ignore: prefer_initializing_formals
+       _bookmarks = bookmarks,
+       _bookmarkHandler = BookmarkHandler(bookmarks: bookmarks),
+       // ignore: prefer_initializing_formals
+       _hostKeys = hostKeys,
+       // ignore: prefer_initializing_formals
+       _pinVerdicts = pinVerdicts,
+       // ignore: prefer_initializing_formals
+       _tripwires = tripwires,
+       // ignore: prefer_initializing_formals
+       _transportFactory = transportFactory,
+       // ignore: prefer_initializing_formals
+       _vaultKey = vaultKey,
+       // ignore: prefer_initializing_formals
+       _servers = servers,
+       // ignore: prefer_initializing_formals
+       _vaultStore = vaultStore,
+       // ignore: prefer_initializing_formals
+       _serverCatalogPublisher = serverCatalogPublisher,
+       // ignore: prefer_initializing_formals
+       _settings = settings,
+       // ignore: prefer_initializing_formals
+       _recordQuarantinePath = recordQuarantinePath,
+       _now = now ?? DateTime.now;
 
   final SyncCredentialStore _credentials;
   final RetainedSyncTokenStore _retainedTokens;
@@ -274,8 +274,9 @@ final class BookmarkBackupService extends ChangeNotifier
     _passphraseUnverified = await _enrollmentState.passphraseUnverified();
     _trippedIds = await _tripwires.trippedIds();
     final coordinator = _coordinator;
-    _pinConflicts =
-        coordinator == null ? const [] : await coordinator.pinConflicts();
+    _pinConflicts = coordinator == null
+        ? const []
+        : await coordinator.pinConflicts();
     _quarantinedPath = _recordQuarantinePath?.call();
     _retainedAccount = await _loadRetainedAccount();
     _retainedTokenAvailable = await _retainedTokens.read() != null;
@@ -324,14 +325,13 @@ final class BookmarkBackupService extends ChangeNotifier
   /// orphaned-credential check reads the store before the tombstone lands,
   /// and two of them racing is exactly the read-then-write hazard the tail
   /// exists for (Séance's `_mutate` queue, narrowed to the server domain).
-  Future<void> deleteServer(ServerConfig server) =>
-      _mutateServer(() async {
-        final coordinator = _coordinator;
-        if (coordinator == null) return;
+  Future<void> deleteServer(ServerConfig server) => _mutateServer(() async {
+    final coordinator = _coordinator;
+    if (coordinator == null) return;
 
-        await coordinator.writer.deleteServer(server);
-        notifyListeners();
-      });
+    await coordinator.writer.deleteServer(server);
+    notifyListeners();
+  });
 
   /// The server-domain mutation tail delete and duplicate serialize on.
   /// Duplicating reads the vault and the label set before writing — the
@@ -372,9 +372,7 @@ final class BookmarkBackupService extends ChangeNotifier
       if (vault == null) {
         // Reachable only with the account gone mid-tap — the catalog, and
         // so this verb, exists only where the vault resolved.
-        throw StateError(
-          'the vault is unavailable — cannot duplicate servers',
-        );
+        throw StateError('the vault is unavailable — cannot duplicate servers');
       }
       final plan = await planServerDuplication(
         latest!,
@@ -401,8 +399,10 @@ final class BookmarkBackupService extends ChangeNotifier
     if (vault == null) {
       throw StateError('the vault is unavailable — cannot save secrets');
     }
-    await vault.putLocalSecret(secret,
-        updatedAt: _now().toUtc().millisecondsSinceEpoch);
+    await vault.putLocalSecret(
+      secret,
+      updatedAt: _now().toUtc().millisecondsSinceEpoch,
+    );
     await _coordinator?.writer.secretSaved(secret.id);
   }
 
@@ -445,7 +445,8 @@ final class BookmarkBackupService extends ChangeNotifier
     final previous = _coordinator;
     // Same account and vault key: the new coordinator keeps serving the
     // live catalog, so a rebind never flashes an empty server list.
-    final canReuseCatalog = shared &&
+    final canReuseCatalog =
+        shared &&
         _catalog != null &&
         previous != null &&
         identical(previous.catalog, _catalog) &&
@@ -503,11 +504,11 @@ final class BookmarkBackupService extends ChangeNotifier
   }
 
   SyncEnrollment _enrollment() => SyncEnrollment(
-        credentials: _credentials,
-        state: _enrollmentState,
-        records: _records,
-        handlers: [_bookmarkHandler],
-      );
+    credentials: _credentials,
+    state: _enrollmentState,
+    records: _records,
+    handlers: [_bookmarkHandler],
+  );
 
   /// A durable-state mutation must never overlap an in-flight round: the
   /// round's writes and status bookkeeping belong to the account it
@@ -810,8 +811,7 @@ final class BookmarkBackupService extends ChangeNotifier
         }
         // 8. The hold set is recomputed from the pull, never snapshotted.
         final held = await coordinator.pinConflicts();
-        final heldLocators =
-            {for (final conflict in held) conflict.locator};
+        final heldLocators = {for (final conflict in held) conflict.locator};
         // 9. Re-seal every non-held local pin under a fresh LWW tuple on
         //    this deviceId so hosts verified in separate mode reach the
         //    shared fleet — through the writer's seal funnel, like every
@@ -819,13 +819,15 @@ final class BookmarkBackupService extends ChangeNotifier
         final deviceId = await _enrollmentState.deviceId();
         for (final pin in await _hostKeys.all()) {
           if (heldLocators.contains(pin.locator)) continue;
-          await coordinator.writer.sealLocal(DecryptedRecord(
-            id: pin.recordId,
-            kind: RecordKind.hostKey,
-            updatedAt: _now().toUtc().millisecondsSinceEpoch,
-            deviceId: deviceId,
-            data: pin.toJson(),
-          ));
+          await coordinator.writer.sealLocal(
+            DecryptedRecord(
+              id: pin.recordId,
+              kind: RecordKind.hostKey,
+              updatedAt: _now().toUtc().millisecondsSinceEpoch,
+              deviceId: deviceId,
+              data: pin.toJson(),
+            ),
+          );
         }
         await refresh();
         return BackupSwitchOutcome(

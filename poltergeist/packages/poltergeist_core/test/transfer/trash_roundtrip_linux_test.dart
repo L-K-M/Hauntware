@@ -37,15 +37,11 @@ List<Directory> _trashInfoDirs(String trashedFrom) {
   // where the spec puts the volume trash — not a guessed '/' or '/tmp'.
   // The parent directory, not the file: the file may already be trashed
   // (the teardown path) while its parent still exists.
-  final mount =
-      Process.runSync('stat', [
-            '-c',
-            '%m',
-            File(trashedFrom).parent.path,
-          ])
-          .stdout
-          .toString()
-          .trim();
+  final mount = Process.runSync('stat', [
+    '-c',
+    '%m',
+    File(trashedFrom).parent.path,
+  ]).stdout.toString().trim();
   if (uid.isNotEmpty && mount.isNotEmpty) {
     final top = mount.endsWith('/') ? mount : '$mount/';
     dirs.add(Directory('$top.Trash-$uid/info'));

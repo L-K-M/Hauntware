@@ -53,8 +53,7 @@ void main() {
       connections: connections,
       poolPolicy: PoolPolicy(taskRetryLimit: taskRetryLimit),
       maxInFlightFiles: maxInFlightFiles ?? maxGlobalInFlightTransfers,
-      maxPendingConflicts:
-          maxPendingConflicts ?? maxSurfacedPendingConflicts,
+      maxPendingConflicts: maxPendingConflicts ?? maxSurfacedPendingConflicts,
     );
     createdQueues.add(created);
     return created;
@@ -87,9 +86,7 @@ void main() {
       () => queue.pendingConflicts.isNotEmpty,
       reason: 'the collision never surfaced',
     );
-    return task.items
-        .where((i) => i.destinationPath == destinationPath)
-        .single;
+    return task.items.where((i) => i.destinationPath == destinationPath).single;
   }
 
   group('park and resolve (02 §5.2, 03 §4.1)', () {
@@ -113,19 +110,20 @@ void main() {
       expect(conflict.destinationPath, '/dst/f.txt');
       expect(conflict.existing.size, 3);
       expect(conflict.existing.modifiedAt, DateTime.utc(2020));
-      expect(conflict.availableVerbs, isNot(contains(ConflictResolution.merge)));
+      expect(
+        conflict.availableVerbs,
+        isNot(contains(ConflictResolution.merge)),
+      );
       // A parked item holds nothing: no leases, no upload in flight.
       expect(connections.activeLeases('s1'), 0);
       expect(connections.activeLeases('s2'), 0);
       expect(s2.activeUploads, 0);
       expect(s2.fileBytes['/dst/f.txt'], 'old'.codeUnits);
-      expect(
-        conflictEvents(events).single.pending,
-        isTrue,
-      );
+      expect(conflictEvents(events).single.pending, isTrue);
       // The sibling file is unaffected — the item pauses, not the task.
       await pumpUntil(
-        () => s2.entryAt('/dst/ok.txt') != null &&
+        () =>
+            s2.entryAt('/dst/ok.txt') != null &&
             task.items.any(
               (i) =>
                   i.sourcePath == '/src/ok.txt' &&
@@ -153,22 +151,24 @@ void main() {
       expect(queue.pendingConflicts, isEmpty);
     });
 
-    test('a skip answer preserves the occupant and ends the item skipped',
-        () async {
-      s1.addFile('/src/f.txt', 'new'.codeUnits);
-      s2.addFile('/dst/f.txt', 'old'.codeUnits);
-      final task = queue.enqueue(copySpec(rootPaths: ['/src/f.txt']));
-      final item = await parkFile(task);
+    test(
+      'a skip answer preserves the occupant and ends the item skipped',
+      () async {
+        s1.addFile('/src/f.txt', 'new'.codeUnits);
+        s2.addFile('/dst/f.txt', 'old'.codeUnits);
+        final task = queue.enqueue(copySpec(rootPaths: ['/src/f.txt']));
+        final item = await parkFile(task);
 
-      expect(
-        queue.resolveConflict(task.id, item.id, ConflictResolution.skip),
-        isTrue,
-      );
-      await awaitTaskDone(task);
-      expect(item.state, TransferItemState.skipped);
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/f.txt'], 'old'.codeUnits);
-    });
+        expect(
+          queue.resolveConflict(task.id, item.id, ConflictResolution.skip),
+          isTrue,
+        );
+        await awaitTaskDone(task);
+        expect(item.state, TransferItemState.skipped);
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/f.txt'], 'old'.codeUnits);
+      },
+    );
 
     test('a keepBoth answer lands the numbered target', () async {
       s1.addFile('/src/report.pdf', 'new'.codeUnits);
@@ -233,99 +233,101 @@ void main() {
       expect(s2.fileBytes['/dst/f.txt'], 'new'.codeUnits);
     });
 
-    test('resolveConflict validates: ask is never an answer, merge is '
-        'folders-only, unknown and already-answered ids return false',
-        () async {
-      s1.addFile('/src/f.txt', 'new'.codeUnits);
-      s2.addFile('/dst/f.txt', 'old'.codeUnits);
-      final task = queue.enqueue(copySpec(rootPaths: ['/src/f.txt']));
-      final item = await parkFile(task);
+    test(
+      'resolveConflict validates: ask is never an answer, merge is '
+      'folders-only, unknown and already-answered ids return false',
+      () async {
+        s1.addFile('/src/f.txt', 'new'.codeUnits);
+        s2.addFile('/dst/f.txt', 'old'.codeUnits);
+        final task = queue.enqueue(copySpec(rootPaths: ['/src/f.txt']));
+        final item = await parkFile(task);
 
-      expect(
-        () => queue.resolveConflict(
-          task.id,
-          item.id,
-          ConflictResolution.ask,
-        ),
-        throwsArgumentError,
-      );
-      expect(
-        () => queue.resolveConflict(
-          task.id,
-          item.id,
-          ConflictResolution.merge,
-        ),
-        throwsArgumentError,
-      );
-      // A rejected answer leaves the conflict parked.
-      expect(queue.pendingConflicts, hasLength(1));
+        expect(
+          () => queue.resolveConflict(task.id, item.id, ConflictResolution.ask),
+          throwsArgumentError,
+        );
+        expect(
+          () =>
+              queue.resolveConflict(task.id, item.id, ConflictResolution.merge),
+          throwsArgumentError,
+        );
+        // A rejected answer leaves the conflict parked.
+        expect(queue.pendingConflicts, hasLength(1));
 
-      expect(
-        queue.resolveConflict(task.id, item.id, ConflictResolution.skip),
-        isTrue,
-      );
-      // Late/duplicate answers are ignored (03 §4.1).
-      expect(
-        queue.resolveConflict(task.id, item.id, ConflictResolution.replace),
-        isFalse,
-      );
-      expect(
-        queue.resolveConflict(task.id, 'no-such-item', ConflictResolution.skip),
-        isFalse,
-      );
-      expect(
-        queue.resolveConflict('no-such-task', item.id, ConflictResolution.skip),
-        isFalse,
-      );
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-    });
+        expect(
+          queue.resolveConflict(task.id, item.id, ConflictResolution.skip),
+          isTrue,
+        );
+        // Late/duplicate answers are ignored (03 §4.1).
+        expect(
+          queue.resolveConflict(task.id, item.id, ConflictResolution.replace),
+          isFalse,
+        );
+        expect(
+          queue.resolveConflict(
+            task.id,
+            'no-such-item',
+            ConflictResolution.skip,
+          ),
+          isFalse,
+        );
+        expect(
+          queue.resolveConflict(
+            'no-such-task',
+            item.id,
+            ConflictResolution.skip,
+          ),
+          isFalse,
+        );
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+      },
+    );
   });
 
   group('apply-to-all scope (02 §5.2)', () {
-    test('a task-scoped answer resolves later collisions without prompting',
-        () async {
-      // The stat gate holds the second file's destination check (scan or
-      // decision) until the task-scoped answer is already installed, so
-      // it can never reach the prompt.
-      final bStat = Completer<void>();
-      s2.statGate = (path) => path == '/dst/b.txt' ? bStat : null;
-      s1.addFile('/src/a.txt', 'A'.codeUnits);
-      s1.addFile('/src/b.txt', 'B'.codeUnits);
-      s2.addFile('/dst/a.txt', 'old-a'.codeUnits);
-      s2.addFile('/dst/b.txt', 'old-b'.codeUnits);
-      final task = queue.enqueue(
-        copySpec(rootPaths: ['/src/a.txt', '/src/b.txt']),
-      );
-      await pumpUntil(
-        () => queue.pendingConflicts.isNotEmpty,
-        reason: 'the first collision never surfaced',
-      );
-      final first = queue.pendingConflicts.single;
+    test(
+      'a task-scoped answer resolves later collisions without prompting',
+      () async {
+        // The stat gate holds the second file's destination check (scan or
+        // decision) until the task-scoped answer is already installed, so
+        // it can never reach the prompt.
+        final bStat = Completer<void>();
+        s2.statGate = (path) => path == '/dst/b.txt' ? bStat : null;
+        s1.addFile('/src/a.txt', 'A'.codeUnits);
+        s1.addFile('/src/b.txt', 'B'.codeUnits);
+        s2.addFile('/dst/a.txt', 'old-a'.codeUnits);
+        s2.addFile('/dst/b.txt', 'old-b'.codeUnits);
+        final task = queue.enqueue(
+          copySpec(rootPaths: ['/src/a.txt', '/src/b.txt']),
+        );
+        await pumpUntil(
+          () => queue.pendingConflicts.isNotEmpty,
+          reason: 'the first collision never surfaced',
+        );
+        final first = queue.pendingConflicts.single;
 
-      expect(
-        queue.resolveConflict(
-          task.id,
-          first.itemId,
-          ConflictResolution.replace,
-          scope: ConflictResolutionScope.task,
-        ),
-        isTrue,
-      );
-      bStat.complete();
-      s2.statGate = null;
+        expect(
+          queue.resolveConflict(
+            task.id,
+            first.itemId,
+            ConflictResolution.replace,
+            scope: ConflictResolutionScope.task,
+          ),
+          isTrue,
+        );
+        bStat.complete();
+        s2.statGate = null;
 
-      await awaitTaskDone(task);
-      expect(task.state, TransferTaskState.completed);
-      expect(s2.fileBytes['/dst/a.txt'], 'A'.codeUnits);
-      expect(s2.fileBytes['/dst/b.txt'], 'B'.codeUnits);
-      // Exactly one conflict ever surfaced: the second colliding item
-      // took the installed scope answer without prompting.
-      expect(
-        conflictEvents(events).where((e) => e.pending),
-        hasLength(1),
-      );
-    });
+        await awaitTaskDone(task);
+        expect(task.state, TransferTaskState.completed);
+        expect(s2.fileBytes['/dst/a.txt'], 'A'.codeUnits);
+        expect(s2.fileBytes['/dst/b.txt'], 'B'.codeUnits);
+        // Exactly one conflict ever surfaced: the second colliding item
+        // took the installed scope answer without prompting.
+        expect(conflictEvents(events).where((e) => e.pending), hasLength(1));
+      },
+    );
 
     test('task-scoped merge keeps folders merging while colliding files '
         'take the replace analog', () async {
@@ -334,9 +336,7 @@ void main() {
       s2.addDirectory('/dst/dir');
       s2.addFile('/dst/dir/inside.txt', 'old'.codeUnits);
       s2.addFile('/dst/dir/kept.txt', 'kept'.codeUnits);
-      final task = queue.enqueue(
-        copySpec(rootPaths: ['/src/dir']),
-      );
+      final task = queue.enqueue(copySpec(rootPaths: ['/src/dir']));
       await pumpUntil(
         () => queue.pendingConflicts.isNotEmpty,
         reason: 'the directory collision never surfaced',
@@ -360,10 +360,7 @@ void main() {
       // the apply-to-all file analog (replace).
       expect(s2.fileBytes['/dst/dir/inside.txt'], 'new'.codeUnits);
       expect(s2.fileBytes['/dst/dir/kept.txt'], 'kept'.codeUnits);
-      expect(
-        conflictEvents(events).where((e) => e.pending),
-        hasLength(1),
-      );
+      expect(conflictEvents(events).where((e) => e.pending), hasLength(1));
     });
   });
 
@@ -400,7 +397,8 @@ void main() {
       // The freed slot promotes the waiter — it re-stats and surfaces
       // its own fresh conflict rather than reusing a stale entry.
       await pumpUntil(
-        () => queue.pendingConflicts.isNotEmpty &&
+        () =>
+            queue.pendingConflicts.isNotEmpty &&
             queue.pendingConflicts.single.itemId != first.itemId,
         reason: 'the waiting collision never promoted',
       );
@@ -415,8 +413,7 @@ void main() {
       expect(s2.fileBytes['/dst/b.txt'], 'old-b'.codeUnits);
     });
 
-    test('cancel dismisses the surface and a late answer is ignored',
-        () async {
+    test('cancel dismisses the surface and a late answer is ignored', () async {
       s1.addFile('/src/f.txt', 'new'.codeUnits);
       s2.addFile('/dst/f.txt', 'old'.codeUnits);
       final task = queue.enqueue(copySpec(rootPaths: ['/src/f.txt']));
@@ -433,10 +430,7 @@ void main() {
         () => conflictEvents(events).length == 2,
         reason: 'the cancel dismissal never surfaced',
       );
-      expect(
-        conflictEvents(events).map((e) => e.pending),
-        [true, false],
-      );
+      expect(conflictEvents(events).map((e) => e.pending), [true, false]);
       // The reply arrived after dismissal — §4.1's ignored-late-reply.
       expect(
         queue.resolveConflict(task.id, item.id, ConflictResolution.skip),
@@ -473,22 +467,21 @@ void main() {
         () => queue.pendingConflicts.isNotEmpty,
         reason: 'the collision never surfaced',
       );
-      final item = task.items
-          .where((i) => i.sourcePath == '/src/f.txt')
-          .single;
+      final item = task.items.where((i) => i.sourcePath == '/src/f.txt').single;
 
       // The disconnect flips the task to queued → the parked prompt is
       // stale and dismisses; the item re-dispatches and re-surfaces.
       await pumpUntil(
-        () => conflictEvents(events)
-            .any((e) => e.itemId == item.id && !e.pending),
+        () => conflictEvents(
+          events,
+        ).any((e) => e.itemId == item.id && !e.pending),
         reason: 'the disconnect never invalidated the parked conflict',
       );
       await pumpUntil(
         () =>
-            conflictEvents(events)
-                .where((e) => e.itemId == item.id && e.pending)
-                .length ==
+            conflictEvents(
+              events,
+            ).where((e) => e.itemId == item.id && e.pending).length ==
             2,
         reason: 'the conflict never re-surfaced fresh',
       );
@@ -512,10 +505,7 @@ void main() {
       s2.addDirectory('/dst/dir');
       s2.addFile('/dst/dir/kept.txt', 'kept'.codeUnits);
       final task = queue.enqueue(
-        copySpec(
-          rootPaths: ['/src/dir'],
-          files: ConflictResolution.replace,
-        ),
+        copySpec(rootPaths: ['/src/dir'], files: ConflictResolution.replace),
       );
       await pumpUntil(
         () => queue.pendingConflicts.isNotEmpty,

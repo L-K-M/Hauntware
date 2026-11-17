@@ -25,15 +25,14 @@ EncryptedRecord record({
   bool deleted = false,
   int? seq,
   int blobBytes = 0,
-}) =>
-    EncryptedRecord(
-      id: id,
-      updatedAt: updatedAt,
-      deviceId: deviceId,
-      deleted: deleted,
-      seq: seq,
-      blob: Uint8List.fromList(List.generate(blobBytes, (i) => i % 256)),
-    );
+}) => EncryptedRecord(
+  id: id,
+  updatedAt: updatedAt,
+  deviceId: deviceId,
+  deleted: deleted,
+  seq: seq,
+  blob: Uint8List.fromList(List.generate(blobBytes, (i) => i % 256)),
+);
 
 void main() {
   group('EncryptedRecord.encodedJsonBytes', () {
@@ -41,7 +40,10 @@ void main() {
       'unsequenced record': record(),
       'sequenced record': record(seq: 42),
       'tombstone': EncryptedRecord.tombstone(
-          id: 'gone', updatedAt: 7, deviceId: 'device-B'),
+        id: 'gone',
+        updatedAt: 7,
+        deviceId: 'device-B',
+      ),
       'large blob': record(blobBytes: 64 * 1024),
       // Base64 pads to a multiple of four; cover each remainder.
       'blob length 1 mod 3': record(blobBytes: 10),
@@ -49,11 +51,14 @@ void main() {
       'blob length 0 mod 3': record(blobBytes: 12),
       'non-ASCII device name': record(deviceId: 'Lukas’ Séance — büro'),
       'escaped characters in id': record(id: 'quote:" backslash:\\ tab:\t'),
-      'control characters in id':
-          record(id: 'bell:\u0007 null:\u0000 unit-sep:\u001f'),
+      'control characters in id': record(
+        id: 'bell:\u0007 null:\u0000 unit-sep:\u001f',
+      ),
       'astral plane in id': record(id: 'ghost:\u{1F47B}'),
-      'large timestamp and seq':
-          record(updatedAt: 1893456000000, seq: 987654321),
+      'large timestamp and seq': record(
+        updatedAt: 1893456000000,
+        seq: 987654321,
+      ),
       'negative timestamp': record(updatedAt: -1),
     };
 
@@ -76,12 +81,18 @@ void main() {
     });
 
     test('matches jsonEncode for many mixed records', () {
-      final request = PushRequest(records: [
-        record(id: 'a', blobBytes: 3),
-        record(id: 'b', seq: 12, blobBytes: 4096),
-        EncryptedRecord.tombstone(id: 'c', updatedAt: 9, deviceId: 'device-C'),
-        record(id: 'd', deleted: true, deviceId: 'Séance', blobBytes: 7),
-      ]);
+      final request = PushRequest(
+        records: [
+          record(id: 'a', blobBytes: 3),
+          record(id: 'b', seq: 12, blobBytes: 4096),
+          EncryptedRecord.tombstone(
+            id: 'c',
+            updatedAt: 9,
+            deviceId: 'device-C',
+          ),
+          record(id: 'd', deleted: true, deviceId: 'Séance', blobBytes: 7),
+        ],
+      );
       expect(request.encodedSizeBytes(), actualBodyBytes(request));
     });
 
@@ -92,8 +103,7 @@ void main() {
       ];
       final composed = PushRequest.bodyBytesFor(
         recordCount: records.length,
-        recordBytes:
-            records.fold(0, (sum, r) => sum + r.encodedJsonBytes()),
+        recordBytes: records.fold(0, (sum, r) => sum + r.encodedJsonBytes()),
       );
       expect(composed, actualBodyBytes(PushRequest(records: records)));
     });
@@ -105,43 +115,55 @@ void main() {
       // varying at once. Fixed seed: a failure has to be reproducible.
       final random = Random(20260911);
       for (var recordCount = 0; recordCount < 24; recordCount++) {
-        final request = PushRequest(records: [
-          for (var i = 0; i < recordCount; i++)
-            record(
-              id: 'id-$i-\u0001"\\ ${'é' * random.nextInt(4)}',
-              // Epoch-millisecond scale (13 digits), both signs: nextInt
-              // caps at 2^32, so compose the value from two draws.
-              updatedAt: (random.nextInt(1 << 31) * 1000 +
-                      random.nextInt(1000)) *
-                  (random.nextBool() ? 1 : -1),
-              deviceId: 'device-${random.nextInt(1000)}',
-              deleted: random.nextBool(),
-              seq: random.nextBool() ? random.nextInt(1 << 32) : null,
-              blobBytes: random.nextInt(300),
-            ),
-        ]);
-        expect(request.encodedSizeBytes(), actualBodyBytes(request),
-            reason: 'body holding $recordCount records');
+        final request = PushRequest(
+          records: [
+            for (var i = 0; i < recordCount; i++)
+              record(
+                id: 'id-$i-\u0001"\\ ${'é' * random.nextInt(4)}',
+                // Epoch-millisecond scale (13 digits), both signs: nextInt
+                // caps at 2^32, so compose the value from two draws.
+                updatedAt:
+                    (random.nextInt(1 << 31) * 1000 + random.nextInt(1000)) *
+                    (random.nextBool() ? 1 : -1),
+                deviceId: 'device-${random.nextInt(1000)}',
+                deleted: random.nextBool(),
+                seq: random.nextBool() ? random.nextInt(1 << 32) : null,
+                blobBytes: random.nextInt(300),
+              ),
+          ],
+        );
+        expect(
+          request.encodedSizeBytes(),
+          actualBodyBytes(request),
+          reason: 'body holding $recordCount records',
+        );
       }
     });
 
     test('a non-default protocol version is counted', () {
       final request = PushRequest(
-          protocolVersion: 1234, records: [record(blobBytes: 8)]);
+        protocolVersion: 1234,
+        records: [record(blobBytes: 8)],
+      );
       expect(request.encodedSizeBytes(), actualBodyBytes(request));
     });
 
     test('a per-record refusal scope is counted', () {
       final request = PushRequest(
-        records: [record(blobBytes: 8), record(id: 'b', blobBytes: 3)],
+        records: [
+          record(blobBytes: 8),
+          record(id: 'b', blobBytes: 3),
+        ],
         refusalScope: PushRefusalScope.record,
       );
       expect(request.encodedSizeBytes(), actualBodyBytes(request));
       expect(
         PushRequest.bodyBytesFor(
           recordCount: 2,
-          recordBytes: request.records
-              .fold(0, (sum, r) => sum + r.encodedJsonBytes()),
+          recordBytes: request.records.fold(
+            0,
+            (sum, r) => sum + r.encodedJsonBytes(),
+          ),
           refusalScope: PushRefusalScope.record,
         ),
         actualBodyBytes(request),
@@ -172,8 +194,7 @@ void main() {
         'latestSeq': 1,
         'limits': {'maxBodyBytes': 4096},
       });
-      expect(decoded.limits,
-          const PushLimits(maxBodyBytes: 4096));
+      expect(decoded.limits, const PushLimits(maxBodyBytes: 4096));
     });
 
     test('a pull response carries the limits when the server advertises', () {
@@ -183,14 +204,15 @@ void main() {
         maxBlobBytes: 512,
       );
       final decoded = PullResponse.fromJson(
-          PullResponse(records: const [], latestSeq: 3, limits: limits)
-              .toJson());
+        PullResponse(records: const [], latestSeq: 3, limits: limits).toJson(),
+      );
       expect(decoded.limits, limits);
     });
 
     test('a pull response from a server that does not advertise has none', () {
       final decoded = PullResponse.fromJson(
-          const PullResponse(records: [], latestSeq: 3).toJson());
+        const PullResponse(records: [], latestSeq: 3).toJson(),
+      );
       expect(decoded.limits, isNull);
     });
 

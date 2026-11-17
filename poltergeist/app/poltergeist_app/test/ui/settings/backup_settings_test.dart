@@ -208,10 +208,7 @@ final class _FakeBackupModel extends ChangeNotifier
     required String username,
     required String password,
     required String encryptionPassphrase,
-  }) async => BackupSwitchOutcome(
-    held: const [],
-    passphraseUnverified: false,
-  );
+  }) async => BackupSwitchOutcome(held: const [], passphraseUnverified: false);
 
   @override
   Future<void> resolvePinConflict(
@@ -916,10 +913,7 @@ void main() {
         'ghost-abcd1234',
       );
       await tester.pumpAndSettle();
-      expect(
-        _enabled(tester, const ValueKey('backup.delete.confirm')),
-        isTrue,
-      );
+      expect(_enabled(tester, const ValueKey('backup.delete.confirm')), isTrue);
       await tester.showKeyboard(
         find.byKey(const ValueKey('backup.delete.confirmField')),
       );
@@ -927,10 +921,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(h.server.deleteAccountCalls, 1);
-      expect(
-        find.byKey(const ValueKey('backup.delete.dialog')),
-        findsNothing,
-      );
+      expect(find.byKey(const ValueKey('backup.delete.dialog')), findsNothing);
     });
 
     testWidgets('Return in the retained delete field confirms like the '

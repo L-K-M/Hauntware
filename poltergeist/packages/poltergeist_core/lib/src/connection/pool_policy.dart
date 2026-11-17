@@ -58,16 +58,16 @@ class PoolPolicy {
     this.idleExtraTransportTimeout = const Duration(seconds: 60),
     this.reconnectBackoffCap = const Duration(seconds: 30),
     this.taskRetryLimit = 5,
-  })  : assert(maxTransports >= 1, 'maxTransports must be positive'),
-        assert(
-          maxTransferChannelsPerTransport >= 1,
-          'maxTransferChannelsPerTransport must be positive',
-        ),
-        assert(
-          maxChannelsPerTransport >= maxTransferChannelsPerTransport,
-          'the total channel ceiling must cover the transfer budget',
-        ),
-        assert(taskRetryLimit >= 0, 'taskRetryLimit must not be negative');
+  }) : assert(maxTransports >= 1, 'maxTransports must be positive'),
+       assert(
+         maxTransferChannelsPerTransport >= 1,
+         'maxTransferChannelsPerTransport must be positive',
+       ),
+       assert(
+         maxChannelsPerTransport >= maxTransferChannelsPerTransport,
+         'the total channel ceiling must cover the transfer budget',
+       ),
+       assert(taskRetryLimit >= 0, 'taskRetryLimit must not be negative');
 
   // Duration invariants are deliberately not asserted: the constructor
   // must stay const (it is a default parameter value), and const asserts

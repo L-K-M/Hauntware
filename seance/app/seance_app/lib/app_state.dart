@@ -807,7 +807,8 @@ class AppState extends ChangeNotifier {
     this._claimInboxProposal,
   }) : _updateChecker = updateChecker ?? UpdateChecker(),
        apkUpdater = apkUpdater ?? (Platform.isAndroid ? ApkUpdater() : null),
-       _keepAlive = keepAlive ??
+       _keepAlive =
+           keepAlive ??
            BackgroundKeepAlive(strings: const SeanceKeepAliveStrings());
 
   /// The host-key prompt as the SSH layer wants it, reading [hostKeyPrompter]
@@ -1286,10 +1287,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     _scheduleAutoSync();
     if (cleanupError != null) {
-      Error.throwWithStackTrace(
-        cleanupError,
-        cleanupStack!,
-      );
+      Error.throwWithStackTrace(cleanupError, cleanupStack!);
     }
   }
 
@@ -2032,7 +2030,8 @@ class AppState extends ChangeNotifier {
     // at once each keep their own answer.
     final hostKey = _HostKeyAttempt(_promptForHostKey);
     final passphrases = <String, String>{
-      if (keyPassphrase != null) keyPassphrase.serverId: keyPassphrase.passphrase,
+      if (keyPassphrase != null)
+        keyPassphrase.serverId: keyPassphrase.passphrase,
     };
     try {
       final credentials = await services.resolveCredentials(
@@ -2133,7 +2132,8 @@ class AppState extends ChangeNotifier {
       tab.missingCredentialServerId = e is CredentialMissingException
           ? e.serverId
           : null;
-      tab.keyPassphraseFailureServerId = e is SshConnectException &&
+      tab.keyPassphraseFailureServerId =
+          e is SshConnectException &&
               (e.kind == SshConnectFailureKind.keyPassphraseRequired ||
                   e.kind == SshConnectFailureKind.keyPassphraseWrong)
           ? e.serverId ?? config.id
@@ -3737,7 +3737,11 @@ class AppState extends ChangeNotifier {
     final hasFile = path != null && path.isNotEmpty;
     final base = stored?.kind == SecretKind.privateKey
         ? stored!
-        : Secret(id: ref, kind: SecretKind.privateKey, value: hasFile ? '' : pem);
+        : Secret(
+            id: ref,
+            kind: SecretKind.privateKey,
+            value: hasFile ? '' : pem,
+          );
     final secret = hasFile
         ? base.copyWith(
             identityFilePath: path,

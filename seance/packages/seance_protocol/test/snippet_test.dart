@@ -7,8 +7,10 @@ Snippet _s(String body) =>
 void main() {
   group('Snippet placeholders', () {
     test('parses distinct names in first-appearance order, trimming space', () {
-      expect(_s('cp {{ src }} {{dst}} && echo {{src}}').placeholders,
-          ['src', 'dst']);
+      expect(_s('cp {{ src }} {{dst}} && echo {{src}}').placeholders, [
+        'src',
+        'dst',
+      ]);
     });
 
     test('no placeholders yields an empty list', () {
@@ -17,8 +19,10 @@ void main() {
 
     test('fill substitutes values and leaves unfilled placeholders intact', () {
       final s = _s('tail -f {{file}} | grep {{pattern}}');
-      expect(s.fill({'file': '/var/log/syslog', 'pattern': 'error'}),
-          'tail -f /var/log/syslog | grep error');
+      expect(
+        s.fill({'file': '/var/log/syslog', 'pattern': 'error'}),
+        'tail -f /var/log/syslog | grep error',
+      );
       expect(s.fill({'file': '/x'}), 'tail -f /x | grep {{pattern}}');
     });
 

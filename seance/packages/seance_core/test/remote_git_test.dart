@@ -215,35 +215,38 @@ void main() {
       expect(repo.stashCount, isNull);
     });
 
-    test('git 2.11–2.16 retried without --show-stash keeps v2 parsing', () async {
-      const h = 'a1b2c3d4e5f6';
-      final runner = _FakeRunner([
-        _result(
-          '',
-          stderr:
-              "error: unknown option `show-stash'\n"
-              'usage: git status [<options>]',
-          exitCode: 129,
-        ),
-        _result(
-          '/srv/app\n'
-          '# branch.oid $h\n'
-          '# branch.head main\n'
-          '1 .M N... 100644 100644 100644 $h $h modified.txt$_nul'
-          '$_nul'
-          'abc1234\tstill v2\n',
-        ),
-      ]);
-      final result = await RemoteGit(runner.call).probe('/srv/app');
+    test(
+      'git 2.11–2.16 retried without --show-stash keeps v2 parsing',
+      () async {
+        const h = 'a1b2c3d4e5f6';
+        final runner = _FakeRunner([
+          _result(
+            '',
+            stderr:
+                "error: unknown option `show-stash'\n"
+                'usage: git status [<options>]',
+            exitCode: 129,
+          ),
+          _result(
+            '/srv/app\n'
+            '# branch.oid $h\n'
+            '# branch.head main\n'
+            '1 .M N... 100644 100644 100644 $h $h modified.txt$_nul'
+            '$_nul'
+            'abc1234\tstill v2\n',
+          ),
+        ]);
+        final result = await RemoteGit(runner.call).probe('/srv/app');
 
-      expect(runner.commands, hasLength(2));
-      expect(runner.commands[1], contains('--porcelain=v2'));
-      expect(runner.commands[1], isNot(contains('show-stash')));
-      expect(result.kind, GitProbeKind.ok);
-      expect(result.status!.unstaged.single.path, 'modified.txt');
-      // No stash header arrived, so the count is honestly unknown.
-      expect(result.status!.stashCount, isNull);
-    });
+        expect(runner.commands, hasLength(2));
+        expect(runner.commands[1], contains('--porcelain=v2'));
+        expect(runner.commands[1], isNot(contains('show-stash')));
+        expect(result.kind, GitProbeKind.ok);
+        expect(result.status!.unstaged.single.path, 'modified.txt');
+        // No stash header arrived, so the count is honestly unknown.
+        expect(result.status!.stashCount, isNull);
+      },
+    );
 
     test('a v2 usage failure still falls all the way back to v1', () async {
       final usageError = _result(
@@ -262,26 +265,28 @@ void main() {
       expect(result.status!.branch, 'main');
     });
 
-    test('latches the working rung so old hosts probe in one round trip',
-        () async {
-      final usageError = _result(
-        '',
-        stderr: 'usage: git status [<options>]',
-        exitCode: 129,
-      );
-      final v1 = _result('/srv/app\n## main\n?? a.txt$_nul$_nul\n');
-      final runner = _FakeRunner([usageError, usageError, v1, v1]);
-      final git = RemoteGit(runner.call);
+    test(
+      'latches the working rung so old hosts probe in one round trip',
+      () async {
+        final usageError = _result(
+          '',
+          stderr: 'usage: git status [<options>]',
+          exitCode: 129,
+        );
+        final v1 = _result('/srv/app\n## main\n?? a.txt$_nul$_nul\n');
+        final runner = _FakeRunner([usageError, usageError, v1, v1]);
+        final git = RemoteGit(runner.call);
 
-      await git.probe('/srv/app');
-      expect(runner.commands, hasLength(3));
+        await git.probe('/srv/app');
+        expect(runner.commands, hasLength(3));
 
-      // The v1 rung latched — the refresh doesn't re-walk the ladder.
-      final second = await git.probe('/srv/app');
-      expect(runner.commands, hasLength(4));
-      expect(runner.commands[3], contains('--porcelain --branch'));
-      expect(second.status!.branch, 'main');
-    });
+        // The v1 rung latched — the refresh doesn't re-walk the ladder.
+        final second = await git.probe('/srv/app');
+        expect(runner.commands, hasLength(4));
+        expect(runner.commands[3], contains('--porcelain --branch'));
+        expect(second.status!.branch, 'main');
+      },
+    );
 
     test('a malformed status payload is an error, not an empty repo', () async {
       final result = await RemoteGit(
@@ -353,10 +358,7 @@ void main() {
         runner.commands[0],
         startsWith("${prefix}cd -- '/srv/my app' && "),
       );
-      expect(
-        runner.commands[1],
-        startsWith("${prefix}cd -- ~/'proj dir' && "),
-      );
+      expect(runner.commands[1], startsWith("${prefix}cd -- ~/'proj dir' && "));
       expect(runner.commands[2], startsWith('${prefix}cd -- ~ && '));
       // A null directory runs in the channel's own cwd.
       expect(runner.commands[3], startsWith('${prefix}git rev-parse'));

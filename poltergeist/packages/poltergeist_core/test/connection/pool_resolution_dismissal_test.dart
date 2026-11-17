@@ -10,12 +10,12 @@ const _sshPort = 22;
 Future<void> _flush() => Future<void>.delayed(Duration.zero);
 
 Matcher get _disconnected => throwsA(
-      isA<RemoteFileException>().having(
-        (error) => error.kind,
-        'kind',
-        RemoteFileErrorKind.disconnected,
-      ),
-    );
+  isA<RemoteFileException>().having(
+    (error) => error.kind,
+    'kind',
+    RemoteFileErrorKind.disconnected,
+  ),
+);
 
 /// How a prompt-owning resolver models dismissal: the dialog's future
 /// fails the resolution instead of waiting for an answer nobody will use.
@@ -88,10 +88,12 @@ class _PromptHarness {
       );
     }
     answeredByUser[answeredByUser.length - 1] = true;
-    prompt.complete(ResolvedCredentials(
-      credentials: SshCredentials.password(secret),
-      origin: CredentialOrigin.prompted,
-    ));
+    prompt.complete(
+      ResolvedCredentials(
+        credentials: SshCredentials.password(secret),
+        origin: CredentialOrigin.prompted,
+      ),
+    );
   }
 
   Future<void> close() async {
@@ -106,41 +108,47 @@ void main() {
   setUp(() => harness = _PromptHarness());
   tearDown(() => harness.close());
 
-  test('abandoning the pool dismisses an in-flight resolution prompt', () async {
-    final connect = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
-    final outcome = expectLater(connect, _disconnected);
-    await _flush();
-    expect(harness.resolutions, 1);
+  test(
+    'abandoning the pool dismisses an in-flight resolution prompt',
+    () async {
+      final connect = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
+      final outcome = expectLater(connect, _disconnected);
+      await _flush();
+      expect(harness.resolutions, 1);
 
-    await harness.manager.disconnectServer('s1');
+      await harness.manager.disconnectServer('s1');
 
-    // The scope's contract: dismissal completes, the prompt dies without a
-    // user answer, and the caller fails without that answer ever arriving.
-    await harness.scopes.single.dismissed;
-    expect(harness.dismissedByPool, [true]);
-    expect(harness.answeredByUser, [false]);
-    await outcome;
-  });
+      // The scope's contract: dismissal completes, the prompt dies without a
+      // user answer, and the caller fails without that answer ever arriving.
+      await harness.scopes.single.dismissed;
+      expect(harness.dismissedByPool, [true]);
+      expect(harness.answeredByUser, [false]);
+      await outcome;
+    },
+  );
 
-  test('folded callers fail without waiting for the abandoned prompt', () async {
-    final first = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
-    final second = harness.manager.openBrowseChannel('s1', paneTabId: 'b');
-    final outcomes = Future.wait([
-      expectLater(first, _disconnected),
-      expectLater(second, _disconnected),
-    ]);
-    await _flush();
-    expect(harness.resolutions, 1);
+  test(
+    'folded callers fail without waiting for the abandoned prompt',
+    () async {
+      final first = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
+      final second = harness.manager.openBrowseChannel('s1', paneTabId: 'b');
+      final outcomes = Future.wait([
+        expectLater(first, _disconnected),
+        expectLater(second, _disconnected),
+      ]);
+      await _flush();
+      expect(harness.resolutions, 1);
 
-    await harness.manager.disconnectServer('s1');
-    await outcomes;
+      await harness.manager.disconnectServer('s1');
+      await outcomes;
 
-    // One resolution, dismissed once — never a second prompt for callers
-    // whose pool already ended.
-    expect(harness.resolutions, 1);
-    expect(harness.dismissedByPool, [true]);
-    expect(harness.answeredByUser, [false]);
-  });
+      // One resolution, dismissed once — never a second prompt for callers
+      // whose pool already ended.
+      expect(harness.resolutions, 1);
+      expect(harness.dismissedByPool, [true]);
+      expect(harness.answeredByUser, [false]);
+    },
+  );
 
   test('a sibling reference keeps the resolution prompt alive', () async {
     final stale = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
@@ -185,10 +193,7 @@ void main() {
     expect(harness.scopes.first, isNot(same(harness.scopes.last)));
     await harness.scopes.first.dismissed;
     expect(harness.dismissedByPool, [true, false]);
-    expect(
-      harness.opener.calls.single.credentials.password,
-      'fresh secret',
-    );
+    expect(harness.opener.calls.single.credentials.password, 'fresh secret');
   });
 
   test('a failed resolution hands its retry a fresh scope', () async {
@@ -225,46 +230,40 @@ void main() {
     expect(harness.answeredByUser, [true]);
   });
 
-  test(
-    'a resolution that finished is not dismissed mid-handshake',
-    () async {
-      final connectGate = harness.opener.connectGate = Completer<void>();
-      final connect = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
-      final outcome = expectLater(connect, _disconnected);
-      await _flush();
-      harness.answer('secret');
-      await _flush();
+  test('a resolution that finished is not dismissed mid-handshake', () async {
+    final connectGate = harness.opener.connectGate = Completer<void>();
+    final connect = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
+    final outcome = expectLater(connect, _disconnected);
+    await _flush();
+    harness.answer('secret');
+    await _flush();
 
-      // The transport handshake is parked; the resolution completed before
-      // it. Abandoning the pool here must not fire the finished scope.
-      await harness.manager.disconnectServer('s1');
-      connectGate.complete();
-      await outcome;
+    // The transport handshake is parked; the resolution completed before
+    // it. Abandoning the pool here must not fire the finished scope.
+    await harness.manager.disconnectServer('s1');
+    connectGate.complete();
+    await outcome;
 
-      expect(harness.dismissedByPool, [false]);
-      expect(harness.answeredByUser, [true]);
-    },
-  );
+    expect(harness.dismissedByPool, [false]);
+    expect(harness.answeredByUser, [true]);
+  });
 
-  test(
-    'a dismissal racing the answer in the same turn is tolerated',
-    () async {
-      final connect = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
-      final outcome = expectLater(connect, _disconnected);
-      await _flush();
+  test('a dismissal racing the answer in the same turn is tolerated', () async {
+    final connect = harness.manager.openBrowseChannel('s1', paneTabId: 'a');
+    final outcome = expectLater(connect, _disconnected);
+    await _flush();
 
-      // One synchronous turn: the answer completes the resolver future and
-      // the disconnect's prefix runs before the pool's continuation
-      // observes the answer — the documented window where dismissal may
-      // still fire for a future that already completed. The guard (an
-      // already-completed answer ignores the firing) must hold, and the
-      // late result stays discarded.
-      harness.answer('secret');
-      await harness.manager.disconnectServer('s1');
-      await outcome;
+    // One synchronous turn: the answer completes the resolver future and
+    // the disconnect's prefix runs before the pool's continuation
+    // observes the answer — the documented window where dismissal may
+    // still fire for a future that already completed. The guard (an
+    // already-completed answer ignores the firing) must hold, and the
+    // late result stays discarded.
+    harness.answer('secret');
+    await harness.manager.disconnectServer('s1');
+    await outcome;
 
-      expect(harness.answeredByUser, [true]);
-      expect(harness.dismissedByPool, [true]);
-    },
-  );
+    expect(harness.answeredByUser, [true]);
+    expect(harness.dismissedByPool, [true]);
+  });
 }

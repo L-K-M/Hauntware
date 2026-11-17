@@ -49,16 +49,17 @@ Future<StartedHttpResponse> sendWithResponseDeadlines(
     if (!abortCompleter.isCompleted) abortCompleter.complete();
   }
 
-  final abortable = http.AbortableRequest(
-    request.method,
-    request.url,
-    abortTrigger: abortCompleter.future,
-  )
-    ..followRedirects = request.followRedirects
-    ..maxRedirects = request.maxRedirects
-    ..persistentConnection = request.persistentConnection
-    ..headers.addAll(request.headers)
-    ..bodyBytes = request.bodyBytes;
+  final abortable =
+      http.AbortableRequest(
+          request.method,
+          request.url,
+          abortTrigger: abortCompleter.future,
+        )
+        ..followRedirects = request.followRedirects
+        ..maxRedirects = request.maxRedirects
+        ..persistentConnection = request.persistentConnection
+        ..headers.addAll(request.headers)
+        ..bodyBytes = request.bodyBytes;
   final sent = client.send(abortable);
   final http.StreamedResponse response;
   try {
@@ -66,10 +67,7 @@ Future<StartedHttpResponse> sendWithResponseDeadlines(
   } on TimeoutException {
     abort();
     unawaited(
-      sent.then<void>(
-        cancelHttpResponse,
-        onError: (Object _, StackTrace _) {},
-      ),
+      sent.then<void>(cancelHttpResponse, onError: (Object _, StackTrace _) {}),
     );
     throw http.ClientException(
       wait == totalTimeout

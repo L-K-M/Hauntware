@@ -36,11 +36,7 @@ void main() {
         content: file.readAsStringSync(),
         path: file.path,
       );
-      expect(
-        result.errors,
-        isEmpty,
-        reason: '${file.path} must parse cleanly',
-      );
+      expect(result.errors, isEmpty, reason: '${file.path} must parse cleanly');
       final visitor = _InvariantVisitor(
         file.path,
         allowedDartIo.contains(file.uri.pathSegments.last),

@@ -866,13 +866,11 @@ final class RecordCoordinator {
       var pulled = 0;
       PushLimits? limits;
       await for (final page in pullPages(api, since: since)) {
-        final dirtyIds =
-            (await _records.dirtyRecords()).map((r) => r.id).toSet();
+        final dirtyIds = (await _records.dirtyRecords())
+            .map((r) => r.id)
+            .toSet();
         final holdActive = await _pushesHeld();
-        await observeRecordEnvelopeFloor(
-          _records,
-          page.recordEnvelopeFloor,
-        );
+        await observeRecordEnvelopeFloor(_records, page.recordEnvelopeFloor);
         pulled += page.records.length;
         limits = page.limits ?? limits;
         for (final remote in page.records) {
@@ -949,7 +947,8 @@ final class RecordCoordinator {
     final wouldOpenLive = !identical(handler, _secretHandler)
         ? handler.prefix != null || _catalog != null
         : _secretHandler.publishes;
-    final mustOpen = record.deleted ||
+    final mustOpen =
+        record.deleted ||
         dirtyIds.contains(record.id) ||
         (!holdActive && wouldOpenLive);
     if (!mustOpen) return true;

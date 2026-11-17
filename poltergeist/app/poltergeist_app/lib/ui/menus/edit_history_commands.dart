@@ -54,8 +54,7 @@ List<RegisteredCommand> buildEditHistoryCommands({
     // A held chord steps back change by change, as in the suite's other
     // apps; the history refuses a step while one is still running.
     repeatable: true,
-    enabled: () =>
-        history.undoName != null && blockedUndoName?.call() == null,
+    enabled: () => history.undoName != null && blockedUndoName?.call() == null,
     disabledReason: (l10n) => blockedUndoName?.call() == null
         ? l10n.commandDisabledNoUndo
         : l10n.fileUndoIrreversibleDelete,

@@ -91,26 +91,28 @@ void main() {
     expect(spec.destination, isA<LocalFsLocation>());
   });
 
-  test('a file opened in pane B goes to pane A, whichever pane is active',
-      () async {
-    final left = await localPane('pane.left.tab1', '/home/tester');
-    final right = await localPane(
-      'pane.right.tab1',
-      '/srv/backups',
-      names: ['dump.sql'],
-    );
-    final workspace = workspaceOf(left, right);
-    // F5 sends from the active pane; a double-click sends from the pane
-    // it happened in.
-    workspace.setActivePane(workspace.left);
+  test(
+    'a file opened in pane B goes to pane A, whichever pane is active',
+    () async {
+      final left = await localPane('pane.left.tab1', '/home/tester');
+      final right = await localPane(
+        'pane.right.tab1',
+        '/srv/backups',
+        names: ['dump.sql'],
+      );
+      final workspace = workspaceOf(left, right);
+      // F5 sends from the active pane; a double-click sends from the pane
+      // it happened in.
+      workspace.setActivePane(workspace.left);
 
-    final outcome = transfer(workspace, right, '/srv/backups/dump.sql');
+      final outcome = transfer(workspace, right, '/srv/backups/dump.sql');
 
-    expect(outcome, OtherPaneTransferOutcome.queued);
-    final spec = queue.enqueuedSpecs.single;
-    expect(spec.rootPaths, ['/srv/backups/dump.sql']);
-    expect(spec.destinationDir, '/home/tester');
-  });
+      expect(outcome, OtherPaneTransferOutcome.queued);
+      final spec = queue.enqueuedSpecs.single;
+      expect(spec.rootPaths, ['/srv/backups/dump.sql']);
+      expect(spec.destinationDir, '/home/tester');
+    },
+  );
 
   test('both panes on one folder still queue, as F5 does', () async {
     final left = await localPane(

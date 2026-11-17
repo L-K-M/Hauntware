@@ -10,25 +10,22 @@ import 'package:test/test.dart';
 
 void main() {
   test('every vault/keystore barrel symbol resolves at this pin', () {
-    expect(
-      <Object>[
-        Argon2Params,
-        HostKeyStore,
-        InMemoryHostKeyStore,
-        InMemoryVaultStore,
-        PreferredPane,
-        Secret,
-        SecretKind,
-        SecretVault,
-        ServerColor,
-        ServerIcon,
-        VaultCrypto,
-        VaultKeys,
-        VaultStore,
-        secureRandomBytes,
-      ],
-      hasLength(14),
-    );
+    expect(<Object>[
+      Argon2Params,
+      HostKeyStore,
+      InMemoryHostKeyStore,
+      InMemoryVaultStore,
+      PreferredPane,
+      Secret,
+      SecretKind,
+      SecretVault,
+      ServerColor,
+      ServerIcon,
+      VaultCrypto,
+      VaultKeys,
+      VaultStore,
+      secureRandomBytes,
+    ], hasLength(14));
   });
 
   test('seals, opens, and deletes secrets through the barrel', () async {

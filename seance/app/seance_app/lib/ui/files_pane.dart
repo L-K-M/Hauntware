@@ -616,8 +616,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
         _lastPrimaryDownPath == entry.path &&
         !sinceLast.isNegative &&
         sinceLast <= kDoubleTapTimeout &&
-        (event.position - _lastPrimaryDownPosition).distance <=
-            kDoubleTapSlop;
+        (event.position - _lastPrimaryDownPosition).distance <= kDoubleTapSlop;
     _lastPrimaryDownAt = event.timeStamp;
     _lastPrimaryDownPosition = event.position;
     _lastPrimaryDownPath = sinceLast.isNegative ? null : entry.path;

@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart'
     show debugDefaultTargetPlatformOverride;
-import 'package:flutter/gestures.dart' show PointerDeviceKind, kDoubleTapTimeout;
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,7 +89,10 @@ void main() {
   /// [platform] picks the row gesture model (D32 §6/§9): desktop rows
   /// select on press and open on a double-click, touch rows open on a
   /// tap. Defaults to the overridden host, else Linux.
-  Future<void> pumpShell(WidgetTester tester, {TargetPlatform? platform}) async {
+  Future<void> pumpShell(
+    WidgetTester tester, {
+    TargetPlatform? platform,
+  }) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -156,9 +160,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('a single press selects at once and never opens', (
-    tester,
-  ) async {
+  testWidgets('a single press selects at once and never opens', (tester) async {
     final channel = localChannel();
     await left.openLocalHome();
     await pumpShell(tester);
@@ -372,9 +374,7 @@ void main() {
       );
 
       // The ✕ dismisses early (02 §10: transient or dismiss — both).
-      await tester.tap(
-        find.byKey(const ValueKey('pane.left.notice.dismiss')),
-      );
+      await tester.tap(find.byKey(const ValueKey('pane.left.notice.dismiss')));
       await tester.pumpAndSettle();
       expect(left.notice, isNull);
     } finally {
@@ -385,9 +385,7 @@ void main() {
   testWidgets('the remote-unavailable notice renders on a remote file '
       'and never launches', (tester) async {
     final remote = controller_test.FakePaneChannel('/srv/home');
-    remote.listings['/srv/home'] = [
-      _entry('remote.txt', parent: '/srv/home'),
-    ];
+    remote.listings['/srv/home'] = [_entry('remote.txt', parent: '/srv/home')];
     lanes.nextRemoteChannel = remote;
     await left.connectRemote(_remoteBookmark());
     await pumpShell(tester);
@@ -406,9 +404,7 @@ void main() {
     expect(left.error, isNull);
 
     // The ✕ dismisses early — and retires the auto-dismiss timer.
-    await tester.tap(
-      find.byKey(const ValueKey('pane.left.notice.dismiss')),
-    );
+    await tester.tap(find.byKey(const ValueKey('pane.left.notice.dismiss')));
     await tester.pumpAndSettle();
     expect(left.notice, isNull);
   });

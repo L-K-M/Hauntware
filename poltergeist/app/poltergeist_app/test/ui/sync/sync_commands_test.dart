@@ -20,8 +20,9 @@ WorkspaceController _workspace() => WorkspaceController(
 );
 
 void main() {
-  testWidgets('registers the 05 §9 verbs with their §8.3 chords',
-      (tester) async {
+  testWidgets('registers the 05 §9 verbs with their §8.3 chords', (
+    tester,
+  ) async {
     final workspace = _workspace();
     addTearDown(workspace.dispose);
     var synchronizeCalls = 0;
@@ -70,11 +71,7 @@ void main() {
     expect(
       synchronize.activators?.call(TargetPlatform.macOS),
       contains(
-        const SingleActivator(
-          LogicalKeyboardKey.keyY,
-          meta: true,
-          alt: true,
-        ),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true, alt: true),
       ),
     );
     expect(

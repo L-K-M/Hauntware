@@ -178,7 +178,10 @@ String _decodeName(Uint8List bytes, int start, int end) {
     length--;
   }
   if (length == 0) return '';
-  return utf8.decode(bytes.sublist(start, start + length), allowMalformed: true);
+  return utf8.decode(
+    bytes.sublist(start, start + length),
+    allowMalformed: true,
+  );
 }
 
 /// Maps one non-move event record to the dart:io event shape the watch
@@ -207,14 +210,14 @@ FileSystemEvent? fileSystemEventFromInotify({
 
   final path = name.isEmpty ? watchedPath : p.join(watchedPath, name);
 
-  if (mask & inotifyCreate != 0) return FileSystemCreateEvent(path, isDirectory);
-  if (mask & inotifyDelete != 0) return FileSystemDeleteEvent(path, isDirectory);
+  if (mask & inotifyCreate != 0) {
+    return FileSystemCreateEvent(path, isDirectory);
+  }
+  if (mask & inotifyDelete != 0) {
+    return FileSystemDeleteEvent(path, isDirectory);
+  }
   if (mask & (inotifyModify | inotifyAttrib) != 0) {
-    return FileSystemModifyEvent(
-      path,
-      isDirectory,
-      mask & inotifyModify != 0,
-    );
+    return FileSystemModifyEvent(path, isDirectory, mask & inotifyModify != 0);
   }
   return null;
 }
@@ -309,22 +312,33 @@ final DynamicLibrary _libc = DynamicLibrary.process();
 
 // Late finals: symbol lookup happens on first use, always inside this
 // file's Linux-only paths; nothing here loads on other platforms.
-final _inotifyInit1 = _libc.lookupFunction<Int32 Function(Int32),
-    int Function(int)>('inotify_init1');
+final _inotifyInit1 = _libc
+    .lookupFunction<Int32 Function(Int32), int Function(int)>('inotify_init1');
 final _inotifyAddWatch = _libc
-    .lookupFunction<Int32 Function(Int32, Pointer<Uint8>, Uint32),
-        int Function(int, Pointer<Uint8>, int)>('inotify_add_watch');
-final _pipe = _libc.lookupFunction<Int32 Function(Pointer<Int32>, Int32),
-    int Function(Pointer<Int32>, int)>('pipe2');
-final _poll = _libc.lookupFunction<
-    Int32 Function(Pointer<_PollFd>, UnsignedLong, Int32),
-    int Function(Pointer<_PollFd>, int, int)>('poll');
-final _read = _libc.lookupFunction<
-    IntPtr Function(Int32, Pointer<Uint8>, IntPtr),
-    int Function(int, Pointer<Uint8>, int)>('read');
-final _write = _libc.lookupFunction<
-    IntPtr Function(Int32, Pointer<Uint8>, IntPtr),
-    int Function(int, Pointer<Uint8>, int)>('write');
+    .lookupFunction<
+      Int32 Function(Int32, Pointer<Uint8>, Uint32),
+      int Function(int, Pointer<Uint8>, int)
+    >('inotify_add_watch');
+final _pipe = _libc
+    .lookupFunction<
+      Int32 Function(Pointer<Int32>, Int32),
+      int Function(Pointer<Int32>, int)
+    >('pipe2');
+final _poll = _libc
+    .lookupFunction<
+      Int32 Function(Pointer<_PollFd>, UnsignedLong, Int32),
+      int Function(Pointer<_PollFd>, int, int)
+    >('poll');
+final _read = _libc
+    .lookupFunction<
+      IntPtr Function(Int32, Pointer<Uint8>, IntPtr),
+      int Function(int, Pointer<Uint8>, int)
+    >('read');
+final _write = _libc
+    .lookupFunction<
+      IntPtr Function(Int32, Pointer<Uint8>, IntPtr),
+      int Function(int, Pointer<Uint8>, int)
+    >('write');
 final _close = _libc.lookupFunction<Int32 Function(Int32), int Function(int)>(
   'close',
 );
@@ -354,8 +368,12 @@ final class _HelperConfig {
   final int bufferAddress;
   final SendPort toMain;
 
-  const _HelperConfig(this.inotifyFd, this.stopPipeRead, this.bufferAddress,
-      this.toMain);
+  const _HelperConfig(
+    this.inotifyFd,
+    this.stopPipeRead,
+    this.bufferAddress,
+    this.toMain,
+  );
 }
 
 /// The helper isolate's entry: wait on {inotify, stop pipe}, drain the
@@ -398,8 +416,10 @@ void _runHelperLoop(_HelperConfig config, Pointer<_PollFd> pollFds) {
     if (inotifyEvents & pollIn != 0) {
       if (_drainInotify(config, buffer)) return;
     } else if (inotifyEvents & (pollError | pollHup | pollNval) != 0) {
-      config.toMain
-          .send([_syscallError('the inotify descriptor failed', 0), null]);
+      config.toMain.send([
+        _syscallError('the inotify descriptor failed', 0),
+        null,
+      ]);
       return;
     }
   }
@@ -587,7 +607,8 @@ final class _LinuxInotifyWatch {
         name: record.name,
         watchedPath: _path,
       );
-      final mapped = event ??
+      final mapped =
+          event ??
           fileSystemEventFromInotify(
             mask: record.mask,
             name: record.name,
@@ -601,7 +622,7 @@ final class _LinuxInotifyWatch {
       // done into the same lost). The kernel has already removed the
       // watch.
       if (record.mask &
-            (inotifyDeleteSelf | inotifyMoveSelf | inotifyUnmount) !=
+              (inotifyDeleteSelf | inotifyMoveSelf | inotifyUnmount) !=
           0) {
         for (final event in _moves.flush(_path)) {
           if (_failed || _releaseFuture != null) return;
@@ -698,6 +719,5 @@ final class _LinuxInotifyWatch {
   }
 }
 
-FileSystemException _osError(String message, int code) => FileSystemException(
-  '$message (${_errnoName(code)}).',
-);
+FileSystemException _osError(String message, int code) =>
+    FileSystemException('$message (${_errnoName(code)}).');

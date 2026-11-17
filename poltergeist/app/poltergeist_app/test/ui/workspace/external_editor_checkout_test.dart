@@ -177,8 +177,7 @@ AppLocalizations l10nOf(WidgetTester tester) =>
 /// for this, not for the call.
 bool managedUploadCompleted() => harness.queue.tasks.any(
   (task) =>
-      task.spec.managedCheckout?.direction ==
-          ManagedCheckoutDirection.upload &&
+      task.spec.managedCheckout?.direction == ManagedCheckoutDirection.upload &&
       task.state == TransferTaskState.completed,
 );
 
@@ -303,9 +302,7 @@ void main() {
             externalOpener: seams.opener,
           );
 
-          await leftPane(
-            tester,
-          ).openEntry(cursorEntry(tester, 'config.txt'));
+          await leftPane(tester).openEntry(cursorEntry(tester, 'config.txt'));
           final record = await checkoutOf(tester, remoteConfigPath);
           await pollUntil(
             tester,
@@ -336,9 +333,7 @@ void main() {
             externalOpener: seams.opener,
           );
 
-          await leftPane(
-            tester,
-          ).openEntry(cursorEntry(tester, 'config.txt'));
+          await leftPane(tester).openEntry(cursorEntry(tester, 'config.txt'));
           await checkoutOf(tester, remoteConfigPath);
           await pollUntil(
             tester,
@@ -361,9 +356,7 @@ void main() {
             externalOpener: seams.opener,
           );
 
-          await leftPane(
-            tester,
-          ).openEntry(cursorEntry(tester, 'config.txt'));
+          await leftPane(tester).openEntry(cursorEntry(tester, 'config.txt'));
           final record = await checkoutOf(tester, remoteConfigPath);
           await pollUntil(
             tester,
@@ -412,69 +405,58 @@ void main() {
       },
     );
 
-    testWidgets(
-      'the explicit built-in over a KNOWN over-cap size refuses with '
-      'the Open With router — no download spent',
-      (tester) async {
-        await tester.runAsync(() async {
-          await mountEditorShell(
-            tester,
-            harness,
-            editorRegistry: registry,
-            externalOpener: seams.opener,
-            extraEntries: [_bigListing()],
-          );
+    testWidgets('the explicit built-in over a KNOWN over-cap size refuses with '
+        'the Open With router — no download spent', (tester) async {
+      await tester.runAsync(() async {
+        await mountEditorShell(
+          tester,
+          harness,
+          editorRegistry: registry,
+          externalOpener: seams.opener,
+          extraEntries: [_bigListing()],
+        );
 
-          final downloadsBefore = harness.fs.downloadCalls.length;
-          final pane = leftPane(tester);
-          await pane.editInBuiltInEditor(cursorEntry(tester, 'big.bin'));
+        final downloadsBefore = harness.fs.downloadCalls.length;
+        final pane = leftPane(tester);
+        await pane.editInBuiltInEditor(cursorEntry(tester, 'big.bin'));
 
-          await pollFor(tester, find.textContaining('editor limit'));
-          // The toast's Open With action — the toolbar carries another
-          // Open With affordance, so assert at least one button.
-          expect(
-            find.widgetWithText(TextButton, 'Open With'),
-            findsWidgets,
-          );
-          // The known-size refusal happens before the download starts.
-          expect(harness.fs.downloadCalls.length, downloadsBefore);
-          expect(
-            harness.checkout.copiesFor('b1').containsKey(remoteBigPath),
-            isFalse,
-          );
-        });
-      },
-    );
+        await pollFor(tester, find.textContaining('editor limit'));
+        // The toast's Open With action — the toolbar carries another
+        // Open With affordance, so assert at least one button.
+        expect(find.widgetWithText(TextButton, 'Open With'), findsWidgets);
+        // The known-size refusal happens before the download starts.
+        expect(harness.fs.downloadCalls.length, downloadsBefore);
+        expect(
+          harness.checkout.copiesFor('b1').containsKey(remoteBigPath),
+          isFalse,
+        );
+      });
+    });
 
-    testWidgets(
-      'an unknown-size over-cap Open re-resolves through the system '
-      'default — the download was already spent',
-      (tester) async {
-        await tester.runAsync(() async {
-          await mountEditorShell(
-            tester,
-            harness,
-            editorRegistry: registry,
-            externalOpener: seams.opener,
-            extraEntries: [_mysteryListing()],
-          );
+    testWidgets('an unknown-size over-cap Open re-resolves through the system '
+        'default — the download was already spent', (tester) async {
+      await tester.runAsync(() async {
+        await mountEditorShell(
+          tester,
+          harness,
+          editorRegistry: registry,
+          externalOpener: seams.opener,
+          extraEntries: [_mysteryListing()],
+        );
 
-          await leftPane(
-            tester,
-          ).openEntry(cursorEntry(tester, 'mystery.bin'));
-          final record = await checkoutOf(tester, remoteMysteryPath);
-          await pollUntil(
-            tester,
-            () => seams.systemOpener.opens.isNotEmpty,
-            reason: 'system opener never fired',
-          );
-          expect(
-            seams.systemOpener.opens.single,
-            harness.checkout.localFile(record).path,
-          );
-        });
-      },
-    );
+        await leftPane(tester).openEntry(cursorEntry(tester, 'mystery.bin'));
+        final record = await checkoutOf(tester, remoteMysteryPath);
+        await pollUntil(
+          tester,
+          () => seams.systemOpener.opens.isNotEmpty,
+          reason: 'system opener never fired',
+        );
+        expect(
+          seams.systemOpener.opens.single,
+          harness.checkout.localFile(record).path,
+        );
+      });
+    });
   });
 
   group('the open boundary never executes (06 §5.3)', () {
@@ -580,30 +562,29 @@ void main() {
       });
     });
 
-    testWidgets(
-      'Windows: a document type still OS-opens its managed copy',
-      (tester) async {
-        await tester.runAsync(() async {
-          pinHost(EditorHostPlatform.windows);
-          await mount(tester, [
-            seededListing('report.pdf', utf8.encode('%PDF-1.7\n')),
-          ]);
+    testWidgets('Windows: a document type still OS-opens its managed copy', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        pinHost(EditorHostPlatform.windows);
+        await mount(tester, [
+          seededListing('report.pdf', utf8.encode('%PDF-1.7\n')),
+        ]);
 
-          await leftPane(tester).openEntry(cursorEntry(tester, 'report.pdf'));
-          final record = await checkoutOf(tester, '/srv/www/report.pdf');
-          await pollUntil(
-            tester,
-            () => seams.systemOpener.opens.isNotEmpty,
-            reason: 'system opener never fired',
-          );
+        await leftPane(tester).openEntry(cursorEntry(tester, 'report.pdf'));
+        final record = await checkoutOf(tester, '/srv/www/report.pdf');
+        await pollUntil(
+          tester,
+          () => seams.systemOpener.opens.isNotEmpty,
+          reason: 'system opener never fired',
+        );
 
-          expect(
-            seams.systemOpener.opens.single,
-            harness.checkout.localFile(record).path,
-          );
-        });
-      },
-    );
+        expect(
+          seams.systemOpener.opens.single,
+          harness.checkout.localFile(record).path,
+        );
+      });
+    });
 
     testWidgets(
       'the built-in default falling back for a binary copy refuses at the '
@@ -639,9 +620,7 @@ void main() {
 
     setUp(() async {
       localDir = await scratchDir.createTemp('local-pane-');
-      await File(
-        p.join(localDir.path, 'notes.txt'),
-      ).writeAsString('local\n');
+      await File(p.join(localDir.path, 'notes.txt')).writeAsString('local\n');
     });
 
     RemoteFileEntry localEntry() => RemoteFileEntry(
@@ -697,36 +676,30 @@ void main() {
       );
     }
 
-    testWidgets(
-      'a configured editor launches detached on the local file — '
-      'never a checkout',
-      (tester) async {
-        await tester.runAsync(() async {
-          final editor = seams.editor();
-          await registry.register(editor);
-          await mountLocalShell(tester);
+    testWidgets('a configured editor launches detached on the local file — '
+        'never a checkout', (tester) async {
+      await tester.runAsync(() async {
+        final editor = seams.editor();
+        await registry.register(editor);
+        await mountLocalShell(tester);
 
-          final pane = leftPane(tester);
-          await pane.openInExternalEditor(
-            cursorEntry(tester, 'notes.txt'),
-            editorId: editor.id,
-          );
-          await pollUntil(
-            tester,
-            () => seams.launches.isNotEmpty,
-            reason: 'editor never launched',
-          );
+        final pane = leftPane(tester);
+        await pane.openInExternalEditor(
+          cursorEntry(tester, 'notes.txt'),
+          editorId: editor.id,
+        );
+        await pollUntil(
+          tester,
+          () => seams.launches.isNotEmpty,
+          reason: 'editor never launched',
+        );
 
-          expect(seams.launches.single.$1, editor.launchTarget);
-          expect(
-            seams.launches.single.$2,
-            p.join(localDir.path, 'notes.txt'),
-          );
-          // Local files never enter the managed store.
-          expect(harness.checkout.records, isEmpty);
-        });
-      },
-    );
+        expect(seams.launches.single.$1, editor.launchTarget);
+        expect(seams.launches.single.$2, p.join(localDir.path, 'notes.txt'));
+        // Local files never enter the managed store.
+        expect(harness.checkout.records, isEmpty);
+      });
+    });
 
     testWidgets(
       'the System default row hands the local file to the pane channel',
@@ -736,9 +709,7 @@ void main() {
           final channel = harness.appEngine.localChannels.single;
 
           final pane = leftPane(tester);
-          await pane.openInSystemDefaultApp(
-            cursorEntry(tester, 'notes.txt'),
-          );
+          await pane.openInSystemDefaultApp(cursorEntry(tester, 'notes.txt'));
           await pollUntil(
             tester,
             () => channel.openCalls.isNotEmpty,
@@ -771,9 +742,7 @@ void main() {
         editorRegistry: registry,
         externalOpener: seams.opener,
       );
-      await leftPane(
-        tester,
-      ).openEntry(cursorEntry(tester, 'config.txt'));
+      await leftPane(tester).openEntry(cursorEntry(tester, 'config.txt'));
       final record = await checkoutOf(tester, remoteConfigPath);
       await pollUntil(
         tester,
@@ -793,10 +762,7 @@ void main() {
       (tester) async {
         await tester.runAsync(() async {
           await openAndEdit(tester);
-          expect(
-            find.widgetWithText(TextButton, 'Upload'),
-            findsOneWidget,
-          );
+          expect(find.widgetWithText(TextButton, 'Upload'), findsOneWidget);
 
           await tester.tap(find.widgetWithText(TextButton, 'Upload'));
           await pollUntil(
@@ -806,10 +772,7 @@ void main() {
                 managedUploadCompleted(),
             reason: 'upload never completed on the remote',
           );
-          expect(
-            utf8.decode(harness.fs.bytes(remoteConfigPath)!),
-            'changed\n',
-          );
+          expect(utf8.decode(harness.fs.bytes(remoteConfigPath)!), 'changed\n');
           await pollFor(tester, find.text('Uploaded config.txt'));
 
           // 07 §3.8's criterion-3 wording: the upload is visible in the
@@ -833,53 +796,45 @@ void main() {
           );
 
           // Clean again — the prompted set released the record.
-          final record = harness.checkout.copiesFor(
-            'b1',
-          )[remoteConfigPath];
+          final record = harness.checkout.copiesFor('b1')[remoteConfigPath];
           expect(record?.dirty, isFalse);
         });
       },
     );
 
-    testWidgets(
-      'a remote change under the dirty copy conflicts — Cancel keeps '
-      'the remote, no upload lands',
-      (tester) async {
-        await tester.runAsync(() async {
-          await openAndEdit(tester);
-          // The remote moved after the checkout's snapshot: the CAS
-          // preflight must refuse.
-          harness.fs.seed(
-            remoteConfigPath,
-            utf8.encode('remote moved\n'),
-            modifiedAt: DateTime.utc(2026, 3, 3),
-          );
+    testWidgets('a remote change under the dirty copy conflicts — Cancel keeps '
+        'the remote, no upload lands', (tester) async {
+      await tester.runAsync(() async {
+        await openAndEdit(tester);
+        // The remote moved after the checkout's snapshot: the CAS
+        // preflight must refuse.
+        harness.fs.seed(
+          remoteConfigPath,
+          utf8.encode('remote moved\n'),
+          modifiedAt: DateTime.utc(2026, 3, 3),
+        );
 
-          await tester.tap(find.widgetWithText(TextButton, 'Upload'));
-          await pollFor(tester, find.text('Remote file changed'));
-          await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-          await pollUntil(
-            tester,
-            () => find.text('Remote file changed').evaluate().isEmpty,
-            reason: 'conflict dialog never closed',
-          );
+        await tester.tap(find.widgetWithText(TextButton, 'Upload'));
+        await pollFor(tester, find.text('Remote file changed'));
+        await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+        await pollUntil(
+          tester,
+          () => find.text('Remote file changed').evaluate().isEmpty,
+          reason: 'conflict dialog never closed',
+        );
 
-          // One preflight stat, zero uploads; the remote keeps its bytes.
-          expect(
-            harness.fs.statCalls.where((path) => path == remoteConfigPath),
-            hasLength(1),
-          );
-          expect(
-            harness.fs.uploadCalls,
-            isNot(contains(remoteConfigPath)),
-          );
-          expect(
-            utf8.decode(harness.fs.bytes(remoteConfigPath)!),
-            'remote moved\n',
-          );
-        });
-      },
-    );
+        // One preflight stat, zero uploads; the remote keeps its bytes.
+        expect(
+          harness.fs.statCalls.where((path) => path == remoteConfigPath),
+          hasLength(1),
+        );
+        expect(harness.fs.uploadCalls, isNot(contains(remoteConfigPath)));
+        expect(
+          utf8.decode(harness.fs.bytes(remoteConfigPath)!),
+          'remote moved\n',
+        );
+      });
+    });
 
     testWidgets(
       'the conflict dialog’s Overwrite drops CAS and lands the save',
@@ -904,56 +859,45 @@ void main() {
                 managedUploadCompleted(),
             reason: 'overwrite upload never completed on the remote',
           );
-          expect(
-            utf8.decode(harness.fs.bytes(remoteConfigPath)!),
-            'changed\n',
-          );
+          expect(utf8.decode(harness.fs.bytes(remoteConfigPath)!), 'changed\n');
         });
       },
     );
 
-    testWidgets(
-      'an atomic-replace save (write-temp, rename-over) still marks '
-      'the checkout dirty',
-      (tester) async {
-        await tester.runAsync(() async {
-          final editor = seams.editor();
-          await registry.register(editor);
-          await registry.setDefault(editor.id);
-          await mountEditorShell(
-            tester,
-            harness,
-            editorRegistry: registry,
-            externalOpener: seams.opener,
-          );
-          await leftPane(
-            tester,
-          ).openEntry(cursorEntry(tester, 'config.txt'));
-          final record = await checkoutOf(tester, remoteConfigPath);
-          await pollUntil(
-            tester,
-            () => seams.launches.isNotEmpty,
-            reason: 'editor never launched',
-          );
+    testWidgets('an atomic-replace save (write-temp, rename-over) still marks '
+        'the checkout dirty', (tester) async {
+      await tester.runAsync(() async {
+        final editor = seams.editor();
+        await registry.register(editor);
+        await registry.setDefault(editor.id);
+        await mountEditorShell(
+          tester,
+          harness,
+          editorRegistry: registry,
+          externalOpener: seams.opener,
+        );
+        await leftPane(tester).openEntry(cursorEntry(tester, 'config.txt'));
+        final record = await checkoutOf(tester, remoteConfigPath);
+        await pollUntil(
+          tester,
+          () => seams.launches.isNotEmpty,
+          reason: 'editor never launched',
+        );
 
-          final file = harness.checkout.localFile(record);
-          final temp = File('${file.path}.save-tmp');
-          await temp.writeAsString('atomic\n');
-          if (Platform.isWindows) {
-            // Rename-over-existing is a POSIX atomic; Windows tests take
-            // the two-step path — the directory watch fires either way.
-            await file.delete();
-          }
-          await temp.rename(file.path);
+        final file = harness.checkout.localFile(record);
+        final temp = File('${file.path}.save-tmp');
+        await temp.writeAsString('atomic\n');
+        if (Platform.isWindows) {
+          // Rename-over-existing is a POSIX atomic; Windows tests take
+          // the two-step path — the directory watch fires either way.
+          await file.delete();
+        }
+        await temp.rename(file.path);
 
-          await pollForDirtyPrompt(tester, 'config.txt');
-          expect(
-            find.widgetWithText(TextButton, 'Upload'),
-            findsOneWidget,
-          );
-        });
-      },
-    );
+        await pollForDirtyPrompt(tester, 'config.txt');
+        expect(find.widgetWithText(TextButton, 'Upload'), findsOneWidget);
+      });
+    });
   });
 
   group('Open With ▸ menu and remember-choice (06 §4.1)', () {
@@ -972,128 +916,112 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
 
-    testWidgets(
-      'the File menu renders the submenu rows for the cursor file',
-      (tester) async {
-        await tester.runAsync(() async {
-          final editor = seams.editor(acceptedExtensions: ['txt']);
-          await registry.register(editor);
-          await mountEditorShell(
-            tester,
-            harness,
-            editorRegistry: registry,
-            externalOpener: seams.opener,
-          );
-          cursorEntry(tester, 'config.txt');
-          await tester.pump();
-          final l10n = l10nOf(tester);
+    testWidgets('the File menu renders the submenu rows for the cursor file', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        final editor = seams.editor(acceptedExtensions: ['txt']);
+        await registry.register(editor);
+        await mountEditorShell(
+          tester,
+          harness,
+          editorRegistry: registry,
+          externalOpener: seams.opener,
+        );
+        cursorEntry(tester, 'config.txt');
+        await tester.pump();
+        final l10n = l10nOf(tester);
 
-          await openWithSubmenu(tester);
+        await openWithSubmenu(tester);
 
-          expect(find.text(l10n.openWithBuiltInLabel), findsOneWidget);
-          expect(find.text('Fake Editor'), findsOneWidget);
-          expect(
-            find.text(l10n.openWithSystemDefaultLabel),
-            findsOneWidget,
-          );
-          expect(find.text(l10n.openWithOtherLabel), findsOneWidget);
-          expect(find.text(l10n.openWithConfigureLabel), findsOneWidget);
-        });
-      },
-    );
+        expect(find.text(l10n.openWithBuiltInLabel), findsOneWidget);
+        expect(find.text('Fake Editor'), findsOneWidget);
+        expect(find.text(l10n.openWithSystemDefaultLabel), findsOneWidget);
+        expect(find.text(l10n.openWithOtherLabel), findsOneWidget);
+        expect(find.text(l10n.openWithConfigureLabel), findsOneWidget);
+      });
+    });
 
-    testWidgets(
-      'Other… picks an application, remembers the binding, and opens '
-      'through it',
-      (tester) async {
-        await tester.runAsync(() async {
-          await mountEditorShell(
-            tester,
-            harness,
-            editorRegistry: registry,
-            externalOpener: seams.opener,
-          );
-          cursorEntry(tester, 'config.txt');
-          await tester.pump();
-          final l10n = l10nOf(tester);
+    testWidgets('Other… picks an application, remembers the binding, and opens '
+        'through it', (tester) async {
+      await tester.runAsync(() async {
+        await mountEditorShell(
+          tester,
+          harness,
+          editorRegistry: registry,
+          externalOpener: seams.opener,
+        );
+        cursorEntry(tester, 'config.txt');
+        await tester.pump();
+        final l10n = l10nOf(tester);
 
-          await openWithSubmenu(tester);
-          await tester.tap(
-            find.widgetWithText(MenuItemButton, l10n.openWithOtherLabel),
-          );
-          await pollFor(
-            tester,
-            find.textContaining('Open “config.txt” with'),
-          );
+        await openWithSubmenu(tester);
+        await tester.tap(
+          find.widgetWithText(MenuItemButton, l10n.openWithOtherLabel),
+        );
+        await pollFor(tester, find.textContaining('Open “config.txt” with'));
 
-          // The pick already ran — the prompt now asks about remembering.
-          if (currentEditorHostPlatform == EditorHostPlatform.macos) {
-            // macOS picks through the channel, not the picker seam.
-            expect(seams.pickCalls, isEmpty);
-          } else {
-            expect(seams.pickCalls, hasLength(1));
-          }
-          final picked = registry.registry.editors.single;
-          expect(
-            picked.displayName,
-            currentEditorHostPlatform == EditorHostPlatform.macos
-                ? 'Picked Editor'
-                : 'fake-editor',
-          );
+        // The pick already ran — the prompt now asks about remembering.
+        if (currentEditorHostPlatform == EditorHostPlatform.macos) {
+          // macOS picks through the channel, not the picker seam.
+          expect(seams.pickCalls, isEmpty);
+        } else {
+          expect(seams.pickCalls, hasLength(1));
+        }
+        final picked = registry.registry.editors.single;
+        expect(
+          picked.displayName,
+          currentEditorHostPlatform == EditorHostPlatform.macos
+              ? 'Picked Editor'
+              : 'fake-editor',
+        );
 
-          // Remember the binding, then Open.
-          await tester.tap(find.byKey(const ValueKey('openWith.remember')));
-          await tester.pump();
-          await tester.tap(find.byKey(const ValueKey('openWith.confirm')));
-          final record = await checkoutOf(tester, remoteConfigPath);
-          await pollUntil(
-            tester,
-            () => seams.launches.isNotEmpty,
-            reason: 'editor never launched',
-          );
+        // Remember the binding, then Open.
+        await tester.tap(find.byKey(const ValueKey('openWith.remember')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('openWith.confirm')));
+        final record = await checkoutOf(tester, remoteConfigPath);
+        await pollUntil(
+          tester,
+          () => seams.launches.isNotEmpty,
+          reason: 'editor never launched',
+        );
 
-          expect(registry.registry.extensionDefaults['txt'], picked.id);
-          expect(
-            seams.launches.single.$2,
-            harness.checkout.localFile(record).path,
-          );
-        });
-      },
-    );
+        expect(registry.registry.extensionDefaults['txt'], picked.id);
+        expect(
+          seams.launches.single.$2,
+          harness.checkout.localFile(record).path,
+        );
+      });
+    });
 
-    testWidgets(
-      'cancelling the remember-choice aborts the launch entirely',
-      (tester) async {
-        await tester.runAsync(() async {
-          await mountEditorShell(
-            tester,
-            harness,
-            editorRegistry: registry,
-            externalOpener: seams.opener,
-          );
-          cursorEntry(tester, 'config.txt');
-          await tester.pump();
-          final l10n = l10nOf(tester);
+    testWidgets('cancelling the remember-choice aborts the launch entirely', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await mountEditorShell(
+          tester,
+          harness,
+          editorRegistry: registry,
+          externalOpener: seams.opener,
+        );
+        cursorEntry(tester, 'config.txt');
+        await tester.pump();
+        final l10n = l10nOf(tester);
 
-          await openWithSubmenu(tester);
-          await tester.tap(
-            find.widgetWithText(MenuItemButton, l10n.openWithOtherLabel),
-          );
-          await pollFor(
-            tester,
-            find.byKey(const ValueKey('openWith.confirm')),
-          );
-          await tester.tap(
-            find.widgetWithText(TextButton, l10n.openWithCancel),
-          );
-          await tester.pump(const Duration(milliseconds: 400));
+        await openWithSubmenu(tester);
+        await tester.tap(
+          find.widgetWithText(MenuItemButton, l10n.openWithOtherLabel),
+        );
+        await pollFor(tester, find.byKey(const ValueKey('openWith.confirm')));
+        await tester.tap(find.widgetWithText(TextButton, l10n.openWithCancel));
+        await tester.pump(const Duration(milliseconds: 400));
 
-          expect(seams.launches, isEmpty);
-          expect(registry.registry.extensionDefaults, isEmpty);
-          // The pick itself registered — the cancel only aborts the open.
-          expect(registry.registry.editors, hasLength(1));
-        });
-      },
-    );
+        expect(seams.launches, isEmpty);
+        expect(registry.registry.extensionDefaults, isEmpty);
+        // The pick itself registered — the cancel only aborts the open.
+        expect(registry.registry.editors, hasLength(1));
+      });
+    });
   });
 }

@@ -171,9 +171,7 @@ class _InboxSettingsState extends State<InboxSettings> {
             ),
           )
         else if (!view.syncConfigured)
-          const Text(
-            'Set up sync first: the inbox uses your sync server.',
-          )
+          const Text('Set up sync first: the inbox uses your sync server.')
         else ...[
           for (final app in view.apps)
             ListTile(

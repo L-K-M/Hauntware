@@ -312,11 +312,8 @@ class TransferTask {
 
   /// Journal restore (03 §4.6): a replayed task keeps its journaled
   /// identity so its records still key on it.
-  TransferTask.restored(
-    this.spec, {
-    required this.id,
-    required this.enqueuedAt,
-  }) : wasRestored = true;
+  TransferTask.restored(this.spec, {required this.id, required this.enqueuedAt})
+    : wasRestored = true;
 
   /// `uuidV4()` from seance_protocol.
   final String id;

@@ -12,7 +12,8 @@ import 'serialized_operations.dart';
 /// Simple JSON-file [ConfigStore]. For a single-user personal tool this is
 /// plenty; the proposal's SQLite/drift backend is a drop-in future swap behind
 /// the same interface. Secret material never lands here — only references.
-class FileConfigStore with SerializedOperations
+class FileConfigStore
+    with SerializedOperations
     implements ConfigStore, SyncCollectionHealth {
   final File file;
   final Map<String, ServerConfig> _cache = {};
@@ -44,7 +45,9 @@ class FileConfigStore with SerializedOperations
 
   Future<void> _flush(Map<String, ServerConfig> snapshot) async {
     await writeStringAtomically(
-        file, jsonEncode(snapshot.values.map((c) => c.toJson()).toList()));
+      file,
+      jsonEncode(snapshot.values.map((c) => c.toJson()).toList()),
+    );
   }
 
   Future<T> _serialize<T>(Future<T> Function() operation) =>
@@ -68,19 +71,17 @@ class FileConfigStore with SerializedOperations
 
   @override
   Future<void> markSyncCollectionRecovered() => _serialize(() async {
-        await _flush(_cache);
-        await clearSyncCollectionRecovery(file);
-        _syncCollectionFailed = false;
-      });
+    await _flush(_cache);
+    await clearSyncCollectionRecovery(file);
+    _syncCollectionFailed = false;
+  });
 
   @override
   Future<List<ServerConfig>> listServers() => _serialize(() async {
-        final list = _cache.values.toList()
-          ..sort(
-            (a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()),
-          );
-        return list;
-      });
+    final list = _cache.values.toList()
+      ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    return list;
+  });
 
   @override
   Future<ServerConfig?> getServer(String id) =>
@@ -96,7 +97,8 @@ class FileConfigStore with SerializedOperations
 }
 
 /// Simple JSON-file [SnippetStore]. Non-secret; synced like server configs.
-class FileSnippetStore with SerializedOperations
+class FileSnippetStore
+    with SerializedOperations
     implements SnippetStore, SyncCollectionHealth {
   final File file;
   final Map<String, Snippet> _cache = {};
@@ -127,7 +129,9 @@ class FileSnippetStore with SerializedOperations
 
   Future<void> _flush(Map<String, Snippet> snapshot) async {
     await writeStringAtomically(
-        file, jsonEncode(snapshot.values.map((s) => s.toJson()).toList()));
+      file,
+      jsonEncode(snapshot.values.map((s) => s.toJson()).toList()),
+    );
   }
 
   // FileConfigStore's rule (#661): operations run one at a time, and a
@@ -151,19 +155,17 @@ class FileSnippetStore with SerializedOperations
 
   @override
   Future<void> markSyncCollectionRecovered() => _serialize(() async {
-        await _flush(_cache);
-        await clearSyncCollectionRecovery(file);
-        _syncCollectionFailed = false;
-      });
+    await _flush(_cache);
+    await clearSyncCollectionRecovery(file);
+    _syncCollectionFailed = false;
+  });
 
   @override
   Future<List<Snippet>> listSnippets() => _serialize(() async {
-        final list = _cache.values.toList()
-          ..sort(
-            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-          );
-        return list;
-      });
+    final list = _cache.values.toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    return list;
+  });
 
   @override
   Future<Snippet?> getSnippet(String id) => _serialize(() async => _cache[id]);
@@ -201,7 +203,9 @@ class FileTombstoneStore with SerializedOperations implements TombstoneStore {
       try {
         final list = jsonDecode(await file.readAsString()) as List;
         for (final j in list) {
-          final r = EncryptedRecord.fromJson((j as Map).cast<String, dynamic>());
+          final r = EncryptedRecord.fromJson(
+            (j as Map).cast<String, dynamic>(),
+          );
           _cache[r.id] = r;
         }
       } catch (error, stackTrace) {
@@ -226,7 +230,9 @@ class FileTombstoneStore with SerializedOperations implements TombstoneStore {
 
   Future<void> _flush(Map<String, EncryptedRecord> snapshot) async {
     await writeStringAtomically(
-        file, jsonEncode(snapshot.values.map((r) => r.toJson()).toList()));
+      file,
+      jsonEncode(snapshot.values.map((r) => r.toJson()).toList()),
+    );
   }
 
   // FileConfigStore's rule (#661): one operation at a time, and memory
@@ -253,25 +259,25 @@ class FileTombstoneStore with SerializedOperations implements TombstoneStore {
 
   @override
   Future<void> add(EncryptedRecord tombstone) => _mutate((candidate) {
-        final existing = candidate[tombstone.id];
-        // Monotonic (see [TombstoneStore]): a retry or double-delete after the
-        // row is gone recomputes a bare-"now" stamp that can trail a pending
-        // skew-beating tombstone; keeping the higher stamp stops a regression
-        // that would lose last-write-wins and resurrect the row.
-        if (existing != null && existing.updatedAt > tombstone.updatedAt) {
-          return false;
-        }
-        candidate[tombstone.id] = tombstone;
-        return true;
-      });
+    final existing = candidate[tombstone.id];
+    // Monotonic (see [TombstoneStore]): a retry or double-delete after the
+    // row is gone recomputes a bare-"now" stamp that can trail a pending
+    // skew-beating tombstone; keeping the higher stamp stops a regression
+    // that would lose last-write-wins and resurrect the row.
+    if (existing != null && existing.updatedAt > tombstone.updatedAt) {
+      return false;
+    }
+    candidate[tombstone.id] = tombstone;
+    return true;
+  });
 
   @override
   Future<void> remove(String id) => _mutate(
-        // Skip the rewrite when nothing was pending: saveServer/saveSnippet
-        // call remove() on every save, so without this a delete-free install
-        // would create and rewrite the file on each save.
-        (candidate) => candidate.remove(id) != null,
-      );
+    // Skip the rewrite when nothing was pending: saveServer/saveSnippet
+    // call remove() on every save, so without this a delete-free install
+    // would create and rewrite the file on each save.
+    (candidate) => candidate.remove(id) != null,
+  );
 }
 
 /// JSON-file [HostKeyStore] for pinned TOFU keys. Conflict-aware, so sync
@@ -310,7 +316,9 @@ class FileHostKeyStore
 
   Future<void> _flush(Map<String, HostKey> keys) async {
     await writeStringAtomically(
-        file, jsonEncode(keys.values.map((k) => k.toJson()).toList()));
+      file,
+      jsonEncode(keys.values.map((k) => k.toJson()).toList()),
+    );
   }
 
   /// Keep the cache and each atomic snapshot in one operation order.
@@ -329,8 +337,7 @@ class FileHostKeyStore
   }
 
   @override
-  Future<List<HostKey>> all() =>
-      _serialize(() async => _keys.values.toList());
+  Future<List<HostKey>> all() => _serialize(() async => _keys.values.toList());
 
   @override
   Future<HostKey?> get(String host, int port) =>

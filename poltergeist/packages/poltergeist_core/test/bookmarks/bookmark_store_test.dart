@@ -48,78 +48,78 @@ Bookmark _localBookmark(
 
 /// One representative per 04 §2.1 kind, every synced field populated.
 List<Bookmark> _allKinds() => [
-      Bookmark(
-        id: 'local-1',
-        kind: BookmarkKind.localFolder,
-        label: 'Downloads',
-        group: 'Places',
-        color: ServerColor.amber,
-        icon: ServerIcon.home,
-        localPath: '~/Downloads',
-        preferredPane: PreferredPane.left,
-        sortKey: 'am',
-        createdAt: _fixedNow,
-        updatedAt: _fixedNow,
+  Bookmark(
+    id: 'local-1',
+    kind: BookmarkKind.localFolder,
+    label: 'Downloads',
+    group: 'Places',
+    color: ServerColor.amber,
+    icon: ServerIcon.home,
+    localPath: '~/Downloads',
+    preferredPane: PreferredPane.left,
+    sortKey: 'am',
+    createdAt: _fixedNow,
+    updatedAt: _fixedNow,
+  ),
+  Bookmark(
+    id: 'remote-1',
+    kind: BookmarkKind.remotePath,
+    label: 'www logs',
+    group: 'Work',
+    color: ServerColor.violet,
+    icon: ServerIcon.database,
+    server: const BookmarkServerRef(
+      identity: EmbeddedHostIdentity(
+        host: 'nas.local',
+        username: 'alice',
+        authMethod: AuthMethod.privateKey,
+        identityFilePath: '~/.ssh/id_ed25519',
       ),
-      Bookmark(
-        id: 'remote-1',
-        kind: BookmarkKind.remotePath,
-        label: 'www logs',
-        group: 'Work',
-        color: ServerColor.violet,
-        icon: ServerIcon.database,
-        server: const BookmarkServerRef(
-          identity: EmbeddedHostIdentity(
-            host: 'nas.local',
-            username: 'alice',
-            authMethod: AuthMethod.privateKey,
-            identityFilePath: '~/.ssh/id_ed25519',
-          ),
+    ),
+    remotePath: '/var/log/nginx',
+    preferredPane: PreferredPane.right,
+    sortKey: 'b',
+    createdAt: _fixedNow,
+    updatedAt: _fixedNow,
+  ),
+  Bookmark(
+    id: 'ws-1',
+    kind: BookmarkKind.workspace,
+    label: 'Site pair',
+    left: const BookmarkLocation(path: '~/site'),
+    right: const BookmarkLocation(
+      server: BookmarkServerRef(
+        identity: EmbeddedHostIdentity(
+          host: 'nas.local',
+          username: 'alice',
+          authMethod: AuthMethod.password,
+          secretRef: 'nas-password',
         ),
-        remotePath: '/var/log/nginx',
-        preferredPane: PreferredPane.right,
-        sortKey: 'b',
-        createdAt: _fixedNow,
-        updatedAt: _fixedNow,
       ),
-      Bookmark(
-        id: 'ws-1',
-        kind: BookmarkKind.workspace,
-        label: 'Site pair',
-        left: const BookmarkLocation(path: '~/site'),
-        right: const BookmarkLocation(
-          server: BookmarkServerRef(
-            identity: EmbeddedHostIdentity(
-              host: 'nas.local',
-              username: 'alice',
-              authMethod: AuthMethod.password,
-              secretRef: 'nas-password',
-            ),
-          ),
-          path: '/srv/site',
-        ),
-        sortKey: 'd',
-        createdAt: _fixedNow,
-        updatedAt: _fixedNow,
+      path: '/srv/site',
+    ),
+    sortKey: 'd',
+    createdAt: _fixedNow,
+    updatedAt: _fixedNow,
+  ),
+  Bookmark(
+    id: 'sync-1',
+    kind: BookmarkKind.savedSync,
+    label: 'Deploy',
+    sync: SavedSyncSpec(
+      source: const BookmarkLocation(path: '~/site'),
+      destination: const BookmarkLocation(
+        server: BookmarkServerRef(serverConfigId: 'srv-9'),
+        path: '/srv/site',
       ),
-      Bookmark(
-        id: 'sync-1',
-        kind: BookmarkKind.savedSync,
-        label: 'Deploy',
-        sync: SavedSyncSpec(
-          source: const BookmarkLocation(path: '~/site'),
-          destination: const BookmarkLocation(
-            server: BookmarkServerRef(serverConfigId: 'srv-9'),
-            path: '/srv/site',
-          ),
-          ignoreRules: const ['.git/**'],
-          rules: const {'direction': 'leftToRight'},
-        ),
-        sortKey: 'g',
-        createdAt: _fixedNow,
-        updatedAt: _fixedNow,
-      ),
-    ];
+      ignoreRules: const ['.git/**'],
+      rules: const {'direction': 'leftToRight'},
+    ),
+    sortKey: 'g',
+    createdAt: _fixedNow,
+    updatedAt: _fixedNow,
+  ),
+];
 
 void main() {
   late Directory dir;
@@ -189,9 +189,9 @@ void main() {
       final store = FileBookmarkStore(path: path);
 
       expect(await store.load(), isEmpty);
-      final quarantined = dir
-          .listSync()
-          .where((entity) => entity.path.contains('.corrupt-'));
+      final quarantined = dir.listSync().where(
+        (entity) => entity.path.contains('.corrupt-'),
+      );
       expect(quarantined, hasLength(1));
       expect(
         File(quarantined.single.path).readAsStringSync(),
@@ -200,33 +200,30 @@ void main() {
       );
     });
 
-    test('a failed quarantine fails the load instead of starting empty',
-        () async {
-      final path = pathIn('bookmarks.json');
-      const contents = '{not valid json';
-      File(path).writeAsStringSync(contents);
+    test(
+      'a failed quarantine fails the load instead of starting empty',
+      () async {
+        final path = pathIn('bookmarks.json');
+        const contents = '{not valid json';
+        File(path).writeAsStringSync(contents);
 
-      // Park a directory where the quarantine rename would land, so the
-      // rename fails. The store must then fail closed rather than load
-      // empty and let the next save overwrite the unreadable bytes.
-      Directory(
-        bookmarkQuarantinePath(path, _fixedNow),
-      ).createSync();
-      final store = FileBookmarkStore(
-        path: path,
-        now: () => _fixedNow,
-      );
+        // Park a directory where the quarantine rename would land, so the
+        // rename fails. The store must then fail closed rather than load
+        // empty and let the next save overwrite the unreadable bytes.
+        Directory(bookmarkQuarantinePath(path, _fixedNow)).createSync();
+        final store = FileBookmarkStore(path: path, now: () => _fixedNow);
 
-      await expectLater(store.load(), throwsA(isA<FileSystemException>()));
-      expect(File(path).readAsStringSync(), contents);
+        await expectLater(store.load(), throwsA(isA<FileSystemException>()));
+        expect(File(path).readAsStringSync(), contents);
 
-      // A later save must fail too, never replacing the bytes.
-      await expectLater(
-        store.upsertAll([_remoteBookmark('a')]),
-        throwsA(isA<FileSystemException>()),
-      );
-      expect(File(path).readAsStringSync(), contents);
-    });
+        // A later save must fail too, never replacing the bytes.
+        await expectLater(
+          store.upsertAll([_remoteBookmark('a')]),
+          throwsA(isA<FileSystemException>()),
+        );
+        expect(File(path).readAsStringSync(), contents);
+      },
+    );
 
     test('preserves undecodable records verbatim on the next write', () async {
       final path = pathIn('bookmarks.json');
@@ -320,8 +317,7 @@ void main() {
       );
     });
 
-    test('rethrows read failures instead of silently starting empty',
-        () async {
+    test('rethrows read failures instead of silently starting empty', () async {
       if (!Platform.isLinux && !Platform.isMacOS) {
         markTestSkipped('mode-000 read denial applies on desktop POSIX only');
         return;
@@ -531,52 +527,56 @@ Host web
   });
 
   group('atomic-write durability', () {
-    test('a torn temp sibling from a crashed write leaves the old store',
-        () async {
-      final path = pathIn('bookmarks.json');
-      final good = jsonEncode({
-        'version': 1,
-        'bookmarks': [_remoteBookmark('a', sortKey: 'm').toJson()],
-      });
-      File(path).writeAsStringSync(good);
-      // The crash landed between temp write and rename: the temp holds a
-      // truncated payload, the real file still holds the last good store.
-      File('$path.tmp-deadbeef').writeAsStringSync('{"version":1,"bookmar');
+    test(
+      'a torn temp sibling from a crashed write leaves the old store',
+      () async {
+        final path = pathIn('bookmarks.json');
+        final good = jsonEncode({
+          'version': 1,
+          'bookmarks': [_remoteBookmark('a', sortKey: 'm').toJson()],
+        });
+        File(path).writeAsStringSync(good);
+        // The crash landed between temp write and rename: the temp holds a
+        // truncated payload, the real file still holds the last good store.
+        File('$path.tmp-deadbeef').writeAsStringSync('{"version":1,"bookmar');
 
-      final store = FileBookmarkStore(path: path);
-      expect((await store.load()).map((bookmark) => bookmark.id), ['a']);
-      expect(File(path).readAsStringSync(), good);
-    });
+        final store = FileBookmarkStore(path: path);
+        expect((await store.load()).map((bookmark) => bookmark.id), ['a']);
+        expect(File(path).readAsStringSync(), good);
+      },
+    );
 
-    test('a write that throws mid-rename never truncates the old store',
-        () async {
-      final path = pathIn('bookmarks.json');
-      final good = jsonEncode({
-        'version': 1,
-        'bookmarks': [_remoteBookmark('a', sortKey: 'm').toJson()],
-      });
-      File(path).writeAsStringSync(good);
+    test(
+      'a write that throws mid-rename never truncates the old store',
+      () async {
+        final path = pathIn('bookmarks.json');
+        final good = jsonEncode({
+          'version': 1,
+          'bookmarks': [_remoteBookmark('a', sortKey: 'm').toJson()],
+        });
+        File(path).writeAsStringSync(good);
 
-      final store = FileBookmarkStore(
-        path: path,
-        atomicWriter: (file, contents) async {
-          // Simulated crash: a torn temp lands, the rename never runs.
-          await File('${file.path}.tmp-aaaa').writeAsString('{torn');
-          throw StateError('simulated crash');
-        },
-      );
+        final store = FileBookmarkStore(
+          path: path,
+          atomicWriter: (file, contents) async {
+            // Simulated crash: a torn temp lands, the rename never runs.
+            await File('${file.path}.tmp-aaaa').writeAsString('{torn');
+            throw StateError('simulated crash');
+          },
+        );
 
-      await expectLater(
-        store.upsertAll([_remoteBookmark('b', sortKey: 'q')]),
-        throwsStateError,
-      );
-      expect(File(path).readAsStringSync(), good);
+        await expectLater(
+          store.upsertAll([_remoteBookmark('b', sortKey: 'q')]),
+          throwsStateError,
+        );
+        expect(File(path).readAsStringSync(), good);
 
-      // The failed write must not wedge the store either: a working writer
-      // still sees the pre-failure state and completes.
-      final recovered = FileBookmarkStore(path: path);
-      expect((await recovered.load()).map((bookmark) => bookmark.id), ['a']);
-    });
+        // The failed write must not wedge the store either: a working writer
+        // still sees the pre-failure state and completes.
+        final recovered = FileBookmarkStore(path: path);
+        expect((await recovered.load()).map((bookmark) => bookmark.id), ['a']);
+      },
+    );
   });
 
   group('payload purity — the M6 serialization contract', () {
@@ -621,8 +621,7 @@ Host web
       'secretValue',
     };
 
-    test('persisted records carry only synced keys, for every kind',
-        () async {
+    test('persisted records carry only synced keys, for every kind', () async {
       final path = pathIn('bookmarks.json');
       final bookmarks = _allKinds();
       final store = FileBookmarkStore(path: path);
@@ -651,95 +650,86 @@ Host web
       }
     });
 
-    test('the sealed-payload shape round-trips like 04 §2.4 records it',
-        () async {
-      // The sync envelope is {'kind': 'bookmark', 'data': toJson()} — the
-      // inner map must never grow device-local keys.
-      final bookmark = _allKinds().first;
-      final envelope = {
-        'kind': 'bookmark',
-        'data': bookmark.toJson(),
-      };
-      final data = envelope['data'] as Map<String, dynamic>;
-      expect(data.keys.toSet().difference(syncedKeys), isEmpty);
-      expect(data.keys.toSet().intersection(deviceLocalKeys), isEmpty);
-    });
-
     test(
-      'no local-only key nests inside the workspace or server payloads',
-      () {
-        // The top-level key audit above does not reach inside `left`,
-        // `right`, `server`, or `sync` — and M5's workspace record is
-        // exactly where a nested location could smuggle a device-local
-        // field. Walk every map key at every depth instead.
-        Set<String> allKeys(Object? node) {
-          final keys = <String>{};
-          void walk(Object? value) {
-            switch (value) {
-              case Map():
-                for (final entry in value.entries) {
-                  keys.add(entry.key as String);
-                  walk(entry.value);
-                }
-              case List():
-                value.forEach(walk);
-            }
-          }
-
-          walk(node);
-          return keys;
-        }
-
-        for (final bookmark in _allKinds()) {
-          final leaked = allKeys(
-            bookmark.toJson(),
-          ).intersection(deviceLocalKeys);
-          expect(leaked, isEmpty, reason: bookmark.id);
-        }
-
-        // And the M5 additions specifically: a workspace location is
-        // {server?, path} — `path` is required, `server` is the
-        // optional remote endpoint — and nothing else may ride along.
-        final workspace = _allKinds().firstWhere(
-          (bookmark) => bookmark.kind == BookmarkKind.workspace,
-          orElse: () =>
-              fail('_allKinds() must include a workspace bookmark'),
-        );
-        final json = workspace.toJson();
-        for (final side in const ['left', 'right']) {
-          final location = json[side] as Map<String, dynamic>;
-          expect(location, contains('path'), reason: '$side.path');
-          for (final key in location.keys) {
-            expect(
-              {'server', 'path'},
-              contains(key),
-              reason: '$side.$key',
-            );
-          }
-        }
+      'the sealed-payload shape round-trips like 04 §2.4 records it',
+      () async {
+        // The sync envelope is {'kind': 'bookmark', 'data': toJson()} — the
+        // inner map must never grow device-local keys.
+        final bookmark = _allKinds().first;
+        final envelope = {'kind': 'bookmark', 'data': bookmark.toJson()};
+        final data = envelope['data'] as Map<String, dynamic>;
+        expect(data.keys.toSet().difference(syncedKeys), isEmpty);
+        expect(data.keys.toSet().intersection(deviceLocalKeys), isEmpty);
       },
     );
+
+    test('no local-only key nests inside the workspace or server payloads', () {
+      // The top-level key audit above does not reach inside `left`,
+      // `right`, `server`, or `sync` — and M5's workspace record is
+      // exactly where a nested location could smuggle a device-local
+      // field. Walk every map key at every depth instead.
+      Set<String> allKeys(Object? node) {
+        final keys = <String>{};
+        void walk(Object? value) {
+          switch (value) {
+            case Map():
+              for (final entry in value.entries) {
+                keys.add(entry.key as String);
+                walk(entry.value);
+              }
+            case List():
+              value.forEach(walk);
+          }
+        }
+
+        walk(node);
+        return keys;
+      }
+
+      for (final bookmark in _allKinds()) {
+        final leaked = allKeys(bookmark.toJson()).intersection(deviceLocalKeys);
+        expect(leaked, isEmpty, reason: bookmark.id);
+      }
+
+      // And the M5 additions specifically: a workspace location is
+      // {server?, path} — `path` is required, `server` is the
+      // optional remote endpoint — and nothing else may ride along.
+      final workspace = _allKinds().firstWhere(
+        (bookmark) => bookmark.kind == BookmarkKind.workspace,
+        orElse: () => fail('_allKinds() must include a workspace bookmark'),
+      );
+      final json = workspace.toJson();
+      for (final side in const ['left', 'right']) {
+        final location = json[side] as Map<String, dynamic>;
+        expect(location, contains('path'), reason: '$side.path');
+        for (final key in location.keys) {
+          expect({'server', 'path'}, contains(key), reason: '$side.$key');
+        }
+      }
+    });
   });
 
   group('ordering and grouping', () {
-    test('load returns bookmarks sorted by sortKey with the id tiebreak',
-        () async {
-      final path = pathIn('bookmarks.json');
-      File(path).writeAsStringSync(
-        jsonEncode({
-          'version': 1,
-          'bookmarks': [
-            _localBookmark('z', sortKey: 'm').toJson(),
-            _localBookmark('a', sortKey: 'm').toJson(),
-            _localBookmark('n', sortKey: 'am').toJson(),
-          ],
-        }),
-      );
+    test(
+      'load returns bookmarks sorted by sortKey with the id tiebreak',
+      () async {
+        final path = pathIn('bookmarks.json');
+        File(path).writeAsStringSync(
+          jsonEncode({
+            'version': 1,
+            'bookmarks': [
+              _localBookmark('z', sortKey: 'm').toJson(),
+              _localBookmark('a', sortKey: 'm').toJson(),
+              _localBookmark('n', sortKey: 'am').toJson(),
+            ],
+          }),
+        );
 
-      final loaded = await FileBookmarkStore(path: path).load();
+        final loaded = await FileBookmarkStore(path: path).load();
 
-      expect(loaded.map((bookmark) => bookmark.id), ['n', 'a', 'z']);
-    });
+        expect(loaded.map((bookmark) => bookmark.id), ['n', 'a', 'z']);
+      },
+    );
 
     test('sections order groups by name, ungrouped last', () async {
       final path = pathIn('bookmarks.json');
@@ -764,8 +754,7 @@ Host web
       expect(sections[2].bookmarks.map((b) => b.id), ['u1']);
     });
 
-    test('an entirely ungrouped store reports one anonymous section',
-        () async {
+    test('an entirely ungrouped store reports one anonymous section', () async {
       final path = pathIn('bookmarks.json');
       final store = FileBookmarkStore(path: path);
       await store.upsertAll([_localBookmark('a', sortKey: 'm')]);
@@ -798,8 +787,10 @@ Host web
       // through [applySyncedRecords]) must not restamp — LWW compares this
       // tuple.
       final path = pathIn('bookmarks.json');
-      final store =
-          FileBookmarkStore(path: path, now: () => DateTime.utc(2030));
+      final store = FileBookmarkStore(
+        path: path,
+        now: () => DateTime.utc(2030),
+      );
       await store.upsertAll([_localBookmark('a', sortKey: 'm')]);
 
       expect((await store.byId('a'))!.updatedAt, _fixedNow);
@@ -828,10 +819,11 @@ Host web
 
       expect(moved.sortKey.compareTo('am') > 0, isTrue);
       expect(moved.sortKey.compareTo('an') < 0, isTrue);
-      expect(
-        (await store.load()).map((bookmark) => bookmark.id),
-        ['a', 'c', 'b'],
-      );
+      expect((await store.load()).map((bookmark) => bookmark.id), [
+        'a',
+        'c',
+        'b',
+      ]);
     });
 
     test('reorder to head and tail stays inside the group', () async {
@@ -848,8 +840,7 @@ Host web
       expect(tail.sortKey.compareTo('m') > 0, isTrue);
     });
 
-    test('reorder rejects a neighbor outside the bookmark\'s group',
-        () async {
+    test('reorder rejects a neighbor outside the bookmark\'s group', () async {
       final path = pathIn('bookmarks.json');
       final store = FileBookmarkStore(path: path);
       await store.upsertAll([
@@ -858,10 +849,7 @@ Host web
       ]);
       await store.moveToGroup('b', 'Elsewhere');
 
-      await expectLater(
-        store.reorder('a', beforeId: 'b'),
-        throwsArgumentError,
-      );
+      await expectLater(store.reorder('a', beforeId: 'b'), throwsArgumentError);
     });
 
     test('moveToGroup refiles and lands at the group tail', () async {
@@ -876,10 +864,10 @@ Host web
       final moved = await store.moveToGroup('b', 'Work');
       expect(moved.group, 'Work');
       expect(moved.sortKey.compareTo('m') > 0, isTrue);
-      expect(
-        (await store.sections()).single.bookmarks.map((b) => b.id),
-        ['a', 'b'],
-      );
+      expect((await store.sections()).single.bookmarks.map((b) => b.id), [
+        'a',
+        'b',
+      ]);
     });
 
     test('moveToGroup to ungrouped drops the group', () async {
@@ -894,20 +882,22 @@ Host web
       expect((await store.byId('a'))!.group, isNull);
     });
 
-    test('group and reorder stamp updatedAt on the moved bookmark only',
-        () async {
-      final path = pathIn('bookmarks.json');
-      final stamp = DateTime.utc(2026, 9, 19, 11);
-      final store = FileBookmarkStore(path: path, now: () => stamp);
-      await store.upsertAll([
-        _localBookmark('a', sortKey: 'm'),
-        _localBookmark('b', sortKey: 'q'),
-      ]);
+    test(
+      'group and reorder stamp updatedAt on the moved bookmark only',
+      () async {
+        final path = pathIn('bookmarks.json');
+        final stamp = DateTime.utc(2026, 9, 19, 11);
+        final store = FileBookmarkStore(path: path, now: () => stamp);
+        await store.upsertAll([
+          _localBookmark('a', sortKey: 'm'),
+          _localBookmark('b', sortKey: 'q'),
+        ]);
 
-      final moved = await store.reorder('b', afterId: 'a');
-      expect(moved.updatedAt, stamp);
-      expect((await store.byId('a'))!.updatedAt, _fixedNow);
-    });
+        final moved = await store.reorder('b', afterId: 'a');
+        expect(moved.updatedAt, stamp);
+        expect((await store.byId('a'))!.updatedAt, _fixedNow);
+      },
+    );
 
     test('sortKeyForInsert appends at the named group\'s tail', () async {
       final path = pathIn('bookmarks.json');
@@ -949,40 +939,46 @@ Host web
 
       // And the repair persists at the next write.
       await store.upsertAll([_localBookmark('new', sortKey: 'zz')]);
-      final written = ((jsonDecode(File(path).readAsStringSync()) as Map)[
-              'bookmarks'] as List)
-          .cast<Map>()
-          .singleWhere((record) => record['id'] == 'legacy');
+      final written =
+          ((jsonDecode(File(path).readAsStringSync()) as Map)['bookmarks']
+                  as List)
+              .cast<Map>()
+              .singleWhere((record) => record['id'] == 'legacy');
       expect(isValidSortKey(written['sortKey'] as String), isTrue);
     });
 
-    test('a loaded legacy key never reaches a reorder\'s neighbor read',
-        () async {
-      // The first mutation after opening a legacy store can be a drag:
-      // moveToGroup reads the neighbors' keys before any write runs, so
-      // load-time normalization (not the write path's) is what keeps the
-      // interim uuid out of sortKeyBetween. `legacy` sits in the target
-      // group, so the tail-key computation reads its key as a neighbor.
-      final path = pathIn('bookmarks.json');
-      File(path).writeAsStringSync(
-        jsonEncode({
-          'version': 1,
-          'bookmarks': [
-            _localBookmark('legacy', group: 'Work', sortKey: 'x9-deadbeef')
-                .toJson(),
-            _localBookmark('ok', sortKey: 'm').toJson(),
-          ],
-        }),
-      );
-      final store = FileBookmarkStore(path: path);
+    test(
+      'a loaded legacy key never reaches a reorder\'s neighbor read',
+      () async {
+        // The first mutation after opening a legacy store can be a drag:
+        // moveToGroup reads the neighbors' keys before any write runs, so
+        // load-time normalization (not the write path's) is what keeps the
+        // interim uuid out of sortKeyBetween. `legacy` sits in the target
+        // group, so the tail-key computation reads its key as a neighbor.
+        final path = pathIn('bookmarks.json');
+        File(path).writeAsStringSync(
+          jsonEncode({
+            'version': 1,
+            'bookmarks': [
+              _localBookmark(
+                'legacy',
+                group: 'Work',
+                sortKey: 'x9-deadbeef',
+              ).toJson(),
+              _localBookmark('ok', sortKey: 'm').toJson(),
+            ],
+          }),
+        );
+        final store = FileBookmarkStore(path: path);
 
-      final moved = await store.moveToGroup('ok', 'Work');
-      expect(isValidSortKey(moved.sortKey), isTrue);
-      expect(
-        (await store.sections()).single.bookmarks.map((b) => b.id),
-        ['legacy', 'ok'],
-      );
-    });
+        final moved = await store.moveToGroup('ok', 'Work');
+        expect(isValidSortKey(moved.sortKey), isTrue);
+        expect((await store.sections()).single.bookmarks.map((b) => b.id), [
+          'legacy',
+          'ok',
+        ]);
+      },
+    );
 
     test('a synced record carrying an invalid key is repaired on '
         'applySyncedRecords', () async {
@@ -1014,8 +1010,7 @@ Host web
   });
 
   group('payload size cap', () {
-    test('a payload over 64 KiB refuses to save (04 §2.5 hard cap)',
-        () async {
+    test('a payload over 64 KiB refuses to save (04 §2.5 hard cap)', () async {
       final path = pathIn('bookmarks.json');
       final store = FileBookmarkStore(path: path);
       final huge = Bookmark(
@@ -1060,8 +1055,7 @@ Host web
       expect(events.whereType<BookmarkRemovedChange>().single.id, 'b');
     });
 
-    test('the sync-apply path stays quiet and keeps its tombstone',
-        () async {
+    test('the sync-apply path stays quiet and keeps its tombstone', () async {
       // M6's coordinator marks dirty on local saves; a pulled record
       // applied back through the store must not re-fire it (04 §3.2's
       // store-behind-callback split).

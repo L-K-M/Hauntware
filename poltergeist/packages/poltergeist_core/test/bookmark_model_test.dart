@@ -15,13 +15,13 @@ final _createdAt = DateTime.utc(2026, 9, 7, 8, 30);
 final _updatedAt = DateTime.utc(2026, 9, 7, 9, 31);
 
 Map<String, dynamic> _baseJson(BookmarkKind kind) => {
-      'id': _bookmarkId,
-      'kind': kind.name,
-      'label': 'Work',
-      'sortKey': 'hm',
-      'createdAt': _createdAt.toIso8601String(),
-      'updatedAt': _updatedAt.toIso8601String(),
-    };
+  'id': _bookmarkId,
+  'kind': kind.name,
+  'label': 'Work',
+  'sortKey': 'hm',
+  'createdAt': _createdAt.toIso8601String(),
+  'updatedAt': _updatedAt.toIso8601String(),
+};
 
 void main() {
   test('round-trips a savedSync bookmark through the barrel', () {
@@ -49,8 +49,7 @@ void main() {
       updatedAt: _updatedAt,
     );
 
-    final decoded =
-        Bookmark.fromJson(bookmark.toJson(), recordId: _recordId);
+    final decoded = Bookmark.fromJson(bookmark.toJson(), recordId: _recordId);
 
     expect(decoded.toJson(), bookmark.toJson());
     expect(decoded.sync!.rules, {'direction': 'leftToRight'});
@@ -63,16 +62,16 @@ void main() {
       'sync': {
         'source': {'path': '~/site'},
         'destination': {'path': '/srv/site'},
-        'rules': {'direction': 'leftToRight', 'future': {'enabled': true}},
+        'rules': {
+          'direction': 'leftToRight',
+          'future': {'enabled': true},
+        },
       },
     }, recordId: _recordId);
 
     // Unknown keys survive decode -> re-encode, so an older device's re-save
     // cannot strip a newer device's sync settings (04 §2.1).
-    expect(
-      decoded.sync!.rules['future'],
-      {'enabled': true},
-    );
+    expect(decoded.sync!.rules['future'], {'enabled': true});
     expect(
       Bookmark.fromJson(decoded.toJson(), recordId: _recordId).sync!.rules,
       decoded.sync!.rules,

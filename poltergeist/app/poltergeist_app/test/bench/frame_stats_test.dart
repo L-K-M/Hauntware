@@ -7,11 +7,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/bench/frame_stats.dart';
 
-FrameSlice frame(
-  int vsyncStartUs, {
-  int buildUs = 4000,
-  int rasterUs = 8000,
-}) {
+FrameSlice frame(int vsyncStartUs, {int buildUs = 4000, int rasterUs = 8000}) {
   return FrameSlice(
     vsyncStartUs: vsyncStartUs,
     buildStartUs: vsyncStartUs + 500,
@@ -24,8 +20,9 @@ FrameSlice frame(
 /// [count] frames on a perfect [intervalUs] vsync grid starting at 0.
 /// 16666 us is the closest integral grid to 60 Hz (measured 60.0024 Hz,
 /// deadline 16666.0 us).
-List<FrameSlice> grid(int count, [int intervalUs = 16666]) =>
-    [for (var i = 0; i < count; i++) frame(i * intervalUs)];
+List<FrameSlice> grid(int count, [int intervalUs = 16666]) => [
+  for (var i = 0; i < count; i++) frame(i * intervalUs),
+];
 
 void main() {
   group('estimateRefreshHz', () {
@@ -116,8 +113,7 @@ void main() {
       expect(stats.lateFrames, 1);
     });
 
-    test('refuses a ratio from an undersized capture (>= 1800 at 60 Hz)',
-        () {
+    test('refuses a ratio from an undersized capture (>= 1800 at 60 Hz)', () {
       final frames = grid(1799);
       expect(
         () => summarizeScrollWindow(frames: frames, windowSeconds: 30),
@@ -132,7 +128,8 @@ void main() {
     test('scales the floor with the measured rate (120 Hz -> 3600)', () {
       // 8333 us -> 120.0048 Hz; floor(120.0048 * 30) = 3600.
       expect(
-        () => summarizeScrollWindow(frames: grid(3000, 8333), windowSeconds: 30),
+        () =>
+            summarizeScrollWindow(frames: grid(3000, 8333), windowSeconds: 30),
         throwsA(
           isA<InsufficientFramesException>().having(
             (e) => e.required,

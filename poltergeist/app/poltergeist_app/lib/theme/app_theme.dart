@@ -64,10 +64,7 @@ ThemeData buildPoltergeistTheme(
 /// brightness, whatever the system or the mode says; otherwise a light and
 /// a dark one, picked between by the mode.
 ({ThemeData theme, ThemeData darkTheme, ThemeMode themeMode})
-poltergeistThemesFor(
-  AppAppearance appearance, {
-  TargetPlatform? platform,
-}) {
+poltergeistThemesFor(AppAppearance appearance, {TargetPlatform? platform}) {
   final palette = appearance.palette;
   if (palette.surface != null) {
     final theme = buildPoltergeistThemeFor(

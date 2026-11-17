@@ -65,7 +65,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
   /// and the caller reading it, and the read was a `!`. There is no window to
   /// lose here.
   Future<({Map<String, dynamic> tool, Map<String, String> session})>?
-      _handshake;
+  _handshake;
   int _nextId = 0;
 
   ZaiSearch({
@@ -77,19 +77,18 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
     // up to [maxToolPages] pages and the call, doubled once if the session
     // is retired mid-way — so the worst case is a multiple of this.
     this.timeout = const Duration(seconds: 20),
-  })  :
-        // Trimmed here rather than trusting the caller. The settings screen
-        // does trim what it stores, but a key also arrives from a
-        // hand-edited `settings.json` or over sync, and a pasted one carries
-        // a trailing newline more often than not. Two costs, and the second
-        // is the reason this is not cosmetic: it goes into the
-        // `Authorization` header, and it is what the tool-error branch
-        // redacts with — `detail.replaceAll(apiKey, …)` cannot match a key
-        // the gateway echoed back without the stray whitespace, so an
-        // untrimmed key silently disarms its own redaction.
-        apiKey = apiKey.trim(),
-        _client = _searchClient(client, clientFactory),
-        _ownsClient = client == null;
+  }) : // Trimmed here rather than trusting the caller. The settings screen
+       // does trim what it stores, but a key also arrives from a
+       // hand-edited `settings.json` or over sync, and a pasted one carries
+       // a trailing newline more often than not. Two costs, and the second
+       // is the reason this is not cosmetic: it goes into the
+       // `Authorization` header, and it is what the tool-error branch
+       // redacts with — `detail.replaceAll(apiKey, …)` cannot match a key
+       // the gateway echoed back without the stray whitespace, so an
+       // untrimmed key silently disarms its own redaction.
+       apiKey = apiKey.trim(),
+       _client = _searchClient(client, clientFactory),
+       _ownsClient = client == null;
 
   @override
   void close() {
@@ -210,7 +209,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
       throw http.ClientException(
         detail.isEmpty
             ? 'Z.AI search failed. Check the search key, Coding Plan access, '
-                'and quota.'
+                  'and quota.'
             : 'Z.AI search failed: $detail',
       );
     }
@@ -219,7 +218,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
 
   /// Run the handshake once, and let concurrent callers await the same one.
   Future<({Map<String, dynamic> tool, Map<String, String> session})>
-      _ensureHandshake() async {
+  _ensureHandshake() async {
     final pending = _handshake;
     if (pending != null) return pending;
     final attempt = _runHandshake();
@@ -237,7 +236,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
   }
 
   Future<({Map<String, dynamic> tool, Map<String, String> session})>
-      _runHandshake() async {
+  _runHandshake() async {
     // Staged locally and published only on success. A handshake that edited
     // `_session` as it went could have its freshly negotiated id wiped by a
     // *second* caller's expiry reset arriving mid-flight, and would then send
@@ -259,8 +258,9 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
     // the UI raw, instead of the deliberately body-free message every other
     // malformed-reply path produces. Same reasoning as `_collect`'s depth cap.
     final negotiated = initialized['protocolVersion'];
-    staged['mcp-protocol-version'] =
-        negotiated is String ? negotiated : protocolVersion;
+    staged['mcp-protocol-version'] = negotiated is String
+        ? negotiated
+        : protocolVersion;
     // A notification: no id, so no reply to match. The server acknowledges
     // with 202 and an empty body.
     await _send(
@@ -327,12 +327,12 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
     bool stageIssuedId = false,
   }) async {
     final id = ++_nextId;
-    final message = await _send({
-      'jsonrpc': '2.0',
-      'id': id,
-      'method': method,
-      'params': params,
-    }, id: id, session: session, stageIssuedId: stageIssuedId);
+    final message = await _send(
+      {'jsonrpc': '2.0', 'id': id, 'method': method, 'params': params},
+      id: id,
+      session: session,
+      stageIssuedId: stageIssuedId,
+    );
     _ensureOpen();
     return readRpcResult(message, method: method, id: id);
   }
@@ -374,9 +374,11 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
         // on exactly the connection that stalled long enough to reach this
         // deadline and then broke — landed on the result future with nothing
         // handling it, as an unhandled async error in the caller's zone.
-        unawaited(sent
-            .then((late) => late.stream.listen(null).cancel())
-            .catchError((Object _) {}));
+        unawaited(
+          sent
+              .then((late) => late.stream.listen(null).cancel())
+              .catchError((Object _) {}),
+        );
         throw http.ClientException(
           'Z.AI did not answer the search request in time.',
         );
@@ -434,7 +436,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
         response.statusCode == 401
             ? 'Z.AI rejected the search API key. Check the key in Settings.'
             : 'Z.AI refused the search request. The key may be valid but lack '
-                'Web Search Prime access, which needs a GLM Coding Plan.',
+                  'Web Search Prime access, which needs a GLM Coding Plan.',
       );
     }
     // Named like the gateway's own throttling reply, which `readRpcResult`
@@ -455,9 +457,9 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
       throw http.ClientException(
         retryAfter == null
             ? 'Z.AI is rate-limiting the search. That is usually temporary — '
-                'try the search again.'
+                  'try the search again.'
             : 'Z.AI is rate-limiting the search. That is usually temporary — '
-                'try the search again in $retryAfter seconds.',
+                  'try the search again in $retryAfter seconds.',
       );
     }
     // 300, not 400. A redirect this client did not follow is not a reply:
@@ -507,7 +509,8 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
         // Names the step: this fires only for the init notification, and a
         // server that answers it with a held-open stream instead of the 202
         // the protocol owes is the one shape that reaches here.
-        const held = 'Z.AI held the search stream open after the init '
+        const held =
+            'Z.AI held the search stream open after the init '
             'notification instead of acknowledging it.';
         await bounded(
           response.stream,
@@ -660,13 +663,15 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
     // pipeline that nothing here converts, so the same bad payload fails two
     // different ways depending on which transport carried it.
     final lines = const Utf8Decoder(allowMalformed: true)
-        .bind(bounded(
-          bytes,
-          maxBytes,
-          idleTimeout,
-          total: overallTimeout,
-          totalMessage: 'Z.AI never finished answering the search stream.',
-        ))
+        .bind(
+          bounded(
+            bytes,
+            maxBytes,
+            idleTimeout,
+            total: overallTimeout,
+            totalMessage: 'Z.AI never finished answering the search stream.',
+          ),
+        )
         .transform(const LineSplitter());
 
     Map<String, dynamic>? finish() {
@@ -759,7 +764,8 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
       // "tokens exhausted" and "token budget depleted" carry neither of the
       // first four words and every bit of the same meaning, so without them
       // the "token" test below sends someone with a working key to rotate it.
-      final quota = text.contains('quota') ||
+      final quota =
+          text.contains('quota') ||
           text.contains('limit') ||
           text.contains('balance') ||
           text.contains('insufficient') ||
@@ -786,7 +792,8 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
       // others on the key message, and all three told a user to go fix
       // something that is working. Not `rate` alone: it is a substring of
       // "generate".
-      final throttled = text.contains('throttl') ||
+      final throttled =
+          text.contains('throttl') ||
           text.contains('too many') ||
           text.contains('rate limit');
       // Both spellings: gateways write "invalid api key" and "invalid apikey"
@@ -864,10 +871,8 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
     String query,
     int limit,
   ) {
-    final properties =
-        _asStringMap(schema['properties']);
-    final required =
-        _asList(schema['required']).whereType<String>();
+    final properties = _asStringMap(schema['properties']);
+    final required = _asList(schema['required']).whereType<String>();
 
     String? pick(List<String> candidates) {
       // Required first, not merely present. A schema advertising both `query`
@@ -954,11 +959,9 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
 
     // Each block reduced to the text a person wrote in it, so an envelope
     // contributes its prose and not its punctuation. See [_answerProse].
-    final prose = _textBlocks(result['content'])
-        .map(_answerProse)
-        .where((text) => text.isNotEmpty)
-        .join('\n')
-        .trim();
+    final prose = _textBlocks(
+      result['content'],
+    ).map(_answerProse).where((text) => text.isNotEmpty).join('\n').trim();
     // The limit binds here too: the link path takes none when asked for none,
     // and prose answering anyway would be a different count for the same ask.
     if (prose.isEmpty || limit < 1) return const [];
@@ -1112,8 +1115,12 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
   /// Walk a tool reply of any shape, collecting every result-looking map.
   ///
   /// [depth] caps the walk at [_maxWalkDepth].
-  static void _collect(Object? value, List<SearchResult> out, Set<String> seen,
-      [int depth = 0]) {
+  static void _collect(
+    Object? value,
+    List<SearchResult> out,
+    Set<String> seen, [
+    int depth = 0,
+  ]) {
     if (depth > _maxWalkDepth) return;
     if (value is List) {
       for (final item in value) {
@@ -1202,24 +1209,24 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
           // localized objects — the shape the arm above exists for, one level
           // down — was filtered away whole, and the field fell through to the
           // URL or to nothing.
-          final List<Object?> parts => parts
-              .map((part) => textOf(part, depth + 1))
-              .whereType<String>()
-              .join(' '),
+          final List<Object?> parts =>
+            parts
+                .map((part) => textOf(part, depth + 1))
+                .whereType<String>()
+                .join(' '),
           _ => null,
         };
         return text != null && text.isNotEmpty ? text : null;
       }
 
       final title = textOf(value['title']) ?? textOf(value['media']);
-      final snippet = textOf(value['content']) ??
+      final snippet =
+          textOf(value['content']) ??
           textOf(value['snippet']) ??
           textOf(value['description']);
-      out.add(SearchResult(
-        title: title ?? url,
-        url: url,
-        snippet: snippet ?? '',
-      ));
+      out.add(
+        SearchResult(title: title ?? url, url: url, snippet: snippet ?? ''),
+      );
       return;
     }
     for (final entry in value.entries) {

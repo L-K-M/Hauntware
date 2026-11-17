@@ -13,11 +13,10 @@ import 'package:poltergeist_core/poltergeist_core.dart'
 import 'package:poltergeist_core/src/transfer/bounded_transfer_sink.dart';
 import 'package:test/test.dart';
 
-BoundedTransferSink newSink({int maxBufferedBytes = 8}) =>
-    BoundedTransferSink(
-      StreamController<List<int>>(),
-      maxBufferedBytes: maxBufferedBytes,
-    );
+BoundedTransferSink newSink({int maxBufferedBytes = 8}) => BoundedTransferSink(
+  StreamController<List<int>>(),
+  maxBufferedBytes: maxBufferedBytes,
+);
 
 void main() {
   group('BoundedTransferSink', () {
@@ -28,8 +27,7 @@ void main() {
       expect(identical(sink.stream, sink.stream), isTrue);
     });
 
-    test('close fails a pending addStream rather than completing it',
-        () async {
+    test('close fails a pending addStream rather than completing it', () async {
       final sink = newSink(maxBufferedBytes: 4);
       // The upload side is always attached in real use — close() waits
       // for buffered events to be delivered, so a consumer must exist.
@@ -50,8 +48,7 @@ void main() {
       unawaited(source.close());
     });
 
-    test('a source error fails the relay and reaches the consumer',
-        () async {
+    test('a source error fails the relay and reaches the consumer', () async {
       final sink = newSink();
       final source = StreamController<List<int>>();
       final failure = StateError('boom');
@@ -67,8 +64,7 @@ void main() {
       unawaited(source.close());
     });
 
-    test('a read gate parks a chunk on its grant and frees on abort',
-        () async {
+    test('a read gate parks a chunk on its grant and frees on abort', () async {
       final gate = Completer<void>();
       final sink = BoundedTransferSink(
         StreamController<List<int>>(),
@@ -110,10 +106,7 @@ void main() {
       );
       final received = <int>[];
       final done = Completer<void>();
-      sink.stream.listen(
-        (c) => received.addAll(c),
-        onDone: done.complete,
-      );
+      sink.stream.listen((c) => received.addAll(c), onDone: done.complete);
       final source = StreamController<List<int>>();
       final relay = sink.addStream(source.stream);
       source.add([1, 2, 3]);

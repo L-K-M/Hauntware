@@ -46,9 +46,7 @@ Future<PreviewTextContent> loadPreviewText(File file) async {
   try {
     text = utf8.decode(body, allowMalformed: false);
   } on FormatException {
-    throw const BuiltInEditorException(
-      'This file is not valid UTF-8 text.',
-    );
+    throw const BuiltInEditorException('This file is not valid UTF-8 text.');
   }
   if (text.contains('\x00')) {
     throw const BuiltInEditorException(

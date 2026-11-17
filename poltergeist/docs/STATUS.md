@@ -42,9 +42,6 @@ lock prompt on Android, iOS, macOS and Windows devices.
 
 This closes Wave 5's three deferred items.
 
-Deferred, suite follow-up: the app directories are not format-checked
-in CI.
-
 Proof: analysis and the full app suite passed locally, and CI passed on
 each PR's last head; #795's macOS pure-Dart job was cancelled there and
 passed on main's merge run. Still manual: the notices on screen (tested

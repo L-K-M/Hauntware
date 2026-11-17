@@ -41,8 +41,7 @@ final class _HeldReadVaultStore implements VaultStore {
   }
 
   @override
-  Future<Map<String, Uint8List>> allSecretBlobs() =>
-      _delegate.allSecretBlobs();
+  Future<Map<String, Uint8List>> allSecretBlobs() => _delegate.allSecretBlobs();
 }
 
 /// The server editor as a dialog: what Return does from where, and how the
@@ -91,10 +90,7 @@ void main() {
     // waiting on a completion that only another pump can deliver. The same
     // encrypted SecretVault over an in-memory blob store keeps the production
     // crypto and versioning while removing that test-harness lock inversion.
-    services!.vault = SecretVault(
-      InMemoryVaultStore(),
-      services!.vaultKey!,
-    );
+    services!.vault = SecretVault(InMemoryVaultStore(), services!.vaultKey!);
     state = AppState(services!);
   });
 
@@ -198,8 +194,9 @@ void main() {
       expect(find.textContaining('isn\'t supported yet'), findsNothing);
     });
 
-    testWidgets('editing preserves the saved jump host and start directory',
-        (tester) async {
+    testWidgets('editing preserves the saved jump host and start directory', (
+      tester,
+    ) async {
       await boot(tester);
       final existing = ServerConfig(
         id: 'target',
@@ -253,8 +250,10 @@ void main() {
       await openEditor(tester, existing: existing);
 
       expect(find.text('Saved credential: password'), findsOneWidget);
-      expect(find.byKey(const ValueKey('credential-edit-action')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('credential-edit-action')),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('credential-edit-action')));
       await tester.pumpAndSettle();
       expect(find.text('Keep saved credential'), findsWidgets);
@@ -262,8 +261,9 @@ void main() {
       expect(find.text('Clear saved credential'), findsOneWidget);
     });
 
-    testWidgets('a delayed vault read does not override explicit edit intent',
-        (tester) async {
+    testWidgets('a delayed vault read does not override explicit edit intent', (
+      tester,
+    ) async {
       await boot(tester);
       final heldStore = _HeldReadVaultStore();
       services!.vault = SecretVault(heldStore, services!.vaultKey!);
@@ -303,71 +303,80 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final credentialField = tester.widget<
-          DropdownButtonFormField<CredentialEditAction>>(
-        find.descendant(
-          of: find.byKey(const ValueKey('credential-edit-action')),
-          matching:
-              find.byType(DropdownButtonFormField<CredentialEditAction>),
-        ),
-      );
-      final passphraseField = tester.widget<
-          DropdownButtonFormField<KeyPassphraseAction>>(
-        find.descendant(
-          of: find.byKey(const ValueKey('key-passphrase-action')),
-          matching:
-              find.byType(DropdownButtonFormField<KeyPassphraseAction>),
-        ),
-      );
+      final credentialField = tester
+          .widget<DropdownButtonFormField<CredentialEditAction>>(
+            find.descendant(
+              of: find.byKey(const ValueKey('credential-edit-action')),
+              matching: find.byType(
+                DropdownButtonFormField<CredentialEditAction>,
+              ),
+            ),
+          );
+      final passphraseField = tester
+          .widget<DropdownButtonFormField<KeyPassphraseAction>>(
+            find.descendant(
+              of: find.byKey(const ValueKey('key-passphrase-action')),
+              matching: find.byType(
+                DropdownButtonFormField<KeyPassphraseAction>,
+              ),
+            ),
+          );
       expect(credentialField.initialValue, CredentialEditAction.replace);
       expect(passphraseField.initialValue, KeyPassphraseAction.clear);
     });
 
-    testWidgets('changing a referenced key source visibly switches to replace',
-        (tester) async {
-      await boot(tester);
-      final existing = ServerConfig(
-        id: 'box',
-        label: 'box',
-        host: 'box.example.com',
-        username: 'deploy',
-        authMethod: AuthMethod.privateKey,
-        secretRef: 'secret-box',
-        identityFilePath: '/keys/old',
-        createdAt: 1,
-        updatedAt: 1,
-      );
-      await tester.runAsync(
-        () => state!.saveServer(
-          existing,
-          secret: const Secret(
-            id: 'secret-box',
-            kind: SecretKind.privateKey,
-            value: '',
-            identityFilePath: '/keys/old',
-            identityFilePassphrase: 'saved phrase',
+    testWidgets(
+      'changing a referenced key source visibly switches to replace',
+      (tester) async {
+        await boot(tester);
+        final existing = ServerConfig(
+          id: 'box',
+          label: 'box',
+          host: 'box.example.com',
+          username: 'deploy',
+          authMethod: AuthMethod.privateKey,
+          secretRef: 'secret-box',
+          identityFilePath: '/keys/old',
+          createdAt: 1,
+          updatedAt: 1,
+        );
+        await tester.runAsync(
+          () => state!.saveServer(
+            existing,
+            secret: const Secret(
+              id: 'secret-box',
+              kind: SecretKind.privateKey,
+              value: '',
+              identityFilePath: '/keys/old',
+              identityFilePassphrase: 'saved phrase',
+            ),
           ),
-        ),
-      );
-      await openEditor(tester, existing: existing);
+        );
+        await openEditor(tester, existing: existing);
 
-      await tester.enterText(field('Identity file path'), '/keys/new');
-      await tester.pumpAndSettle();
+        await tester.enterText(field('Identity file path'), '/keys/new');
+        await tester.pumpAndSettle();
 
-      final credentialField = tester.widget<
-          DropdownButtonFormField<CredentialEditAction>>(
-        find.descendant(
-          of: find.byKey(const ValueKey('credential-edit-action')),
-          matching:
-              find.byType(DropdownButtonFormField<CredentialEditAction>),
-        ),
-      );
-      expect(credentialField.initialValue, CredentialEditAction.replace);
-      expect(find.byKey(const ValueKey('key-passphrase-action')), findsOneWidget);
-    });
+        final credentialField = tester
+            .widget<DropdownButtonFormField<CredentialEditAction>>(
+              find.descendant(
+                of: find.byKey(const ValueKey('credential-edit-action')),
+                matching: find.byType(
+                  DropdownButtonFormField<CredentialEditAction>,
+                ),
+              ),
+            );
+        expect(credentialField.initialValue, CredentialEditAction.replace);
+        expect(
+          find.byKey(const ValueKey('key-passphrase-action')),
+          findsOneWidget,
+        );
+      },
+    );
 
-    testWidgets('a method switch cannot keep a credential of the wrong kind',
-        (tester) async {
+    testWidgets('a method switch cannot keep a credential of the wrong kind', (
+      tester,
+    ) async {
       await boot(tester);
       final existing = ServerConfig(
         id: 'box',
@@ -407,8 +416,9 @@ void main() {
       expect(state!.servers.single.authMethod, AuthMethod.password);
     });
 
-    testWidgets('clear removes the reference and its unshared vault entry',
-        (tester) async {
+    testWidgets('clear removes the reference and its unshared vault entry', (
+      tester,
+    ) async {
       await boot(tester);
       final existing = ServerConfig(
         id: 'box',
@@ -440,7 +450,8 @@ void main() {
       await tester.runAsync(() async {
         await tester.tap(find.widgetWithText(FilledButton, 'Save'));
         await waitUntil(
-          () => state!.servers.single.secretRef == null &&
+          () =>
+              state!.servers.single.secretRef == null &&
               services!.settings.pendingCredentialCleanup.isEmpty,
         );
       });
@@ -448,15 +459,14 @@ void main() {
 
       expect(state!.servers.single.secretRef, isNull);
       expect(
-        await tester.runAsync(
-          () => services!.vault.getSecret('secret-box'),
-        ),
+        await tester.runAsync(() => services!.vault.getSecret('secret-box')),
         isNull,
       );
     });
 
-    testWidgets('replace is copy-on-write and removes the old unshared entry',
-        (tester) async {
+    testWidgets('replace is copy-on-write and removes the old unshared entry', (
+      tester,
+    ) async {
       await boot(tester);
       final existing = ServerConfig(
         id: 'box',
@@ -489,7 +499,8 @@ void main() {
       await tester.runAsync(() async {
         await tester.tap(find.widgetWithText(FilledButton, 'Save'));
         await waitUntil(
-          () => state!.servers.single.secretRef != 'secret-box' &&
+          () =>
+              state!.servers.single.secretRef != 'secret-box' &&
               services!.settings.pendingCredentialCleanup.isEmpty,
         );
       });
@@ -512,128 +523,130 @@ void main() {
       );
     });
 
-    testWidgets('failed cleanup is queued, closes the saved editor, and retries',
-        (tester) async {
-      await boot(tester);
-      final store = _HeldReadVaultStore();
-      services!.vault = SecretVault(store, services!.vaultKey!);
-      final existing = ServerConfig(
-        id: 'box',
-        label: 'box',
-        host: 'box.example.com',
-        username: 'deploy',
-        authMethod: AuthMethod.password,
-        secretRef: 'secret-box',
-        createdAt: 1,
-        updatedAt: 1,
-      );
-      await tester.runAsync(
-        () => state!.saveServer(
-          existing,
-          secret: const Secret(
-            id: 'secret-box',
-            kind: SecretKind.password,
-            value: 'old password',
-          ),
-        ),
-      );
-      await openEditor(tester, existing: existing);
-      store.deleteError = StateError('keyring locked');
-
-      await tester.tap(find.byKey(const ValueKey('credential-edit-action')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Clear saved credential').last);
-      await tester.pumpAndSettle();
-      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
-      await tester.runAsync(() async {
-        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-        await waitUntil(
-          () => state!.servers.single.secretRef == null && store.deleteCalls > 0,
+    testWidgets(
+      'failed cleanup is queued, closes the saved editor, and retries',
+      (tester) async {
+        await boot(tester);
+        final store = _HeldReadVaultStore();
+        services!.vault = SecretVault(store, services!.vaultKey!);
+        final existing = ServerConfig(
+          id: 'box',
+          label: 'box',
+          host: 'box.example.com',
+          username: 'deploy',
+          authMethod: AuthMethod.password,
+          secretRef: 'secret-box',
+          createdAt: 1,
+          updatedAt: 1,
         );
-      });
-      await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => state!.saveServer(
+            existing,
+            secret: const Secret(
+              id: 'secret-box',
+              kind: SecretKind.password,
+              value: 'old password',
+            ),
+          ),
+        );
+        await openEditor(tester, existing: existing);
+        store.deleteError = StateError('keyring locked');
 
-      expect(find.text('Edit server'), findsNothing);
-      expect(
-        services!.settings.pendingCredentialCleanup,
-        {'secret-box'},
-      );
-      expect(await services!.vault.getSecret('secret-box'), isNotNull);
-      final withdrawals = await tester.runAsync(
-        () => services!.tombstoneStore.all(),
-      );
-      final withdrawal = withdrawals!.singleWhere(
-        (record) => record.id == 'secret:secret-box',
-      );
+        await tester.tap(find.byKey(const ValueKey('credential-edit-action')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Clear saved credential').last);
+        await tester.pumpAndSettle();
+        await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
+        await tester.runAsync(() async {
+          await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+          await waitUntil(
+            () =>
+                state!.servers.single.secretRef == null &&
+                store.deleteCalls > 0,
+          );
+        });
+        await tester.pumpAndSettle();
 
-      store.deleteError = null;
-      await tester.runAsync(
-        () => state!.saveServer(
-          state!.servers.single.copyWith(updatedAt: 2),
-        ),
-      );
-      expect(await services!.vault.getSecret('secret-box'), isNull);
-      expect(services!.settings.pendingCredentialCleanup, isEmpty);
-      final retriedWithdrawals = await tester.runAsync(
-        () => services!.tombstoneStore.all(),
-      );
-      expect(
-        retriedWithdrawals!.singleWhere(
+        expect(find.text('Edit server'), findsNothing);
+        expect(services!.settings.pendingCredentialCleanup, {'secret-box'});
+        expect(await services!.vault.getSecret('secret-box'), isNotNull);
+        final withdrawals = await tester.runAsync(
+          () => services!.tombstoneStore.all(),
+        );
+        final withdrawal = withdrawals!.singleWhere(
           (record) => record.id == 'secret:secret-box',
-        ).updatedAt,
-        withdrawal.updatedAt,
-        reason: 'a cleanup retry retains the original withdrawal stamp',
-      );
-    });
+        );
 
-    testWidgets('save refuses a credential ref changed while the editor is open',
-        (tester) async {
-      await boot(tester);
-      final existing = ServerConfig(
-        id: 'box',
-        label: 'box',
-        host: 'box.example.com',
-        username: 'deploy',
-        authMethod: AuthMethod.password,
-        secretRef: 'old-ref',
-        createdAt: 1,
-        updatedAt: 1,
-      );
-      await tester.runAsync(
-        () => state!.saveServer(
-          existing,
-          secret: const Secret(
-            id: 'old-ref',
-            kind: SecretKind.password,
-            value: 'old',
+        store.deleteError = null;
+        await tester.runAsync(
+          () => state!.saveServer(state!.servers.single.copyWith(updatedAt: 2)),
+        );
+        expect(await services!.vault.getSecret('secret-box'), isNull);
+        expect(services!.settings.pendingCredentialCleanup, isEmpty);
+        final retriedWithdrawals = await tester.runAsync(
+          () => services!.tombstoneStore.all(),
+        );
+        expect(
+          retriedWithdrawals!
+              .singleWhere((record) => record.id == 'secret:secret-box')
+              .updatedAt,
+          withdrawal.updatedAt,
+          reason: 'a cleanup retry retains the original withdrawal stamp',
+        );
+      },
+    );
+
+    testWidgets(
+      'save refuses a credential ref changed while the editor is open',
+      (tester) async {
+        await boot(tester);
+        final existing = ServerConfig(
+          id: 'box',
+          label: 'box',
+          host: 'box.example.com',
+          username: 'deploy',
+          authMethod: AuthMethod.password,
+          secretRef: 'old-ref',
+          createdAt: 1,
+          updatedAt: 1,
+        );
+        await tester.runAsync(
+          () => state!.saveServer(
+            existing,
+            secret: const Secret(
+              id: 'old-ref',
+              kind: SecretKind.password,
+              value: 'old',
+            ),
           ),
-        ),
-      );
-      await openEditor(tester, existing: existing);
+        );
+        await openEditor(tester, existing: existing);
 
-      await tester.runAsync(
-        () => state!.saveServer(
-          existing.copyWith(secretRef: 'new-ref', updatedAt: 2),
-          secret: const Secret(
-            id: 'new-ref',
-            kind: SecretKind.password,
-            value: 'new',
+        await tester.runAsync(
+          () => state!.saveServer(
+            existing.copyWith(secretRef: 'new-ref', updatedAt: 2),
+            secret: const Secret(
+              id: 'new-ref',
+              kind: SecretKind.password,
+              value: 'new',
+            ),
           ),
-        ),
-      );
-      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
+        );
+        await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
 
-      expect(
-        find.textContaining('credential changed while it was open'),
-        findsOneWidget,
-      );
-      expect(state!.servers.single.secretRef, 'new-ref');
-    });
+        expect(
+          find.textContaining('credential changed while it was open'),
+          findsOneWidget,
+        );
+        expect(state!.servers.single.secretRef, 'new-ref');
+      },
+    );
 
-    testWidgets('save never clears the credential it still references',
-        (tester) async {
+    testWidgets('save never clears the credential it still references', (
+      tester,
+    ) async {
       await boot(tester);
       final config = ServerConfig(
         id: 'box',
@@ -655,8 +668,9 @@ void main() {
       expect(state!.servers, isEmpty);
     });
 
-    testWidgets('the mutation queue enforces the observed credential ref',
-        (tester) async {
+    testWidgets('the mutation queue enforces the observed credential ref', (
+      tester,
+    ) async {
       await boot(tester);
       final original = ServerConfig(
         id: 'box',
@@ -689,8 +703,9 @@ void main() {
       expect(state!.servers.single.secretRef, 'new-ref');
     });
 
-    testWidgets('the mutation queue enforces the observed secret snapshot',
-        (tester) async {
+    testWidgets('the mutation queue enforces the observed secret snapshot', (
+      tester,
+    ) async {
       await boot(tester);
       final original = ServerConfig(
         id: 'box',

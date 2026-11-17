@@ -273,18 +273,22 @@ void main() {
       expect(readyStatus, 200);
     });
 
-    test('healthz stays live when readyz reports storage unavailable',
-        () async {
-      final c = TestClient(SyncServer(
-        storage: NotReadyStorage(),
-        settings: const ServerSettings(),
-      ).handler);
+    test(
+      'healthz stays live when readyz reports storage unavailable',
+      () async {
+        final c = TestClient(
+          SyncServer(
+            storage: NotReadyStorage(),
+            settings: const ServerSettings(),
+          ).handler,
+        );
 
-      expect((await c.send('GET', '/healthz')).$1, 200);
-      final (status, body) = await c.send('GET', '/readyz');
-      expect(status, 503);
-      expect(body['error'], 'storage_unavailable');
-    });
+        expect((await c.send('GET', '/healthz')).$1, 200);
+        final (status, body) = await c.send('GET', '/readyz');
+        expect(status, 503);
+        expect(body['error'], 'storage_unavailable');
+      },
+    );
 
     test('landing page and favicon are served for browsers', () async {
       final handler = makeServer().handler;

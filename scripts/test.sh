@@ -72,6 +72,8 @@ if [[ "$scope" != flutter ]]; then
     run dart pub get
     run dart analyze \
       packages/seance_protocol packages/seance_core packages/seance_sync_server
+    run dart format --output=none --set-exit-if-changed \
+      packages/seance_protocol packages/seance_core packages/seance_sync_server
     run dart test packages/seance_protocol packages/seance_core
     cd packages/seance_sync_server
     run dart test
@@ -92,6 +94,7 @@ if [[ "$scope" != flutter ]]; then
       [[ -d "$package" ]] || continue
       run dart analyze "$package"
     done
+    run dart format --output=none --set-exit-if-changed packages
     dirs=()
     for package in packages/*; do
       [[ -d "$package/test" ]] || continue
@@ -212,20 +215,23 @@ if [[ "$scope" != dart ]]; then
     cd seance
     (cd packages/seance_terminal && run flutter pub get && run flutter analyze \
       && run flutter test && run dart format --set-exit-if-changed --output=none .)
-    (cd app/seance_app && run flutter pub get && run flutter analyze && run flutter test)
+    (cd app/seance_app && run flutter pub get && run flutter analyze && run flutter test \
+      && run dart format --set-exit-if-changed --output=none .)
     (cd third_party/xterm && run flutter pub get && run flutter test)
   )
 
   # ---- Poltergeist app.
   (
     cd poltergeist
-    (cd app/poltergeist_app && run flutter pub get && run flutter analyze && run flutter test)
+    (cd app/poltergeist_app && run flutter pub get && run flutter analyze && run flutter test \
+      && run dart format --set-exit-if-changed --output=none .)
   )
 
   # ---- Klabautermann app.
   (
     cd klabautermann
-    (cd app/klabautermann_app && run flutter pub get && run flutter analyze && run flutter test)
+    (cd app/klabautermann_app && run flutter pub get && run flutter analyze && run flutter test \
+      && run dart format --set-exit-if-changed --output=none .)
   )
 fi
 

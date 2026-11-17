@@ -37,7 +37,8 @@ Future<ByteData> _fontBytes(String path) async {
 
 Future<void> _loadRealFonts() async {
   final home = Platform.environment['HOME'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home == null ? '' : '$home/.local/share/fonts');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -52,8 +53,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -114,9 +114,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme: base.primaryTextTheme.apply(
-        fontFamily: 'DejaVu Sans',
-      ),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       RepaintBoundary(
@@ -127,10 +125,7 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           navigatorKey: navigatorKey,
-          home: WorkspaceShell(
-            bookmarks: bookmarks,
-            engineSession: session,
-          ),
+          home: WorkspaceShell(bookmarks: bookmarks, engineSession: session),
         ),
       ),
     );
@@ -147,9 +142,7 @@ void main() {
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List();
         } finally {
           image.dispose();
@@ -173,20 +166,14 @@ void main() {
     // The toggle hides pane B whole: the layout collapses to pane A at
     // full width while the strip and per-tab state live on.
     await runShellCommand(tester, 'view.toggleSecondPane');
-    expect(
-      find.byKey(AdaptiveShell.secondaryPaneKey),
-      findsNothing,
-    );
+    expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsNothing);
     expect(find.text('right-photos.txt'), findsNothing);
     await capture('pane-toggle-one-pane');
 
     // Re-showing restores the remembered pane exactly — same strip,
     // same listing, no re-list.
     await runShellCommand(tester, 'view.toggleSecondPane');
-    expect(
-      find.byKey(AdaptiveShell.secondaryPaneKey),
-      findsOneWidget,
-    );
+    expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsOneWidget);
     expect(find.text('right-photos.txt'), findsOneWidget);
     expect(engine.localChannels[1].listCalls, ['/home/tester']);
     await capture('pane-toggle-restored');

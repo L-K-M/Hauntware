@@ -17,9 +17,8 @@ class ServerLabelScope extends InheritedWidget {
 
   /// The nearest resolver, or null outside a shell (tests mounting a
   /// row alone fall back to the id, the honest last resort).
-  static ServerLabelResolver? maybeOf(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<ServerLabelScope>()
-      ?.resolve;
+  static ServerLabelResolver? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ServerLabelScope>()?.resolve;
 
   @override
   bool updateShouldNotify(ServerLabelScope oldWidget) =>

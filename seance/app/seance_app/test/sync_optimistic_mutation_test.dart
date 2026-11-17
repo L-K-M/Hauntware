@@ -195,7 +195,8 @@ void main() {
       await syncing;
       final pullsAfterManual = remote.pulls;
       final deadline = DateTime.now().add(const Duration(seconds: 4));
-      while (remote.pulls == pullsAfterManual && DateTime.now().isBefore(deadline)) {
+      while (remote.pulls == pullsAfterManual &&
+          DateTime.now().isBefore(deadline)) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
       expect(remote.pulls, greaterThan(pullsAfterManual));

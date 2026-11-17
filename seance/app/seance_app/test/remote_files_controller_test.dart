@@ -1021,15 +1021,13 @@ void main() {
 
     List<RemoteFileEntry> listing() => remote.directories['/home/test']!;
 
-    RemoteFileEntry fileEntry(
-      String name, {
-      String parent = '/home/test',
-    }) => RemoteFileEntry(
-      path: '$parent/$name',
-      name: name,
-      type: RemoteFileType.file,
-      size: 3,
-    );
+    RemoteFileEntry fileEntry(String name, {String parent = '/home/test'}) =>
+        RemoteFileEntry(
+          path: '$parent/$name',
+          name: name,
+          type: RemoteFileType.file,
+          size: 3,
+        );
 
     void expectNothingTransferred(Directory target) {
       expect(remote.downloaded, isEmpty, reason: 'no payload bytes moved');
@@ -1071,11 +1069,7 @@ void main() {
       () async {
         final target = destination();
         await target.create();
-        final aliases = await _volumeAliases(
-          target,
-          'caf\u00e9',
-          'cafe\u0301',
-        );
+        final aliases = await _volumeAliases(target, 'caf\u00e9', 'cafe\u0301');
         remote.directories['/home/test'] = [
           fileEntry('caf\u00e9'),
           fileEntry('cafe\u0301'),
@@ -1096,50 +1090,44 @@ void main() {
       },
     );
 
-    test(
-      'a case-aliasing file and directory are rejected together',
-      () async {
-        final target = destination();
-        await target.create();
-        final aliases = await _volumeAliases(target, 'Notes', 'notes');
-        remote.directories['/home/test'] = [
-          fileEntry('notes'),
-          const RemoteFileEntry(
-            path: '/home/test/Notes',
-            name: 'Notes',
-            type: RemoteFileType.directory,
-          ),
-        ];
-        remote.directories['/home/test/Notes'] = [
-          fileEntry('child.txt', parent: '/home/test/Notes'),
-        ];
-        if (aliases) {
-          await expectLater(
-            controller.downloadEntries(listing(), target),
-            throwsStateError,
-          );
-          expectNothingTransferred(target);
-        } else {
-          await controller.downloadEntries(listing(), target);
-          expect(await File('${target.path}/notes').readAsBytes(), [1, 2, 3]);
-          expect(
-            await File('${target.path}/Notes/child.txt').readAsBytes(),
-            [1, 2, 3],
-          );
-        }
-      },
-    );
+    test('a case-aliasing file and directory are rejected together', () async {
+      final target = destination();
+      await target.create();
+      final aliases = await _volumeAliases(target, 'Notes', 'notes');
+      remote.directories['/home/test'] = [
+        fileEntry('notes'),
+        const RemoteFileEntry(
+          path: '/home/test/Notes',
+          name: 'Notes',
+          type: RemoteFileType.directory,
+        ),
+      ];
+      remote.directories['/home/test/Notes'] = [
+        fileEntry('child.txt', parent: '/home/test/Notes'),
+      ];
+      if (aliases) {
+        await expectLater(
+          controller.downloadEntries(listing(), target),
+          throwsStateError,
+        );
+        expectNothingTransferred(target);
+      } else {
+        await controller.downloadEntries(listing(), target);
+        expect(await File('${target.path}/notes').readAsBytes(), [1, 2, 3]);
+        expect(await File('${target.path}/Notes/child.txt').readAsBytes(), [
+          1,
+          2,
+          3,
+        ]);
+      }
+    });
 
     test(
       'a normalization-aliasing file and directory are rejected together',
       () async {
         final target = destination();
         await target.create();
-        final aliases = await _volumeAliases(
-          target,
-          'caf\u00e9',
-          'cafe\u0301',
-        );
+        final aliases = await _volumeAliases(target, 'caf\u00e9', 'cafe\u0301');
         remote.directories['/home/test'] = [
           fileEntry('cafe\u0301'),
           const RemoteFileEntry(
@@ -1159,10 +1147,11 @@ void main() {
           expectNothingTransferred(target);
         } else {
           await controller.downloadEntries(listing(), target);
-          expect(
-            await File('${target.path}/cafe\u0301').readAsBytes(),
-            [1, 2, 3],
-          );
+          expect(await File('${target.path}/cafe\u0301').readAsBytes(), [
+            1,
+            2,
+            3,
+          ]);
           expect(
             await File('${target.path}/caf\u00e9/inner.txt').readAsBytes(),
             [1, 2, 3],

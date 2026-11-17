@@ -163,7 +163,10 @@ final class WorkspaceLibrary extends ChangeNotifier {
       // v2+: a detail whose favorite is gone is a deleted row's residue
       // (or a synced tombstone's), never a workspace to resurrect.
       final ids = {for (final b in workspaceBookmarks) b.id};
-      final kept = [for (final d in details) if (ids.contains(d.id)) d];
+      final kept = [
+        for (final d in details)
+          if (ids.contains(d.id)) d,
+      ];
       if (kept.length != details.length) {
         await _store.save(WorkspaceListDocument(workspaces: kept));
         if (_disposed) return;
@@ -269,9 +272,7 @@ final class WorkspaceLibrary extends ChangeNotifier {
     assert(_loaded, 'markOpened before WorkspaceLibrary.load() completed');
     final detail = _details[id];
     if (detail == null) return;
-    await _persistDetail(
-      detail.copyWith(lastOpenedAt: () => _now().toUtc()),
-    );
+    await _persistDetail(detail.copyWith(lastOpenedAt: () => _now().toUtc()));
   }
 
   /// One detail write: persist first, publish second — a failed write
@@ -289,10 +290,7 @@ final class WorkspaceLibrary extends ChangeNotifier {
   /// run time, so a removal enqueued behind an in-flight persist cannot
   /// be clobbered by the persist's pre-await snapshot — and the publish
   /// step replays that same merge into memory.
-  Future<void> _writeDetails({
-    SavedWorkspace? upsert,
-    String? removedId,
-  }) {
+  Future<void> _writeDetails({SavedWorkspace? upsert, String? removedId}) {
     final operation = _detailTail.then((_) async {
       final next = Map<String, SavedWorkspace>.of(_details);
       if (removedId != null) next.remove(removedId);

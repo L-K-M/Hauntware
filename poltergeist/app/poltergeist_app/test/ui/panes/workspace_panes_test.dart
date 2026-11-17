@@ -1,9 +1,9 @@
-
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -138,7 +138,6 @@ void main() {
     );
     addTearDown(session!.shutdown);
 
-
     await tester.pumpWidget(
       PoltergeistApp(
         bookmarks: bookmarks,
@@ -165,20 +164,19 @@ void main() {
     await pumpApp(tester);
 
     // Both panes opened local channels and listed their canonical home.
-    expect(
-      engine.localChannels.map((c) => c.listCalls).toList(),
-      [
-        ['/home/tester'],
-        ['/home/tester'],
-      ],
-    );
+    expect(engine.localChannels.map((c) => c.listCalls).toList(), [
+      ['/home/tester'],
+      ['/home/tester'],
+    ]);
     // The home anchor is the engine-expanded '~', never a raw path.
     expect(engine.localChannelRoots, ['~', '~']);
     expect(find.text('left.txt'), findsOneWidget);
     expect(find.text('right.txt'), findsOneWidget);
   });
 
-  testWidgets('Refresh becomes available after initial binding', (tester) async {
+  testWidgets('Refresh becomes available after initial binding', (
+    tester,
+  ) async {
     await pumpApp(tester);
     await tester.pumpAndSettle();
 
@@ -190,7 +188,11 @@ void main() {
 
   testWidgets('Open follows cursor and active pane changes', (tester) async {
     engine.localChannels[0].listings['/home/tester'] = [
-      const RemoteFileEntry(path: '/home/tester/docs', name: 'docs', type: RemoteFileType.directory),
+      const RemoteFileEntry(
+        path: '/home/tester/docs',
+        name: 'docs',
+        type: RemoteFileType.directory,
+      ),
     ];
     await pumpApp(tester);
     await tester.pumpAndSettle();
@@ -206,12 +208,17 @@ void main() {
     expect(shellCommandEnabled(tester, kGoOpenCommandId), isTrue);
 
     await runShellCommand(tester, kGoOpenCommandId);
-    expect(engine.localChannels[0].listCalls, ['/home/tester', '/home/tester/docs']);
+    expect(engine.localChannels[0].listCalls, [
+      '/home/tester',
+      '/home/tester/docs',
+    ]);
     expect(engine.localChannels[1].listCalls, ['/home/tester']);
     expect(shellCommandEnabled(tester, kGoOpenCommandId), isFalse);
   });
 
-  testWidgets('Enclosing Folder tracks pending and completed listings', (tester) async {
+  testWidgets('Enclosing Folder tracks pending and completed listings', (
+    tester,
+  ) async {
     final channel = _HeldListingChannel();
     engine.localChannels[0] = channel;
     await pumpApp(tester);
@@ -511,10 +518,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('sidebar.favorite.srv-r')));
       await tester.pumpAndSettle();
 
-      expect(
-        engine.openCalls.single.paneTabId,
-        startsWith('pane.right'),
-      );
+      expect(engine.openCalls.single.paneTabId, startsWith('pane.right'));
       expect(find.text('right-pane.txt'), findsOneWidget);
       // The active pane moved with the open.
       final (left, right) = paneControllers(tester);
@@ -523,89 +527,71 @@ void main() {
     },
   );
 
-  testWidgets(
-    'the other-pane verb opens against the preferred side',
-    (tester) async {
-      final store = FakeBookmarkStore([
-        _remoteBookmark('srv-r', preferredPane: PreferredPane.right),
-      ]);
-      engine.channel = session_test.FakeAppBrowseChannel(
-        homePath: '/srv/home',
-      )..listings['/srv/home'] = [
-        _entry('left-pane.txt', parent: '/srv/home'),
-      ];
+  testWidgets('the other-pane verb opens against the preferred side', (
+    tester,
+  ) async {
+    final store = FakeBookmarkStore([
+      _remoteBookmark('srv-r', preferredPane: PreferredPane.right),
+    ]);
+    engine.channel = session_test.FakeAppBrowseChannel(homePath: '/srv/home')
+      ..listings['/srv/home'] = [_entry('left-pane.txt', parent: '/srv/home')];
 
-      await pumpApp(tester, bookmarks: store);
-      await tester.pumpAndSettle();
+    await pumpApp(tester, bookmarks: store);
+    await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const ValueKey('sidebar.favorite.srv-r')),
-        buttons: kSecondaryButton,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('sidebar.menu.openOtherPane')),
-      );
-      await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('sidebar.favorite.srv-r')),
+      buttons: kSecondaryButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sidebar.menu.openOtherPane')));
+    await tester.pumpAndSettle();
 
-      expect(
-        engine.openCalls.single.paneTabId,
-        startsWith('pane.left'),
-      );
-      expect(find.text('left-pane.txt'), findsOneWidget);
-    },
-  );
+    expect(engine.openCalls.single.paneTabId, startsWith('pane.left'));
+    expect(find.text('left-pane.txt'), findsOneWidget);
+  });
 
-  testWidgets(
-    'a local favorite opens in its preferred pane',
-    (tester) async {
-      final now = DateTime.utc(2026, 9, 12);
-      final store = FakeBookmarkStore([
-        Bookmark(
-          id: 'local-r',
-          kind: BookmarkKind.localFolder,
-          label: 'Exports',
-          localPath: '/srv/exports',
-          preferredPane: PreferredPane.right,
-          sortKey: 'k',
-          createdAt: now,
-          updatedAt: now,
-        ),
-      ]);
-      // openLocalAt binds a fresh channel at '~' then lists the target —
-      // the third scripted channel serves the favorite's open.
-      final target = session_test.FakeAppBrowseChannel(
-        homePath: '/home/tester',
-      )..listings['/srv/exports'] = [
+  testWidgets('a local favorite opens in its preferred pane', (tester) async {
+    final now = DateTime.utc(2026, 9, 12);
+    final store = FakeBookmarkStore([
+      Bookmark(
+        id: 'local-r',
+        kind: BookmarkKind.localFolder,
+        label: 'Exports',
+        localPath: '/srv/exports',
+        preferredPane: PreferredPane.right,
+        sortKey: 'k',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ]);
+    // openLocalAt binds a fresh channel at '~' then lists the target —
+    // the third scripted channel serves the favorite's open.
+    final target = session_test.FakeAppBrowseChannel(homePath: '/home/tester')
+      ..listings['/srv/exports'] = [
         _entry('export.txt', parent: '/srv/exports'),
       ];
-      engine.localChannels.add(target);
+    engine.localChannels.add(target);
 
-      await pumpApp(tester, bookmarks: store);
-      await tester.pumpAndSettle();
+    await pumpApp(tester, bookmarks: store);
+    await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const ValueKey('sidebar.favorite.local-r')),
-      );
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sidebar.favorite.local-r')));
+    await tester.pumpAndSettle();
 
-      expect(target.listCalls, ['/srv/exports']);
-      final (left, right) = paneControllers(tester);
-      expect(left.location?.path, '/home/tester');
-      expect(right.location?.path, '/srv/exports');
-      expect(find.text('export.txt'), findsOneWidget);
-    },
-  );
-
+    expect(target.listCalls, ['/srv/exports']);
+    final (left, right) = paneControllers(tester);
+    expect(left.location?.path, '/home/tester');
+    expect(right.location?.path, '/srv/exports');
+    expect(find.text('export.txt'), findsOneWidget);
+  });
 
   testWidgets(
     'Esc cancels a pending remote bind without severing a same-server sibling',
     (tester) async {
       final held = heldConnectEngine();
       final sibling = session_test.FakeAppBrowseChannel(homePath: '/srv/home')
-        ..listings['/srv/home'] = [
-          _entry('sibling.txt', parent: '/srv/home'),
-        ];
+        ..listings['/srv/home'] = [_entry('sibling.txt', parent: '/srv/home')];
       final lateLeft = session_test.FakeAppBrowseChannel(homePath: '/srv/home')
         ..listings['/srv/home'] = [_entry('late.txt', parent: '/srv/home')];
       held.paneChannels['pane.right.tab1'] = sibling;
@@ -714,10 +700,11 @@ void main() {
         ..listings['/srv/home'] = [
           _entry('bound-then-lost.txt', parent: '/srv/home'),
         ];
-      final rightChannel = session_test.FakeAppBrowseChannel(
-        homePath: '/srv/home',
-      )
-        ..listings['/srv/home'] = [_entry('sibling-late.txt', parent: '/srv/home')];
+      final rightChannel =
+          session_test.FakeAppBrowseChannel(homePath: '/srv/home')
+            ..listings['/srv/home'] = [
+              _entry('sibling-late.txt', parent: '/srv/home'),
+            ];
       held.paneChannels['pane.left.tab1'] = leftChannel;
       held.paneChannels['pane.right.tab1'] = rightChannel;
       engine = held;
@@ -789,8 +776,7 @@ void main() {
         ];
       final rightChannel = session_test.FakeAppBrowseChannel(
         homePath: '/srv/home',
-      )
-        ..listings['/srv/home'] = [_entry('late-open.txt', parent: '/srv/home')];
+      )..listings['/srv/home'] = [_entry('late-open.txt', parent: '/srv/home')];
       held.paneChannels['pane.left.tab1'] = leftChannel;
       held.paneChannels['pane.right.tab1'] = rightChannel;
       // The sibling's open parks engine-side: its bind has STARTED (the
@@ -888,13 +874,10 @@ void main() {
       expect(controller.committedLocation?.path, committed);
       expect(controller.entries.map((e) => e.path).toList(), entries);
       expect(controller.selectedCount, selectedCount);
-      expect(
-        [
-          for (var i = 0; i < selectedRows.length; i++)
-            controller.isRowSelected(i),
-        ],
-        selectedRows,
-      );
+      expect([
+        for (var i = 0; i < selectedRows.length; i++)
+          controller.isRowSelected(i),
+      ], selectedRows);
       expect(controller.cursorIndex, cursor);
       expect(controller.filterQuery, filterQuery);
       expect(controller.filterFieldOpen, filterFieldOpen);
@@ -932,10 +915,7 @@ void main() {
         await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
         await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(AdaptiveShell.secondaryPaneKey),
-          findsNothing,
-        );
+        expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsNothing);
         expect(find.text('right.txt'), findsNothing);
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
@@ -977,10 +957,7 @@ void main() {
 
         // Re-showing restores pane B's surface.
         await runShellCommand(tester, kViewToggleSecondPaneCommandId);
-        expect(
-          find.byKey(AdaptiveShell.secondaryPaneKey),
-          findsOneWidget,
-        );
+        expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsOneWidget);
         expect(find.text('right.txt'), findsOneWidget);
 
         // Re-showing must not re-grab the active pane: the next
@@ -1019,10 +996,7 @@ void main() {
         );
         leftAddFocus.requestFocus();
         await tester.pump();
-        expect(
-          FocusManager.instance.primaryFocus,
-          leftAddFocus,
-        );
+        expect(FocusManager.instance.primaryFocus, leftAddFocus);
         final rightAddFocus = Focus.of(
           tester.element(
             find.descendant(
@@ -1033,10 +1007,7 @@ void main() {
         );
         rightAddFocus.requestFocus();
         await tester.pump();
-        expect(
-          FocusManager.instance.primaryFocus,
-          rightAddFocus,
-        );
+        expect(FocusManager.instance.primaryFocus, rightAddFocus);
 
         await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
         await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -1045,10 +1016,7 @@ void main() {
         await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
         await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(AdaptiveShell.secondaryPaneKey),
-          findsNothing,
-        );
+        expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsNothing);
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
           'pane.left.listing',
@@ -1076,9 +1044,7 @@ void main() {
       ];
       engine.localChannels.add(
         session_test.FakeAppBrowseChannel(homePath: '/srv/deep')
-          ..listings['/srv/deep'] = [
-            _entry('deep.txt', parent: '/srv/deep'),
-          ],
+          ..listings['/srv/deep'] = [_entry('deep.txt', parent: '/srv/deep')],
       );
       await pumpApp(tester);
       await tester.pumpAndSettle();
@@ -1188,10 +1154,7 @@ void main() {
         tester.view.physicalSize = const Size(500, 900);
         await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(AdaptiveShell.secondaryPaneKey),
-          findsNothing,
-        );
+        expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsNothing);
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
           'pane.left.listing',
@@ -1208,10 +1171,7 @@ void main() {
         // DPR-1.0 logical-pixel sizing as the hide above.
         tester.view.physicalSize = const Size(1400, 900);
         await tester.pumpAndSettle();
-        expect(
-          find.byKey(AdaptiveShell.secondaryPaneKey),
-          findsOneWidget,
-        );
+        expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsOneWidget);
         expect(find.text('right.txt'), findsOneWidget);
       } finally {
         debugDefaultTargetPlatformOverride = null;

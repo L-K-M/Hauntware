@@ -17,7 +17,9 @@ const _baseUrl = 'https://sync.test';
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
 enum _Enrollment { register, login }
+
 enum _ResponseMode { accepted, rejected }
+
 enum _LocalFailure { token, settings }
 
 Future<String> _vaultKeyCheck({
@@ -84,8 +86,7 @@ class _SelectiveKeystore extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async =>
-      _map[key];
+  }) async => _map[key];
 
   @override
   Future<void> write({
@@ -125,8 +126,7 @@ class _SelectiveKeystore extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async =>
-      _map.remove(key);
+  }) async => _map.remove(key);
 }
 
 void main() {
@@ -155,86 +155,112 @@ void main() {
 
   for (final enrollment in _Enrollment.values) {
     for (final responseMode in _ResponseMode.values) {
-      test('${enrollment.name} ${responseMode.name} closes its client', () async {
-        const sharedSecret = Secret(
-          id: 'shared',
-          kind: SecretKind.password,
-          value: 'shared-password',
-        );
-        await services.vault.putSecret(sharedSecret);
-        for (final id in ['first', 'second']) {
-          await services.configStore.putServer(ServerConfig(
-            id: id,
-            label: id,
-            host: '$id.test',
-            username: 'user',
-            secretRef: sharedSecret.id,
-            createdAt: 1,
-            updatedAt: 1,
-          ));
-        }
-        services.settings.syncUsername = 'old-user';
-        await services.saveSettings();
-        final oldKey = List<int>.of(services.vaultKey!);
-        final keyCheck = await _vaultKeyCheck(username: 'user');
-        final transport = _TrackedClient((request) async {
-          if (request.url.path == '/v1/prelogin') {
-            return http.Response(jsonEncode({
-              'argonSalt': base64Encode(List<int>.filled(16, 0)),
-              'argonParams': const Argon2Params().toJson(),
-            }), HttpStatus.ok);
+      test(
+        '${enrollment.name} ${responseMode.name} closes its client',
+        () async {
+          const sharedSecret = Secret(
+            id: 'shared',
+            kind: SecretKind.password,
+            value: 'shared-password',
+          );
+          await services.vault.putSecret(sharedSecret);
+          for (final id in ['first', 'second']) {
+            await services.configStore.putServer(
+              ServerConfig(
+                id: id,
+                label: id,
+                host: '$id.test',
+                username: 'user',
+                secretRef: sharedSecret.id,
+                createdAt: 1,
+                updatedAt: 1,
+              ),
+            );
           }
-          if (responseMode == _ResponseMode.rejected) {
-            return http.Response('unavailable', HttpStatus.serviceUnavailable);
-          }
-          if (request.url.path == '/v1/sync') {
+          services.settings.syncUsername = 'old-user';
+          await services.saveSettings();
+          final oldKey = List<int>.of(services.vaultKey!);
+          final keyCheck = await _vaultKeyCheck(username: 'user');
+          final transport = _TrackedClient((request) async {
+            if (request.url.path == '/v1/prelogin') {
+              return http.Response(
+                jsonEncode({
+                  'argonSalt': base64Encode(List<int>.filled(16, 0)),
+                  'argonParams': const Argon2Params().toJson(),
+                }),
+                HttpStatus.ok,
+              );
+            }
+            if (responseMode == _ResponseMode.rejected) {
+              return http.Response(
+                'unavailable',
+                HttpStatus.serviceUnavailable,
+              );
+            }
+            if (request.url.path == '/v1/sync') {
+              return http.Response(
+                jsonEncode(
+                  const PullResponse(records: [], latestSeq: 0).toJson(),
+                ),
+                HttpStatus.ok,
+              );
+            }
             return http.Response(
-                jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()),
-                HttpStatus.ok);
+              jsonEncode({
+                'token': 'enrolled-token',
+                if (request.url.path == '/v1/login' ||
+                    request.url.path == '/v1/register')
+                  'vaultKeyCheck': request.url.path == '/v1/register'
+                      ? (jsonDecode(request.body) as Map)['vaultKeyCheck']
+                      : keyCheck,
+              }),
+              HttpStatus.ok,
+            );
+          });
+          final enroll = switch (enrollment) {
+            _Enrollment.register => services.registerSync,
+            _Enrollment.login => services.loginSync,
+          };
+          final result = http.runWithClient(
+            () => enroll(
+              baseUrl: 'https://new-sync.test',
+              username: 'user',
+              password: 'password',
+              encryptionPassphrase: 'password',
+            ),
+            () => transport,
+          );
+          if (responseMode == _ResponseMode.rejected) {
+            await expectLater(result, throwsA(isA<ApiError>()));
+            expect(services.settings.syncBaseUrl, _baseUrl);
+            expect(services.settings.syncUsername, 'old-user');
+            expect(services.vaultKey, oldKey);
+            expect(
+              await services.masterKeys.getApiKey('sync.token'),
+              'session-token',
+            );
+          } else {
+            await result;
+            expect(
+              await services.masterKeys.getApiKey('sync.token'),
+              'enrolled-token',
+            );
           }
-          return http.Response(jsonEncode({
-            'token': 'enrolled-token',
-            if (request.url.path == '/v1/login' ||
-                request.url.path == '/v1/register')
-              'vaultKeyCheck': request.url.path == '/v1/register'
-                  ? (jsonDecode(request.body) as Map)['vaultKeyCheck']
-                  : keyCheck,
-          }),
-              HttpStatus.ok);
-        });
-        final enroll = switch (enrollment) {
-          _Enrollment.register => services.registerSync,
-          _Enrollment.login => services.loginSync,
-        };
-        final result = http.runWithClient(
-          () => enroll(
-            baseUrl: 'https://new-sync.test',
-            username: 'user',
-            password: 'password',
-            encryptionPassphrase: 'password',
-          ),
-          () => transport,
-        );
-        if (responseMode == _ResponseMode.rejected) {
-          await expectLater(result, throwsA(isA<ApiError>()));
-          expect(services.settings.syncBaseUrl, _baseUrl);
-          expect(services.settings.syncUsername, 'old-user');
-          expect(services.vaultKey, oldKey);
-          expect(await services.masterKeys.getApiKey('sync.token'),
-              'session-token');
-        } else {
-          await result;
-          expect(await services.masterKeys.getApiKey('sync.token'), 'enrolled-token');
-        }
-        expect(transport.closes, 1);
-        expect((await services.vault.getSecret(sharedSecret.id))?.value,
-            sharedSecret.value);
-        final reopened = await AppServices.initialize();
-        addTearDown(() => reopened.probe.dispose());
-        expect((await reopened.vault.getSecret(sharedSecret.id))?.value,
+          expect(transport.closes, 1);
+          expect(
+            (await services.vault.getSecret(sharedSecret.id))?.value,
             sharedSecret.value,
-            reason: 'shared credentials must remain decryptable after restart');
-      }, timeout: const Timeout(Duration(minutes: 2)));
+          );
+          final reopened = await AppServices.initialize();
+          addTearDown(() => reopened.probe.dispose());
+          expect(
+            (await reopened.vault.getSecret(sharedSecret.id))?.value,
+            sharedSecret.value,
+            reason: 'shared credentials must remain decryptable after restart',
+          );
+        },
+        timeout: const Timeout(Duration(minutes: 2)),
+      );
     }
   }
 
@@ -560,139 +586,164 @@ void main() {
     timeout: const Timeout(Duration(minutes: 2)),
   );
 
-  test('successful sync closes its client after consuming the response', () async {
-    final transport = _TrackedClient((request) async {
-      expect(request.headers['authorization'], 'Bearer session-token');
-      return http.Response(
+  test(
+    'successful sync closes its client after consuming the response',
+    () async {
+      final transport = _TrackedClient((request) async {
+        expect(request.headers['authorization'], 'Bearer session-token');
+        return http.Response(
           jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()),
-          HttpStatus.ok);
-    });
-    await http.runWithClient(services.runSync, () => transport);
-    expect(transport.closes, 1);
-  });
-
-  test('restart resumes from the durable cursor without pushing unchanged data',
-      () async {
-    services.settings.syncBaseUrl = '$_baseUrl/';
-    services.settings.syncUsername = 'user';
-    await services.saveSettings();
-    final codec = RecordCodec(services.vaultKey!);
-    final config = ServerConfig(
-      id: 'remote-server',
-      label: 'Remote',
-      host: 'remote.test',
-      username: 'deploy',
-      createdAt: 1,
-      updatedAt: 20,
-    );
-    final remote = (await codec.encrypt(DecryptedRecord(
-      id: config.id,
-      kind: RecordKind.serverConfig,
-      updatedAt: config.updatedAt,
-      deviceId: 'peer',
-      data: config.toJson(),
-    )))
-        .withSeq(1);
-    final firstSince = <int>[];
-    var pushes = 0;
-    final firstTransport = _TrackedClient((request) async {
-      if (request.method == 'POST') {
-        pushes++;
-        return http.Response(
-          jsonEncode(const PushResponse(results: [], latestSeq: 1).toJson()),
           HttpStatus.ok,
         );
-      }
-      final since = int.parse(request.url.queryParameters['since']!);
-      firstSince.add(since);
-      return http.Response(
-        jsonEncode(PullResponse(
-          records: since == 0 ? [remote] : const [],
-          latestSeq: 1,
-        ).toJson()),
-        HttpStatus.ok,
+      });
+      await http.runWithClient(services.runSync, () => transport);
+      expect(transport.closes, 1);
+    },
+  );
+
+  test(
+    'restart resumes from the durable cursor without pushing unchanged data',
+    () async {
+      services.settings.syncBaseUrl = '$_baseUrl/';
+      services.settings.syncUsername = 'user';
+      await services.saveSettings();
+      final codec = RecordCodec(services.vaultKey!);
+      final config = ServerConfig(
+        id: 'remote-server',
+        label: 'Remote',
+        host: 'remote.test',
+        username: 'deploy',
+        createdAt: 1,
+        updatedAt: 20,
       );
-    });
-
-    await http.runWithClient(services.runSync, () => firstTransport);
-    expect((await services.configStore.getServer(config.id))?.label, 'Remote');
-    expect(firstSince, [0, 1]);
-    expect(pushes, 0);
-
-    final reopened = await AppServices.initialize();
-    addTearDown(() => reopened.probe.dispose());
-    final secondSince = <int>[];
-    final secondTransport = _TrackedClient((request) async {
-      if (request.method == 'POST') {
-        pushes++;
+      final remote = (await codec.encrypt(
+        DecryptedRecord(
+          id: config.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: config.updatedAt,
+          deviceId: 'peer',
+          data: config.toJson(),
+        ),
+      )).withSeq(1);
+      final firstSince = <int>[];
+      var pushes = 0;
+      final firstTransport = _TrackedClient((request) async {
+        if (request.method == 'POST') {
+          pushes++;
+          return http.Response(
+            jsonEncode(const PushResponse(results: [], latestSeq: 1).toJson()),
+            HttpStatus.ok,
+          );
+        }
+        final since = int.parse(request.url.queryParameters['since']!);
+        firstSince.add(since);
         return http.Response(
-          jsonEncode(const PushResponse(results: [], latestSeq: 1).toJson()),
+          jsonEncode(
+            PullResponse(
+              records: since == 0 ? [remote] : const [],
+              latestSeq: 1,
+            ).toJson(),
+          ),
           HttpStatus.ok,
         );
-      }
-      final since = int.parse(request.url.queryParameters['since']!);
-      secondSince.add(since);
-      return http.Response(
-        jsonEncode(const PullResponse(records: [], latestSeq: 1).toJson()),
-        HttpStatus.ok,
+      });
+
+      await http.runWithClient(services.runSync, () => firstTransport);
+      expect(
+        (await services.configStore.getServer(config.id))?.label,
+        'Remote',
       );
-    });
+      expect(firstSince, [0, 1]);
+      expect(pushes, 0);
 
-    await http.runWithClient(reopened.runSync, () => secondTransport);
+      final reopened = await AppServices.initialize();
+      addTearDown(() => reopened.probe.dispose());
+      final secondSince = <int>[];
+      final secondTransport = _TrackedClient((request) async {
+        if (request.method == 'POST') {
+          pushes++;
+          return http.Response(
+            jsonEncode(const PushResponse(results: [], latestSeq: 1).toJson()),
+            HttpStatus.ok,
+          );
+        }
+        final since = int.parse(request.url.queryParameters['since']!);
+        secondSince.add(since);
+        return http.Response(
+          jsonEncode(const PullResponse(records: [], latestSeq: 1).toJson()),
+          HttpStatus.ok,
+        );
+      });
 
-    expect(secondSince, [1]);
-    expect(pushes, 0);
-    final document = jsonDecode(
-      await File('${directory.path}/sync_records.json').readAsString(),
-    ) as Map;
-    expect(document['version'], 2);
-    expect(document['account'], {
-      'baseUrl': _baseUrl,
-      'username': 'user',
-    });
-  });
+      await http.runWithClient(reopened.runSync, () => secondTransport);
 
-  test('enrollment sends the existing installation id and product device name',
-      () async {
-    http.Request? registration;
-    final transport = _TrackedClient((request) async {
-      registration = request;
-      final body = jsonDecode(request.body) as Map;
-      return http.Response(jsonEncode({
-        'token': 'new-token',
-        'vaultKeyCheck': body['vaultKeyCheck'],
-        'recordEnvelopeFloor': kCurrentRecordEnvelopeVersion,
-      }), HttpStatus.ok);
-    });
-    final stableId = services.settings.deviceId;
+      expect(secondSince, [1]);
+      expect(pushes, 0);
+      final document =
+          jsonDecode(
+                await File(
+                  '${directory.path}/sync_records.json',
+                ).readAsString(),
+              )
+              as Map;
+      expect(document['version'], 2);
+      expect(document['account'], {'baseUrl': _baseUrl, 'username': 'user'});
+    },
+  );
 
-    await http.runWithClient(
-      () => services.registerSync(
-        baseUrl: _baseUrl,
-        username: 'new-user',
-        password: 'password',
-        encryptionPassphrase: 'password',
-      ),
-      () => transport,
-    );
+  test(
+    'enrollment sends the existing installation id and product device name',
+    () async {
+      http.Request? registration;
+      final transport = _TrackedClient((request) async {
+        registration = request;
+        final body = jsonDecode(request.body) as Map;
+        return http.Response(
+          jsonEncode({
+            'token': 'new-token',
+            'vaultKeyCheck': body['vaultKeyCheck'],
+            'recordEnvelopeFloor': kCurrentRecordEnvelopeVersion,
+          }),
+          HttpStatus.ok,
+        );
+      });
+      final stableId = services.settings.deviceId;
 
-    expect(registration, isNotNull);
-    expect(registration!.headers['x-seance-device-id'], stableId);
-    expect(registration!.headers['x-seance-device-name'],
-        'Seance on ${Platform.operatingSystem}');
-  }, timeout: const Timeout(Duration(minutes: 2)));
+      await http.runWithClient(
+        () => services.registerSync(
+          baseUrl: _baseUrl,
+          username: 'new-user',
+          password: 'password',
+          encryptionPassphrase: 'password',
+        ),
+        () => transport,
+      );
+
+      expect(registration, isNotNull);
+      expect(registration!.headers['x-seance-device-id'], stableId);
+      expect(
+        registration!.headers['x-seance-device-name'],
+        'Seance on ${Platform.operatingSystem}',
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 
   test('failed sync closes its client', () async {
-    final transport = _TrackedClient((_) async =>
-        http.Response('unavailable', HttpStatus.serviceUnavailable));
-    await expectLater(http.runWithClient(services.runSync, () => transport),
-        throwsA(isA<ApiError>()));
+    final transport = _TrackedClient(
+      (_) async => http.Response('unavailable', HttpStatus.serviceUnavailable),
+    );
+    await expectLater(
+      http.runWithClient(services.runSync, () => transport),
+      throwsA(isA<ApiError>()),
+    );
     expect(transport.closes, 1);
   });
 
   test('malformed prelogin closes its client', () async {
-    final transport = _TrackedClient((_) async =>
-        http.Response('not-json', HttpStatus.ok));
+    final transport = _TrackedClient(
+      (_) async => http.Response('not-json', HttpStatus.ok),
+    );
     await expectLater(
       http.runWithClient(
         () => services.loginSync(
@@ -708,31 +759,42 @@ void main() {
     expect(transport.closes, 1);
   });
 
-  test('weak prelogin is rejected before login and closes its client', () async {
-    final paths = <String>[];
-    final transport = _TrackedClient((request) async {
-      paths.add(request.url.path);
-      return http.Response(jsonEncode({
-        'argonSalt': base64Encode(List<int>.filled(16, 0)),
-        'argonParams': const Argon2Params.fast().toJson(),
-      }), HttpStatus.ok);
-    });
-    await expectLater(
-      http.runWithClient(
-        () => services.loginSync(
-          baseUrl: _baseUrl,
-          username: 'user',
-          password: 'password',
-          encryptionPassphrase: 'password',
+  test(
+    'weak prelogin is rejected before login and closes its client',
+    () async {
+      final paths = <String>[];
+      final transport = _TrackedClient((request) async {
+        paths.add(request.url.path);
+        return http.Response(
+          jsonEncode({
+            'argonSalt': base64Encode(List<int>.filled(16, 0)),
+            'argonParams': const Argon2Params.fast().toJson(),
+          }),
+          HttpStatus.ok,
+        );
+      });
+      await expectLater(
+        http.runWithClient(
+          () => services.loginSync(
+            baseUrl: _baseUrl,
+            username: 'user',
+            password: 'password',
+            encryptionPassphrase: 'password',
+          ),
+          () => transport,
         ),
-        () => transport,
-      ),
-      throwsA(isA<StateError>().having(
-          (error) => error.message, 'reason', contains('weaker'))),
-    );
-    expect(paths, ['/v1/prelogin']);
-    expect(transport.closes, 1);
-  });
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'reason',
+            contains('weaker'),
+          ),
+        ),
+      );
+      expect(paths, ['/v1/prelogin']);
+      expect(transport.closes, 1);
+    },
+  );
 
   test('a wrong vault key check rejects an empty account', () async {
     final oldKey = List<int>.of(services.vaultKey!);
@@ -742,15 +804,18 @@ void main() {
     );
     final transport = _TrackedClient((request) async {
       if (request.url.path == '/v1/prelogin') {
-        return http.Response(jsonEncode({
-          'argonSalt': base64Encode(List<int>.filled(16, 0)),
-          'argonParams': const Argon2Params().toJson(),
-        }), HttpStatus.ok);
+        return http.Response(
+          jsonEncode({
+            'argonSalt': base64Encode(List<int>.filled(16, 0)),
+            'argonParams': const Argon2Params().toJson(),
+          }),
+          HttpStatus.ok,
+        );
       }
-      return http.Response(jsonEncode({
-        'token': 'new-token',
-        'vaultKeyCheck': check,
-      }), HttpStatus.ok);
+      return http.Response(
+        jsonEncode({'token': 'new-token', 'vaultKeyCheck': check}),
+        HttpStatus.ok,
+      );
     });
 
     await expectLater(
@@ -763,11 +828,13 @@ void main() {
         ),
         () => transport,
       ),
-      throwsA(isA<StateError>().having(
-        (error) => error.message,
-        'reason',
-        contains('could not decrypt this account'),
-      )),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'reason',
+          contains('could not decrypt this account'),
+        ),
+      ),
     );
     expect(services.vaultKey, oldKey);
     expect(await services.masterKeys.getApiKey('sync.token'), 'session-token');
@@ -779,23 +846,31 @@ void main() {
     services.settings.syncUsername = 'different-account';
     final transport = _TrackedClient((request) async {
       if (request.url.path == '/v1/prelogin') {
-        return http.Response(jsonEncode({
-          'argonSalt': base64Encode(List<int>.filled(16, 0)),
-          'argonParams': const Argon2Params().toJson(),
-        }), HttpStatus.ok);
+        return http.Response(
+          jsonEncode({
+            'argonSalt': base64Encode(List<int>.filled(16, 0)),
+            'argonParams': const Argon2Params().toJson(),
+          }),
+          HttpStatus.ok,
+        );
       }
       if (request.url.path == '/v1/sync') {
         return http.Response(
-          jsonEncode(PullResponse(records: [
-            EncryptedRecord(
-              id: 'forged-delete',
-              updatedAt: 1,
-              deviceId: 'server',
-              deleted: true,
-              seq: 1,
-              blob: Uint8List.fromList([1, 2, 3]),
-            ),
-          ], latestSeq: 1).toJson()),
+          jsonEncode(
+            PullResponse(
+              records: [
+                EncryptedRecord(
+                  id: 'forged-delete',
+                  updatedAt: 1,
+                  deviceId: 'server',
+                  deleted: true,
+                  seq: 1,
+                  blob: Uint8List.fromList([1, 2, 3]),
+                ),
+              ],
+              latestSeq: 1,
+            ).toJson(),
+          ),
           HttpStatus.ok,
         );
       }
@@ -812,82 +887,100 @@ void main() {
         ),
         () => transport,
       ),
-      throwsA(isA<StateError>().having(
-        (error) => error.message,
-        'reason',
-        contains('empty legacy account'),
-      )),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'reason',
+          contains('empty legacy account'),
+        ),
+      ),
     );
     expect(services.vaultKey, oldKey);
     expect(await services.masterKeys.getApiKey('sync.token'), 'session-token');
     expect(transport.closes, 1);
   });
 
-  test('a legacy live payload proves only the vault key during login',
-      () async {
-    final keys = await VaultCrypto.deriveKeys(
-      passphrase: 'password',
-      salt: List<int>.filled(16, 0),
-    );
-    final legacy = EncryptedRecord(
-      envelopeVersion: kLegacyRecordEnvelopeVersion,
-      id: 'untrusted-outer-id',
-      updatedAt: 999999,
-      deviceId: 'untrusted-device',
-      deleted: false,
-      seq: 1,
-      blob: await VaultCrypto.sealJson(keys.vaultKey, {
-        'kind': RecordKind.serverConfig.name,
-        'data': const <String, dynamic>{'id': 'canonical-id'},
-      }),
-    );
-    final transport = _TrackedClient((request) async {
-      if (request.url.path == '/v1/prelogin') {
-        return http.Response(jsonEncode({
-          'argonSalt': base64Encode(List<int>.filled(16, 0)),
-          'argonParams': const Argon2Params().toJson(),
-        }), HttpStatus.ok);
-      }
-      if (request.url.path == '/v1/sync') {
+  test(
+    'a legacy live payload proves only the vault key during login',
+    () async {
+      final keys = await VaultCrypto.deriveKeys(
+        passphrase: 'password',
+        salt: List<int>.filled(16, 0),
+      );
+      final legacy = EncryptedRecord(
+        envelopeVersion: kLegacyRecordEnvelopeVersion,
+        id: 'untrusted-outer-id',
+        updatedAt: 999999,
+        deviceId: 'untrusted-device',
+        deleted: false,
+        seq: 1,
+        blob: await VaultCrypto.sealJson(keys.vaultKey, {
+          'kind': RecordKind.serverConfig.name,
+          'data': const <String, dynamic>{'id': 'canonical-id'},
+        }),
+      );
+      final transport = _TrackedClient((request) async {
+        if (request.url.path == '/v1/prelogin') {
+          return http.Response(
+            jsonEncode({
+              'argonSalt': base64Encode(List<int>.filled(16, 0)),
+              'argonParams': const Argon2Params().toJson(),
+            }),
+            HttpStatus.ok,
+          );
+        }
+        if (request.url.path == '/v1/sync') {
+          return http.Response(
+            jsonEncode(
+              PullResponse(
+                records: [legacy],
+                latestSeq: 1,
+                recordEnvelopeFloor: kLegacyRecordEnvelopeVersion,
+              ).toJson(),
+            ),
+            HttpStatus.ok,
+          );
+        }
         return http.Response(
-          jsonEncode(PullResponse(
-            records: [legacy],
-            latestSeq: 1,
-            recordEnvelopeFloor: kLegacyRecordEnvelopeVersion,
-          ).toJson()),
+          jsonEncode({
+            'token': 'legacy-token',
+            'recordEnvelopeFloor': kLegacyRecordEnvelopeVersion,
+          }),
           HttpStatus.ok,
         );
-      }
-      return http.Response(jsonEncode({
-        'token': 'legacy-token',
-        'recordEnvelopeFloor': kLegacyRecordEnvelopeVersion,
-      }), HttpStatus.ok);
-    });
+      });
 
-    await http.runWithClient(
-      () => services.loginSync(
-        baseUrl: _baseUrl,
-        username: 'user',
-        password: 'password',
-        encryptionPassphrase: 'password',
-      ),
-      () => transport,
-    );
+      await http.runWithClient(
+        () => services.loginSync(
+          baseUrl: _baseUrl,
+          username: 'user',
+          password: 'password',
+          encryptionPassphrase: 'password',
+        ),
+        () => transport,
+      );
 
-    expect(await services.masterKeys.getApiKey('sync.token'), 'legacy-token');
-    expect(await services.configStore.getServer('canonical-id'), isNull,
-        reason: 'legacy outer metadata must not enter local stores at login');
-    expect(transport.closes, 1);
-  });
+      expect(await services.masterKeys.getApiKey('sync.token'), 'legacy-token');
+      expect(
+        await services.configStore.getServer('canonical-id'),
+        isNull,
+        reason: 'legacy outer metadata must not enter local stores at login',
+      );
+      expect(transport.closes, 1);
+    },
+  );
 
   test('an empty legacy account is not silently initialized', () async {
     services.settings.syncUsername = null;
     final transport = _TrackedClient((request) async {
       if (request.url.path == '/v1/prelogin') {
-        return http.Response(jsonEncode({
-          'argonSalt': base64Encode(List<int>.filled(16, 0)),
-          'argonParams': const Argon2Params().toJson(),
-        }), HttpStatus.ok);
+        return http.Response(
+          jsonEncode({
+            'argonSalt': base64Encode(List<int>.filled(16, 0)),
+            'argonParams': const Argon2Params().toJson(),
+          }),
+          HttpStatus.ok,
+        );
       }
       if (request.url.path == '/v1/sync') {
         return http.Response(
@@ -908,172 +1001,208 @@ void main() {
         ),
         () => transport,
       ),
-      throwsA(isA<StateError>().having(
-        (error) => error.message,
-        'reason',
-        contains('empty legacy account'),
-      )),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'reason',
+          contains('empty legacy account'),
+        ),
+      ),
     );
     expect(transport.closes, 1);
   });
 
   for (final tombstoneOnly in [false, true]) {
-  test('an enrolled device initializes a legacy account (tombstones=$tombstoneOnly)', () async {
-    final keys = await VaultCrypto.deriveKeys(
-      passphrase: 'password',
-      salt: List<int>.filled(16, 0),
-    );
-    await services.rekeyVaultForTesting(keys.vaultKey);
-    services.settings.syncBaseUrl = _baseUrl;
-    services.settings.syncUsername = 'user';
-    await services.saveSettings();
-    final paths = <String>[];
-    String? initializedCheck;
-    final transport = _TrackedClient((request) async {
-      paths.add(request.url.path);
-      switch (request.url.path) {
-        case '/v1/prelogin':
-          return http.Response(jsonEncode({
-            'argonSalt': base64Encode(List<int>.filled(16, 0)),
-            'argonParams': const Argon2Params().toJson(),
-          }), HttpStatus.ok);
-        case '/v1/login':
-          return http.Response(
-              jsonEncode({'token': 'migrated-token'}), HttpStatus.ok);
-        case '/v1/sync':
-          return http.Response(
-            jsonEncode(PullResponse(
-              records: tombstoneOnly ? [EncryptedRecord.tombstone(
-                id: 'deleted', updatedAt: 1, deviceId: 'old-device',
-              ).withSeq(1)] : const [],
-              latestSeq: tombstoneOnly ? 1 : 0,
-              recordEnvelopeFloor: kLegacyRecordEnvelopeVersion,
-            ).toJson()),
-            HttpStatus.ok,
-          );
-        case '/v1/account/vault-key-check':
-          final body = jsonDecode(request.body) as Map;
-          initializedCheck = body['vaultKeyCheck'] as String;
-          return http.Response(
-            jsonEncode({'vaultKeyCheck': initializedCheck}),
-            HttpStatus.ok,
-          );
-        default:
-          fail('unexpected request ${request.url}');
-      }
-    });
+    test(
+      'an enrolled device initializes a legacy account (tombstones=$tombstoneOnly)',
+      () async {
+        final keys = await VaultCrypto.deriveKeys(
+          passphrase: 'password',
+          salt: List<int>.filled(16, 0),
+        );
+        await services.rekeyVaultForTesting(keys.vaultKey);
+        services.settings.syncBaseUrl = _baseUrl;
+        services.settings.syncUsername = 'user';
+        await services.saveSettings();
+        final paths = <String>[];
+        String? initializedCheck;
+        final transport = _TrackedClient((request) async {
+          paths.add(request.url.path);
+          switch (request.url.path) {
+            case '/v1/prelogin':
+              return http.Response(
+                jsonEncode({
+                  'argonSalt': base64Encode(List<int>.filled(16, 0)),
+                  'argonParams': const Argon2Params().toJson(),
+                }),
+                HttpStatus.ok,
+              );
+            case '/v1/login':
+              return http.Response(
+                jsonEncode({'token': 'migrated-token'}),
+                HttpStatus.ok,
+              );
+            case '/v1/sync':
+              return http.Response(
+                jsonEncode(
+                  PullResponse(
+                    records: tombstoneOnly
+                        ? [
+                            EncryptedRecord.tombstone(
+                              id: 'deleted',
+                              updatedAt: 1,
+                              deviceId: 'old-device',
+                            ).withSeq(1),
+                          ]
+                        : const [],
+                    latestSeq: tombstoneOnly ? 1 : 0,
+                    recordEnvelopeFloor: kLegacyRecordEnvelopeVersion,
+                  ).toJson(),
+                ),
+                HttpStatus.ok,
+              );
+            case '/v1/account/vault-key-check':
+              final body = jsonDecode(request.body) as Map;
+              initializedCheck = body['vaultKeyCheck'] as String;
+              return http.Response(
+                jsonEncode({'vaultKeyCheck': initializedCheck}),
+                HttpStatus.ok,
+              );
+            default:
+              fail('unexpected request ${request.url}');
+          }
+        });
 
-    await http.runWithClient(
-      () => services.loginSync(
-        baseUrl: _baseUrl,
-        username: 'user',
-        password: 'password',
-        encryptionPassphrase: 'password',
-      ),
-      () => transport,
-    );
+        await http.runWithClient(
+          () => services.loginSync(
+            baseUrl: _baseUrl,
+            username: 'user',
+            password: 'password',
+            encryptionPassphrase: 'password',
+          ),
+          () => transport,
+        );
 
-    expect(initializedCheck, isNotNull);
-    await expectLater(
-      VaultKeyCheck.verify(
-        keys.vaultKey,
-        initializedCheck!,
-        username: 'user',
-      ),
-      completes,
+        expect(initializedCheck, isNotNull);
+        await expectLater(
+          VaultKeyCheck.verify(
+            keys.vaultKey,
+            initializedCheck!,
+            username: 'user',
+          ),
+          completes,
+        );
+        expect(paths, [
+          '/v1/prelogin',
+          '/v1/login',
+          '/v1/sync',
+          '/v1/account/vault-key-check',
+        ]);
+        expect(
+          await services.masterKeys.getApiKey('sync.token'),
+          'migrated-token',
+        );
+      },
     );
-    expect(paths, [
-      '/v1/prelogin',
-      '/v1/login',
-      '/v1/sync',
-      '/v1/account/vault-key-check',
-    ]);
-    expect(await services.masterKeys.getApiKey('sync.token'), 'migrated-token');
-  });
   }
 
   for (final committedBeforeFailure in [false, true]) {
-  test('a refused re-key preserves credentials (committed=$committedBeforeFailure)',
+    test(
+      'a refused re-key preserves credentials (committed=$committedBeforeFailure)',
       () async {
-    final keystore = _SelectiveKeystore();
-    final own = await AppServices.initialize(
-        masterKeyManager: MasterKeyManager(keystore));
-    addTearDown(() => own.probe.dispose());
+        final keystore = _SelectiveKeystore();
+        final own = await AppServices.initialize(
+          masterKeyManager: MasterKeyManager(keystore),
+        );
+        addTearDown(() => own.probe.dispose());
 
-    final secrets = [
-      for (final id in ['alpha', 'beta', 'gamma'])
-        Secret(id: id, kind: SecretKind.password, value: 'password-$id'),
-    ];
-    for (final secret in secrets) {
-      await own.vault.putSecret(secret);
-      await own.configStore.putServer(ServerConfig(
-        id: secret.id,
-        label: secret.id,
-        host: '${secret.id}.test',
-        username: 'user',
-        secretRef: secret.id,
-        createdAt: 1,
-        updatedAt: 1,
-      ));
-    }
+        final secrets = [
+          for (final id in ['alpha', 'beta', 'gamma'])
+            Secret(id: id, kind: SecretKind.password, value: 'password-$id'),
+        ];
+        for (final secret in secrets) {
+          await own.vault.putSecret(secret);
+          await own.configStore.putServer(
+            ServerConfig(
+              id: secret.id,
+              label: secret.id,
+              host: '${secret.id}.test',
+              username: 'user',
+              secretRef: secret.id,
+              createdAt: 1,
+              updatedAt: 1,
+            ),
+          );
+        }
 
-    final transport = _TrackedClient((request) async {
-      if (request.url.path == '/v1/prelogin') {
-        return http.Response(jsonEncode({
-          'argonSalt': base64Encode(List<int>.filled(16, 0)),
-          'argonParams': const Argon2Params().toJson(),
-        }), HttpStatus.ok);
-      }
-      if (request.url.path == '/v1/sync') {
-        return http.Response(
-            jsonEncode(const PullResponse(records: [], latestSeq: 0).toJson()),
-            HttpStatus.ok);
-      }
-      final body = jsonDecode(request.body) as Map;
-      return http.Response(
-        jsonEncode({
-          'token': 'enrolled-token',
-          'vaultKeyCheck': body['vaultKeyCheck'],
-        }),
-        HttpStatus.ok,
-      );
-    });
+        final transport = _TrackedClient((request) async {
+          if (request.url.path == '/v1/prelogin') {
+            return http.Response(
+              jsonEncode({
+                'argonSalt': base64Encode(List<int>.filled(16, 0)),
+                'argonParams': const Argon2Params().toJson(),
+              }),
+              HttpStatus.ok,
+            );
+          }
+          if (request.url.path == '/v1/sync') {
+            return http.Response(
+              jsonEncode(
+                const PullResponse(records: [], latestSeq: 0).toJson(),
+              ),
+              HttpStatus.ok,
+            );
+          }
+          final body = jsonDecode(request.body) as Map;
+          return http.Response(
+            jsonEncode({
+              'token': 'enrolled-token',
+              'vaultKeyCheck': body['vaultKeyCheck'],
+            }),
+            HttpStatus.ok,
+          );
+        });
 
-    // The vault file re-seals fine; the keyring refuses the one write that
-    // would make the new key survive a restart.
-    keystore.refuseMasterKey = true;
-    keystore.commitMasterKeyBeforeFailure = committedBeforeFailure;
-    await expectLater(
-      http.runWithClient(
-        () => own.registerSync(
-          baseUrl: _baseUrl,
-          username: 'user',
-          password: 'password',
-          encryptionPassphrase: 'separate-encryption-passphrase',
-        ),
-        () => transport,
-      ),
-      throwsA(isA<KeystoreException>()),
+        // The vault file re-seals fine; the keyring refuses the one write that
+        // would make the new key survive a restart.
+        keystore.refuseMasterKey = true;
+        keystore.commitMasterKeyBeforeFailure = committedBeforeFailure;
+        await expectLater(
+          http.runWithClient(
+            () => own.registerSync(
+              baseUrl: _baseUrl,
+              username: 'user',
+              password: 'password',
+              encryptionPassphrase: 'separate-encryption-passphrase',
+            ),
+            () => transport,
+          ),
+          throwsA(isA<KeystoreException>()),
+        );
+
+        // The keyring's own diagnosis has to survive the failure. Deciding which
+        // key survived means reading the keystore from inside this catch, and a
+        // read that reported health would mark it *available* again — clearing
+        // the `KeyringLocked` the refused write just recorded, which is what the
+        // bootstrap toast's retry affordance keys off.
+        expect(own.masterKeys.keystoreStatus, KeystoreStatus.unavailable);
+        expect(own.masterKeys.lastKeystoreError, contains('KeyringLocked'));
+
+        // The keystore still holds the original key, so that is the key the file
+        // has to be readable with. Leaving it under the uninstalled one would put
+        // every credential out of reach of the next launch.
+        final reopened = await AppServices.initialize(
+          masterKeyManager: MasterKeyManager(keystore),
+        );
+        addTearDown(() => reopened.probe.dispose());
+        for (final secret in secrets) {
+          expect(
+            (await reopened.vault.getSecret(secret.id))!.value,
+            secret.value,
+          );
+        }
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
     );
-
-    // The keyring's own diagnosis has to survive the failure. Deciding which
-    // key survived means reading the keystore from inside this catch, and a
-    // read that reported health would mark it *available* again — clearing
-    // the `KeyringLocked` the refused write just recorded, which is what the
-    // bootstrap toast's retry affordance keys off.
-    expect(own.masterKeys.keystoreStatus, KeystoreStatus.unavailable);
-    expect(own.masterKeys.lastKeystoreError, contains('KeyringLocked'));
-
-    // The keystore still holds the original key, so that is the key the file
-    // has to be readable with. Leaving it under the uninstalled one would put
-    // every credential out of reach of the next launch.
-    final reopened = await AppServices.initialize(
-        masterKeyManager: MasterKeyManager(keystore));
-    addTearDown(() => reopened.probe.dispose());
-    for (final secret in secrets) {
-      expect((await reopened.vault.getSecret(secret.id))!.value, secret.value);
-    }
-  }, timeout: const Timeout(Duration(minutes: 2)));
   }
-
 }

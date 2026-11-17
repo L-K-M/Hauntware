@@ -51,14 +51,14 @@ void main() {
 
   group('standardFolderGlyph', () {
     test('names a standard folder directly inside home', () {
-      expect(
-        standardFolderGlyph('/home/ada/Downloads', home: '/home/ada'),
-        (glyph: Icons.download, hue: FamilyHue.cyan),
-      );
-      expect(
-        standardFolderGlyph('/Users/ada/Pictures', home: '/Users/ada/'),
-        (glyph: Icons.photo, hue: FamilyHue.pink),
-      );
+      expect(standardFolderGlyph('/home/ada/Downloads', home: '/home/ada'), (
+        glyph: Icons.download,
+        hue: FamilyHue.cyan,
+      ));
+      expect(standardFolderGlyph('/Users/ada/Pictures', home: '/Users/ada/'), (
+        glyph: Icons.photo,
+        hue: FamilyHue.pink,
+      ));
       expect(
         standardFolderGlyph(r'C:\Users\ada\Music', home: r'C:\Users\ada'),
         (glyph: Icons.music_note, hue: FamilyHue.purple),
@@ -73,36 +73,32 @@ void main() {
     });
 
     test('a name alone elsewhere is just a folder', () {
-      expect(
-        standardFolderGlyph('/srv/Downloads', home: '/home/ada'),
-        isNull,
-      );
+      expect(standardFolderGlyph('/srv/Downloads', home: '/home/ada'), isNull);
       expect(
         standardFolderGlyph('/home/ada/work/Downloads', home: '/home/ada'),
         isNull,
       );
       expect(standardFolderGlyph('/home/ada/Downloads', home: null), isNull);
-      expect(standardFolderGlyph('/home/ada/Projects', home: '/home/ada'),
-          isNull);
+      expect(
+        standardFolderGlyph('/home/ada/Projects', home: '/home/ada'),
+        isNull,
+      );
     });
   });
 
   group('favoriteGlyph', () {
     final stamp = DateTime.utc(2026, 9, 25);
-    Bookmark favorite(
-      BookmarkKind kind, {
-      String? path,
-      ServerIcon? icon,
-    }) => Bookmark(
-      id: 'f',
-      kind: kind,
-      label: 'f',
-      localPath: path,
-      icon: icon,
-      sortKey: 'f',
-      createdAt: stamp,
-      updatedAt: stamp,
-    );
+    Bookmark favorite(BookmarkKind kind, {String? path, ServerIcon? icon}) =>
+        Bookmark(
+          id: 'f',
+          kind: kind,
+          label: 'f',
+          localPath: path,
+          icon: icon,
+          sortKey: 'f',
+          createdAt: stamp,
+          updatedAt: stamp,
+        );
 
     test('a folder is blue; a standard folder takes its own glyph', () {
       expect(
@@ -132,7 +128,10 @@ void main() {
     });
 
     test('a workspace is the recipes teal, a saved sync the sync indigo', () {
-      expect(favoriteGlyph(favorite(BookmarkKind.workspace)).hue, FamilyHue.teal);
+      expect(
+        favoriteGlyph(favorite(BookmarkKind.workspace)).hue,
+        FamilyHue.teal,
+      );
       expect(
         favoriteGlyph(favorite(BookmarkKind.savedSync)).hue,
         FamilyHue.indigo,

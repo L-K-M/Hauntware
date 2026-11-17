@@ -55,7 +55,8 @@ Future<CredentialDialogResult?> showCredentialDialog(
   final passphraseOnly = request?.keyField == GhostKeyField.passphraseOnly;
   final reply = await showGhostCredentialDialog(
     context,
-    request ?? ghostCredentialRequestOf(data, vaultUnavailable: vaultUnavailable),
+    request ??
+        ghostCredentialRequestOf(data, vaultUnavailable: vaultUnavailable),
     strings: passphraseOnly
         ? poltergeistPassphraseStrings(l10n, retry: retry)
         : poltergeistCredentialStrings(l10n, vaultKeyMissing: vaultKeyMissing),

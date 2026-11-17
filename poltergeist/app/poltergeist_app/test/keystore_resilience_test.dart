@@ -62,8 +62,7 @@ void main() {
   // planchette/packages/ghost_keystore/test/master_key_manager_test.dart
   // with MasterKeyManager (F3c); this binding keeps its entry name here.
   group("Poltergeist's MasterKeyManager binding", () {
-    test('the master key is stored under the Poltergeist entry name',
-        () async {
+    test('the master key is stored under the Poltergeist entry name', () async {
       final storage = _ToggleableKeystore();
       final keys = poltergeistMasterKeyManager(storage);
 
@@ -83,29 +82,31 @@ void main() {
 
     tearDown(() => directory.delete(recursive: true));
 
-    test('a keystore that lost its entry beside a sealed vault is refused',
-        () async {
-      // The vault was sealed under a key the keystore no longer holds: a
-      // Windows password reset, a reset Secret Service collection, a
-      // support directory restored onto a new machine.
-      final oldKey = secureRandomBytes(32);
-      await SecretVault(FileVaultStore(vaultFile), oldKey).putSecret(
-        const Secret(id: 'a', kind: SecretKind.password, value: 'pw'),
-      );
-      final storage = _ToggleableKeystore();
-      final keys = poltergeistMasterKeyManager(storage);
+    test(
+      'a keystore that lost its entry beside a sealed vault is refused',
+      () async {
+        // The vault was sealed under a key the keystore no longer holds: a
+        // Windows password reset, a reset Secret Service collection, a
+        // support directory restored onto a new machine.
+        final oldKey = secureRandomBytes(32);
+        await SecretVault(FileVaultStore(vaultFile), oldKey).putSecret(
+          const Secret(id: 'a', kind: SecretKind.password, value: 'pw'),
+        );
+        final storage = _ToggleableKeystore();
+        final keys = poltergeistMasterKeyManager(storage);
 
-      await expectLater(
-        probeVaultKey(keys, vaultFile),
-        throwsA(isA<MasterKeyUnavailableException>()),
-      );
+        await expectLater(
+          probeVaultKey(keys, vaultFile),
+          throwsA(isA<MasterKeyUnavailableException>()),
+        );
 
-      expect(storage.writes, 0, reason: 'no replacement key may be stored');
-      expect(storage._map, isEmpty);
-      // The saved secret still opens once the original key comes back.
-      final reopened = SecretVault(FileVaultStore(vaultFile), oldKey);
-      expect((await reopened.getSecret('a'))!.value, 'pw');
-    });
+        expect(storage.writes, 0, reason: 'no replacement key may be stored');
+        expect(storage._map, isEmpty);
+        // The saved secret still opens once the original key comes back.
+        final reopened = SecretVault(FileVaultStore(vaultFile), oldKey);
+        expect((await reopened.getSecret('a'))!.value, 'pw');
+      },
+    );
 
     test('an unparseable vault file counts as holding secrets', () async {
       await vaultFile.writeAsString('');
@@ -126,8 +127,7 @@ void main() {
       expect(storage._map.keys, ['poltergeist.vault.masterKey.v1']);
     });
 
-    test('an empty vault has nothing to strand, so a key is minted',
-        () async {
+    test('an empty vault has nothing to strand, so a key is minted', () async {
       await vaultFile.writeAsString('{}');
       final keys = poltergeistMasterKeyManager(_ToggleableKeystore());
 

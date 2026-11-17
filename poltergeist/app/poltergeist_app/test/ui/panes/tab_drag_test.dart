@@ -24,11 +24,7 @@ Future<ByteData> _fontBytes(String path) async {
   final bytes = File(path).readAsBytesSync();
   // Honor the list's window into its buffer — a nonzero offset would
   // otherwise smear the font bytes.
-  return ByteData.view(
-    bytes.buffer,
-    bytes.offsetInBytes,
-    bytes.lengthInBytes,
-  );
+  return ByteData.view(bytes.buffer, bytes.offsetInBytes, bytes.lengthInBytes);
 }
 
 /// Registers a readable face under the names the theme resolves — the
@@ -36,7 +32,8 @@ Future<ByteData> _fontBytes(String path) async {
 Future<void> _loadRealFonts() async {
   final home =
       Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home != null ? '$home/.local/share/fonts' : '');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -54,8 +51,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -99,19 +95,18 @@ void main() {
     addTearDown(rightFocus.dispose);
   });
 
-  Widget pane(Key key, PaneTabsController strip, FocusNode focus) =>
-      Expanded(
-        child: KeyedSubtree(
-          key: key,
-          child: PaneTabsView(
-            tabs: strip,
-            workspace: workspace,
-            focusNode: focus,
-            onSwapFocus: () {},
-            onCancelRecovery: () {},
-          ),
-        ),
-      );
+  Widget pane(Key key, PaneTabsController strip, FocusNode focus) => Expanded(
+    child: KeyedSubtree(
+      key: key,
+      child: PaneTabsView(
+        tabs: strip,
+        workspace: workspace,
+        focusNode: focus,
+        onSwapFocus: () {},
+        onCancelRecovery: () {},
+      ),
+    ),
+  );
 
   Future<void> pumpPanes(WidgetTester tester) {
     tester.view.physicalSize = const Size(1200, 600);
@@ -152,8 +147,7 @@ void main() {
   /// Opens [count] launcher tabs on [strip] — unbound tabs keep the
   /// widget flow engine-free.
   List<PaneTab> launcherTabs(PaneTabsController strip, int count) => [
-    for (var i = 0; i < count; i++)
-      strip.newTab(target: NewTabTarget.launcher),
+    for (var i = 0; i < count; i++) strip.newTab(target: NewTabTarget.launcher),
   ];
 
   testWidgets('a chip dragged to the other strip lands there whole', (
@@ -190,10 +184,7 @@ void main() {
     await tester.pumpAndSettle();
     // The moved tab's listing renders in the right pane's view.
     expect(
-      find.descendant(
-        of: find.byKey(rightPane),
-        matching: find.text('a.txt'),
-      ),
+      find.descendant(of: find.byKey(rightPane), matching: find.text('a.txt')),
       findsOneWidget,
     );
     // The source pane sits on the launcher, never blank: the Quick
@@ -207,9 +198,7 @@ void main() {
     );
   });
 
-  testWidgets('the drop index follows the hovered chip half', (
-    tester,
-  ) async {
+  testWidgets('the drop index follows the hovered chip half', (tester) async {
     final moved = left.newTab(target: NewTabTarget.launcher);
     final r = launcherTabs(right, 3);
     await pumpPanes(tester);
@@ -252,9 +241,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     chip = chipIn(leftPane, third.id);
-    target = tester.getCenter(
-      find.byKey(const ValueKey('pane.right.tab.new')),
-    );
+    target = tester.getCenter(find.byKey(const ValueKey('pane.right.tab.new')));
     gesture = await tester.startGesture(tester.getCenter(chip));
     await tester.pump();
     await gesture.moveTo(Offset(target.dx - 10, target.dy));
@@ -297,9 +284,7 @@ void main() {
     expect(indicatorIn(leftPane), findsNothing);
   });
 
-  testWidgets('a drop outside either strip cancels cleanly', (
-    tester,
-  ) async {
+  testWidgets('a drop outside either strip cancels cleanly', (tester) async {
     final tab = left.newTab(target: NewTabTarget.launcher);
     launcherTabs(right, 1);
     await pumpPanes(tester);
@@ -383,9 +368,7 @@ void main() {
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List(
             data.offsetInBytes,
             data.lengthInBytes,

@@ -28,9 +28,7 @@ Future<SyncPlanController> _readyController(
       right: testScanResult('/right', const {}),
     ),
     differ: FakeSyncDiffer(plan),
-    environment: testSyncEnvironment(
-      Directory.systemTemp.createTempSync(),
-    ),
+    environment: testSyncEnvironment(Directory.systemTemp.createTempSync()),
     syncTasks: SyncQueueTasks(),
   );
   addTearDown(controller.dispose);
@@ -42,22 +40,10 @@ Future<SyncPlanController> _readyController(
 void main() {
   group('syncActionGlyph', () {
     test('maps every action to its §7 glyph', () {
-      expect(
-        syncActionGlyph(SyncActionType.copyLeftToRight),
-        '→',
-      );
-      expect(
-        syncActionGlyph(SyncActionType.updateLeftToRight),
-        '⇒',
-      );
-      expect(
-        syncActionGlyph(SyncActionType.copyRightToLeft),
-        '←',
-      );
-      expect(
-        syncActionGlyph(SyncActionType.updateRightToLeft),
-        '⇐',
-      );
+      expect(syncActionGlyph(SyncActionType.copyLeftToRight), '→');
+      expect(syncActionGlyph(SyncActionType.updateLeftToRight), '⇒');
+      expect(syncActionGlyph(SyncActionType.copyRightToLeft), '←');
+      expect(syncActionGlyph(SyncActionType.updateRightToLeft), '⇐');
       expect(syncActionGlyph(SyncActionType.makeDirLeft), '⊞');
       expect(syncActionGlyph(SyncActionType.deleteRight), '✕');
       expect(syncActionGlyph(SyncActionType.conflict), '↯');
@@ -67,10 +53,7 @@ void main() {
 
   group('header clauses', () {
     test('the one-way copy clause is §7 verbatim', () async {
-      final pair = testSyncPair(
-        left: '/home/me/docs',
-        right: '/srv/www/docs',
-      );
+      final pair = testSyncPair(left: '/home/me/docs', right: '/srv/www/docs');
       final controller = await _readyController(
         pair,
         testPlan(pair, [
@@ -89,13 +72,10 @@ void main() {
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, controller),
-        [
-          'Copy 1 new file (2.0 KB), and update 1 on docs.',
-          'Nothing will be deleted.',
-        ],
-      );
+      expect(syncHeaderClauses(_l10n, controller), [
+        'Copy 1 new file (2.0 KB), and update 1 on docs.',
+        'Nothing will be deleted.',
+      ]);
     });
 
     test('a dirs-only plan renders the folder-only headline', () async {
@@ -111,14 +91,13 @@ void main() {
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, controller),
-        ['Create 1 folder on right.', 'Nothing will be deleted.'],
-      );
+      expect(syncHeaderClauses(_l10n, controller), [
+        'Create 1 folder on right.',
+        'Nothing will be deleted.',
+      ]);
     });
 
-    test('Additive aggregates both directions onto "both sides"',
-        () async {
+    test('Additive aggregates both directions onto "both sides"', () async {
       final pair = testSyncPair(
         rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
       );
@@ -139,13 +118,10 @@ void main() {
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, controller),
-        [
-          'Copy 2 new files (10 B) on both sides.',
-          'Nothing will be deleted.',
-        ],
-      );
+      expect(syncHeaderClauses(_l10n, controller), [
+        'Copy 2 new files (10 B) on both sides.',
+        'Nothing will be deleted.',
+      ]);
     });
 
     test('deletion clauses distinguish trash from permanent', () async {
@@ -163,13 +139,10 @@ void main() {
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, trashedController),
-        [
-          'Delete 1 file on right '
-          '(moved to trash at .poltergeist-trash).',
-        ],
-      );
+      expect(syncHeaderClauses(_l10n, trashedController), [
+        'Delete 1 file on right '
+            '(moved to trash at .poltergeist-trash).',
+      ]);
 
       final permanent = testSyncPair(
         rules: const SyncRuleSet(deletions: DeletionPolicy.permanent),
@@ -185,10 +158,9 @@ void main() {
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, permanentController),
-        ['Delete 1 file on right permanently.'],
-      );
+      expect(syncHeaderClauses(_l10n, permanentController), [
+        'Delete 1 file on right permanently.',
+      ]);
     });
 
     test('a type-change replace carries its own clause', () async {
@@ -205,29 +177,20 @@ void main() {
             suggested: SyncActionType.updateLeftToRight,
             reason: SyncReason.typeDiffers,
             destinationSubtree: const {
-              'thing/a.txt': EntrySnapshot(
-                kind: EntryKind.file,
-                size: 1,
-              ),
-              'thing/b.txt': EntrySnapshot(
-                kind: EntryKind.file,
-                size: 2,
-              ),
+              'thing/a.txt': EntrySnapshot(kind: EntryKind.file, size: 1),
+              'thing/b.txt': EntrySnapshot(kind: EntryKind.file, size: 2),
             },
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, controller),
-        [
-          'update 1 on right.',
-          // §7: {j} counts ROWS (one per replaced path) — the row's
-          // 2-file toll rides the chip/rails/typed gate, not this
-          // clause.
-          'Replace 1 file of a different kind on right '
-          '(previous version moved to trash at .poltergeist-trash).',
-        ],
-      );
+      expect(syncHeaderClauses(_l10n, controller), [
+        'update 1 on right.',
+        // §7: {j} counts ROWS (one per replaced path) — the row's
+        // 2-file toll rides the chip/rails/typed gate, not this
+        // clause.
+        'Replace 1 file of a different kind on right '
+            '(previous version moved to trash at .poltergeist-trash).',
+      ]);
     });
 
     test('empty-folder cleanups replace the green tail, never sit '
@@ -254,13 +217,10 @@ void main() {
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, controller),
-        [
-          'Copy 1 new file (4 B) on right.',
-          'Remove 1 empty folder on right.',
-        ],
-      );
+      expect(syncHeaderClauses(_l10n, controller), [
+        'Copy 1 new file (4 B) on right.',
+        'Remove 1 empty folder on right.',
+      ]);
     });
 
     test('conflicts and the no-op tail render verbatim', () async {
@@ -277,20 +237,19 @@ void main() {
           ),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, controller),
-        ['Nothing will be deleted.', '1 conflict needs a decision.'],
-      );
+      expect(syncHeaderClauses(_l10n, controller), [
+        'Nothing will be deleted.',
+        '1 conflict needs a decision.',
+      ]);
       final empty = await _readyController(
         pair,
         testPlan(pair, [
           testItem('same.txt', left: testFile(), right: testFile()),
         ]),
       );
-      expect(
-        syncHeaderClauses(_l10n, empty),
-        ['Both sides match. Nothing to do.'],
-      );
+      expect(syncHeaderClauses(_l10n, empty), [
+        'Both sides match. Nothing to do.',
+      ]);
     });
   });
 
@@ -305,67 +264,35 @@ void main() {
     test('each reason maps to its §7 string', () {
       final now = DateTime.fromMillisecondsSinceEpoch(1000 * 1000);
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.onlyOnLeft),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.onlyOnLeft), now: now),
         'only exists here',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.newerOnLeft),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.newerOnLeft), now: now),
         'newer here (15m vs 13m)',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.sizeDiffers),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.sizeDiffers), now: now),
         'sizes differ (4 B vs 8 B)',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.contentDiffers),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.contentDiffers), now: now),
         'contents differ',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.bothChanged),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.bothChanged), now: now),
         'changed on both sides',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.typeDiffers),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.typeDiffers), now: now),
         'type differs (file here, file there)',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.excluded),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.excluded), now: now),
         'excluded by rule',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.caseCollision),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.caseCollision), now: now),
         'names differ only by case',
       );
       expect(
@@ -385,19 +312,11 @@ void main() {
         'name invalid on Windows',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.scanError),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.scanError), now: now),
         'couldn\'t scan — subtree excluded',
       );
       expect(
-        syncReasonText(
-          _l10n,
-          reasoned(SyncReason.equal),
-          now: now,
-        ),
+        syncReasonText(_l10n, reasoned(SyncReason.equal), now: now),
         'identical',
       );
     });
@@ -414,16 +333,12 @@ void main() {
         effective: SyncActionType.skip,
         reason: SyncReason.equal,
       );
-      expect(
-        syncReasonText(_l10n, item),
-        'symbolic link — skipped',
-      );
+      expect(syncReasonText(_l10n, item), 'symbolic link — skipped');
     });
   });
 
   group('rail-3 trigger copy', () {
-    test('the 0.5 threshold renders "half"; others render the number',
-        () {
+    test('the 0.5 threshold renders "half"; others render the number', () {
       const trigger = SyncDeleteRailTrigger(
         side: SyncSide.right,
         deleteCount: 12,

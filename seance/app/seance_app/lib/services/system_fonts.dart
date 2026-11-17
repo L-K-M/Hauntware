@@ -94,15 +94,14 @@ class SfntSystemFonts implements SystemFonts {
   /// Upper bound on a declared `name` table length. See [_readFace].
   static const int _maxNameTableBytes = 1 << 20;
 
-
   final List<Directory> _roots;
   Future<List<SystemFontFamily>>? _cached;
 
   /// [visitBudget] overrides [maxVisitedEntities]; only a test needs to, to
   /// drive the bound without laying down two hundred thousand files.
   SfntSystemFonts({List<Directory>? roots, int? visitBudget})
-      : _roots = roots ?? _platformRoots(),
-        _visitBudget = visitBudget ?? maxVisitedEntities;
+    : _roots = roots ?? _platformRoots(),
+      _visitBudget = visitBudget ?? maxVisitedEntities;
 
   final int _visitBudget;
 
@@ -220,15 +219,18 @@ class SfntSystemFonts implements SystemFonts {
       // listing has no timeout, so an exhausted scan could still block on a
       // root that sits on an unreachable mount.
       if (files >= maxFiles || visited > _visitBudget) break;
-      await for (final entity in root.list(
-        // Followed, because a font installed as a symlink is not exotic: a
-        // manual `ln -s` into ~/.fonts, a distro linking into a package store,
-        // and on Nix essentially every font. Left unfollowed they arrive as
-        // Link rather than File and are dropped by the guard below, which is
-        // most of the collection on those systems.
-        recursive: true,
-        followLinks: true,
-      ).handleError((_) {}, test: (e) => e is FileSystemException)) {
+      await for (final entity
+          in root
+              .list(
+                // Followed, because a font installed as a symlink is not exotic: a
+                // manual `ln -s` into ~/.fonts, a distro linking into a package store,
+                // and on Nix essentially every font. Left unfollowed they arrive as
+                // Link rather than File and are dropped by the guard below, which is
+                // most of the collection on those systems.
+                recursive: true,
+                followLinks: true,
+              )
+              .handleError((_) {}, test: (e) => e is FileSystemException)) {
         if (files >= maxFiles || ++visited > _visitBudget) break;
         if (entity is! File) continue;
         final dot = entity.path.lastIndexOf('.');
@@ -363,10 +365,7 @@ Future<List<SystemFontFamily>> _readCollection(RandomAccessFile handle) async {
 }
 
 /// One sfnt font, starting at [base].
-Future<SystemFontFamily?> _readFace(
-  RandomAccessFile handle,
-  int base,
-) async {
+Future<SystemFontFamily?> _readFace(RandomAccessFile handle, int base) async {
   final header = await _readAt(handle, base, 12);
   final numTables = header.getUint16(4);
   if (numTables == 0 || numTables > 512) return null;
@@ -461,7 +460,8 @@ String? _familyName(ByteData name) {
     // Platform 0 defines no language ids and the spec says to set the field
     // to zero, so a non-zero one is not a record to prefer over an en-US
     // Windows name.
-    final preferred = (platformId == 0 && languageId == 0) ||
+    final preferred =
+        (platformId == 0 && languageId == 0) ||
         (platformId == 3 && languageId == _langEnglishUs);
     if (nameId == 16) {
       typographic ??= value;

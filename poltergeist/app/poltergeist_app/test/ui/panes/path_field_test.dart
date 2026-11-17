@@ -216,9 +216,7 @@ void main() {
     expect(left.loading, isFalse);
   });
 
-  testWidgets('go.toFolder opens the same editor seeded empty', (
-    tester,
-  ) async {
+  testWidgets('go.toFolder opens the same editor seeded empty', (tester) async {
     scriptLocal(const []);
     await left.openLocalHome();
     await pumpShell(tester);
@@ -299,17 +297,14 @@ void main() {
 
     expect(find.byKey(fieldKey), findsNothing);
     expect(left.error, isA<PaneFaultException>());
+    expect((left.error as PaneFaultException).fault, PaneFault.invalidPath);
     expect(
-      (left.error as PaneFaultException).fault,
-      PaneFault.invalidPath,
+      channel.listCalls.length,
+      callsBefore,
+      reason: 'shape validation precedes any listing request',
     );
-    expect(channel.listCalls.length, callsBefore,
-        reason: 'shape validation precedes any listing request');
     // The pane's own error affordance renders the ARB line — no dialog.
-    expect(
-      find.textContaining('not a folder path'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('not a folder path'), findsOneWidget);
     expect(find.byKey(const ValueKey('pane.error.retry')), findsOneWidget);
 
     // Esc/Retry refreshes back to the still-committed location.
@@ -406,12 +401,7 @@ void main() {
     // While the field holds focus its chord is suppressed (02 §8.2's
     // field-first rule — the reseed covers the command invoked over an
     // open-but-unfocused field, e.g. a menu click after a stray tap).
-    await press(
-      tester,
-      LogicalKeyboardKey.keyG,
-      control: true,
-      shift: true,
-    );
+    await press(tester, LogicalKeyboardKey.keyG, control: true, shift: true);
     expect(
       tester.widget<TextField>(find.byKey(fieldKey)).controller!.text,
       '/in/progress',

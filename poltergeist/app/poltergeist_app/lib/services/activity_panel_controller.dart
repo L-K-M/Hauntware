@@ -208,10 +208,7 @@ final class ActivityPanelController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  void _persist(
-    FutureOr<void> Function(int?)? persist,
-    int? bytesPerSecond,
-  ) {
+  void _persist(FutureOr<void> Function(int?)? persist, int? bytesPerSecond) {
     final callback = persist;
     if (callback == null) return;
     try {
@@ -282,8 +279,7 @@ final class ActivityPanelController extends ChangeNotifier {
   }
 
   bool moveTask(String taskId, {String? beforeTaskId}) {
-    final moved = _queue?.moveTask(taskId, beforeTaskId: beforeTaskId) ??
-        false;
+    final moved = _queue?.moveTask(taskId, beforeTaskId: beforeTaskId) ?? false;
     if (moved) notifyListeners();
     return moved;
   }
@@ -317,7 +313,8 @@ final class ActivityPanelController extends ChangeNotifier {
     ConflictResolution verb, {
     ConflictResolutionScope scope = ConflictResolutionScope.item,
   }) {
-    final resolved = _queue?.resolveConflict(
+    final resolved =
+        _queue?.resolveConflict(
           conflict.taskId,
           conflict.itemId,
           verb,

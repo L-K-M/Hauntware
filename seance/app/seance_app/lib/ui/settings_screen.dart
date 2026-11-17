@@ -7,10 +7,7 @@ import 'package:ghost_editors/ghost_editors.dart'
     show EditorRegistryModel, GhostEditorsSettingsSection, GhostEditorsStrings;
 import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart'
-    show
-        EditorLigatures,
-        EditorTextSize,
-        editorDefaultFont;
+    show EditorLigatures, EditorTextSize, editorDefaultFont;
 import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
@@ -240,7 +237,10 @@ class _SettingsScreenState extends State<SettingsScreen>
         const Tab(icon: Icon(Icons.tune_outlined), text: 'General'),
         const Tab(icon: Icon(Icons.palette_outlined), text: 'Appearance'),
         Tab(
-          icon: Icon(Icons.auto_awesome, color: palette.glyph(FamilyHue.purple)),
+          icon: Icon(
+            Icons.auto_awesome,
+            color: palette.glyph(FamilyHue.purple),
+          ),
           text: 'Assistant',
         ),
         Tab(
@@ -252,7 +252,10 @@ class _SettingsScreenState extends State<SettingsScreen>
           text: 'Sync',
         ),
         Tab(
-          icon: Icon(Icons.move_to_inbox, color: palette.glyph(FamilyHue.yellow)),
+          icon: Icon(
+            Icons.move_to_inbox,
+            color: palette.glyph(FamilyHue.yellow),
+          ),
           text: 'Inbox',
         ),
       ],
@@ -1167,10 +1170,8 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// Persist the local-shell opt-in; off closes every open local tab, so a
   /// hidden row cannot strand live shells.
-  Future<void> _persistLocalShell() => _persist(
-    'Local shell',
-    () => _backend.setLocalShellEnabled(_localShell),
-  );
+  Future<void> _persistLocalShell() =>
+      _persist('Local shell', () => _backend.setLocalShellEnabled(_localShell));
 
   /// Persist the background keep-alive toggle and apply it to live sessions.
   /// A failed save reverts the switch — unless the user toggled again while

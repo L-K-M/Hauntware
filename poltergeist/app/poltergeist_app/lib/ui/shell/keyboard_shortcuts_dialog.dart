@@ -45,9 +45,10 @@ class _KeyboardShortcutsDialog extends StatelessWidget {
           ?formatShortcutActivator(activator, platform),
       ];
       if (chords.isEmpty) continue;
-      grouped
-          .putIfAbsent(command.menuPlacement?.menu, () => [])
-          .add((command.label(l10n), chords.join('  ·  ')));
+      grouped.putIfAbsent(command.menuPlacement?.menu, () => []).add((
+        command.label(l10n),
+        chords.join('  ·  '),
+      ));
     }
     // Menus first, then each view's own keys, then the commands no menu
     // holds.

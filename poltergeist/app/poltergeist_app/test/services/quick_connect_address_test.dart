@@ -27,10 +27,7 @@ void main() {
 
       expect(parsed.ok, isTrue);
       expect(parsed.target?.port, 2222);
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.portAssumed),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.portAssumed));
     });
 
     test('a remote start path parses on the default port', () {
@@ -39,10 +36,7 @@ void main() {
       expect(parsed.ok, isTrue);
       expect(parsed.target?.port, 22);
       expect(parsed.target?.remotePath, '/srv/www');
-      expect(
-        parsed.issues,
-        isNot(contains(QuickConnectIssue.portAssumed)),
-      );
+      expect(parsed.issues, isNot(contains(QuickConnectIssue.portAssumed)));
     });
 
     test('a dashed token is a path, never a port', () {
@@ -59,10 +53,7 @@ void main() {
       expect(parsed.ok, isTrue);
       expect(parsed.target?.port, 22);
       expect(parsed.target?.remotePath, '99999');
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.pathAssumed),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.pathAssumed));
     });
 
     test('port zero parses as a path with a hint', () {
@@ -71,10 +62,7 @@ void main() {
       expect(parsed.ok, isTrue);
       expect(parsed.target?.port, 22);
       expect(parsed.target?.remotePath, '0');
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.pathAssumed),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.pathAssumed));
     });
 
     test('a bare host without a user is accepted for prompt-time auth', () {
@@ -107,20 +95,14 @@ void main() {
       expect(parsed.ok, isTrue);
       expect(parsed.target?.port, 22);
       expect(parsed.target?.remotePath, '/2222');
-      expect(
-        parsed.issues,
-        isNot(contains(QuickConnectIssue.portAssumed)),
-      );
+      expect(parsed.issues, isNot(contains(QuickConnectIssue.portAssumed)));
     });
 
     test('an out-of-range URL port is rejected, never a silent path', () {
       final parsed = parseQuickConnectAddress('sftp://example.com:99999/');
 
       expect(parsed.ok, isFalse);
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.invalidPort),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.invalidPort));
     });
   });
 
@@ -129,10 +111,7 @@ void main() {
       final parsed = parseQuickConnectAddress('deploy@2001:db8::1');
 
       expect(parsed.ok, isFalse);
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.ipv6NeedsBrackets),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.ipv6NeedsBrackets));
     });
 
     test('a bracketed address parses the port after the bracket', () {
@@ -144,10 +123,7 @@ void main() {
       expect(parsed.target?.host, '2001:db8::1');
       expect(parsed.target?.port, 2222);
       expect(parsed.target?.remotePath, '/srv/www');
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.portAssumed),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.portAssumed));
     });
 
     test('a bracketed address without a port takes the default', () {
@@ -167,11 +143,8 @@ void main() {
       expect(parsed.target?.remotePath, isNull);
     });
 
-    test('a bracketed host with default port and a path keeps the path',
-        () {
-      final parsed = parseQuickConnectAddress(
-        'deploy@[2001:db8::1]:/srv/www',
-      );
+    test('a bracketed host with default port and a path keeps the path', () {
+      final parsed = parseQuickConnectAddress('deploy@[2001:db8::1]:/srv/www');
 
       expect(parsed.ok, isTrue);
       expect(parsed.target?.port, 22);
@@ -182,10 +155,7 @@ void main() {
       final parsed = parseQuickConnectAddress('deploy@[2001:db8::1');
 
       expect(parsed.ok, isFalse);
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.ipv6NeedsBrackets),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.ipv6NeedsBrackets));
     });
   });
 
@@ -199,14 +169,8 @@ void main() {
       expect(parsed.target?.username, 'deploy');
       expect(parsed.target?.host, 'example.com');
       expect(parsed.target?.port, 2222);
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.passwordStripped),
-      );
-      expect(
-        parsed.sanitizedInput,
-        'sftp://deploy@example.com:2222/srv/www',
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.passwordStripped));
+      expect(parsed.sanitizedInput, 'sftp://deploy@example.com:2222/srv/www');
     });
 
     test('a raw @ inside a pasted password cannot leak into the host', () {
@@ -217,10 +181,7 @@ void main() {
       expect(parsed.ok, isTrue);
       expect(parsed.target?.username, 'deploy');
       expect(parsed.target?.host, 'example.com');
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.passwordStripped),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.passwordStripped));
     });
 
     test('a bare-form password is stripped with an inline notice', () {
@@ -229,10 +190,7 @@ void main() {
       expect(parsed.ok, isTrue);
       expect(parsed.target?.username, 'deploy');
       expect(parsed.target?.host, 'example.com');
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.passwordStripped),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.passwordStripped));
       expect(parsed.sanitizedInput, 'deploy@example.com');
     });
   });
@@ -256,10 +214,7 @@ void main() {
       final parsed = parseQuickConnectAddress('https://example.com/');
 
       expect(parsed.ok, isFalse);
-      expect(
-        parsed.issues,
-        contains(QuickConnectIssue.unsupportedScheme),
-      );
+      expect(parsed.issues, contains(QuickConnectIssue.unsupportedScheme));
     });
   });
 }

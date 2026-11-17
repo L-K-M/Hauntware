@@ -166,31 +166,30 @@ GhostCredentialRequest ghostPassphraseRequestOf({
 GhostCredentialStrings poltergeistCredentialStrings(
   AppLocalizations l10n, {
   bool vaultKeyMissing = false,
-}) =>
-    GhostCredentialStrings(
-      passwordTitle: (_) => l10n.credentialTitle,
-      privateKeyTitle: (_) => l10n.credentialTitle,
-      explanation: null,
-      endpoint: (username, host, port) => username == null
-          ? l10n.hostKeyEndpoint(host, port)
-          : l10n.credentialEndpoint(username, host, port),
-      vaultUnavailable: vaultKeyMissing
-          ? l10n.credentialVaultKeyMissing
-          : l10n.credentialVaultUnavailable,
-      passwordField: l10n.credentialPasswordField,
-      keyFileField: l10n.credentialKeyFileField,
-      keyFileRequired: l10n.credentialKeyFileRequired,
-      keyFileError: (error) => l10n.credentialKeyFileReadError(
-        error is IdentityFileReadException &&
-                error.kind == IdentityFileReadFailureKind.fileSystem
-            ? error.message
-            : l10n.credentialKeyFileUnreadable,
-      ),
-      passphraseField: l10n.credentialPassphraseField,
-      saveInVault: l10n.credentialSaveInVault,
-      cancel: l10n.credentialCancel,
-      connect: l10n.credentialConnect,
-    );
+}) => GhostCredentialStrings(
+  passwordTitle: (_) => l10n.credentialTitle,
+  privateKeyTitle: (_) => l10n.credentialTitle,
+  explanation: null,
+  endpoint: (username, host, port) => username == null
+      ? l10n.hostKeyEndpoint(host, port)
+      : l10n.credentialEndpoint(username, host, port),
+  vaultUnavailable: vaultKeyMissing
+      ? l10n.credentialVaultKeyMissing
+      : l10n.credentialVaultUnavailable,
+  passwordField: l10n.credentialPasswordField,
+  keyFileField: l10n.credentialKeyFileField,
+  keyFileRequired: l10n.credentialKeyFileRequired,
+  keyFileError: (error) => l10n.credentialKeyFileReadError(
+    error is IdentityFileReadException &&
+            error.kind == IdentityFileReadFailureKind.fileSystem
+        ? error.message
+        : l10n.credentialKeyFileUnreadable,
+  ),
+  passphraseField: l10n.credentialPassphraseField,
+  saveInVault: l10n.credentialSaveInVault,
+  cancel: l10n.credentialCancel,
+  connect: l10n.credentialConnect,
+);
 
 /// The passphrase-only prompt's words in ARB. [retry] explains that the
 /// previous passphrase did not open the key.

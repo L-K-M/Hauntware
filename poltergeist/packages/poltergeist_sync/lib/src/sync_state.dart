@@ -60,40 +60,32 @@ final class SyncPairState {
     'caseSensitiveOverrideLeft': caseSensitiveOverrideLeft,
     'caseSensitiveOverrideRight': caseSensitiveOverrideRight,
     'caseProbe': {
-      for (final entry in caseProbe.entries)
-        entry.key: entry.value.toJson(),
+      for (final entry in caseProbe.entries) entry.key: entry.value.toJson(),
     },
     'trashCacheLeft': trashCacheLeft?.toJson(),
     'trashCacheRight': trashCacheRight?.toJson(),
     'touchedAt': touchedAt?.toUtc().toIso8601String(),
   };
 
-  factory SyncPairState.fromJson(Map<String, Object?> json) =>
-      SyncPairState(
-        lastRunAt: _date(json['lastRunAt']),
-        mtimeUnreliableLeft: json['mtimeUnreliableLeft'] == true,
-        mtimeUnreliableRight: json['mtimeUnreliableRight'] == true,
-        caseSensitiveOverrideLeft:
-            json['caseSensitiveOverrideLeft'] as bool?,
-        caseSensitiveOverrideRight:
-            json['caseSensitiveOverrideRight'] as bool?,
-        caseProbe: {
-          for (final entry
-              in ((json['caseProbe'] as Map?)?.cast<String, Object?>() ??
-                      const <String, Object?>{})
-                  .entries)
-            entry.key: CaseProbeRecord.fromJson(
-              (entry.value as Map).cast<String, Object?>(),
-            ),
-        },
-        trashCacheLeft: TrashCacheEntry.maybeFromJson(
-          json['trashCacheLeft'],
+  factory SyncPairState.fromJson(Map<String, Object?> json) => SyncPairState(
+    lastRunAt: _date(json['lastRunAt']),
+    mtimeUnreliableLeft: json['mtimeUnreliableLeft'] == true,
+    mtimeUnreliableRight: json['mtimeUnreliableRight'] == true,
+    caseSensitiveOverrideLeft: json['caseSensitiveOverrideLeft'] as bool?,
+    caseSensitiveOverrideRight: json['caseSensitiveOverrideRight'] as bool?,
+    caseProbe: {
+      for (final entry
+          in ((json['caseProbe'] as Map?)?.cast<String, Object?>() ??
+                  const <String, Object?>{})
+              .entries)
+        entry.key: CaseProbeRecord.fromJson(
+          (entry.value as Map).cast<String, Object?>(),
         ),
-        trashCacheRight: TrashCacheEntry.maybeFromJson(
-          json['trashCacheRight'],
-        ),
-        touchedAt: _date(json['touchedAt']),
-      );
+    },
+    trashCacheLeft: TrashCacheEntry.maybeFromJson(json['trashCacheLeft']),
+    trashCacheRight: TrashCacheEntry.maybeFromJson(json['trashCacheRight']),
+    touchedAt: _date(json['touchedAt']),
+  );
 
   static DateTime? _date(Object? value) =>
       value is String ? DateTime.tryParse(value)?.toLocal() : null;
@@ -135,11 +127,9 @@ final class CaseProbeRecord {
         caseSensitive: json['caseSensitive'] == true,
         volumeIdentity: (json['volumeIdentity'] as String?) ?? '',
         probedAt:
-            DateTime.tryParse((json['probedAt'] as String?) ?? '')
-                ?.toLocal() ??
+            DateTime.tryParse((json['probedAt'] as String?) ?? '')?.toLocal() ??
             DateTime.fromMillisecondsSinceEpoch(0),
-        normalizationInsensitive:
-            json['normalizationInsensitive'] == true,
+        normalizationInsensitive: json['normalizationInsensitive'] == true,
       );
 }
 
@@ -178,8 +168,9 @@ final class TrashCacheEntry {
   factory TrashCacheEntry.fromJson(Map<String, Object?> json) =>
       TrashCacheEntry(
         lastListedAt:
-            DateTime.tryParse((json['lastListedAt'] as String?) ?? '')
-                ?.toLocal() ??
+            DateTime.tryParse(
+              (json['lastListedAt'] as String?) ?? '',
+            )?.toLocal() ??
             DateTime.fromMillisecondsSinceEpoch(0),
         trashScope: switch (json['trashScope']) {
           final String value when value.isNotEmpty => value,
@@ -191,9 +182,7 @@ final class TrashCacheEntry {
         },
         runs: [
           for (final run in (json['runs'] as List?) ?? const [])
-            TrashCacheRun.fromJson(
-              (run as Map).cast<String, Object?>(),
-            ),
+            TrashCacheRun.fromJson((run as Map).cast<String, Object?>()),
         ],
       );
 
@@ -227,15 +216,13 @@ final class TrashCacheRun {
     'fileCount': fileCount,
   };
 
-  factory TrashCacheRun.fromJson(Map<String, Object?> json) =>
-      TrashCacheRun(
-        runId: json['runId']! as String,
-        ageBasis:
-            DateTime.tryParse((json['ageBasis'] as String?) ?? '')
-                ?.toLocal() ??
-            DateTime.fromMillisecondsSinceEpoch(0),
-        fileCount: json['fileCount'] as int?,
-      );
+  factory TrashCacheRun.fromJson(Map<String, Object?> json) => TrashCacheRun(
+    runId: json['runId']! as String,
+    ageBasis:
+        DateTime.tryParse((json['ageBasis'] as String?) ?? '')?.toLocal() ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    fileCount: json['fileCount'] as int?,
+  );
 }
 
 /// Validates [pairId] as a state-file key — the app-side store calls

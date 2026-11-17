@@ -117,5 +117,4 @@ final class WindowManagerDockSurface implements DockProgressSurface {
   @override
   Future<void> setProgress(double? fraction) =>
       windowManager.setProgressBar(fraction ?? -1);
-
 }

@@ -91,9 +91,7 @@ final class TreeScanner {
   TreeScanner(
     this._fileSystem, {
     int readdirConcurrency = defaultReaddirConcurrency,
-  }) : readdirConcurrency = readdirConcurrency < 1
-           ? 1
-           : readdirConcurrency;
+  }) : readdirConcurrency = readdirConcurrency < 1 ? 1 : readdirConcurrency;
 
   /// M0-tuned pipeline depth (05 §2 D9): 8 outstanding READDIRs measured
   /// 3,639 LAN entries/s versus 482 serially.
@@ -150,13 +148,16 @@ final class TreeScanner {
     );
 
     final warnings = <ScanWarning>[];
-    final (caseSensitive, caseBasis, probeWarning) =
-        await _resolveCaseSensitivity(
-          root,
-          side: side,
-          override: caseSensitivityOverride,
-          probe: probeCaseSensitivity,
-        );
+    final (
+      caseSensitive,
+      caseBasis,
+      probeWarning,
+    ) = await _resolveCaseSensitivity(
+      root,
+      side: side,
+      override: caseSensitivityOverride,
+      probe: probeCaseSensitivity,
+    );
     if (probeWarning != null) warnings.add(probeWarning);
 
     final entries = <String, EntrySnapshot>{};
@@ -168,7 +169,10 @@ final class TreeScanner {
     // READDIRs keep the pipe full while entries are absorbed.
     final pending = Queue<({String absolute, String relative})>()
       ..add((absolute: root, relative: ''));
-    final results = Queue<({String relative, Object? error, List<RemoteFileEntry>? entries})>();
+    final results =
+        Queue<
+          ({String relative, Object? error, List<RemoteFileEntry>? entries})
+        >();
     var inFlight = 0;
     Completer<void>? signal;
 
@@ -300,8 +304,7 @@ final class TreeScanner {
     }
 
     final sorted = Map.fromEntries(
-      entries.entries.toList()
-        ..sort((a, b) => a.key.compareTo(b.key)),
+      entries.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
     );
     return ScanResult(
       rootPath: root,
@@ -336,8 +339,12 @@ final class TreeScanner {
     final caseInsensitive =
         _windowsVolumeShape.hasMatch(root) ||
         _windowsVolumeShape.hasMatch(resolved);
-    final rootCmp = caseInsensitive ? normalizedRoot.toLowerCase() : normalizedRoot;
-    final trashCmp = caseInsensitive ? normalizedTrash.toLowerCase() : normalizedTrash;
+    final rootCmp = caseInsensitive
+        ? normalizedRoot.toLowerCase()
+        : normalizedRoot;
+    final trashCmp = caseInsensitive
+        ? normalizedTrash.toLowerCase()
+        : normalizedTrash;
     if (trashCmp == rootCmp) {
       // A trash root equal to the sync root would exclude every entry —
       // an empty scan that Mirror reads as "delete the other side".
@@ -380,10 +387,7 @@ final class TreeScanner {
     while (true) {
       try {
         final canonicalAncestor = await _fileSystem.canonicalize(ancestor);
-        return context.joinAll([
-          canonicalAncestor,
-          ...missingNames.reversed,
-        ]);
+        return context.joinAll([canonicalAncestor, ...missingNames.reversed]);
       } on RemoteFileException catch (error) {
         if (error.kind != RemoteFileErrorKind.notFound) rethrow;
       }

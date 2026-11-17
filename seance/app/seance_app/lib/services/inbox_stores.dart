@@ -110,7 +110,8 @@ class FileInboxAppStore with SerializedOperations implements InboxAppStore {
 }
 
 /// JSON-file [InboxStatusStore].
-class FileInboxStatusStore with SerializedOperations
+class FileInboxStatusStore
+    with SerializedOperations
     implements InboxStatusStore, SyncCollectionHealth {
   final File file;
   final Map<String, InboxStatus> _cache = {};
@@ -169,33 +170,31 @@ class FileInboxStatusStore with SerializedOperations
 
   @override
   Future<void> markSyncCollectionRecovered() => _serialize(() async {
-        await _flush(_cache);
-        await clearSyncCollectionRecovery(file);
-        _syncCollectionFailed = false;
-      });
+    await _flush(_cache);
+    await clearSyncCollectionRecovery(file);
+    _syncCollectionFailed = false;
+  });
 
   @override
   Future<List<InboxStatus>> listStatuses() =>
       _serialize(() async => _cache.values.toList());
 
   @override
-  Future<InboxStatus?> getStatus(String appId, String proposalId) =>
-      _serialize(
-        () async => _cache[InboxStatus.recordIdFor(appId, proposalId)],
-      );
+  Future<InboxStatus?> getStatus(String appId, String proposalId) => _serialize(
+    () async => _cache[InboxStatus.recordIdFor(appId, proposalId)],
+  );
 
   @override
   Future<void> putStatus(InboxStatus status) => _mutate((candidate) {
-        candidate[status.recordId] = status;
-        return true;
-      });
+    candidate[status.recordId] = status;
+    return true;
+  });
 
   @override
   Future<void> deleteStatus(String appId, String proposalId) => _mutate(
-        (candidate) =>
-            candidate.remove(InboxStatus.recordIdFor(appId, proposalId)) !=
-            null,
-      );
+    (candidate) =>
+        candidate.remove(InboxStatus.recordIdFor(appId, proposalId)) != null,
+  );
 }
 
 /// JSON-file [InboxCacheStore], owner-only: the scripts are commands for the

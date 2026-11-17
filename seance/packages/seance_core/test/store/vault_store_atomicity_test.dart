@@ -27,30 +27,32 @@ void main() {
 
   tearDown(() => directory.delete(recursive: true));
 
-  test('a re-key that cannot be written leaves every credential readable',
-      () async {
-    final oldKey = secureRandomBytes(32);
-    final newKey = secureRandomBytes(32);
-    final secrets = [secret('a'), secret('b'), secret('c')];
-    final store = FileVaultStore(file);
-    await SecretVault(store, oldKey).putSecrets(secrets);
+  test(
+    'a re-key that cannot be written leaves every credential readable',
+    () async {
+      final oldKey = secureRandomBytes(32);
+      final newKey = secureRandomBytes(32);
+      final secrets = [secret('a'), secret('b'), secret('c')];
+      final store = FileVaultStore(file);
+      await SecretVault(store, oldKey).putSecrets(secrets);
 
-    await blockWrites(file);
-    await expectLater(
-      SecretVault(store, newKey).putSecrets(secrets),
-      throwsA(isA<FileSystemException>()),
-    );
-    await allowWrites(file);
+      await blockWrites(file);
+      await expectLater(
+        SecretVault(store, newKey).putSecrets(secrets),
+        throwsA(isA<FileSystemException>()),
+      );
+      await allowWrites(file);
 
-    // The old key is the one still installed in the keystore, so it is the one
-    // the vault has to stay readable with. A per-credential loop would have
-    // left the entries written before the failure sealed under a key nothing
-    // holds yet, and a restart could not open them again.
-    final reopened = SecretVault(FileVaultStore(file), oldKey);
-    for (final expected in secrets) {
-      expect((await reopened.getSecret(expected.id))!.value, expected.value);
-    }
-  });
+      // The old key is the one still installed in the keystore, so it is the one
+      // the vault has to stay readable with. A per-credential loop would have
+      // left the entries written before the failure sealed under a key nothing
+      // holds yet, and a restart could not open them again.
+      final reopened = SecretVault(FileVaultStore(file), oldKey);
+      for (final expected in secrets) {
+        expect((await reopened.getSecret(expected.id))!.value, expected.value);
+      }
+    },
+  );
 
   test('a failed write is not committed by the next successful one', () async {
     final key = secureRandomBytes(32);

@@ -303,8 +303,7 @@ List<AppCommand> buildAppCommands({
           windowPaneChord(WindowPane.sidebar, platform),
         ],
         leftAltOnly: platform != TargetPlatform.macOS,
-        run: (context) =>
-            toggleWindowPane(context, panes, WindowPane.sidebar),
+        run: (context) => toggleWindowPane(context, panes, WindowPane.sidebar),
         menuPlacement: const CommandMenuPlacement(
           menu: AppMenuId.view,
           order: 20,

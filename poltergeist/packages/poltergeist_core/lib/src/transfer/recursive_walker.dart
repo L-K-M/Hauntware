@@ -86,8 +86,7 @@ class RecursiveWalker {
   /// and `disconnected` retry seam.
   final RemoteFileSystem? source;
   final Future<RemoteFileEntry> Function(String path)? _stat;
-  final Future<List<RemoteFileEntry>> Function(String path)?
-  _listDirectory;
+  final Future<List<RemoteFileEntry>> Function(String path)? _listDirectory;
 
   /// The destination endpoint — transfer walks validate each leaf name
   /// against its rules ([validateLocalName] for local targets,
@@ -101,7 +100,7 @@ class RecursiveWalker {
   /// Decides whether a duplicate destination identity is refused or can
   /// proceed to keep-both numbering. Null refuses duplicates.
   final DestinationCollisionDisposition Function(RemoteFileEntry entry)?
-      destinationCollisionDisposition;
+  destinationCollisionDisposition;
 
   /// The §13 flag detector — consulted once per enumerated entry, with
   /// the result shared by the containment guard and classification.
@@ -256,8 +255,10 @@ class RecursiveWalker {
         continue;
       }
       final node = WalkNode._(entry: entry, parent: null, depth: 0);
-      final classified =
-          _classify(entry, flagged: isFlaggedEntry?.call(entry) ?? false);
+      final classified = _classify(
+        entry,
+        flagged: isFlaggedEntry?.call(entry) ?? false,
+      );
       if (classified.kind != WalkItemKind.directory) {
         yield WalkEntryEvent(
           node: node,
@@ -280,10 +281,7 @@ class RecursiveWalker {
             // and its subtree stays undiscovered. It still emits as a
             // post-order delete target: the consumer can attempt the
             // delete and fail honestly rather than never see the node.
-            yield WalkListingFailedEvent(
-              directory: frame.node,
-              error: error,
-            );
+            yield WalkListingFailedEvent(directory: frame.node, error: error);
             stack.removeLast();
             yield WalkEntryEvent(
               node: frame.node,
@@ -299,10 +297,7 @@ class RecursiveWalker {
           stack.removeLast();
           // Post-order: the container's own delete entry lands after
           // every descendant it still holds.
-          yield WalkEntryEvent(
-            node: frame.node,
-            kind: WalkItemKind.directory,
-          );
+          yield WalkEntryEvent(node: frame.node, kind: WalkItemKind.directory);
           continue;
         }
         final child = frame.children![frame.index++];
@@ -462,8 +457,8 @@ class RecursiveWalker {
 
   String _joinSource(String directory, String name) =>
       location is ServerFsLocation
-          ? remoteJoin(directory, name)
-          : p.join(directory, name);
+      ? remoteJoin(directory, name)
+      : p.join(directory, name);
 
   // ---------------------------------------------------------------------
   // VFS access — injected seams ride the consumer's lease/retry path;
@@ -471,14 +466,12 @@ class RecursiveWalker {
   // ---------------------------------------------------------------------
 
   Future<RemoteFileEntry> _statEntry(String path) =>
-      _stat != null
-          ? _stat(path)
-          : source!.stat(path, followLinks: false);
+      _stat != null ? _stat(path) : source!.stat(path, followLinks: false);
 
   Future<List<RemoteFileEntry>> _listEntries(String path) =>
       _listDirectory != null
-          ? _listDirectory(path)
-          : source!.listDirectory(path);
+      ? _listDirectory(path)
+      : source!.listDirectory(path);
 
   void _throwIfCancelled() {
     if (cancellation?.isCancelled ?? false) {
@@ -588,11 +581,7 @@ sealed class WalkEvent {
 /// `destinationCollision`,
 /// `unsupported`).
 final class WalkEntryEvent extends WalkEvent {
-  const WalkEntryEvent({
-    required this.node,
-    required this.kind,
-    this.detail,
-  });
+  const WalkEntryEvent({required this.node, required this.kind, this.detail});
 
   final WalkNode node;
   final WalkItemKind kind;

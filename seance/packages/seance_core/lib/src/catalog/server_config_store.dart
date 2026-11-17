@@ -63,8 +63,7 @@ abstract interface class SyncTrackingServerStore {
 
   /// Materialize a pulled winner verbatim — the record carries its own
   /// stamps — under the envelope tuple that beat the previous state.
-  Future<void> applySyncedRecord(
-      ServerConfig server, ServerSyncTuple winner);
+  Future<void> applySyncedRecord(ServerConfig server, ServerSyncTuple winner);
 
   /// Materialize a pulled tombstone: the row drops and the winning
   /// tombstone tuple persists so a stale live record cannot resurrect it.
@@ -112,8 +111,7 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
   }) : // Keep the filesystem path immutable and private.
        // ignore: prefer_initializing_formals
        _file = File(path),
-       _atomicWriter =
-           atomicWriter ?? const AtomicFileWriter().write,
+       _atomicWriter = atomicWriter ?? const AtomicFileWriter().write,
        _now = now ?? DateTime.now,
        // Keep the callbacks private while allowing test-only injection.
        // ignore: prefer_initializing_formals
@@ -170,8 +168,9 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
     // whose clock trails a pulled `updatedAt` would otherwise stamp its
     // own edit to *lose* against the copy it is editing.
     final stamp = max(
-        _now().toUtc().millisecondsSinceEpoch,
-        (_servers[server.id]?.updatedAt ?? 0) + 1);
+      _now().toUtc().millisecondsSinceEpoch,
+      (_servers[server.id]?.updatedAt ?? 0) + 1,
+    );
     final stored = server.copyWith(updatedAt: stamp);
     await _writeNext(
       (next) => next[stored.id] = stored,
@@ -193,9 +192,12 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
     // 1), the rule save() uses: a bare "now" on a clock trailing the
     // row's pulled stamp would lose LWW to the very copy it deletes and
     // resurrect the server. A peer's genuinely newer edit still wins.
-    final tombstone = _localTombstone(deletionStamp(
+    final tombstone = _localTombstone(
+      deletionStamp(
         now: _now(),
-        prior: [_servers[id]?.updatedAt, _syncTuples[id]?.updatedAt]));
+        prior: [_servers[id]?.updatedAt, _syncTuples[id]?.updatedAt],
+      ),
+    );
     await _writeNext(
       (next) {
         removed = next.remove(id) != null;
@@ -209,7 +211,9 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
 
   @override
   Future<void> applySyncedRecord(
-      ServerConfig server, ServerSyncTuple winner) async {
+    ServerConfig server,
+    ServerSyncTuple winner,
+  ) async {
     await _ensureLoaded();
     await _writeNext(
       (next) => next[server.id] = server,
@@ -218,8 +222,7 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
   }
 
   @override
-  Future<void> removeSyncedRecord(
-      String id, ServerSyncTuple tombstone) async {
+  Future<void> removeSyncedRecord(String id, ServerSyncTuple tombstone) async {
     await _ensureLoaded();
     await _writeTail;
     // Idempotency: a re-pulled tombstone that already matches the
@@ -342,10 +345,7 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
 
     if (decoded is! Map) {
       await _quarantine();
-      _report(
-        const FormatException('server store root'),
-        StackTrace.current,
-      );
+      _report(const FormatException('server store root'), StackTrace.current);
       return;
     }
 
@@ -358,10 +358,7 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
 
     if (decoded[_serversKey] is! List) {
       await _quarantine();
-      _report(
-        const FormatException('server store root'),
-        StackTrace.current,
-      );
+      _report(const FormatException('server store root'), StackTrace.current);
       return;
     }
 
@@ -427,8 +424,7 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
         // keeps writing the exact clean document shape.
         if (tuples.isNotEmpty)
           _syncTuplesKey: {
-            for (final entry in tuples.entries)
-              entry.key: entry.value.toJson(),
+            for (final entry in tuples.entries) entry.key: entry.value.toJson(),
           },
       }),
     );

@@ -676,7 +676,8 @@ final class RemotePinConflicts extends ChangeNotifier
     String localFingerprintSha256,
     String pulledFingerprintSha256,
     bool keepLocal,
-  ) _call;
+  )
+  _call;
 
   List<SyncPinConflict> _value = const [];
   bool _resolving = false;
@@ -966,7 +967,8 @@ final class RemoteRecovery extends ChangeNotifier implements RecoverySettings {
   bool? get configured => _configured;
 
   @override
-  Future<void> refresh() => _call(SettingsLinkMethod.refreshRecoveryStatus, null);
+  Future<void> refresh() =>
+      _call(SettingsLinkMethod.refreshRecoveryStatus, null);
 
   @override
   Future<String> newCode() async =>

@@ -37,7 +37,8 @@ Future<ByteData> _fontBytes(String path) async =>
 Future<void> _loadRealFonts() async {
   final home =
       Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home != null ? '$home/.local/share/fonts' : '');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -56,8 +57,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return; // boxes are still a usable capture
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
   if (mono.existsSync()) {
@@ -83,8 +83,9 @@ RemoteFileEntry _entry(
 }
 
 void main() {
-  testWidgets('captures the path field editing and error states',
-      (tester) async {
+  testWidgets('captures the path field editing and error states', (
+    tester,
+  ) async {
     // Real faces matter only when artifacts are written; an ordinary
     // suite run skips the file IO entirely.
     if (Platform.environment['POLTERGEIST_CAPTURE'] == '1') {
@@ -99,9 +100,7 @@ void main() {
       _entry('photo-01.png', size: 40240),
       _entry('report.txt', size: 2048),
     ];
-    channel.listings['/home/tester/docs'] = [
-      _entry('inner.txt', size: 12),
-    ];
+    channel.listings['/home/tester/docs'] = [_entry('inner.txt', size: 12)];
     lanes.nextLocalChannel = channel;
 
     final left = PaneController(paneTabId: 'pane.left', lanes: lanes);
@@ -124,8 +123,7 @@ void main() {
     final base = buildPoltergeistTheme(Brightness.dark);
     final theme = base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-      primaryTextTheme:
-          base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -180,9 +178,7 @@ void main() {
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
-          final data = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final data = await image.toByteData(format: ui.ImageByteFormat.png);
           return data!.buffer.asUint8List();
         } finally {
           image.dispose();
@@ -212,10 +208,7 @@ void main() {
     await tester.pump();
     expect(left.pathFieldOpen, isFalse);
     expect(left.error, isA<PaneFaultException>());
-    expect(
-      (left.error as PaneFaultException).fault,
-      PaneFault.invalidPath,
-    );
+    expect((left.error as PaneFaultException).fault, PaneFault.invalidPath);
     await capture('pathbar-invalid');
 
     // go.toFolder on a healthy pane: the same field, seeded empty.
@@ -227,10 +220,7 @@ void main() {
     left.goToFolder();
     await tester.pump();
     await tester.pump();
-    expect(
-      tester.widget<TextField>(field).controller!.text,
-      isEmpty,
-    );
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
     await capture('pathbar-tofolder');
   });
 }
