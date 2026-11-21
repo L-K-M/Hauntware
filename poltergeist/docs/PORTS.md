@@ -2753,7 +2753,7 @@ the commit-level detail, without adding names to docs.
 - Source: `seance_protocol` at `seance/packages/seance_protocol` (path dependency)
 - Component: `seance/` at `HEAD`
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
-- Identity: 37 lines; `sha256:5122581cf8870034edd47e849b77c24c1baaaa97f136945a79684883c2ba203b`
+- Identity: 38 lines; `sha256:601038779759d0d4a8b659c239ba03091b0efce28b47793166dbe457675ca2b0`
 - Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
 - License scan: 904 lines; `sha256:948767555a4aae151f056f836d2a64aed1ebb6cf69031c3f17ada31555fb23f8`
 - Vendored paths: 156 lines; `sha256:eba91dd50f0d2540da08a8284a3390dbba09c014ad784ab8dad3ab65e44614c8`

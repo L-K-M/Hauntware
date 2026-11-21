@@ -101,6 +101,18 @@ void main() {
       expect(channel.eofFromClient, isTrue);
     });
 
+    test('empty stdin still seals a stdin-reading command with EOF', () async {
+      final link = await openTestLink();
+      addTearDown(link.link.close);
+      link.peer.onExec = SshChannelPeer.execAnswerOnStdinEof;
+
+      final result = await link.link.run('cat', stdin: const []);
+
+      expect(result.stdout, 'stdin:0');
+      expect(result.exitCode, 0);
+      expect(link.peer.channels.single.eofFromClient, isTrue);
+    });
+
     test('a stalled command aborts at the timeout', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);
