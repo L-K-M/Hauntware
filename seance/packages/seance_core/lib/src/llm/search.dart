@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 
 import 'bounded_http.dart';
+import '../sensitive_transport_policy.dart';
 
 class SearchResult {
   final String title;
@@ -53,7 +54,7 @@ class SearxngSearch implements SearchProvider, ClosableSearchProvider {
   bool _closed = false;
 
   SearxngSearch({
-    required this.baseUrl,
+    required String baseUrl,
     http.Client? client,
     Duration timeout = const Duration(seconds: 20),
     Duration? headerTimeout,
@@ -61,7 +62,8 @@ class SearxngSearch implements SearchProvider, ClosableSearchProvider {
     Duration? totalTimeout,
     this.maxResponseBytes = maxAssistantResponseBytes,
     http.Client Function()? clientFactory,
-  }) : timeout = timeout,
+  }) : baseUrl = requireSensitiveTransportBaseUrl(baseUrl),
+       timeout = timeout,
        headerTimeout = headerTimeout ?? timeout,
        idleTimeout = idleTimeout ?? timeout,
        totalTimeout = totalTimeout ?? timeout,
@@ -121,7 +123,7 @@ class BraveSearch implements SearchProvider, ClosableSearchProvider {
 
   BraveSearch({
     required this.apiKey,
-    this.baseUrl = 'https://api.search.brave.com',
+    String baseUrl = 'https://api.search.brave.com',
     http.Client? client,
     Duration timeout = const Duration(seconds: 20),
     Duration? headerTimeout,
@@ -129,7 +131,8 @@ class BraveSearch implements SearchProvider, ClosableSearchProvider {
     Duration? totalTimeout,
     this.maxResponseBytes = maxAssistantResponseBytes,
     http.Client Function()? clientFactory,
-  }) : timeout = timeout,
+  }) : baseUrl = requireSensitiveTransportBaseUrl(baseUrl),
+       timeout = timeout,
        headerTimeout = headerTimeout ?? timeout,
        idleTimeout = idleTimeout ?? timeout,
        totalTimeout = totalTimeout ?? timeout,

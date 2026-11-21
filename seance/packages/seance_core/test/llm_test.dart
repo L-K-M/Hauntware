@@ -76,6 +76,20 @@ void main() {
       model: 'claude-haiku-4-5-20251001',
     );
 
+    test('rejects remote cleartext and URL credentials', () {
+      expect(
+        () => AnthropicProvider(apiKey: 'k', baseUrl: 'http://api.example.com'),
+        throwsArgumentError,
+      );
+      expect(
+        () => AnthropicProvider(
+          apiKey: 'k',
+          baseUrl: 'https://k@api.example.com',
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('close leaves a borrowed HTTP client open', () {
       final client = _CloseTrackingClient();
       final provider = AnthropicProvider(apiKey: 'k', client: client);
@@ -218,6 +232,17 @@ void main() {
   });
 
   group('OpenAiCompatibleProvider', () {
+    test('rejects remote cleartext and URL credentials', () {
+      expect(
+        () => OpenAiCompatibleProvider(baseUrl: 'http://api.example.com/v1'),
+        throwsArgumentError,
+      );
+      expect(
+        () => OpenAiCompatibleProvider(baseUrl: 'https://k@api.example.com/v1'),
+        throwsArgumentError,
+      );
+    });
+
     test('close leaves a borrowed HTTP client open', () {
       final client = _CloseTrackingClient();
       final provider = OpenAiCompatibleProvider(
@@ -247,7 +272,7 @@ void main() {
     });
 
     test('parseResponse decodes tool_calls with JSON-string arguments', () {
-      final p = OpenAiCompatibleProvider(baseUrl: 'http://x/v1');
+      final p = OpenAiCompatibleProvider(baseUrl: 'https://x/v1');
       final turn = p.parseResponse({
         'choices': [
           {

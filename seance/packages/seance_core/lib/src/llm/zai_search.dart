@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:meta/meta.dart';
 
+import '../sensitive_transport_policy.dart';
 import 'search.dart';
 
 /// Search via Z.AI's Web Search Prime server, which speaks MCP over Streamable
@@ -70,7 +71,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
 
   ZaiSearch({
     required String apiKey,
-    this.endpoint = defaultEndpoint,
+    String endpoint = defaultEndpoint,
     http.Client? client,
     http.Client Function()? clientFactory,
     // Per request, not per search: one search is a handshake, a listing of
@@ -87,6 +88,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
        // the gateway echoed back without the stray whitespace, so an
        // untrimmed key silently disarms its own redaction.
        apiKey = apiKey.trim(),
+       endpoint = requireSensitiveTransportBaseUrl(endpoint),
        _client = _searchClient(client, clientFactory),
        _ownsClient = client == null;
 
@@ -348,6 +350,7 @@ class ZaiSearch implements SearchProvider, ClosableSearchProvider {
     _ensureOpen();
     final headers = session ?? _session;
     final request = http.Request('POST', Uri.parse(endpoint))
+      ..followRedirects = false
       ..headers.addAll({
         'content-type': 'application/json',
         // The server picks per reply, so both have to be acceptable.

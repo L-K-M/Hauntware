@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'bounded_http.dart';
+import '../sensitive_transport_policy.dart';
 import 'provider.dart';
 import 'sse.dart';
 
@@ -28,7 +29,7 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
   bool _closed = false;
 
   OpenAiCompatibleProvider({
-    required this.baseUrl,
+    required String baseUrl,
     this.apiKey = '',
     this.model = 'gpt-5.4-mini',
     Duration timeout = const Duration(seconds: 120),
@@ -41,7 +42,8 @@ class OpenAiCompatibleProvider implements LlmProvider, ClosableLlmProvider {
     this.maxSseEvents = maxAssistantSseEvents,
     http.Client? client,
     http.Client Function()? clientFactory,
-  }) : timeout = timeout,
+  }) : baseUrl = requireSensitiveTransportBaseUrl(baseUrl),
+       timeout = timeout,
        headerTimeout = headerTimeout ?? timeout,
        idleTimeout = idleTimeout ?? const Duration(seconds: 30),
        totalTimeout = totalTimeout ?? timeout,

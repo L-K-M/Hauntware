@@ -6603,7 +6603,7 @@
   "@syncPassphraseUnverified": {
     "description": "Toast after a sign-in or sync in which no record could be decrypted to prove the passphrase: it may be wrong, or the account holds nothing yet."
   },
-  "syncValidationServerAddress": "Enter the server address, starting with https:// or http://.",
+  "syncValidationServerAddress": "Use an HTTPS server address, or HTTP on localhost.",
   "@syncValidationServerAddress": {
     "description": "Sign-in error: the server address is missing or not a web address."
   },

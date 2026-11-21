@@ -487,6 +487,16 @@ void main() {
 
       await pasteKey(tester);
       expectNoLearning('Private key (PEM/OpenSSH)');
+      final keyField = field('Private key (PEM/OpenSSH)');
+      TextField keyTextField() => tester.widget<TextField>(
+        find.descendant(of: keyField, matching: find.byType(TextField)),
+      );
+      expect(keyTextField().obscureText, isTrue);
+      await tester.tap(
+        find.byKey(const ValueKey('serverEditor.keyVisibility')),
+      );
+      await tester.pumpAndSettle();
+      expect(keyTextField().obscureText, isFalse);
       expectNoLearning('Key passphrase (optional)');
     });
 
@@ -515,6 +525,41 @@ void main() {
       expect(delegate.saves.single.credential.referenceKeyFile, isFalse);
     });
 
+    testWidgets('Paste key keeps line breaks while the field is masked', (
+      tester,
+    ) async {
+      await openEditor(tester);
+      await fillRequired(tester);
+      await pasteKey(tester);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async => call.method == 'Clipboard.getData'
+            ? {'text': 'line1\nline2'}
+            : null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await scrollTo(
+        tester,
+        find.byKey(const ValueKey('serverEditor.pasteKey')),
+      );
+      await tester.tap(find.byKey(const ValueKey('serverEditor.pasteKey')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(field('Private key (PEM/OpenSSH)'))
+            .controller!
+            .text,
+        'line1\nline2',
+      );
+      await tapSave(tester);
+      expect(delegate.saves.single.credential.keyPem, 'line1\nline2');
+    });
+
     testWidgets('a key file that cannot be read says so and keeps the box', (
       tester,
     ) async {
@@ -523,6 +568,14 @@ void main() {
         ..importReply = () async => throw const FormatException('binary');
       await openEditor(tester);
       await pasteKey(tester);
+      await scrollTo(
+        tester,
+        find.byKey(const ValueKey('serverEditor.keyVisibility')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('serverEditor.keyVisibility')),
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(field('Private key (PEM/OpenSSH)'), 'TYPED KEY');
 
       await scrollTo(tester, find.text('Import from file…'));

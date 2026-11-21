@@ -150,7 +150,7 @@ class WorkspaceCatalog extends ChangeNotifier {
     if (issue != null) {
       throw FormatException(switch (issue) {
         SyncEnrollmentIssue.invalidServerUrl =>
-          'Enter an HTTP or HTTPS server URL.',
+          'Use an HTTPS server URL, or HTTP on localhost.',
         SyncEnrollmentIssue.credentialsInUrl =>
           'Remove credentials from the server URL.',
         SyncEnrollmentIssue.missingUsername => 'Enter your account username.',

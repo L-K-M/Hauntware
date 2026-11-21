@@ -6936,7 +6936,7 @@ abstract class AppLocalizations {
   /// Sign-in error: the server address is missing or not a web address.
   ///
   /// In en, this message translates to:
-  /// **'Enter the server address, starting with https:// or http://.'**
+  /// **'Use an HTTPS server address, or HTTP on localhost.'**
   String get syncValidationServerAddress;
 
   /// Sign-in error: the server address contains a user name or password.

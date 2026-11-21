@@ -42,6 +42,44 @@ void main() {
       final sync = HttpSyncClient(baseUrl: 'http://localhost:8080');
       expect(sync.baseUrl, 'http://localhost:8080');
     });
+
+    test('refuses remote cleartext and URL credentials', () {
+      expect(
+        () => HttpSyncClient(baseUrl: 'http://sync.example.com'),
+        throwsArgumentError,
+      );
+      expect(
+        () => HttpSyncClient(baseUrl: 'https://alice:secret@sync.example.com'),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.toString(),
+            'message',
+            isNot(contains('secret')),
+          ),
+        ),
+      );
+    });
+
+    test('does not follow redirects with credentials', () async {
+      bool? followsRedirects;
+      final client = MockClient((req) async {
+        followsRedirects = req.followRedirects;
+        return http.Response(
+          '',
+          302,
+          headers: {'location': 'http://elsewhere'},
+        );
+      });
+      final sync = HttpSyncClient(
+        baseUrl: 'https://sync.example.com',
+        client: client,
+      );
+      await expectLater(
+        sync.login(const LoginRequest(username: 'u', authVerifier: 'v')),
+        throwsA(isA<ApiError>()),
+      );
+      expect(followsRedirects, isFalse);
+    });
   });
 
   group('HttpSyncClient error surfaces', () {

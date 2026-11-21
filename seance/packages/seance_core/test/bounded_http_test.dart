@@ -10,6 +10,29 @@ import 'package:test/test.dart';
 
 void main() {
   group('bounded HTTP bodies', () {
+    test('credential requests never follow redirects', () async {
+      bool? followsRedirects;
+      final client = _StreamClient((request) async {
+        followsRedirects = request.followRedirects;
+        return http.StreamedResponse(Stream<List<int>>.empty(), 302);
+      });
+      final started = await sendWithResponseDeadlines(
+        client,
+        http.Request('POST', Uri.parse('https://example.invalid')),
+        headerTimeout: const Duration(seconds: 1),
+        totalTimeout: const Duration(seconds: 1),
+        operation: 'Credential request',
+      );
+      expect(followsRedirects, isFalse);
+      await expectLater(
+        requireSuccessfulResponse(
+          started.response,
+          operation: 'Credential request',
+        ),
+        throwsA(isA<http.ClientException>()),
+      );
+    });
+
     test('normal JSON survives arbitrary chunk boundaries', () async {
       final json = await readBoundedJsonObject(
         Stream.fromIterable([utf8.encode('{"answer"'), utf8.encode(':"yes"}')]),
@@ -257,6 +280,21 @@ void main() {
   });
 
   group('search response bounds and ownership', () {
+    test('search providers refuse remote cleartext', () {
+      expect(
+        () => SearxngSearch(baseUrl: 'http://search.example'),
+        throwsArgumentError,
+      );
+      expect(
+        () => BraveSearch(apiKey: 'k', baseUrl: 'http://search.example'),
+        throwsArgumentError,
+      );
+      expect(
+        () => ZaiSearch(apiKey: 'k', endpoint: 'http://search.example/mcp'),
+        throwsArgumentError,
+      );
+    });
+
     test('SearXNG reads a normally chunked bounded response', () async {
       final client = _StreamClient(
         (_) async => http.StreamedResponse(

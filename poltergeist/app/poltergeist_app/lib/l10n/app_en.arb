@@ -3186,7 +3186,7 @@
       }
     }
   },
-  "backupValidationUrl": "Enter a valid HTTP or HTTPS server URL.",
+  "backupValidationUrl": "Use an HTTPS server URL, or HTTP on localhost.",
   "@backupValidationUrl": {
     "description": "Validation error for an unparseable or non-HTTP server URL (ported validator copy)."
   },

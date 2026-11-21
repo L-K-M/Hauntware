@@ -2381,7 +2381,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get backupValidationUrl => 'Enter a valid HTTP or HTTPS server URL.';
+  String get backupValidationUrl =>
+      'Use an HTTPS server URL, or HTTP on localhost.';
 
   @override
   String get backupValidationUrlCredentials =>

@@ -994,6 +994,38 @@ void main() {
 
       await chooseAuth(tester, 'Private key');
       expectNoLearning('Private key (PEM/OpenSSH)');
+      final keyField = field('Private key (PEM/OpenSSH)');
+      TextField keyTextField() => tester.widget<TextField>(
+        find.descendant(of: keyField, matching: find.byType(TextField)),
+      );
+      expect(keyTextField().obscureText, isTrue);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async => call.method == 'Clipboard.getData'
+            ? {'text': 'line1\nline2'}
+            : null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await scrollTo(
+        tester,
+        find.byKey(const ValueKey('serverEditor.pasteKey')),
+      );
+      await tester.tap(find.byKey(const ValueKey('serverEditor.pasteKey')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextFormField>(keyField).controller!.text,
+        'line1\nline2',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('serverEditor.keyVisibility')),
+      );
+      await tester.pumpAndSettle();
+      expect(keyTextField().obscureText, isFalse);
       final passphrase = find.byKey(const ValueKey('key-passphrase-action'));
       await scrollTo(tester, passphrase);
       await tester.tap(passphrase);

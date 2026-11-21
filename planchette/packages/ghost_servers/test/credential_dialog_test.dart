@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:seance_protocol/seance_protocol.dart' show AuthMethod;
@@ -124,6 +125,8 @@ void main() {
       pickKeyText: () async => '$_pemHead\nabc',
     );
     expect(find.text('Private key for box'), findsOneWidget);
+    final keyField = find.byKey(const ValueKey('credential.key'));
+    expect(tester.widget<TextField>(keyField).obscureText, isTrue);
 
     await tester.tap(find.byKey(const ValueKey('credential.chooseFile')));
     await tester.pumpAndSettle();
@@ -134,6 +137,13 @@ void main() {
           .text,
       startsWith('-----BEGIN OPENSSH'),
     );
+    expect(tester.widget<TextField>(keyField).obscureText, isTrue);
+    await tester.tap(find.byKey(const ValueKey('credential.keyVisibility')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(keyField).obscureText, isFalse);
+    await tester.tap(find.byKey(const ValueKey('credential.keyVisibility')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(keyField).obscureText, isTrue);
     await tester.enterText(
       find.byKey(const ValueKey('credential.passphrase')),
       'pp',
@@ -150,12 +160,27 @@ void main() {
     tester,
   ) async {
     await open(tester, authMethod: AuthMethod.privateKey);
-    await tester.enterText(find.byKey(const ValueKey('credential.key')), 'PEM');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => call.method == 'Clipboard.getData'
+          ? {'text': 'line1\nsecret\nline3'}
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('credential.pasteKey')));
+    await tester.pumpAndSettle();
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('credential.save')));
     await tester.pumpAndSettle();
 
-    expect((answers.single! as GhostPrivateKeyReply).keyPassphrase, isNull);
+    final answer = answers.single! as GhostPrivateKeyReply;
+    expect(answer.keyPassphrase, isNull);
+    expect(answer.privateKeyPem, 'line1\nsecret\nline3');
   });
 
   testWidgets('a file that is not a key says so and keeps the dialog', (

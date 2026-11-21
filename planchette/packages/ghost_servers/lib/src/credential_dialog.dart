@@ -14,6 +14,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:seance_protocol/seance_protocol.dart' show AuthMethod;
 
 import 'endpoint_host.dart';
@@ -364,6 +365,20 @@ class _CredentialDialogState extends State<_CredentialDialog> {
   );
   final _passphrase = TextEditingController();
   bool _saveToVault = false;
+  bool _showPrivateKey = false;
+
+  Future<void> _pastePrivateKey() async {
+    try {
+      final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+      if (!mounted || text == null) return;
+      setState(() {
+        _secret.text = text;
+        _error = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not paste the private key.');
+    }
+  }
 
   /// Whether a [GhostKeyField.filePath] read is in flight.
   bool _readingKey = false;
@@ -602,8 +617,9 @@ class _CredentialDialogState extends State<_CredentialDialog> {
         TextField(
           key: const ValueKey('credential.key'),
           controller: _secret,
-          minLines: 4,
-          maxLines: 8,
+          readOnly: !_showPrivateKey,
+          obscureText: !_showPrivateKey,
+          maxLines: _showPrivateKey ? 8 : 1,
           autocorrect: false,
           enableSuggestions: false,
           enableIMEPersonalizedLearning: false,
@@ -611,6 +627,32 @@ class _CredentialDialogState extends State<_CredentialDialog> {
           decoration: InputDecoration(
             labelText: strings.keyPemField,
             hintText: strings.keyPemHint,
+            helperText: _showPrivateKey
+                ? null
+                : 'Paste the key, or show it to edit.',
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!_showPrivateKey)
+                  IconButton(
+                    key: const ValueKey('credential.pasteKey'),
+                    tooltip: 'Paste private key',
+                    icon: const Icon(Icons.content_paste),
+                    onPressed: _pastePrivateKey,
+                  ),
+                IconButton(
+                  key: const ValueKey('credential.keyVisibility'),
+                  tooltip: _showPrivateKey
+                      ? 'Hide private key'
+                      : 'Show private key',
+                  icon: Icon(
+                    _showPrivateKey ? Icons.visibility_off : Icons.visibility,
+                  ),
+                  onPressed: () =>
+                      setState(() => _showPrivateKey = !_showPrivateKey),
+                ),
+              ],
+            ),
           ),
           onChanged: (_) => setState(() {}),
         ),

@@ -55,7 +55,7 @@ Future<StartedHttpResponse> sendWithResponseDeadlines(
           request.url,
           abortTrigger: abortCompleter.future,
         )
-        ..followRedirects = request.followRedirects
+        ..followRedirects = false
         ..maxRedirects = request.maxRedirects
         ..persistentConnection = request.persistentConnection
         ..headers.addAll(request.headers)
@@ -104,7 +104,7 @@ Future<void> requireSuccessfulResponse(
   required String operation,
   void Function()? abort,
 }) async {
-  if (response.statusCode < 400) return;
+  if (response.statusCode < 300) return;
   abort?.call();
   await cancelHttpResponse(response);
   throw http.ClientException('$operation failed: HTTP ${response.statusCode}.');

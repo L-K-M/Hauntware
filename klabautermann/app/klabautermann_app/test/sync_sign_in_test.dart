@@ -22,7 +22,7 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     expect(
-      find.text('Enter the server address, starting with https:// or http://.'),
+      find.text('Use an HTTPS server address, or HTTP on localhost.'),
       findsOneWidget,
     );
 
@@ -106,7 +106,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(
-      find.text('Enter the server address, starting with https:// or http://.'),
+      find.text('Use an HTTPS server address, or HTTP on localhost.'),
       findsOneWidget,
     );
   });

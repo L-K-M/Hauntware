@@ -1,3 +1,5 @@
+import '../sensitive_transport_policy.dart';
+
 /// Which enrollment shape the validator checks: register carries the
 /// passphrase confirmation requirement, login does not.
 enum SyncEnrollmentMode { register, login }
@@ -26,12 +28,7 @@ SyncEnrollmentIssue? validateSyncEnrollment({
   String confirmationPassphrase = '',
 }) {
   final uri = Uri.tryParse(baseUrl.trim());
-  final scheme = uri?.scheme.toLowerCase();
-  // HTTP remains valid for localhost, development, and existing self-hosted
-  // deployments; stricter transport policy is a separate migration.
-  if (uri == null ||
-      (scheme != 'http' && scheme != 'https') ||
-      uri.host.isEmpty) {
+  if (uri == null || !isAllowedSensitiveTransport(uri)) {
     return SyncEnrollmentIssue.invalidServerUrl;
   }
   if (uri.userInfo.isNotEmpty) {

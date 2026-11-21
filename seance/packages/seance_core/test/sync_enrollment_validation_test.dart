@@ -24,8 +24,14 @@ void main() {
   test('accepts a complete registration and login', () {
     expect(validate(), isNull);
     expect(validate(mode: SyncEnrollmentMode.login, confirmation: ''), isNull);
-    // Plain HTTP stays valid for local and self-hosted servers.
+    // Plain HTTP stays valid for a local proxy or development server.
     expect(validate(baseUrl: 'http://localhost:8080'), isNull);
+    expect(validate(baseUrl: 'http://127.0.0.1:8080'), isNull);
+    expect(validate(baseUrl: 'http://[::1]:8080'), isNull);
+    expect(
+      validate(baseUrl: 'http://sync.example.com'),
+      SyncEnrollmentIssue.invalidServerUrl,
+    );
   });
 
   test('refuses a server URL that is not HTTP(S) with a host', () {

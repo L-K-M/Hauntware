@@ -4,7 +4,7 @@ import 'package:seance_core/seance_core.dart';
 /// rules report, shown in the Sync settings status line.
 String syncEnrollmentIssueMessage(SyncEnrollmentIssue issue) => switch (issue) {
   SyncEnrollmentIssue.invalidServerUrl =>
-    'Enter a valid HTTP or HTTPS server URL.',
+    'Use an HTTPS server URL, or HTTP on localhost.',
   SyncEnrollmentIssue.credentialsInUrl =>
     'Server URL must not include embedded credentials.',
   SyncEnrollmentIssue.missingUsername => 'Enter a username.',

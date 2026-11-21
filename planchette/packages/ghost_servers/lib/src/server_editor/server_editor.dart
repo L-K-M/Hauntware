@@ -140,6 +140,21 @@ class _ServerEditorState extends State<_ServerEditor> {
   late final TextEditingController _group;
   final _password = TextEditingController();
   final _keyPem = TextEditingController();
+  bool _showPrivateKey = false;
+
+  Future<void> _pastePrivateKey() async {
+    try {
+      final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+      if (!mounted || text == null) return;
+      setState(() => _keyPem.text = text);
+      _dropTestResult();
+    } catch (_) {
+      if (mounted) {
+        showTopToastIn(context, message: 'Could not paste the private key.');
+      }
+    }
+  }
+
   final _keyPath = TextEditingController();
   final _keyPassphrase = TextEditingController();
   final _loginScript = TextEditingController();
@@ -605,14 +620,44 @@ class _ServerEditorState extends State<_ServerEditor> {
           else ...[
             TextFormField(
               controller: _keyPem,
+              readOnly: !_showPrivateKey,
               autocorrect: false,
               enableSuggestions: false,
               enableIMEPersonalizedLearning: false,
-              maxLines: 5,
+              obscureText: !_showPrivateKey,
+              maxLines: _showPrivateKey ? 5 : 1,
               style: widget.monoStyle.copyWith(fontSize: 12),
               decoration: InputDecoration(
                 labelText: _strings.privateKeyPem,
                 border: const OutlineInputBorder(),
+                helperText: _showPrivateKey
+                    ? null
+                    : 'Paste the key, or show it to edit.',
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_showPrivateKey)
+                      IconButton(
+                        key: const ValueKey('serverEditor.pasteKey'),
+                        tooltip: 'Paste private key',
+                        icon: const Icon(Icons.content_paste),
+                        onPressed: _busy ? null : _pastePrivateKey,
+                      ),
+                    IconButton(
+                      key: const ValueKey('serverEditor.keyVisibility'),
+                      tooltip: _showPrivateKey
+                          ? 'Hide private key'
+                          : 'Show private key',
+                      icon: Icon(
+                        _showPrivateKey
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setState(() => _showPrivateKey = !_showPrivateKey),
+                    ),
+                  ],
+                ),
               ),
             ),
             if (widget.delegate.canImportKeyFile)

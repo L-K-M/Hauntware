@@ -3760,7 +3760,7 @@ abstract class AppLocalizations {
   /// Validation error for an unparseable or non-HTTP server URL (ported validator copy).
   ///
   /// In en, this message translates to:
-  /// **'Enter a valid HTTP or HTTPS server URL.'**
+  /// **'Use an HTTPS server URL, or HTTP on localhost.'**
   String get backupValidationUrl;
 
   /// Validation error for a userinfo-carrying server URL (ported validator copy).

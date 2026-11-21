@@ -29,14 +29,17 @@ void main() {
   }
 
   test('rejects blank and non-HTTP(S) server URLs', () {
-    expect(validate(baseUrl: '   '), 'Enter a valid HTTP or HTTPS server URL.');
+    expect(
+      validate(baseUrl: '   '),
+      'Use an HTTPS server URL, or HTTP on localhost.',
+    );
     expect(
       validate(baseUrl: 'ssh://sync.example.com'),
-      'Enter a valid HTTP or HTTPS server URL.',
+      'Use an HTTPS server URL, or HTTP on localhost.',
     );
     expect(
       validate(baseUrl: 'https:///missing-host'),
-      'Enter a valid HTTP or HTTPS server URL.',
+      'Use an HTTPS server URL, or HTTP on localhost.',
     );
   });
 
@@ -91,8 +94,11 @@ void main() {
     );
   });
 
-  test('HTTP remains accepted for development and self-hosted servers', () {
+  test('HTTP remains accepted only on loopback', () {
     expect(validate(baseUrl: 'http://localhost:8787'), isNull);
-    expect(validate(baseUrl: 'http://sync.example.com'), isNull);
+    expect(
+      validate(baseUrl: 'http://sync.example.com'),
+      'Use an HTTPS server URL, or HTTP on localhost.',
+    );
   });
 }

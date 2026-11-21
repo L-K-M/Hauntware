@@ -569,7 +569,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Enter a valid HTTP or HTTPS server URL.'),
+        find.text('Use an HTTPS server URL, or HTTP on localhost.'),
         findsOneWidget,
       );
     });

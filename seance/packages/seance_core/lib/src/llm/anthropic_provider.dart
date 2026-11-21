@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'bounded_http.dart';
+import '../sensitive_transport_policy.dart';
 import 'provider.dart';
 import 'sse.dart';
 
@@ -28,7 +29,7 @@ class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
   AnthropicProvider({
     required this.apiKey,
     this.model = 'claude-haiku-4-5-20251001',
-    this.baseUrl = 'https://api.anthropic.com',
+    String baseUrl = 'https://api.anthropic.com',
     this.maxTokens = 1024,
     Duration timeout = const Duration(seconds: 120),
     Duration? headerTimeout,
@@ -40,7 +41,8 @@ class AnthropicProvider implements LlmProvider, ClosableLlmProvider {
     this.maxSseEvents = maxAssistantSseEvents,
     http.Client? client,
     http.Client Function()? clientFactory,
-  }) : timeout = timeout,
+  }) : baseUrl = requireSensitiveTransportBaseUrl(baseUrl),
+       timeout = timeout,
        headerTimeout = headerTimeout ?? timeout,
        idleTimeout = idleTimeout ?? const Duration(seconds: 30),
        totalTimeout = totalTimeout ?? timeout,

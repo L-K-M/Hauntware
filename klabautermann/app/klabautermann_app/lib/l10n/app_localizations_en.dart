@@ -5438,7 +5438,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get syncValidationServerAddress =>
-      'Enter the server address, starting with https:// or http://.';
+      'Use an HTTPS server address, or HTTP on localhost.';
 
   @override
   String get syncValidationUrlCredentials =>

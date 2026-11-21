@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:seance_protocol/seance_protocol.dart';
 
 import '../inbox/inbox_api.dart';
+import '../sensitive_transport_policy.dart';
 import 'legacy_envelope_migration.dart';
 import 'stall_guarded_transfer.dart';
 import 'sync_engine.dart';
@@ -55,7 +56,7 @@ class HttpSyncClient
     this.deviceId,
     this.deviceName,
   }) : baseUrl = normalizeBaseUrl(baseUrl),
-       _client = client ?? http.Client(),
+       _client = _NoRedirectClient(client ?? http.Client()),
        _ownsClient = client == null;
 
   /// Release owned connections. Injected clients remain caller-owned.
@@ -72,6 +73,12 @@ class HttpSyncClient
     var normalized = url.trim();
     while (normalized.endsWith('/')) {
       normalized = normalized.substring(0, normalized.length - 1);
+    }
+    final uri = Uri.tryParse(normalized);
+    if (uri == null ||
+        !isAllowedSensitiveTransport(uri) ||
+        uri.userInfo.isNotEmpty) {
+      throw ArgumentError('Use HTTPS or local loopback HTTP for baseUrl');
     }
     return normalized;
   }
@@ -168,7 +175,7 @@ class HttpSyncClient
           body: jsonEncode(request.toJson()),
         )
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     final response = LoginResponse.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     );
@@ -185,7 +192,7 @@ class HttpSyncClient
           body: jsonEncode({'username': username}),
         )
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     return PreloginResponse.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     );
@@ -200,7 +207,7 @@ class HttpSyncClient
           body: jsonEncode(request.toJson()),
         )
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     final response = LoginResponse.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     );
@@ -212,7 +219,7 @@ class HttpSyncClient
     final res = await _client
         .delete(_uri('/v1/account'), headers: _authHeaders)
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     token = null;
   }
 
@@ -221,7 +228,7 @@ class HttpSyncClient
     final res = await _client
         .delete(_uri('/v1/session'), headers: _authHeaders)
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     token = null;
   }
 
@@ -230,7 +237,7 @@ class HttpSyncClient
     final res = await _client
         .delete(_uri('/v1/sessions'), headers: _authHeaders)
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     token = null;
   }
 
@@ -238,7 +245,7 @@ class HttpSyncClient
     final res = await _client
         .get(_uri('/v1/sessions'), headers: _authHeaders)
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     return SyncSessionsResponse.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     ).sessions;
@@ -261,7 +268,7 @@ class HttpSyncClient
         rethrow;
       }
     }
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     final result = RevokeSessionResponse.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     );
@@ -279,7 +286,7 @@ class HttpSyncClient
           body: jsonEncode({'vaultKeyCheck': vaultKeyCheck}),
         )
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     return json['vaultKeyCheck'] as String;
   }
@@ -359,7 +366,7 @@ class HttpSyncClient
         if (throughSeq != null) 'through': '$throughSeq',
       }),
     );
-    if (res.statusCode >= 400) {
+    if (res.statusCode >= 300) {
       try {
         _fail(res);
       } on ApiError catch (error) {
@@ -387,7 +394,7 @@ class HttpSyncClient
         ).toJson(),
       ),
     );
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     return PushResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
@@ -397,7 +404,7 @@ class HttpSyncClient
       'GET',
       _uri('/v1/records/legacy', {'after': ?afterId}),
     );
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     return LegacyRecordPage.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     );
@@ -418,7 +425,7 @@ class HttpSyncClient
         ).toJson(),
       ),
     );
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     return LegacyMigrationResponse.fromJson(
       jsonDecode(res.body) as Map<String, dynamic>,
     );
@@ -433,7 +440,7 @@ class HttpSyncClient
           body: jsonEncode(request.toJson()),
         )
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
   }
 
   @override
@@ -441,7 +448,7 @@ class HttpSyncClient
     final res = await _client
         .get(_uri('/v1/apps'), headers: _authHeaders)
         .timeout(timeout);
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     return [
       for (final app in json['apps'] as List)
@@ -521,7 +528,7 @@ class HttpSyncClient
         if (through != null) 'through': '$through',
       }),
     );
-    if (res.statusCode >= 400) _fail(res);
+    if (res.statusCode >= 300) _fail(res);
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     final items = <InboxItem>[];
     // One malformed entry must not hide every other proposal, so it is
@@ -573,7 +580,7 @@ class HttpSyncClient
     final res = await _client
         .delete(uri, headers: _authHeaders)
         .timeout(timeout);
-    if (res.statusCode < 400) return true;
+    if (res.statusCode < 300) return true;
     if (res.statusCode == 404) {
       try {
         _fail(res);
@@ -584,6 +591,23 @@ class HttpSyncClient
     }
     _fail(res);
   }
+}
+
+/// A redirect could move an auth verifier or bearer to a different endpoint.
+/// Require users to configure the final sync URL instead.
+final class _NoRedirectClient extends http.BaseClient {
+  _NoRedirectClient(this._inner);
+
+  final http.Client _inner;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.followRedirects = false;
+    return _inner.send(request);
+  }
+
+  @override
+  void close() => _inner.close();
 }
 
 const String _notFound = 'not_found';
