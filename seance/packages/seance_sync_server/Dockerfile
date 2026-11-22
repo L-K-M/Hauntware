@@ -9,7 +9,7 @@
 # line each digest came from.
 
 # ---- build stage ----
-FROM dart:stable@sha256:754aaf779c07a44017823fcb0e972f92d8053a9631531cc4e425053036efcb85 AS build
+FROM dart:stable@sha256:36176bf7b6400bdc4aa77ba07b733b2eabf22640f71afd1b83eba679a26d5698 AS build
 # python3 runs the notice generators below; it stays in this stage.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 \
