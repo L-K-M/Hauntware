@@ -996,7 +996,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // LOG-07's token patterns (URLs, IP addresses, HTTP status codes):
     // matched against server output, never shown.
     r"""r'''\b(?:https?|wss?|ftp)://[^\s<>"'`]+'''""",
-    r"""r'[.,;:!?)\]}]+$'""",
     r"""r'(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)'""",
     r"""'(?<![\\w.])(?:$_octet\\.){3}$_octet(?::\\d{1,5}|/\\d{1,2})?(?!\\.?\\w)'""",
     r"""r'(?<![\w:])(?:'""",

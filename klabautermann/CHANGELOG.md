@@ -532,3 +532,7 @@
   of its window instead of the daemon's default size.
 - A container log follow whose stream cannot be read ends with the
   reason after three tries instead of reading again without a word.
+- A container's log no longer freezes the app on one long line. A line
+  of digits or base64 without spaces took seconds to read for its level,
+  and a URL followed by a long run of dots took seconds to colour, each
+  time the row was drawn; both now take well under a millisecond.
