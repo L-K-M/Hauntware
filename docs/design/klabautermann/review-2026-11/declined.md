@@ -415,3 +415,8 @@ Fix commit e242646; glm-review label added for round 2.
 - UIA-11 (Overview rebuilds every card on each clock tick): deferred from the UI batch for size; goes with UIA-08's split of overview_panel in the app refactor chain.
 - ARC-02 remainder (unused barrel names, DockerContainersQuery/DockerImagesQuery, TerminalEndInput, v1.x alert types): deferred to the dead-code step of the app chain.
 - ENG-8 follow-up fixed in #819 (2a11fc7): the linear matcher compared `*` literally before treating it as a wildcard.
+
+## #819 GLM round 1 (2a11fc7): 0 actionable, no push
+- Outside diff, "putRule and saveServer discard the seal result": refuted. `putRule` (engine_sync.dart:847) and `setServerPrefs` (:822) refuse on a non-null `_sealKlabautermann` result; `saveServer` does not use that seal but `CatalogWriter.saveServer`, whose only outcomes are `written` and `refusedPullOnly`, and it checks the latter.
+- Staged writes before a mid-flight refusal in `saveServer`: declined. After the config is saved only `_retractPrefs` can refuse, with a removal payload far under any cap or pull-only, which `_write` and `writer.saveServer` refuse earlier.
+- sampling_scheduler.dart:300 a stale run's lost-readings timer stays armed, engine_sync_test.dart:365 unclosed injected store: declined as minor (the timer only re-reports to a run already dropped; the test store dies with the test's temp directory).
