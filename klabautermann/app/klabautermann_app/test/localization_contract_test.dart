@@ -87,6 +87,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // MenuChecks.swift peer; never rendered.
     "'klabautermann/menu_checks'",
   },
+  // Engine health debugPrint diagnostics; EngineHealthNotice tells the
+  // user in ARB text.
+  'lib/controllers/engine_health.dart': {
+    r"'The engine stopped: ${exit.error}\n${exit.stack ?? ''}'",
+    "''",
+    r"'The engine caught an error: ${fault.error}\n${fault.stack}'",
+  },
   // The not-saved diagnostic; the Appearance tab prints it and shows its
   // own ARB text (themeNotSaved).
   'lib/controllers/appearance_controller.dart': {
@@ -118,7 +125,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The not-saved diagnostic; the General tab prints it and shows its own
   // ARB text (settingsLogDisplayNotSaved).
   // Forward ids the app mints for the engine (NET-11).
-  'lib/controllers/port_forwards.dart': {r"'forward-${_count++}'"},
+  // And the rejected request's class name, which RequestRejected carries.
+  'lib/controllers/port_forwards.dart': {
+    r"'forward-${_count++}'",
+    r"'$OpenPortForward'",
+  },
+  // The rejected requests' class names, which RequestRejected carries;
+  // never shown.
+  'lib/controllers/engine_reads.dart': {r"'${request.runtimeType}'"},
+  'lib/controllers/admin_controller.dart': {
+    r"'$ReadUserCrontabs'",
+    r"'$ReadSmart'",
+    r"'$ReadRestarts'",
+    r"'$ReadFirewall'",
+    r"'$ReadSshdPosture'",
+  },
   // The Apps sub-tab's Docker list values (state, network mode, port
   // type, bound addresses), the loopback address and scheme a forward
   // opens at, and host:port notation, none of them prose (DKE-08).
@@ -245,11 +266,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'prefs-${_count++}'",
     r"'ServerPrefsNotSavedException: $failure, $detail'",
   },
-  // A server edit's request id, matched in the engine's answer, and the
-  // rejected request's class name, which RequestRejected carries.
+  // A server edit's request id, matched in the engine's answer and in
+  // its rejection.
   'lib/controllers/server_editor_controller.dart': {
     r"'server-edit-${_count++}'",
-    r"'$TestServerConnection'",
   },
   // The not-saved diagnostic; the Sync tab prints it and shows its own
   // ARB text (settingsSyncSecretsNotSaved).
@@ -282,6 +302,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // and the server id its reason ends with; never shown.
     r"'$FootprintQuery'",
     r"' $id'",
+    r"'$PlanAction'",
+    r"'$RunAction'",
+    r"'$ReadEditable'",
   },
   'lib/ui/footprint_page.dart': {
     // The index's source prefix for a crontab's backups (03 §8.11), which
@@ -557,6 +580,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
+    // The rejected requests' class names, which RequestRejected carries.
+    r"'$HostQuery'",
+    r"'$UnitQuery'",
+    r"'$RedactLines'",
+    r"'$CheckTlsEndpoints'",
     // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
     r"'host-${_nextHostQuery++}'",
     // A TLS check's id, which its TlsEndpointsChecked answers by (CRT-01).

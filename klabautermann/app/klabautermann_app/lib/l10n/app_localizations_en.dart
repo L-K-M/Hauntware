@@ -769,6 +769,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get engineFailedQuit => 'Quit';
 
   @override
+  String get engineFaultNotice =>
+      'Something went wrong in the background and was stopped. Klabautermann keeps running; if what you just asked for did not happen, try it again.';
+
+  @override
+  String get engineStoppedTitle =>
+      'Klabautermann stopped working in the background';
+
+  @override
+  String get engineStoppedBody =>
+      'Its background engine stopped, so nothing connects or updates any more. Quit and open Klabautermann again. If this keeps happening, include the details below in a bug report.';
+
+  @override
   String get settingsWindowUnreachable =>
       'Settings cannot reach Klabautermann. Close this window and open Settings again.';
 

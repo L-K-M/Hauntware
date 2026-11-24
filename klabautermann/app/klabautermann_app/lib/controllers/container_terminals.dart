@@ -132,11 +132,9 @@ int clampTerminalDimension(int value) =>
 /// terminal ids, sends [OpenTerminal] and the shell's input, and hands
 /// each shell's events to its [ContainerShell].
 ///
-/// A [RequestRejected] names no terminal. The app sends only well-formed
-/// opens (a fresh id, a shell that is null or not empty, a clamped size),
-/// so the one rejection left is an engine whose links are off, which
-/// rejects every open; a rejection of [OpenTerminal] therefore ends every
-/// shell that has heard nothing yet.
+/// A [RequestRejected] of [OpenTerminal] carries the terminal's id and
+/// ends that shell alone: the engine refuses one open for its own reason,
+/// and the others still opening hear their own answers.
 final class ContainerTerminals {
   ContainerTerminals(this._engine) {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
@@ -231,18 +229,14 @@ final class ContainerTerminals {
             ?._end(
               ContainerShellEnded(reason, exitCode: exitCode, detail: detail),
             );
-      case RequestRejected(:final requestName, :final reason)
+      case RequestRejected(:final requestName, :final requestId?, :final reason)
           when requestName == '$OpenTerminal':
-        final waiting = [
-          for (final shell in _shells.values)
-            if (shell.state.value is ContainerShellOpening) shell,
-        ];
-        for (final shell in waiting) {
-          _shells.remove(shell.id);
-          shell._end(
-            ContainerShellEnded(TerminalCloseReason.failed, detail: reason),
-          );
-        }
+        if (_shells[requestId]?.state.value is! ContainerShellOpening) return;
+        _shells
+            .remove(requestId)
+            ?._end(
+              ContainerShellEnded(TerminalCloseReason.failed, detail: reason),
+            );
       case EngineEvent():
         break;
     }

@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'api_version.dart';
+import 'byte_read_buffer.dart';
 import 'errors.dart';
 
 /// 03 §5.6: cap on one multiplexed frame's payload.
@@ -57,39 +58,28 @@ Stream<StdcopyFrame> demuxStdcopy(
   Stream<List<int>> input, {
   int maxFrameBytes = defaultMaxStdcopyFrameBytes,
 }) async* {
-  final buf = <int>[];
-  var pos = 0;
+  const headerBytes = 8;
+  final buf = ByteReadBuffer();
   await for (final chunk in input) {
-    buf.addAll(chunk);
-    while (buf.length - pos >= 8) {
-      final kindCode = buf[pos];
+    buf.add(chunk);
+    while (buf.length >= headerBytes) {
+      final kindCode = buf[0];
       final kind = StdcopyKind.fromCode(kindCode);
       if (kind == null) {
         throw DockerProtocolException('invalid stdcopy stream type $kindCode');
       }
-      final len =
-          (buf[pos + 4] << 24) |
-          (buf[pos + 5] << 16) |
-          (buf[pos + 6] << 8) |
-          buf[pos + 7];
+      final len = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
       if (len > maxFrameBytes) {
         throw DockerProtocolException(
           'stdcopy frame of $len bytes exceeds the $maxFrameBytes byte cap',
         );
       }
-      if (buf.length - pos < 8 + len) break;
-      yield StdcopyFrame(
-        kind,
-        Uint8List.fromList(buf.sublist(pos + 8, pos + 8 + len)),
-      );
-      pos += 8 + len;
-    }
-    if (pos > 64 * 1024 && pos * 2 > buf.length) {
-      buf.removeRange(0, pos);
-      pos = 0;
+      if (buf.length < headerBytes + len) break;
+      buf.skip(headerBytes);
+      yield StdcopyFrame(kind, buf.take(len));
     }
   }
-  if (buf.length - pos != 0) {
+  if (buf.isNotEmpty) {
     throw const DockerProtocolException('truncated stdcopy frame');
   }
 }

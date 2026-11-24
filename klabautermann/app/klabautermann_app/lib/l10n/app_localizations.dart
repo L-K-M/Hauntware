@@ -1204,6 +1204,24 @@ abstract class AppLocalizations {
   /// **'Quit'**
   String get engineFailedQuit;
 
+  /// Notice shown when the app's background engine caught an unexpected error and went on running: one piece of work was lost, connections stay open.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong in the background and was stopped. Klabautermann keeps running; if what you just asked for did not happen, try it again.'**
+  String get engineFaultNotice;
+
+  /// Title of the dialog shown when the app's background engine stopped by itself after the app had started.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann stopped working in the background'**
+  String get engineStoppedTitle;
+
+  /// Body of the dialog shown when the app's background engine stopped by itself: what it means and what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Its background engine stopped, so nothing connects or updates any more. Quit and open Klabautermann again. If this keeps happening, include the details below in a bug report.'**
+  String get engineStoppedBody;
+
   /// Shown in the desktop settings window when the app does not answer it.
   ///
   /// In en, this message translates to:

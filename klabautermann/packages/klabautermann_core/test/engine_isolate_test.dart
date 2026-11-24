@@ -1147,6 +1147,76 @@ void main() {
       );
     });
 
+    test('ENG-4: an error nothing in the engine handled goes out as an '
+        'EngineFault, and the engine goes on answering', () async {
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        entryPoint: _engineWithUnhandledError,
+      );
+      addTearDown(client.shutdown);
+      final events = StreamIterator(client.events);
+      addTearDown(events.cancel);
+
+      EngineFault? fault;
+      while (fault == null) {
+        final event = await next(events);
+        if (event is EngineFault) fault = event;
+      }
+      expect(fault.error, contains('nobody caught this'));
+      expect(fault.stack, isNotEmpty);
+
+      client.send(const Connect('srv-1'));
+      EngineEvent answer;
+      do {
+        answer = await next(events);
+      } while (answer is! RequestRejected);
+      expect(answer.requestName, 'Connect');
+    });
+
+    test('CTL-05: a rejection carries the id of the request it refuses, so '
+        'the read it answers does not stay pending', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client
+        ..send(
+          const HostQuery(
+            serverId: 'srv-1',
+            queryId: 'query-7',
+            query: VarLogQuery(),
+          ),
+        )
+        ..send(const Connect('srv-1'));
+
+      final refused = (await next(events)) as RequestRejected;
+      expect(refused.requestName, 'HostQuery');
+      expect(refused.requestId, 'query-7');
+      // A request that names no id carries none.
+      expect(((await next(events)) as RequestRejected).requestId, isNull);
+    });
+
+    test('ENG-3: a recovery request waiting on the vault does not hold the '
+        'request queue', () async {
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+
+      // The status reads the master key, which the app's keystore answers;
+      // nothing answers it here, as while a sync round holds the vault.
+      client.send(const RecoveryStatusRequest(requestId: 'recovery-1'));
+      EngineEvent asked;
+      do {
+        asked = await next(events);
+      } while (asked is! KeystoreRequest);
+
+      client.send(const RedactLines('redact-1', ['plain line']));
+      final redacted =
+          await next(events).timeout(const Duration(seconds: 5))
+              as RedactedLines;
+      expect(redacted.requestId, 'redact-1');
+    });
+
     test('spawn fails when the engine refuses Hello', () async {
       await expectLater(
         IsolateEngineClient.spawn(
@@ -1158,6 +1228,16 @@ void main() {
     });
   });
 }
+
+/// The real engine with a timer callback that throws inside it, as work
+/// nobody awaits would.
+void _engineWithUnhandledError(EngineStart start) => engineMain(
+  start,
+  onSupportWrites: (_) => Timer(
+    const Duration(milliseconds: 50),
+    () => throw StateError('nobody caught this'),
+  ),
+);
 
 /// An engine that dies before it hands over its command port.
 void _exitAtOnce(EngineStart start) => Isolate.exit();

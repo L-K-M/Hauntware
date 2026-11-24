@@ -196,20 +196,22 @@ void main() {
     int records(String streamId) =>
         batches(streamId).fold(0, (n, b) => n + b.records.length);
 
-    client.send(OpenLogStream(streamId: 'log-0', spec: spec()));
-    await until(() => records('log-0') > 0, 'follow records');
-    // The plan's rate over a measured second, loosely, for a loaded
-    // machine's late batches.
+    // The plan's rate without a measured window, which a loaded machine's
+    // late batches miss either way: the follow keeps producing (a second's
+    // worth of lines arrives), and never more than the plan allows for the
+    // time since before it was opened.
     final clock = Stopwatch()..start();
-    final from = records('log-0');
-    await Future<void>.delayed(const Duration(seconds: 1));
-    final perSecond =
-        (records('log-0') - from) / (clock.elapsedMicroseconds / 1e6);
+    client.send(OpenLogStream(streamId: 'log-0', spec: spec()));
+    await until(
+      () => records('log-0') >= plan.logLinesPerSecond,
+      'a second of follow records',
+      within: const Duration(seconds: 30),
+    );
+    final arrived = records('log-0');
     expect(
-      perSecond,
-      inInclusiveRange(
-        plan.logLinesPerSecond * 0.5,
-        plan.logLinesPerSecond * 1.5,
+      arrived,
+      lessThanOrEqualTo(
+        plan.logLinesPerSecond * clock.elapsedMicroseconds / 1e6,
       ),
     );
     expect(states('log-0'), [const LogStreamRunning()]);

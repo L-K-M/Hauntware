@@ -31,12 +31,15 @@ Map<String, BootEnd> parseBootEnds(String raw) => {
       match[1]!: BootEnd.values.byName(match[2]!),
 };
 
-/// Whether the running kernel is the newest installed (BOOT-03).
+/// Whether the running kernel is the newest installed of its flavour
+/// (BOOT-03, [kernelFlavour]).
 enum KernelCheckState {
-  /// The running kernel is the newest whose modules are installed.
+  /// The running kernel is the newest of its flavour whose modules are
+  /// installed.
   current,
 
-  /// A newer kernel is installed; a reboot loads it.
+  /// A newer kernel of the running flavour is installed; a reboot loads
+  /// it.
   newerInstalled,
 
   /// The running kernel's modules are gone, as after an upgrade that
@@ -64,9 +67,46 @@ final class KernelCheck {
 
   final KernelCheckState state;
 
-  /// The newest installed release, or null with none found.
-  String? get newest => installed.isEmpty ? null : installed.last;
+  /// The newest installed release of the running kernel's flavour
+  /// ([kernelFlavour]), which is what a reboot would load in its place;
+  /// the newest of any flavour where none of the running one's is
+  /// installed. Null with none found.
+  String? get newest {
+    if (installed.isEmpty) return null;
+    final flavour = kernelFlavour(running);
+    return installed.lastWhere(
+      (release) => kernelFlavour(release) == flavour,
+      orElse: () => installed.last,
+    );
+  }
 }
+
+/// The flavour a kernel release names: the `-` parts after its last part
+/// that starts with a digit, and what follows a `+`. `generic` for
+/// `6.8.0-45-generic`, `aws` for `6.8.0-1012-aws`, `rt-amd64` for
+/// `6.1.0-13-rt-amd64`, `+debug` for `5.14.0-503.el9.x86_64+debug`,
+/// `+rpt-rpi-v8` for `6.6.31+rpt-rpi-v8`, and the empty flavour for
+/// `5.14.0-503.el9.x86_64` and `6.6.1-arch1-1`.
+///
+/// Releases of different flavours are different kernels installed side
+/// by side (a debug or realtime build, a second Ubuntu flavour, the
+/// Raspberry Pi's kernel per board), not updates of one another, so
+/// their versions are not compared.
+String kernelFlavour(String release) {
+  final plus = release.indexOf('+');
+  final base = plus < 0 ? release : release.substring(0, plus);
+  final parts = base.split('-');
+  var from = parts.length;
+  while (from > 1 && !_digit.hasMatch(parts[from - 1])) {
+    from--;
+  }
+  return [
+    parts.sublist(from).join('-'),
+    if (plus >= 0) release.substring(plus),
+  ].join();
+}
+
+final _digit = RegExp(r'^[0-9]');
 
 /// The kernels in [raw], or null when it is not the read's output.
 KernelCheck? parseKernels(String raw) {
@@ -83,10 +123,15 @@ KernelCheck? parseKernels(String raw) {
     state = KernelCheckState.unknown;
   } else if (!installed.contains(running)) {
     state = KernelCheckState.runningRemoved;
-  } else if (compareVersions(installed.last, running) > 0) {
-    state = KernelCheckState.newerInstalled;
   } else {
-    state = KernelCheckState.current;
+    // Only a release of the running flavour can replace the running
+    // kernel at the next boot; `installed` is sorted, so the last such
+    // one is the newest.
+    final flavour = kernelFlavour(running);
+    final newest = installed.lastWhere((r) => kernelFlavour(r) == flavour);
+    state = compareVersions(newest, running) > 0
+        ? KernelCheckState.newerInstalled
+        : KernelCheckState.current;
   }
   return KernelCheck(running: running, installed: installed, state: state);
 }
