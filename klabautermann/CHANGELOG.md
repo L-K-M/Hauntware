@@ -569,3 +569,5 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- The admin-mode password, threshold and sync sign-out dialogs scroll on
+  a small phone with the keyboard up, instead of clipping their fields.

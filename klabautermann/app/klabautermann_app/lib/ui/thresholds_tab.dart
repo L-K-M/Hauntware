@@ -163,6 +163,9 @@ class _ThresholdDialogState extends State<_ThresholdDialog> {
     );
     return AlertDialog(
       title: Text(widget.title),
+      // Three fields with a numeric keyboard up can outgrow a phone;
+      // scroll rather than clip (UIA-04).
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
