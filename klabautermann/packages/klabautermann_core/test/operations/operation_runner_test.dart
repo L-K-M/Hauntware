@@ -672,10 +672,14 @@ void main() {
     test('an API step whose runner throws an unlisted error still ends '
         'the run with its answer, after the cleanup', () async {
       final link = _Link((_, _) => _ok);
+      var called = false;
       final finished =
           await runner(
             link,
-            api: (_, _, _) async => throw StateError('unexpected'),
+            api: (_, _, _) async {
+              called = true;
+              throw StateError('unexpected');
+            },
           ).run(
             'plan-1',
             _plan(
@@ -690,15 +694,20 @@ void main() {
       expect(finished.failure, ActionFailure.transport);
       expect(events.whereType<ActionFinished>(), [same(finished)]);
       expect(link.commands.single, contains("'cleanup'"));
+      expect(called, isTrue, reason: 'the error came from the API runner');
     });
 
     test('a detached launch that throws an unlisted error still ends the '
         'run with its answer, after the cleanup', () async {
       final link = _Link((_, _) => _ok);
+      var called = false;
       final finished =
           await runner(
             link,
-            launch: (_, _, _) async => throw StateError('unexpected'),
+            launch: (_, _, _) async {
+              called = true;
+              throw StateError('unexpected');
+            },
           ).run(
             'plan-1',
             _plan(
@@ -716,6 +725,7 @@ void main() {
       expect(finished.failure, ActionFailure.transport);
       expect(events.whereType<ActionFinished>(), [same(finished)]);
       expect(link.commands.single, contains("'cleanup'"));
+      expect(called, isTrue, reason: 'the error came from the launcher');
     });
 
     test('a lender or a finished hook that throws does not lose the '
