@@ -407,6 +407,18 @@ void main() {
       expect(r.value.directories[OpDirectoryKind.user]!.count, 0);
     });
 
+    test('a directory with non-ASCII characters reads as UTF-8', () {
+      // The tracker quotes this path back to the host for the cleanup,
+      // the prune and the output tail: Latin-1 would name another
+      // directory (OPS-6).
+      const path = '/home/jörg/.local/state/klabautermann/ops';
+      final r = parseOps(
+        _payload(utf8.encode('dir user ok 0 $path\n'), _emptyRoot()),
+      );
+      expect(r.warnings, isEmpty);
+      expect(r.value.directories[OpDirectoryKind.user]!.path, path);
+    });
+
     test('random bytes never throw', () {
       final random = List.generate(4096, (i) => (i * 7919 + 13) % 256);
       for (var cut = 0; cut < random.length; cut += 97) {

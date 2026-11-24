@@ -318,6 +318,91 @@ void main() {
     });
   });
 
+  group('digit runs past 64 bits (HST-9)', () {
+    final huge = '9' * 24;
+
+    test('an OOM kill line with such a pid or stamp does not throw', () {
+      String out(String source, List<String> lines) => [
+        '$kOomVmstatMarker 1',
+        '$kOomSourceMarker $source',
+        ...lines,
+        '$kOomReadMarker 10',
+        '',
+      ].join('\n');
+
+      final pid = parseOomKills(
+        out('journal', [
+          '1729912345.123460 h kernel: Killed process $huge (x) anon-rss:1kB',
+          '1729912345.123460 h kernel: Killed process 7 (y) anon-rss:1kB',
+        ]),
+      )!;
+      expect(pid.kills.map((k) => k.pid), [7]);
+
+      final journal = parseOomKills(
+        out('journal', [
+          '$huge.123460 h kernel: Killed process 7 (y) anon-rss:1kB',
+        ]),
+      )!;
+      expect(journal.kills.single.at, isNull);
+
+      final dmesg = parseOomKills(
+        out('dmesg', ['[$huge.5] Killed process 7 (y) anon-rss:1kB']),
+      )!;
+      expect(dmesg.kills.single.sinceBoot, isNull);
+      expect(dmesg.kills.single.pid, 7);
+    });
+
+    test('a netstat holder with such a pid is left unknown', () {
+      final read = parseListeningPorts(
+        '$kPortsToolMarker netstat\n'
+        'tcp 0 0 0.0.0.0:22 0.0.0.0:* LISTEN $huge/sshd\n'
+        'tcp 0 0 0.0.0.0:80 0.0.0.0:* LISTEN 812/nginx\n',
+      )!;
+      expect(read.sockets.map((s) => (s.port, s.processes.length)), [
+        (22, 0),
+        (80, 1),
+      ]);
+    });
+
+    test('inflating every digit run of every fixture never throws', () {
+      // The random-byte fuzz below seldom makes a long digit run; this
+      // one makes each run in real payloads too long for an int.
+      // `overview` and `core` are left out: a meminfo count past 64 bits
+      // still throws there, which the sample pipeline catches and its
+      // own test relies on.
+      final root = _fixturesRoot();
+      var payloads = 0;
+      for (final dir in Directory(root).listSync().whereType<Directory>()) {
+        for (final collector in [
+          'fs',
+          'identity',
+          'procs',
+          'units',
+          'timers',
+          'cron',
+        ]) {
+          final file = File('${dir.path}/$collector.txt');
+          if (!file.existsSync()) continue;
+          final raw = file.readAsStringSync();
+          final runs = RegExp(r'\d+').allMatches(raw).toList();
+          // One run at a time, spread over the payload.
+          final step = runs.length ~/ 40 + 1;
+          for (var i = 0; i < runs.length; i += step) {
+            final m = runs[i];
+            final mutated = raw.replaceRange(m.start, m.end, '${m[0]}$huge');
+            expect(
+              () => _runParser(collector, mutated),
+              returnsNormally,
+              reason: '${dir.path}/$collector.txt run $i',
+            );
+          }
+          payloads++;
+        }
+      }
+      expect(payloads, greaterThan(50));
+    });
+  });
+
   test('fuzz: random bytes never throw', () {
     final rnd = Random(20261013);
     for (var i = 0; i < 300; i++) {

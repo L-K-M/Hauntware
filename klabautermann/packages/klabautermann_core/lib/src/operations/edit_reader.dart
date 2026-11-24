@@ -29,6 +29,16 @@ typedef EditContext = ({
   AdminSession? admin,
 });
 
+/// The most a plan reads of a backup index or a footprint manifest as
+/// the login user: about 30,000 index lines. `SshLink.run` stops at 256
+/// KiB by default, which some 2,000 backups fill, and the tools that
+/// shorten the index (keep last, remove backups) must still read it
+/// then. The elevation prelude's runs keep the default, so root's index
+/// reads whole only below it. A read that is cut either way is refused,
+/// never planned from: the rewrite would drop the lines that were not
+/// read, or fail its hash check for good.
+const int kIndexReadMaxBytes = 4 * 1024 * 1024;
+
 /// The most an edit reads of a file: below `SshLink.run`'s 256 KiB
 /// output cap, which the elevation prelude's runs keep, with room for the
 /// header line.

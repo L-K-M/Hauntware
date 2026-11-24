@@ -746,7 +746,13 @@ void main() {
 
       final step = stepOf(attempt);
       expect(step.elevated, isTrue);
-      expect(step.argv.take(4), ['runuser', '-u', 'www-data', '--']);
+      // The host picks runuser or su (OPS-9).
+      expect(step.argv.take(2), ['sh', '-c']);
+      expect(step.argv.sublist(3), [
+        'klabautermann-run-as',
+        'www-data',
+        'php /srv/app/cron.php',
+      ]);
       expect(attempt.plan!.requiredLevel, RequiredLevel.admin);
     });
 
@@ -769,7 +775,11 @@ void main() {
         },
       );
       expect(read.single, ['crontab', '-l', '-u', 'alice']);
-      expect(stepOf(planned).argv.take(3), ['runuser', '-u', 'alice']);
+      expect(stepOf(planned).argv.sublist(3), [
+        'klabautermann-run-as',
+        'alice',
+        '/home/alice/bin/sync',
+      ]);
     });
 
     test("the login user's crontab, listed by name, is read without -u, "

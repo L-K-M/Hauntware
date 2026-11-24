@@ -170,6 +170,34 @@ void main() {
       expect(health.stopped?.error, contains('link table corrupt'));
     });
 
+    test('a run that fails to build over a restarted engine leaves the '
+        'engine stopped and says so', () async {
+      final health = EngineHealth();
+      addTearDown(health.dispose);
+      final first = _Run(await spawn());
+      IsolateEngineClient? spawned;
+      final restarter = EngineRestarter<_Run>(
+        first: first,
+        spawn: () async => spawned = await spawn(),
+        build: (_) => throw StateError('no controllers'),
+        health: health,
+        quitting: () => false,
+        settled: () async {},
+      );
+      addTearDown(restarter.dispose);
+
+      first.engine.send(const Disconnect('srv-1'));
+      await first.engine.exited.timeout(const Duration(seconds: 10));
+      while (health.stopped?.recovery != EngineRecovery.gaveUp) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+
+      expect(restarter.current.value, same(first));
+      expect(health.stopped?.error, contains('link table corrupt'));
+      // The engine nothing was built over is shut down.
+      await spawned!.exited.timeout(const Duration(seconds: 10));
+    });
+
     test("does not report or restart after the app's own shutdown", () async {
       var quitting = false;
       final health = EngineHealth();

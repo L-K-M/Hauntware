@@ -32,8 +32,14 @@ final _logfmtLevel = RegExp(
 /// prefix words that each hold a digit or are a time zone's capitals: a
 /// timestamp, or PostgreSQL's `2026-10-15 14:30:01.123 UTC [1]`. A level
 /// word after words of a message is never read.
+///
+/// A prefix word with a digit is written as "no digit up to its first
+/// digit, then the rest of the word": that names the same words as
+/// `\S*\d\S*` and gives the matcher one way to read each, where the
+/// shorter form let it try every split of a long word and took seconds
+/// for one line of digits (SMP-01).
 final _levelWord = RegExp(
-  r'^(?:(?:\S*\d\S*|[A-Z]{2,5})\s+){0,4}?\[?'
+  r'^(?:(?:[^\s\d]*\d\S*|[A-Z]{2,5})\s+){0,4}?\[?'
   r'(FATAL|PANIC|CRITICAL|CRIT|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)'
   r'\]?:?(?=\s|$)',
 );

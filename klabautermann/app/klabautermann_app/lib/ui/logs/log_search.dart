@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -5,8 +6,21 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_core/planchette_core.dart'
     show TextMatch, findSearchMatches;
 
+import 'log_pattern_worker.dart';
 import 'log_text.dart';
 import 'log_view_controller.dart';
+
+/// The most rows one question to the pattern worker holds, and the most
+/// characters: a pattern that reads a row in a few microseconds answers
+/// in a few milliseconds, so the worker turns to the rows in sight and
+/// to a new query soon.
+const _chunkLines = 256;
+const _chunkChars = 128 * 1024;
+
+/// The most matches' places kept for the rows in sight, and the most
+/// rows waiting for theirs.
+const _rangesMax = 20000;
+const _wantedMax = 256;
 
 /// A search match: the [LogEntry.seq] of its line and its place among the
 /// line's matches.
@@ -31,16 +45,35 @@ typedef LogMatch = ({int seq, int index});
 /// no current match, [next] goes to the oldest and [previous] to the
 /// newest. A new query or case setting starts with no current match.
 ///
-/// A new query or case setting searches every held line at once, which
-/// took 73 to 125 ms for 50,000 journal rows of about 115 characters in a
-/// JIT test run, so a search field should debounce its input or search in
-/// slices across frames.
+/// A new plain query or case setting searches every held line at once,
+/// which took 73 to 125 ms for 50,000 journal rows of about 115
+/// characters in a JIT test run, so a search field should debounce its
+/// input.
+///
+/// A regular expression never runs on the UI isolate (UIB-1): Dart's
+/// `RegExp` backtracks without a limit, so an ordinary pattern can take
+/// many seconds for a full buffer and a nested quantifier may never
+/// finish one row. A [LogPatternWorker] counts the matches a slice of
+/// rows at a time, oldest first, and [total] grows as it answers;
+/// [searching] is true until it has read every row held when the query
+/// was set. A new query, setting or zone stops the worker in the middle
+/// of a match and starts over. [matchesIn] answers from the places the
+/// worker sent for the rows a view drew, and is empty for a row until
+/// they arrive, when listeners hear of it. A question the worker does not
+/// answer within the limit ends the search: [tooCostly] says so, and it
+/// matches nothing until the query or a setting changes.
 class LogSearch extends ChangeNotifier {
-  LogSearch(this._logs) : _zoneOffset = _logs.zoneOffset {
+  LogSearch(
+    this._logs, {
+    @visibleForTesting this._patternLimit = const Duration(seconds: 5),
+  }) : _zoneOffset = _logs.zoneOffset {
     _logs.addListener(_onLines);
   }
 
   final LogViewController _logs;
+
+  /// How long the pattern worker may take over one question.
+  final Duration _patternLimit;
 
   /// The zone offset the lines were searched at: a new one changes every
   /// row's time, so the search starts over as for a new query.
@@ -51,8 +84,28 @@ class LogSearch extends ChangeNotifier {
   bool _regex = false;
 
   /// [_query] compiled while [_regex] is on, or null when it does not
-  /// compile.
+  /// compile. Only whether it compiles is read here: the worker matches.
   RegExp? _pattern;
+
+  /// The isolate that matches while [_regex] is on, from its first
+  /// question until the search leaves regular expressions.
+  LogPatternWorker? _worker;
+
+  /// Stands for the question the worker has not answered yet. A search
+  /// that starts over drops it, so the answer is ignored.
+  Object? _asked;
+  Timer? _limit;
+  bool _catchingUp = false;
+  bool _tooCostly = false;
+
+  /// The seqs of matching rows a view drew without their matches'
+  /// places, oldest request first.
+  final _wanted = <int>{};
+
+  /// The matches' places of the rows a view drew last, least recently
+  /// read first, and how many they are.
+  final _ranges = <int, List<TextMatch>>{};
+  int _rangesHeld = 0;
 
   /// The matching lines, oldest first, and how many matches each holds.
   final _lines = ListQueue<({int seq, int count})>();
@@ -73,6 +126,20 @@ class LogSearch extends ChangeNotifier {
 
   /// Whether [regex] is on and the query does not compile.
   bool get invalidPattern => _regex && _query.isNotEmpty && _pattern == null;
+
+  /// Whether [regex] is on and the search has not yet read every row
+  /// that was held when the query or a setting changed; [total] is the
+  /// count so far.
+  bool get searching => _catchingUp;
+
+  /// Whether [regex] is on and matching the query took longer than the
+  /// search waits, so it stopped and matches nothing.
+  bool get tooCostly => _tooCostly;
+
+  /// Whether the pattern worker owes an answer: matches of rows that
+  /// arrived, or the places of a row's matches.
+  @visibleForTesting
+  bool get working => _asked != null;
 
   /// The matches in the lines held.
   int get total => _total;
@@ -115,10 +182,22 @@ class LogSearch extends ChangeNotifier {
     _searchAll();
   }
 
-  /// The matches in [line]'s [logRowText], in order.
+  /// The matches in [line]'s [logRowText], in order. For a regular
+  /// expression, empty until the worker sent their places; listeners are
+  /// notified when it has.
   List<TextMatch> matchesIn(LogLine line) {
     if (!_searching || _find(line.seq) < 0) return const [];
-    return _search(_rowText(line));
+    if (!_regex) return _search(_rowText(line));
+
+    // Read again, so it is the last to leave.
+    final held = _ranges.remove(line.seq);
+    if (held != null) return _ranges[line.seq] = held;
+
+    if (_wanted.add(line.seq)) {
+      if (_wanted.length > _wantedMax) _wanted.remove(_wanted.first);
+      _askWorker();
+    }
+    return const [];
   }
 
   /// The index in [matchesIn] of the current match when it is in [line].
@@ -134,6 +213,7 @@ class LogSearch extends ChangeNotifier {
   @override
   void dispose() {
     _logs.removeListener(_onLines);
+    _stopWorker();
     super.dispose();
   }
 
@@ -189,7 +269,14 @@ class LogSearch extends ChangeNotifier {
     _total = 0;
     _current = null;
     _searchedTo = _logs.firstSeq;
-    _searchNew();
+    _forgetPattern();
+    if (_regex) {
+      _catchingUp = _searching;
+      _askWorker();
+    } else {
+      _stopWorker();
+      _searchNew();
+    }
     notifyListeners();
   }
 
@@ -212,11 +299,154 @@ class LogSearch extends ChangeNotifier {
     }
     if (_searchedTo < first) _searchedTo = first;
 
+    if (_regex) {
+      _wanted.removeWhere((seq) => seq < first);
+      _ranges.removeWhere((seq, places) {
+        if (seq >= first) return false;
+        _rangesHeld -= places.length;
+        return true;
+      });
+      final catchingUp = _catchingUp;
+      _askWorker();
+      if (changed || catchingUp != _catchingUp) notifyListeners();
+      return;
+    }
+
     if (_searchNew() || changed) notifyListeners();
+  }
+
+  /// Asks the worker its next question unless it owes an answer: the
+  /// places of a row's matches a view is waiting for, else the counts of
+  /// the next rows not yet searched.
+  void _askWorker() {
+    if (!_regex || !_searching || _asked != null) return;
+
+    final first = _logs.firstSeq;
+    final end = first + _logs.length;
+    while (_wanted.isNotEmpty) {
+      final seq = _wanted.first;
+      _wanted.remove(seq);
+      if (seq < first || _find(seq) < 0 || _ranges.containsKey(seq)) continue;
+
+      final text = _rowText(_logs[seq - first] as LogLine);
+      _ask(
+        (worker) => worker.ranges(_query, text, caseSensitive: _caseSensitive),
+        (places) => _takeRanges(seq, places),
+      );
+      return;
+    }
+
+    final seqs = <int>[];
+    final texts = <String>[];
+    var chars = 0;
+    while (_searchedTo < end &&
+        seqs.length < _chunkLines &&
+        chars < _chunkChars) {
+      final entry = _logs[_searchedTo++ - first];
+      if (entry is! LogLine) continue;
+
+      final text = _rowText(entry);
+      seqs.add(entry.seq);
+      texts.add(text);
+      chars += text.length;
+    }
+    if (seqs.isEmpty) {
+      _catchingUp = false;
+      return;
+    }
+    _ask(
+      (worker) => worker.counts(_query, texts, caseSensitive: _caseSensitive),
+      (counts) => _takeCounts(seqs, counts),
+    );
+  }
+
+  /// Sends [question] to the worker and hands its answer to [take], then
+  /// asks the next. The search stops as too costly when the worker takes
+  /// longer than the limit or dies.
+  Future<void> _ask(
+    Future<Int32List?> Function(LogPatternWorker worker) question,
+    void Function(Int32List answer) take,
+  ) async {
+    final asked = _asked = Object();
+    _limit = Timer(_patternLimit, _giveUp);
+    final answer = await question(_worker ??= LogPatternWorker());
+    // The search started over or stopped while the worker matched.
+    if (!identical(asked, _asked)) return;
+
+    _limit?.cancel();
+    _asked = null;
+    if (answer == null) {
+      _giveUp();
+      return;
+    }
+    take(answer);
+    _askWorker();
+    notifyListeners();
+  }
+
+  void _takeCounts(List<int> seqs, Int32List counts) {
+    final first = _logs.firstSeq;
+    for (var i = 0; i < seqs.length; i++) {
+      // A row that left the buffer while the worker read it.
+      if (counts[i] == 0 || seqs[i] < first) continue;
+
+      _lines.add((seq: seqs[i], count: counts[i]));
+      _total += counts[i];
+    }
+  }
+
+  void _takeRanges(int seq, Int32List places) {
+    if (seq < _logs.firstSeq) return;
+
+    final matches = [
+      for (var i = 0; i < places.length; i += 2)
+        TextMatch(start: places[i], end: places[i + 1]),
+    ];
+    _ranges[seq] = matches;
+    _rangesHeld += matches.length;
+    while (_rangesHeld > _rangesMax && _ranges.length > 1) {
+      _rangesHeld -= _ranges.remove(_ranges.keys.first)!.length;
+    }
+  }
+
+  /// Ends the search as too costly: nothing it found is kept, since a
+  /// count of part of the rows would read as the whole.
+  void _giveUp() {
+    _forgetPattern();
+    _stopWorker();
+    _lines.clear();
+    _total = 0;
+    _current = null;
+    _tooCostly = true;
+    notifyListeners();
+  }
+
+  /// Drops what the worker was asked and what it sent for the query
+  /// before. A worker in the middle of a match is killed: a new one
+  /// starts with the next question, where waiting for the old could
+  /// take for ever.
+  void _forgetPattern() {
+    _limit?.cancel();
+    if (_asked != null) _stopWorker();
+    _asked = null;
+    _wanted.clear();
+    _ranges.clear();
+    _rangesHeld = 0;
+    _catchingUp = false;
+    _tooCostly = false;
+  }
+
+  void _stopWorker() {
+    _limit?.cancel();
+    _asked = null;
+    _worker?.close();
+    _worker = null;
   }
 
   /// Searches the lines not yet searched; returns whether any matched.
   bool _searchNew() {
+    // A pattern is matched by the worker.
+    assert(!_regex);
     final first = _logs.firstSeq;
     final end = first + _logs.length;
     var found = false;
@@ -240,40 +470,19 @@ class LogSearch extends ChangeNotifier {
   String _rowText(LogLine line) => _logs.rowText(line);
 
   /// Whether a query is set that can match.
-  bool get _searching => _query.isNotEmpty && !invalidPattern;
+  bool get _searching => _query.isNotEmpty && !invalidPattern && !_tooCostly;
 
-  /// The query as a pattern, or null when it does not compile. Unicode
-  /// mode comes first, so `\p{Lu}` and characters outside the BMP match
-  /// as the journal's PCRE2 matches them. It rejects escapes PCRE2 takes,
-  /// such as `a\-b`, so a pattern it refuses gets the lenient mode.
-  RegExp? _compile() {
-    if (!_regex || _query.isEmpty) return null;
-    for (final unicode in const [true, false]) {
-      try {
-        return RegExp(_query, caseSensitive: _caseSensitive, unicode: unicode);
-      } on FormatException {
-        continue;
-      }
-    }
-    return null;
-  }
+  /// The query as a pattern ([compileLogPattern]), or null when it is
+  /// plain text or does not compile.
+  RegExp? _compile() =>
+      _regex ? compileLogPattern(_query, caseSensitive: _caseSensitive) : null;
 
-  /// Every match in [text]: the limit is the most a text can hold.
-  List<TextMatch> _search(String text) {
-    if (!_regex) {
-      return findSearchMatches(
-        text,
-        _query,
-        caseSensitive: _caseSensitive,
-        limit: text.length,
-      );
-    }
-    final pattern = _pattern;
-    if (pattern == null) return const [];
-    return [
-      for (final match in pattern.allMatches(text))
-        if (match.end > match.start)
-          TextMatch(start: match.start, end: match.end),
-    ];
-  }
+  /// Every match of the plain query in [text]: the limit is the most a
+  /// text can hold.
+  List<TextMatch> _search(String text) => findSearchMatches(
+    text,
+    _query,
+    caseSensitive: _caseSensitive,
+    limit: text.length,
+  );
 }

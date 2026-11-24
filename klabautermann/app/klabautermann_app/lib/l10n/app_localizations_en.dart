@@ -3836,6 +3836,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Not shown here: this engine cannot read the pattern, but the server may';
 
   @override
+  String get logsPanelSearchTooCostly =>
+      'The search stopped: this pattern takes too long to match these lines';
+
+  @override
+  String get logsPanelSearchSearching => 'Searching…';
+
+  @override
   String get logsPanelSearchServer => 'Search the whole journal on the server';
 
   @override

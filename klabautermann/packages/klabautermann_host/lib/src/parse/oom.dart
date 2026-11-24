@@ -132,25 +132,26 @@ OomKillsRead? parseOomKills(String raw) {
 
     final killed = _killed.firstMatch(line);
     if (killed == null) continue;
-    final pid = int.parse(killed[1]!);
+    // Digit runs past 64 bits are no pid and no stamp: the line is
+    // skipped, or its time left unknown, rather than thrown on.
+    final pid = int.tryParse(killed[1]!);
+    if (pid == null) continue;
     final explanation = explained.remove(pid);
     kills.add(
       OomKill(
         pid: pid,
         command: killed[2]!,
         at: switch (_journalTime.firstMatch(line)) {
-          final time? when source == OomLogSource.journal =>
-            DateTime.fromMicrosecondsSinceEpoch(
-              int.parse(time[1]!) * Duration.microsecondsPerSecond +
-                  int.parse(time[2]!),
-              isUtc: true,
-            ),
+          final time? when source == OomLogSource.journal => _journalInstant(
+            time[1]!,
+            time[2]!,
+          ),
           _ => null,
         },
         sinceBoot: switch (_dmesgTime.firstMatch(line)) {
-          final time? when source == OomLogSource.dmesg => Duration(
-            seconds: int.parse(time[1]!),
-            microseconds: int.parse(time[2]!.padRight(6, '0').substring(0, 6)),
+          final time? when source == OomLogSource.dmesg => _sinceBoot(
+            time[1]!,
+            time[2]!,
           ),
           _ => null,
         },
@@ -171,3 +172,28 @@ OomKillsRead? parseOomKills(String raw) {
     kills: kills,
   );
 }
+
+/// The journal's `<seconds>.<microseconds>` stamp as an instant, or null
+/// for digits no [DateTime] holds.
+DateTime? _journalInstant(String seconds, String micros) {
+  final s = int.tryParse(seconds);
+  final us = int.tryParse(micros);
+  if (s == null || us == null || s > _maxEpochSeconds) return null;
+  return DateTime.fromMicrosecondsSinceEpoch(
+    s * Duration.microsecondsPerSecond + us,
+    isUtc: true,
+  );
+}
+
+/// dmesg's `[<seconds>.<fraction>]` stamp as a time since boot, or null
+/// for digits no [Duration] holds.
+Duration? _sinceBoot(String seconds, String fraction) {
+  final s = int.tryParse(seconds);
+  final us = int.tryParse(fraction.padRight(6, '0').substring(0, 6));
+  if (s == null || us == null || s > _maxEpochSeconds) return null;
+  return Duration(seconds: s, microseconds: us);
+}
+
+/// Seconds either side of which [DateTime] and a microsecond [Duration]
+/// stop holding a value (100,000,000 days).
+const _maxEpochSeconds = 8640000000000;
