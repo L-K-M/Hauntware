@@ -137,18 +137,24 @@ final class IsolateEngineClient implements EngineClient {
     // The engine sends its startup fleet right after EngineReady, before
     // spawn's caller can have listened; a broadcast stream would drop it.
     // Events wait here until the first listener arrives, so the
-    // composition root may await between spawn and its controllers. Only
-    // that first listener gets them, so the controller that needs the
-    // startup fleet must subscribe first. After that, events go out live
-    // and, as on any broadcast stream, reach only the listeners present.
+    // composition root may await between spawn and its controllers, and
+    // go out in a microtask after it: every listener that subscribed in
+    // the same turn as the first gets them (CTL-01), so the composition
+    // root builds all its controllers in one turn. After that, events go
+    // out live and, as on any broadcast stream, reach only the listeners
+    // present.
     List<EngineEvent>? held = [];
+    var releasing = false;
     late final StreamController<EngineEvent> events;
     events = StreamController<EngineEvent>.broadcast(
       onListen: () {
-        final waiting = held;
-        if (waiting == null) return;
-        held = null;
-        waiting.forEach(events.add);
+        if (held == null || releasing) return;
+        releasing = true;
+        scheduleMicrotask(() {
+          final waiting = held;
+          held = null;
+          waiting?.forEach(events.add);
+        });
       },
     );
 
@@ -266,7 +272,10 @@ final class IsolateEngineClient implements EngineClient {
       try {
         await _exited.timeout(_shutdownTimeout);
       } on TimeoutException {
-        _isolate.kill();
+        // A stuck engine is ended. Its exit message still has to arrive
+        // before the ports close, or [exited] would never complete.
+        _isolate.kill(priority: Isolate.immediate);
+        await _exited.timeout(_shutdownTimeout, onTimeout: EngineExit.new);
       }
       _fromEngine.close();
       _exitPort.close();
