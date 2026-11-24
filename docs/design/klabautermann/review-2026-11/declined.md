@@ -366,3 +366,14 @@ Fix commit e242646; glm-review label added for round 2.
 - integration_workflow_test.dart:213 "major" cast crashes on a job without steps: declined. No job in ci.yml or release.yml lacks steps; if one is added the test fails loudly, which is a guard doing its job, not a masked check.
 - :230 fragile test.sh parsing, :212 working-directory filter: declined as minor.
 - "FLUTTER_VERSION may be undefined" (outside diff): refuted, ci.yml defines env.FLUTTER_VERSION at the top and every Flutter job uses it.
+
+## #810 GLM round 1 (0d32812), merged at 0d32812
+- Critical engine_client.dart:185 "fatal stack always dropped": refuted. Isolate.addErrorListener sends `[String error, String? stack]` (both Strings, per the dart:isolate docs), and engine_client_test.dart:40 asserts `exit.stack` is not empty on a real isolate death; it passes in CI.
+- Major main.dart:422 shutdown unbounded: refuted. IsolateEngineClient.shutdown waits at most `_shutdownTimeout` (2 s) and then kills the isolate (engine_client.dart:259-276). A regression test with an engine that ignores Shutdown is added with the restart follow-up.
+- Major server_editor_controller.dart:140 rejection trusts any id: refuted. Ids are `server-edit-N` from this controller's own counter, and `_fail` only removes ids from its own maps, so a foreign id settles nothing.
+- Major request_rejections_test.dart:180 unawaitedThen: declined, test diagnostics only; the assertion still fails if the bug returns.
+- Major AuditQuery catch reports no fault: real but minor; the follow-up reports it through `fault` as the other last-resort catches do.
+- Minor monitoring_controller.dart:829 garbled doc sentence: fixed in the follow-up.
+- Minor engine_health.dart:59 fault after dispose: refuted; a cancelled subscription receives no further events.
+- Minor request_ids.dart `_ => null`: deferred to ENG-11, which removes catch-alls so the compiler checks exhaustiveness.
+- Minor container_terminals id-less OpenTerminal rejection, RunRefused without detail, refused forward ends as closed, app_undo_test RangeError, admin CR/LF as wrongPassword, EngineFault unredacted (shown only in a local debug print and dialog, never exported), PlanAction double answer (latent only), sampling test matching only the type: declined as minor or latent.
