@@ -403,3 +403,15 @@ Fix commit e242646; glm-review label added for round 2.
 - Refuted, major: cadence and cadence-cap listeners leak (removed by the run's disposers in main.dart); KlabautermannApp updated in place (it is a StatelessWidget whose `_RemountOnChange` remounts on a new `(fleet, monitoring, prompts)` identity).
 - Refuted, minor: previous quit guard not disposed and per-run controllers not disposed (both in the run's disposers); settings window inputs rebuilt per run (the new host rebinds the window through `replacing`).
 - Declined: `takeFaultNotice` consumes faults inside the quiet window (same behaviour as the notice before #815, by design: a repeating error is told once per minute); EngineHealth dispose guard and EngineRestarter.dispose not shutting the engine down (both live for the launch and are never disposed in the app); unguarded `readPinConflicts` (unchanged code from before the PR).
+
+## #816 GLM round 1 (e5f0f5a): 0 actionable.
+
+## #817 GLM round 1 (590a43b), minor only, no push
+- endpoint_confirmation.dart:143 hops matched by label can over-select on a label collision: declined. Every row it selects is a shown row with its own host, port and user, checked visibly before the user presses Confirm; nothing is pinned that the list did not show.
+- :133 deselecting a server leaves its hops checked, and re-selecting re-checks a hop the user unchecked: declined as a minor UX choice; the checks are visible and the user confirms what is checked.
+
+## Helper notes (2026-11-24)
+- ENG-7 follow-up, deferred: `SaveServer`'s write path (`runWrite` -> `pinsFor([confirmed])`) still pins a saved server's never-confirmed hops with their current addresses. Same class as ENG-7; changing the save flow is a product decision.
+- UIA-11 (Overview rebuilds every card on each clock tick): deferred from the UI batch for size; goes with UIA-08's split of overview_panel in the app refactor chain.
+- ARC-02 remainder (unused barrel names, DockerContainersQuery/DockerImagesQuery, TerminalEndInput, v1.x alert types): deferred to the dead-code step of the app chain.
+- ENG-8 follow-up fixed in #819 (2a11fc7): the linear matcher compared `*` literally before treating it as a wildcard.
