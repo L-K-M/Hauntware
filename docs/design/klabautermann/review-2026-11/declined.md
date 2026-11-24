@@ -450,3 +450,9 @@ Every bullet has a test that came with its fix in #805/#806: http_pool_test (DKR
 - SHARED.md:123 "85b48f21c may not touch Windows": refuted. It changes seance's windows/runner/settings_window.{h,cpp}, and Klabautermann's copy has both quit methods.
 - SHARED.md:105 line wrap: declined as cosmetic.
 - CI at cce34f9: Android failed on a transient Maven fetch (kotlin-gradle-plugins-bom 2.2.20), iOS was cancelled; rerun through the main merge.
+
+## #823 GLM round 1 (ea38c9a): 1 actionable, declined, no push
+- power_test.dart:444 (major) "the fleet-drop test runs on real timers, so a leaked timer goes unnoticed": declined as test robustness, not a defect. `_onFleet` cancels the follow, whose `cancel()` cancels the timeout timer, and the hold (power_waits.dart:190-191, 357).
+- recovery_controller_test "never-answered coverage dropped": declined. Save and restore are deliberately unbounded so a late answer applies (`_request`'s doc, the CTL fix); a disconnect still fails them, and that test stays.
+- recovery_controller_test 100 ms waits: refuted. The test builds the controller with a 50 ms bound (line 47).
+- Declined as minor: `_holdBack` re-arm without cancel (start/stop already cancel), `_listed` never pruned (intended, per the reviewer too), the literal 5-minute pump, `_posted.clear()` order, `cancelAll()` scope (alerts are the only notifications the app posts), the synchronous-send assumption in the save test.
