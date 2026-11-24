@@ -12,11 +12,7 @@
         "utime": 180,
         "stime": 90,
         "startTicks": 51000,
-        "argv": [
-          "/usr/lib/systemd/systemd",
-          "--switched-root",
-          "--system"
-        ],
+        "argv": null,
         "argsJoined": null
       },
       {
@@ -30,7 +26,7 @@
         "utime": 0,
         "stime": 0,
         "startTicks": 7,
-        "argv": [],
+        "argv": null,
         "argsJoined": null
       },
       {
@@ -65,11 +61,11 @@
     "totalProcesses": 4,
     "selection": "all",
     "argvSource": "cmdline",
-    "forgedHeaders": 1,
+    "forgedHeaders": 2,
     "skippedPids": 0,
     "timeoutAbsent": false
   },
   "warnings": [
-    "cmdline: 1 forged head header(s)"
+    "cmdline: 2 forged head header(s)"
   ]
 }

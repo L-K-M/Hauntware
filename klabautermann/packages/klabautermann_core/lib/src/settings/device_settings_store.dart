@@ -505,8 +505,12 @@ final class DeviceSettingsStore {
   /// math. The app clamps whatever it reads to the window.
   double? get shellSidebarWidth => _paneWidth(_values[_shellSidebarWidthKey]);
 
-  /// Stores [width] and writes the document; throws as [setCadence] does.
+  /// Stores [width] and writes the document; throws as [setCadence] does,
+  /// and an [ArgumentError] for a width that is not finite, which is not
+  /// stored: the document could not be encoded with it, now or for any
+  /// later setting.
   Future<void> setShellSidebarWidth(double width) async {
+    _checkFinite(width, 'width');
     _values[_shellSidebarWidthKey] = width;
     await _save();
   }
@@ -517,10 +521,20 @@ final class DeviceSettingsStore {
   double? get shellInspectorWidth =>
       _paneWidth(_values[_shellInspectorWidthKey]);
 
-  /// Stores [width] and writes the document; throws as [setCadence] does.
+  /// Stores [width] and writes the document; throws as
+  /// [setShellSidebarWidth] does.
   Future<void> setShellInspectorWidth(double width) async {
+    _checkFinite(width, 'width');
     _values[_shellInspectorWidthKey] = width;
     await _save();
+  }
+
+  /// Throws an [ArgumentError] for a [value] JSON cannot hold (NaN or an
+  /// infinity), before a setter stores it.
+  static void _checkFinite(double value, String name) {
+    if (!value.isFinite) {
+      throw ArgumentError.value(value, name, 'must be finite');
+    }
   }
 
   /// A stored pane width: only a finite positive number is usable, so a
@@ -779,8 +793,15 @@ final class DeviceSettingsStore {
 
   /// Stores [levels] as the threshold levels, replacing every metric's,
   /// and writes the document. Throws when the write fails or this
-  /// session is read-only; the value stays in memory either way.
+  /// session is read-only; the value stays in memory either way. A
+  /// level that is not finite is an [ArgumentError], and nothing of
+  /// [levels] is stored.
   Future<void> setThresholds(Map<String, List<double>> levels) async {
+    for (final MapEntry(:key, :value) in levels.entries) {
+      for (final level in value) {
+        _checkFinite(level, 'levels[$key]');
+      }
+    }
     _values[_thresholdsKey] = {
       for (final MapEntry(:key, :value) in levels.entries) key: [...value],
     };

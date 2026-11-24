@@ -71,11 +71,21 @@ final class FsMount {
 /// The `fs` tick (03 §6.4).
 @immutable
 final class FsSnapshot {
-  FsSnapshot(List<FsMount> mounts, {this.timeoutAbsent = false})
-    : mounts = List.unmodifiable(mounts);
+  FsSnapshot(
+    List<FsMount> mounts, {
+    List<String> errors = const [],
+    this.timeoutAbsent = false,
+  }) : mounts = List.unmodifiable(mounts),
+       errors = List.unmodifiable(errors);
 
   /// Mounts in `df` order.
   final List<FsMount> mounts;
+
+  /// What `df` said of each mount it could not read, without its `df: `
+  /// prefix (`/mnt/dead: Transport endpoint is not connected`). Those
+  /// mounts have no row in [mounts]; the list is partial while this is
+  /// not empty.
+  final List<String> errors;
 
   /// True when the payload reports the collector ran without `timeout`
   /// (03 §6.3).
@@ -83,14 +93,16 @@ final class FsSnapshot {
 
   Map<String, Object?> toJson() => {
     'mounts': mounts.map((m) => m.toJson()).toList(),
+    if (errors.isNotEmpty) 'errors': errors,
     'timeoutAbsent': timeoutAbsent,
   };
 }
 
 /// Parses an `fs` section payload; never throws (03 §6.5). GNU `df` wraps
-/// a device name that outgrows its column onto its own line, so a short
-/// row joins the next one; `df` output on a failed run lands in the block
-/// as text and is reported, not fatal.
+/// a device name that outgrows its column onto its own line, so a line
+/// that is no row joins the next one. `df` exits 1 and still prints the
+/// other rows when it cannot read one mount: its `df: ` lines become
+/// [FsSnapshot.errors] and warnings, never part of a row.
 ParseResult<FsSnapshot> parseFs(String raw, ParseContext ctx) {
   final warnings = <String>[];
   final split = splitBlocks(raw, kTimeoutAbsentMarker);
@@ -102,9 +114,10 @@ ParseResult<FsSnapshot> parseFs(String raw, ParseContext ctx) {
   }
 
   final mounts = <FsMount>[];
+  final errors = <String>[];
   final byMount = <String, FsMount>{};
   if (split.blocks['blocks'] case final lines?) {
-    for (final m in _parseDfBlocks(lines, warnings)) {
+    for (final m in _parseDfBlocks(lines, errors, warnings)) {
       mounts.add(m);
       byMount[m.mountPoint] = m;
     }
@@ -113,7 +126,7 @@ ParseResult<FsSnapshot> parseFs(String raw, ParseContext ctx) {
   }
 
   if (split.blocks['inodes'] case final lines?) {
-    for (final row in _parseDfInodes(lines, warnings)) {
+    for (final row in _parseDfInodes(lines, errors, warnings)) {
       final prev = byMount[row.mountPoint];
       if (prev == null) {
         warnings.add('fs: inode row for unmounted ${row.mountPoint}');
@@ -139,82 +152,106 @@ ParseResult<FsSnapshot> parseFs(String raw, ParseContext ctx) {
   }
 
   return ParseResult(
-    FsSnapshot(mounts, timeoutAbsent: split.timeoutAbsent),
-    warnings,
+    FsSnapshot(mounts, errors: errors, timeoutAbsent: split.timeoutAbsent),
+    [...warnings, for (final e in errors) 'df: $e'],
   );
 }
 
+/// A `df -PT -B1` row, read from its fixed columns on the right: the
+/// source and the mount point are the only columns that hold blanks
+/// (`gdrive:My Drive`, `//nas/Shared Docs`), and the first run of type,
+/// three counts, capacity and an absolute path ends the source.
+final _blocksRow = RegExp(
+  r'^(.*?\S)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+%|-)\s+(/.*)$',
+);
+
+/// A `df -Pi` row, as [_blocksRow] without the type column.
+final _inodesRow = RegExp(
+  r'^(.*?\S)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+%|-)\s+(/.*)$',
+);
+
+/// What `df` says of a mount it could not read, on stderr, which the
+/// fragment captures with the table.
+final _dfComplaint = RegExp(r'^df: (.+)$');
+
 /// Parses `df -PT -B1` rows: fs, type, blocks, used, avail, `cap%`, mount.
-/// Device names that fill their column wrap to the next line.
-List<FsMount> _parseDfBlocks(List<String> lines, List<String> warnings) {
-  final rows = _dfRows(lines, 7, warnings);
-  final out = <FsMount>[];
-  for (final t in rows) {
-    final cap = int.tryParse(t[5].replaceAll('%', ''));
-    out.add(
-      FsMount(
-        device: t[0],
-        type: t[1],
-        sizeBytes: int.tryParse(t[2]),
-        usedBytes: int.tryParse(t[3]),
-        availBytes: int.tryParse(t[4]),
-        capacityPercent: cap,
-        mountPoint: t.sublist(6).join(' '),
-      ),
-    );
-  }
-  return out;
-}
+List<FsMount> _parseDfBlocks(
+  List<String> lines,
+  List<String> errors,
+  List<String> warnings,
+) => [
+  for (final m in _dfRows(lines, _blocksRow, errors, warnings))
+    FsMount(
+      device: m[1]!,
+      type: m[2]!,
+      sizeBytes: int.tryParse(m[3]!),
+      usedBytes: int.tryParse(m[4]!),
+      availBytes: int.tryParse(m[5]!),
+      capacityPercent: int.tryParse(m[6]!.replaceAll('%', '')),
+      mountPoint: m[7]!,
+    ),
+];
 
 /// Parses `df -Pi` rows: `<fs> <inodes> <iused> <ifree> <iuse%> <mount>`.
-List<FsMount> _parseDfInodes(List<String> lines, List<String> warnings) {
-  final rows = _dfRows(lines, 6, warnings);
-  final out = <FsMount>[];
-  for (final t in rows) {
-    out.add(
-      FsMount(
-        device: t[0],
-        type: '',
-        mountPoint: t.sublist(5).join(' '),
-        inodesTotal: int.tryParse(t[1]),
-        inodesUsed: int.tryParse(t[2]),
-        inodesFree: int.tryParse(t[3]),
-        inodeUsePercent: int.tryParse(t[4].replaceAll('%', '')),
-      ),
-    );
-  }
-  return out;
-}
-
-/// Tokenizes `df` output, joins wrapped device lines, and skips the
-/// header row. Each returned row has at least [width] fields.
-List<List<String>> _dfRows(
+List<FsMount> _parseDfInodes(
   List<String> lines,
-  int width,
+  List<String> errors,
+  List<String> warnings,
+) => [
+  for (final m in _dfRows(lines, _inodesRow, errors, warnings))
+    FsMount(
+      device: m[1]!,
+      type: '',
+      mountPoint: m[6]!,
+      inodesTotal: int.tryParse(m[2]!),
+      inodesUsed: int.tryParse(m[3]!),
+      inodesFree: int.tryParse(m[4]!),
+      inodeUsePercent: int.tryParse(m[5]!.replaceAll('%', '')),
+    ),
+];
+
+/// Matches `df` output against [row], skipping the header. A line that
+/// is a row by itself is one; only a line that is not may be a device
+/// name wrapped onto its own line, which joins the next line when the
+/// two make a row. `df`'s complaints go to [errors], once each.
+List<RegExpMatch> _dfRows(
+  List<String> lines,
+  RegExp row,
+  List<String> errors,
   List<String> warnings,
 ) {
-  final rows = <List<String>>[];
-  final it = lines.map((l) => l.trimRight()).where((l) => l.trim().isNotEmpty);
+  final rows = <RegExpMatch>[];
   String? carry;
-  for (final line in it) {
-    if (line.startsWith('Filesystem')) continue;
-    final tokens = line.trim().split(RegExp(r'\s+'));
-    final joined = carry == null ? tokens : [carry, ...tokens];
+  void dropCarry() {
+    if (carry != null) {
+      warnings.add('df: dropped wrapped device fragment "$carry"');
+    }
     carry = null;
-    if (joined.length < width) {
-      carry = joined.join(' ');
+  }
+
+  for (final raw in lines) {
+    final line = raw.trim();
+    if (line.isEmpty || line.startsWith('Filesystem')) continue;
+
+    final whole = row.firstMatch(line);
+    if (whole != null) {
+      dropCarry();
+      rows.add(whole);
       continue;
     }
-    // A data row keeps the numeric columns numeric; otherwise it is a
-    // wrapped device prefix waiting for the next line.
-    if (int.tryParse(joined[width - 4]) == null) {
-      carry = joined.join(' ');
+    if (_dfComplaint.firstMatch(line) case final complaint?) {
+      if (!errors.contains(complaint[1])) errors.add(complaint[1]!);
       continue;
     }
-    rows.add(joined);
+    final joined = carry == null ? null : row.firstMatch('$carry $line');
+    if (joined != null) {
+      carry = null;
+      rows.add(joined);
+      continue;
+    }
+    dropCarry();
+    carry = line;
   }
-  if (carry != null) {
-    warnings.add('df: dropped wrapped device fragment "$carry"');
-  }
+  dropCarry();
   return rows;
 }

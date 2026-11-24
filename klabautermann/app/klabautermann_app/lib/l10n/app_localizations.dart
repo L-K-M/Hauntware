@@ -1222,6 +1222,18 @@ abstract class AppLocalizations {
   /// **'Its background engine stopped, so nothing connects or updates any more. Quit and open Klabautermann again. If this keeps happening, include the details below in a bug report.'**
   String get engineStoppedBody;
 
+  /// Title of the dialog shown after the app's background engine stopped by itself and the app started a new one.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann restarted its background engine'**
+  String get engineRestartedTitle;
+
+  /// Body of the dialog shown after the app restarted its background engine: what happened, what may have been lost, and what to do.
+  ///
+  /// In en, this message translates to:
+  /// **'Its background engine stopped unexpectedly and was started again, so your servers reconnect and update as before. An action, shell, transfer or edit that was running when it stopped may not have finished; check it before you try it again. If this keeps happening, include the details below in a bug report.'**
+  String get engineRestartedBody;
+
   /// Shown in the desktop settings window when the app does not answer it.
   ///
   /// In en, this message translates to:
@@ -4996,6 +5008,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not shown here: this engine cannot read the pattern, but the server may'**
   String get logsPanelSearchInvalidLocal;
+
+  /// Error under the log search field in regular expression mode when matching the pattern against the loaded lines did not finish in time, so the search was stopped and shows no matches.
+  ///
+  /// In en, this message translates to:
+  /// **'The search stopped: this pattern takes too long to match these lines'**
+  String get logsPanelSearchTooCostly;
+
+  /// Shown at the end of the log search field, in place of the number of matches, while a regular expression is still being matched against the loaded lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching…'**
+  String get logsPanelSearchSearching;
 
   /// Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown.
   ///

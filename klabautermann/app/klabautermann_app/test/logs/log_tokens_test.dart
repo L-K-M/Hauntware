@@ -7,7 +7,88 @@ List<(String, LogTokenKind)> _tokens(String text) => [
     (text.substring(token.start, token.end), token.kind),
 ];
 
+/// The URL patterns as they stood before UIB-2, when the tail's search
+/// was quadratic: where a URL token must still end.
+final _urlBefore = RegExp(r'''\b(?:https?|wss?|ftp)://[^\s<>"'`]+''');
+final _urlTailBefore = RegExp(r'[.,;:!?)\]}]+$');
+
+List<(int, int)> _urlsBefore(String text) => [
+  for (final match in _urlBefore.allMatches(text))
+    (
+      match.start,
+      match.end - (_urlTailBefore.firstMatch(match[0]!)?.group(0)?.length ?? 0),
+    ),
+];
+
+const _urlCorpus = [
+  'see https://example.com/a?b=1, then (http://x.test/).',
+  'ws://10.0.0.5:8080/feed',
+  'GET http://10.0.0.1/a 200 then 10.0.0.2 status=503 https://h.test',
+  'Fetching https://registry.test/v2/........ done',
+  'Fetching https://registry.test/v2/...',
+  'http://a.test/x).',
+  'http://a.test/(x)',
+  'http://a.test/x]}:;!?',
+  'http://a.test/x.,y.,',
+  'http://...',
+  'http://',
+  'http://.',
+  'http://.a',
+  'ftp://f.test/a.b.c. wss://w.test:443/s?x=[1]',
+  '<https://a.test/b>, "https://c.test/d." and `http://e.test`!',
+  'https://a.test/\u00e9\u{1f600}.',
+  'no URL here: just text.',
+  'xhttp://not.a.url/ and nothttps://x.test/.',
+  '',
+];
+
 void main() {
+  test('a URL ends where the pattern before UIB-2 ended it', () {
+    for (final text in _urlCorpus) {
+      expect(
+        [
+          for (final token in logTokens(text))
+            if (token.kind == LogTokenKind.url) (token.start, token.end),
+        ],
+        _urlsBefore(text),
+        reason: text,
+      );
+    }
+  });
+
+  test('a long adversarial line is read in linear time (UIB-2)', () {
+    const length = 64 * 1024;
+    String filled(String piece) =>
+        (piece * (length ~/ piece.length + 1)).substring(0, length);
+    final lines = [
+      'http://${filled('.')}a',
+      'http://${filled('.')}',
+      filled('http://....a '),
+      filled('http://a.test/. '),
+      filled('1.1.1.1 '),
+      filled('http://a.test 1.1.1.1 status=200 '),
+      filled('255.255.255.255:'),
+      filled('1.'),
+      filled('ffff:'),
+      filled(':'),
+      filled(' a:a:a:a:a:a:a'),
+      'fe80::1%${filled('a.')}:',
+      'GET${filled(' ')}x',
+      'GET ${filled('x')}',
+      filled('GET x '),
+      filled('status '),
+      'HTTP/1${filled(' ')}x',
+      filled('7'),
+    ];
+
+    // Before the fix the first line alone took over half a minute here.
+    final watch = Stopwatch()..start();
+    for (final line in lines) {
+      logTokens(line);
+    }
+    expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+  });
+
   test('finds URLs and leaves sentence punctuation out', () {
     expect(_tokens('see https://example.com/a?b=1, then (http://x.test/).'), [
       ('https://example.com/a?b=1', LogTokenKind.url),
