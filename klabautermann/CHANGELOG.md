@@ -639,3 +639,18 @@
 - Signing out also drops the removed servers' safety entries from this
   device, instead of keeping their read-only switches and marks under
   raw server ids and pushing them again at the next sign-in.
+- A finished reboot or shutdown wait now leaves on its own: the
+  "answered again" line stays only briefly, and a shutdown offers Stop
+  waiting so the power buttons come back instead of staying hidden.
+- Raised-alert notifications are withdrawn when their engine run ends
+  and at the start of the next one, so none is left in the system's
+  notification list with no alert behind it.
+- A reboot wait whose server leaves the fleet ends with it instead of
+  reporting the server as not answered after it has come back.
+- A recovery code, export or restore that takes longer than the bounded
+  status read still reports what the engine did, rather than failing
+  while the vault keeps the change.
+- Docker socket choices survive a launch that cannot read the whole
+  catalog, such as another instance holding the support directory or an
+  unreadable store; they go once a later fleet shows the server really
+  left or moved.

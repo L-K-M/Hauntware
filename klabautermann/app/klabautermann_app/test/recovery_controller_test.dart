@@ -151,22 +151,64 @@ void main() {
   });
 
   test(
-    'a request that is never answered fails with the generic kind',
+    'a save whose answer arrives after the bounded wait still applies',
     () async {
-      final pending = controller.newCode();
+      const code = 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-89AB';
+      Object? error;
+      final pending = controller
+          .saveCode(code)
+          .then<void>((_) {}, onError: (Object e) => error = e);
+      final request = engine.sent.whereType<SetRecoveryCode>().single;
 
-      await expectLater(
-        pending,
-        throwsA(
-          isA<RecoveryException>().having(
-            (error) => error.failure,
-            'failure',
-            VaultRecoveryFailure.failed,
-          ),
-        ),
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(
+        error,
+        isNull,
+        reason: 'the bounded wait is for the status read alone',
       );
+
+      engine.emit(
+        RecoveryStatus(requestId: request.requestId, configured: true),
+      );
+      await pending;
+      expect(controller.configured, isTrue);
     },
   );
+
+  test('a restore whose answer arrives after the bounded wait still '
+      'restores', () async {
+    files.next = Uint8List.fromList([4, 5, 6]);
+    SecretsRestoreSummary? summary;
+    Object? error;
+    final pending = controller
+        .restoreSecrets(
+          code: 'ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567-89AB',
+          policy: VaultRestorePolicy.keepExisting,
+        )
+        .then<void>(
+          (value) => summary = value,
+          onError: (Object e) => error = e,
+        );
+    // The file panel is awaited before the request is sent.
+    await Future<void>.delayed(Duration.zero);
+    final request = engine.sent.whereType<RestoreVault>().single;
+
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(error, isNull);
+
+    engine.emit(
+      VaultRestored(
+        requestId: request.requestId,
+        added: 1,
+        replaced: 0,
+        kept: 2,
+        unreadable: 0,
+      ),
+    );
+    await pending;
+    expect(summary, isNotNull);
+    expect((summary!.added, summary!.kept), (1, 2));
+  });
 
   test(
     'a disconnect completes pending requests with a fixed failure',

@@ -21,6 +21,11 @@ abstract interface class SystemNotifications {
   /// Withdraws the notification [id], if it still shows.
   Future<void> cancel(int id);
 
+  /// Withdraws every notification this app posted, which a run does at
+  /// its start and when its engine ends, so none outlives the alerts
+  /// behind it.
+  Future<void> cancelAll();
+
   /// Shows [count] on the app icon, or no badge for 0, where the system
   /// has an icon badge the app can set; elsewhere it does nothing.
   Future<void> setBadge(int count);
@@ -254,6 +259,9 @@ final class LocalSystemNotifications implements SystemNotifications {
 
   @override
   Future<void> cancel(int id) => _plugin.cancel(id: id);
+
+  @override
+  Future<void> cancelAll() => _plugin.cancelAll();
 
   /// iOS and macOS only (decision Q3): Android launchers, Windows and
   /// Linux would need another plugin.

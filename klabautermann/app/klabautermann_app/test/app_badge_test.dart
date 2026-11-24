@@ -30,6 +30,9 @@ final class _Badges implements SystemNotifications {
   Future<void> cancel(int id) => Future.value();
 
   @override
+  Future<void> cancelAll() => Future.value();
+
+  @override
   Future<void> setBadge(int count) async => badges.add(count);
 }
 

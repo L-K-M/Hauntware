@@ -152,6 +152,7 @@ final class RecoveryController extends ChangeNotifier
     final event = await _request(
       RecoveryStatusRequest(requestId: _id('recovery-status')),
       (event) => event is RecoveryStatus ? event : null,
+      timeout: _requestTimeout,
     );
     _applyConfigured(event.configured);
   }
@@ -162,10 +163,16 @@ final class RecoveryController extends ChangeNotifier
     notifyListeners();
   }
 
+  /// Sends [request] and waits for its correlated answer. Only a caller
+  /// that passes [timeout] is bounded: a recovery action may take as
+  /// long as its keystore read or vault import does, and a late answer
+  /// must still apply rather than report a failure the engine never
+  /// gave while the action went on to succeed.
   Future<T> _request<T extends EngineEvent>(
     EngineRequest request,
-    T? Function(EngineEvent event) select,
-  ) async {
+    T? Function(EngineEvent event) select, {
+    Duration? timeout,
+  }) async {
     if (_disposed) throw const RecoveryException(VaultRecoveryFailure.failed);
     final requestId = _requestIdOf(request);
     final answer = Completer<EngineEvent>();
@@ -177,7 +184,10 @@ final class RecoveryController extends ChangeNotifier
       throw const RecoveryException(VaultRecoveryFailure.failed);
     }
     try {
-      final event = await answer.future.timeout(_requestTimeout);
+      final Future<EngineEvent> waited = timeout == null
+          ? answer.future
+          : answer.future.timeout(timeout);
+      final event = await waited;
       if (event is VaultRecoveryFailed) {
         throw RecoveryException(event.failure);
       }

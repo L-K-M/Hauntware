@@ -468,11 +468,18 @@ Future<void> main(List<String> args) async {
     );
     // CN-09's Docker socket per server, chosen on this device and kept in
     // settings.json (03 §4.10, D54); a server the fleet drops or moves to
-    // another endpoint loses its choice (SYN-08).
+    // another endpoint loses its choice (SYN-08). While this launch cannot
+    // see the whole catalog, an omitted server is not proof of departure,
+    // so its stored choice is kept.
+    final fleetComplete =
+        instanceLockIssue == null &&
+        importStoreIssue == null &&
+        engine.ready.syncStoreIssues.isEmpty;
     final dockerEndpointChoices = DockerEndpointChoices(
       stored: settings.dockerEndpointOverrides,
       save: settings.setDockerEndpointOverride,
       purge: settings.purgeDockerEndpointOverrides,
+      fleetComplete: fleetComplete,
     )..followFleet(fleet);
     final monitoring = MonitoringController(
       engine,
@@ -576,6 +583,7 @@ Future<void> main(List<String> args) async {
     final powerWaits = PowerWaits(
       core: (serverId) => monitoring.sampleFor(serverId, SampleStream.core),
       operations: operations,
+      fleet: fleet,
     );
 
     void applyCadenceCaps() => monitoring.setCadenceCaps({
