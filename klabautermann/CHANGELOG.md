@@ -531,6 +531,14 @@
 - A synced alert rule whose clear value lies on the breach side of its
   raise value is refused, instead of raising and clearing on every
   reading.
+- A stack's logs no longer jump to the oldest line while you read them.
+  Lines of several containers that arrive together are put in time
+  order before they show, and a paused view keeps a late older line back
+  until it follows again, so open fields and the current search match
+  stay where they are.
+- A stack's logs keep reading after a redeploy: the recreated
+  containers are read in the old ones' places, under the same chips,
+  while the Stacks view lists them.
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
