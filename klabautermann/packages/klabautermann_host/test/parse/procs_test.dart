@@ -339,6 +339,97 @@ void main() {
     expect(r.value.processes.single.argv, ['/sbin/init']);
   });
 
+  /// Rows and a cmdline block for [pids], in the fragment's byte order,
+  /// where [forger]'s arguments hold [forgedLines].
+  String forgedPayload(List<int> pids, int forger, List<String> forgedLines) =>
+      [
+        '== rows ==',
+        for (final pid in pids) _row(pid, 'p$pid'),
+        '== cmdline ==',
+        for (final pid in pids) ...[
+          '==> $pid/cmdline <==',
+          if (pid == forger) ...[
+            'attacker\x1f',
+            ...forgedLines,
+            '\x1f',
+          ] else
+            '/bin/p$pid\x1f',
+        ],
+      ].join('\n');
+
+  Map<int, List<String>?> argvByPid(ProcsSnapshot s) => {
+    for (final p in s.processes) p.pid: p.argv,
+  };
+
+  test('a forged header for a pid outside the rows that keeps the order '
+      'shortens only its own entry (HST-2)', () {
+    // Any local user can write this line into an argument. It sorts
+    // after every real pid, so reading it as a header made each real
+    // header after it look out of order.
+    final r = parseProcs(
+      forgedPayload(
+        [100, 101, 102, 103, 104, 105],
+        100,
+        ['==> 99999999/cmdline <=='],
+      ),
+      _ctx,
+    );
+
+    expect(argvByPid(r.value), {
+      100: ['attacker'],
+      for (final pid in [101, 102, 103, 104, 105]) pid: ['/bin/p$pid'],
+    });
+    expect(r.value.forgedHeaders, 0);
+    expect(r.value.skippedPids, 1);
+  });
+
+  test('a forged header for a later row is withdrawn by the header it '
+      'jumped over, and the rows after read on (HST-2)', () {
+    final r = parseProcs(
+      forgedPayload(
+        [100, 101, 102, 103, 104, 105],
+        100,
+        ['==> 104/cmdline <=='],
+      ),
+      _ctx,
+    );
+
+    // The forger, the pid it named and the header that exposed the jump
+    // lose their command line; nothing tells which side was forged.
+    expect(argvByPid(r.value), {
+      100: null,
+      101: null,
+      102: ['/bin/p102'],
+      103: ['/bin/p103'],
+      104: null,
+      105: ['/bin/p105'],
+    });
+    expect(r.value.forgedHeaders, 1);
+    expect(r.warnings, contains(contains('forged')));
+  });
+
+  test('a chain of forged headers for later rows is withdrawn whole', () {
+    final r = parseProcs(
+      forgedPayload(
+        [100, 101, 102, 103, 104, 105, 106],
+        100,
+        ['==> 103/cmdline <==', 'x\x1f', '==> 105/cmdline <=='],
+      ),
+      _ctx,
+    );
+
+    expect(argvByPid(r.value), {
+      100: null,
+      101: null,
+      102: ['/bin/p102'],
+      103: null,
+      104: ['/bin/p104'],
+      105: null,
+      106: ['/bin/p106'],
+    });
+    expect(r.value.forgedHeaders, 2);
+  });
+
   test('the ps -eo fallback parses positional rows', () {
     final raw = [
       '== rows ==',

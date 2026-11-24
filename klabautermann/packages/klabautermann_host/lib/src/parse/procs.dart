@@ -162,9 +162,10 @@ final class ProcsSnapshot {
   /// glob-order rule (03 §7.2).
   final int forgedHeaders;
 
-  /// Headers for pids absent from the rows, skipped per 03 §7.2. The
-  /// fragment passes `head` the kept rows' paths only, so these are
-  /// forged headers that kept the glob order.
+  /// Headers for pids absent from the rows, skipped with the text after
+  /// them per 03 §7.2. The fragment passes `head` the kept rows' paths
+  /// only, so these are lines an argument holds, or the headers of rows
+  /// the parser rejected. They never move the glob order.
   final int skippedPids;
 
   /// True when the payload reports the collector ran without `timeout`
@@ -406,12 +407,30 @@ final class _CmdlineResult {
 /// Splits the `head -c 1536 <pid>/cmdline... | tr '\000' '\037'` dump
 /// into per-pid argument vectors (03 §7.2).
 ///
-/// Real `==> <pid>/cmdline <==` headers appear once each, in the order of
-/// the kept rows, which is the `LC_ALL=C` glob order: byte order on the
-/// pid text. A header that repeats a pid or breaks that order is forged
-/// by an argument containing newlines: it marks the pid it names and the
-/// entry it interrupts "command line unavailable". Headers for pids
-/// missing from the rows are skipped.
+/// Real `==> <pid>/cmdline <==` headers appear once each, only for the
+/// kept rows (the fragment passes `head` their paths and no others) and
+/// in the rows' order, which is the `LC_ALL=C` glob order: byte order on
+/// the pid text. Any other header line is text an argument holds, since
+/// an argument may contain newlines:
+///
+/// - One naming a pid outside the rows ends the entry it sits in, and
+///   what follows it is skipped up to the next header. It does not move
+///   the order, so it cannot make the real headers after it look out of
+///   order: a forger shortens its own command line and no other. (A row
+///   the parser rejected leaves its real header here too, which is why
+///   the text after it is not given to the entry before.)
+/// - One repeating a pid marks that pid and the entry it interrupts
+///   "command line unavailable".
+/// - One naming a later row passes for real until a header arrives that
+///   belongs before it. Nothing tells which of the two is the forgery, so
+///   both sides lose their command line: the headers that jumped ahead
+///   are withdrawn, with the entries they interrupted, and the header
+///   that exposed them is marked too. The order then resumes from that
+///   header, and the withdrawn pids' real headers are read when they
+///   come, so their content does not spill into the entry before them.
+///
+/// A forger therefore costs at most three command lines for each header
+/// it writes, its own among them, never every row after it.
 _CmdlineResult _parseCmdline(
   List<String> lines,
   Set<int> rowPids,
@@ -422,7 +441,9 @@ _CmdlineResult _parseCmdline(
   final bytes = <int, int>{};
   final unavailable = <int>{};
   final seen = <int>{};
-  var lastPidText = '';
+  // The accepted headers in order, each with the pid whose entry it
+  // ended: what a later header out of order withdraws.
+  final accepted = <({String pidText, int pid, int? interrupted})>[];
   var forged = 0;
   var skipped = 0;
   int? current;
@@ -436,13 +457,12 @@ _CmdlineResult _parseCmdline(
       ? lines.sublist(0, lines.length - 1)
       : lines;
 
+  // Inside the text after a header for a pid outside the rows.
+  var skipping = false;
+
   void flush() {
     final pid = current;
-    if (pid == null) return;
-    if (!rowPids.contains(pid)) {
-      skipped++;
-      return;
-    }
+    if (pid == null || skipping) return;
     entries[pid] = _splitArgs(buf);
     bytes[pid] = utf8.encode(buf.join('\n')).length;
   }
@@ -453,26 +473,47 @@ _CmdlineResult _parseCmdline(
       final pidText = m[1]!;
       // A pid past int range names no process: only an argument holds it.
       final pid = int.tryParse(pidText);
-      final forgedHeader =
-          pid == null ||
-          seen.contains(pid) ||
-          (lastPidText.isNotEmpty && pidText.compareTo(lastPidText) <= 0);
-      if (forgedHeader) {
-        forged++;
-        if (pid != null) unavailable.add(pid);
-        if (current != null) unavailable.add(current);
-        // The forged line is argument bytes of the entry it interrupts;
-        // that entry is already marked, so keep accounting simple.
-        if (current != null) buf.add(line);
+      if (pid != null && !rowPids.contains(pid)) {
+        flush();
+        skipped++;
+        skipping = true;
         continue;
       }
+      if (pid == null || seen.contains(pid)) {
+        forged++;
+        if (pid != null) unavailable.add(pid);
+        // The forged line is argument bytes of the entry it interrupts;
+        // that entry is marked, so keep accounting simple.
+        if (current != null) {
+          unavailable.add(current);
+          if (!skipping) buf.add(line);
+        }
+        continue;
+      }
+
       flush();
+      skipping = false;
+      if (accepted.isNotEmpty &&
+          pidText.compareTo(accepted.last.pidText) <= 0) {
+        unavailable.add(pid);
+        while (accepted.isNotEmpty &&
+            pidText.compareTo(accepted.last.pidText) <= 0) {
+          final jump = accepted.removeLast();
+          forged++;
+          seen.remove(jump.pid);
+          unavailable.add(jump.pid);
+          if (jump.interrupted case final interrupted?) {
+            unavailable.add(interrupted);
+          }
+        }
+      }
+      accepted.add((pidText: pidText, pid: pid, interrupted: current));
       seen.add(pid);
-      lastPidText = pidText;
       current = pid;
       buf.clear();
       continue;
     }
+    if (skipping) continue;
     if (current == null) {
       if (line.trim().isNotEmpty) {
         warnings.add('cmdline: content before the first header');
@@ -484,7 +525,8 @@ _CmdlineResult _parseCmdline(
   flush();
 
   // An entry marked "command line unavailable" stays null even when its
-  // header arrived before the forged one that condemned it (03 §7.2).
+  // header arrived before the forged one that condemned it, or again
+  // after its forged one was withdrawn (03 §7.2).
   for (final pid in unavailable) {
     if (entries.containsKey(pid)) entries[pid] = null;
   }

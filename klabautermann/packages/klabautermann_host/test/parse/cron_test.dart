@@ -74,6 +74,80 @@ void main() {
     expect(r.value.jobs.last.expression!.weekDays, {6});
   });
 
+  test('BusyBox without a crontab reads as none, not as unknown (HST-8)', () {
+    for (final said in [
+      "crontab: can't open 'root': No such file or directory",
+      "crontab: can't change directory to '/var/spool/cron/crontabs': "
+          'No such file or directory',
+    ]) {
+      final r = parseCron(
+        '== crontab_meta ==\nrc=1\n== crontab ==\n$said\n'
+        '== etc_crontab ==\n== cron_d ==\n== cron_dirs ==',
+        _ctx,
+      );
+      expect(r.value.ownCrontabPresent, isFalse, reason: said);
+      expect(r.warnings, isEmpty, reason: said);
+      expect(r.value.jobs, isEmpty);
+    }
+
+    // Any other failure stays unknown.
+    final denied = parseCron(
+      "== crontab_meta ==\nrc=1\n== crontab ==\ncrontab: can't open "
+      "'root': Permission denied\n== etc_crontab ==\n== cron_d ==\n"
+      '== cron_dirs ==',
+      _ctx,
+    );
+    expect(denied.value.ownCrontabPresent, isNull);
+  });
+
+  test('sources the login user may not read are named, and the ones read '
+      'are kept (HST-4)', () {
+    final r = parseCron(
+      [
+        '== crontab_meta ==',
+        'rc=0',
+        '== crontab ==',
+        '0 2 * * * /home/deploy/backup.sh',
+        '== etc_crontab ==',
+        '== cron_d ==',
+        'certbot\t0 */12 * * * root certbot -q renew',
+        '== cron_dirs ==',
+        'weekly man-db',
+        '== unreadable ==',
+        '/etc/crontab',
+        '/etc/cron.d/secret',
+        '/etc/cron.daily',
+        '/etc/shadow',
+        'not a path',
+      ].join('\n'),
+      _ctx,
+    );
+
+    expect(r.value.unreadableSources, [
+      '/etc/crontab',
+      '/etc/cron.d/secret',
+      '/etc/cron.daily',
+    ]);
+    expect(_shapes(r.value), [
+      ('crontab', '0 2 * * *', null, '/home/deploy/backup.sh'),
+      ('/etc/cron.d/certbot', '0 */12 * * *', 'root', 'certbot -q renew'),
+    ]);
+    expect(r.value.dirEntries.single.name, 'man-db');
+    expect(r.warnings, [
+      'cron: /etc/crontab is not readable',
+      'cron: /etc/cron.d/secret is not readable',
+      'cron: /etc/cron.daily is not readable',
+    ]);
+    expect(r.value.toJson()['unreadableSources'], hasLength(3));
+  });
+
+  test('a payload with nothing unreadable says so by leaving the key out', () {
+    final r = parseCron('${_payload()}== unreadable ==', _ctx);
+    expect(r.warnings, isEmpty);
+    expect(r.value.unreadableSources, isEmpty);
+    expect(r.value.toJson().containsKey('unreadableSources'), isFalse);
+  });
+
   test('/etc/crontab carries the user column', () {
     final raw = [
       '== crontab_meta ==',
