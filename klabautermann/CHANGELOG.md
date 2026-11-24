@@ -599,3 +599,7 @@
   read from your own crontab and `/etc/cron.d`.
 - On BusyBox, a login without a crontab reads as having none rather
   than as unknown.
+- History keeps recording for every server when one stored bucket or
+  gap is damaged; the damaged slot reads as empty.
+- A 10-minute history bucket no longer counts a minute's readings twice
+  after the app restarts within that minute.
