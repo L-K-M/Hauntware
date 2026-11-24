@@ -353,6 +353,118 @@ void main() {
     );
   });
 
+  test('confirming a server leaves a jump host it never showed '
+      'unconfirmed until the hop is confirmed in its own row', () async {
+    await server.seedServer(fakeServer('edge', 'edge'));
+    await server.seedServer(fakeServer('web', 'web', jumpHostId: 'edge'));
+    final engine = await start();
+    final enrolled = await engine.enroll();
+    final shown = {
+      for (final entry in enrolled.whereType<CatalogReplaced>().last.entries)
+        entry.serverId: ShownEndpoint.of(entry),
+    };
+    expect(shown['web']!.jumpRoute, ['edge']);
+
+    // The user confirms only the server; its hop was not among the rows
+    // they confirmed, so the engine does not pin it either.
+    engine.send(ConfirmEndpoints(const ['web'], shown: {'web': shown['web']!}));
+    var answer = await engine.until<CatalogReplaced>();
+    expect(
+      _endpointIn([answer], serverId: 'web'),
+      EndpointConfirmation.changed,
+    );
+    expect(
+      _endpointIn([answer], serverId: 'edge'),
+      EndpointConfirmation.unconfirmed,
+    );
+    engine.send(const Connect('web'));
+    expect(
+      (await engine.until<ConnectRejected>()).reason,
+      ConnectRejectedReason.endpointNotConfirmed,
+    );
+    expect(dials, isEmpty, reason: 'the unseen hop is never dialed');
+
+    // Confirming the hop in its own row then confirms the server behind
+    // it, and the server dials.
+    engine.send(
+      ConfirmEndpoints(const ['edge'], shown: {'edge': shown['edge']!}),
+    );
+    answer = await engine.until<CatalogReplaced>();
+    expect(
+      _endpointIn([answer], serverId: 'web'),
+      EndpointConfirmation.confirmed,
+    );
+    expect(
+      _endpointIn([answer], serverId: 'edge'),
+      EndpointConfirmation.confirmed,
+    );
+    engine
+      ..send(
+        const Subscribe(
+          serverId: 'web',
+          subscriptionId: 'overview',
+          streams: {SampleStream.core},
+        ),
+      )
+      ..send(const Connect('web'));
+    await engine.until<Sample>();
+    expect(dials.last.host, 'web.example.com');
+  });
+
+  test('a jump host a sync rewrote after it was shown is not pinned', () async {
+    await server.seedServer(fakeServer('edge', 'edge'));
+    await server.seedServer(fakeServer('web', 'web', jumpHostId: 'edge'));
+    final engine = await start();
+    final enrolled = await engine.enroll();
+    final shown = {
+      for (final entry in enrolled.whereType<CatalogReplaced>().last.entries)
+        entry.serverId: ShownEndpoint.of(entry),
+    };
+
+    // Another device moves the hop while the confirmation list is open.
+    await server.seedServer(
+      fakeServer('edge', 'edge').copyWith(host: 'moved.example.com'),
+      updatedAt: 2,
+    );
+    engine.send(const RunSyncRound());
+    await engine.untilSyncEnds();
+
+    // The app still sends what the list showed: the moved hop is not
+    // pinned, and the server behind it stays waiting.
+    engine.send(ConfirmEndpoints(const ['web', 'edge'], shown: shown));
+    final answer = await engine.until<CatalogReplaced>();
+    expect(
+      _endpointIn([answer], serverId: 'web'),
+      EndpointConfirmation.changed,
+    );
+    expect(
+      _endpointIn([answer], serverId: 'edge'),
+      EndpointConfirmation.unconfirmed,
+    );
+    engine.send(const Connect('web'));
+    expect(
+      (await engine.until<ConnectRejected>()).reason,
+      ConnectRejectedReason.endpointNotConfirmed,
+    );
+    expect(dials, isEmpty, reason: 'the rewritten hop is never dialed');
+
+    // Shown as it now stands, the hop pins and the server connects.
+    final fresh = {
+      for (final entry in answer.entries)
+        entry.serverId: ShownEndpoint.of(entry),
+    };
+    engine.send(ConfirmEndpoints(const ['web', 'edge'], shown: fresh));
+    final done = await engine.until<CatalogReplaced>();
+    expect(
+      _endpointIn([done], serverId: 'web'),
+      EndpointConfirmation.confirmed,
+    );
+    expect(
+      _endpointIn([done], serverId: 'edge'),
+      EndpointConfirmation.confirmed,
+    );
+  });
+
   // FL-04, 03 §5.12: a probe is a TCP connect, so it would hand the
   // user's address to whoever rewrote an unconfirmed endpoint.
   test('probes reach only confirmed endpoints, stop when a sync moves one '

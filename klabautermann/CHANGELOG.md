@@ -531,6 +531,14 @@
 - A synced alert rule whose clear value lies on the breach side of its
   raise value is refused, instead of raising and clearing on every
   reading.
+- A stack's logs no longer jump to the oldest line while you read them.
+  Lines of several containers that arrive together are put in time
+  order before they show, and a paused view keeps a late older line back
+  until it follows again, so open fields and the current search match
+  stay where they are.
+- A stack's logs keep reading after a redeploy: the recreated
+  containers are read in the old ones' places, under the same chips,
+  while the Stacks view lists them.
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
@@ -612,6 +620,19 @@
   every line is read, and a new search stops the one before it. A
   pattern that does not finish is stopped after five seconds with a note
   under the field.
+- A server's confirmation no longer covers its jump hosts on its own:
+  selecting a server also selects its unconfirmed hop rows, so one press
+  confirms the whole route, while deselecting a hop leaves it unconfirmed.
+  An address another device rewrote while the list was open stays
+  unconfirmed.
+- Importing ~/.ssh/config finishes quickly even when a Host pattern
+  makes a backtracking matcher try every placement of its wildcards.
+- Removing an alert rule finds it by the id it was written with, and a
+  removal whose synced record is refused says so instead of reporting
+  success.
+- While a long step borrows the slow sampler, panels show its missed
+  readings as gaps instead of stale values, and a probe the borrowing
+  interrupts costs no extra retry wait.
 - Signing out deletes the account's saved credentials before its server
   list, so a sign-out that fails partway and is retried cannot leave them
   behind in the vault.

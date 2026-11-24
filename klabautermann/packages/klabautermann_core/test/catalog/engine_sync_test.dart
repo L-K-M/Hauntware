@@ -12,7 +12,8 @@ import 'package:seance_core/catalog.dart'
         ConflictAwareHostKeyStore,
         FileVaultStore,
         InMemoryConflictAwareHostKeyStore,
-        RecordCrypto;
+        RecordCrypto,
+        SyncTuple;
 import 'package:seance_core/seance_core.dart'
     show
         ApiError,
@@ -379,6 +380,20 @@ void main() {
       return sync;
     }
 
+    /// Puts [payload] in the engine's record store under [id], as a store
+    /// another build wrote could hold it.
+    Future<void> storeRecord(String id, Map<String, Object?> payload) async {
+      final records = await KlabautermannRecordStore.open(
+        support,
+        access: SupportDirectoryAccess.exclusive,
+      );
+      await records.put(
+        id,
+        const SyncTuple(updatedAt: 1, deviceId: 'device-a'),
+        payload,
+      );
+    }
+
     test('a save seals the server, and the next round pushes exactly its '
         'record', () async {
       final sync = await enrolled();
@@ -729,6 +744,96 @@ void main() {
           const RemoveRule(requestId: 'r2', ruleId: 'rule-1'),
         ),
         isA<CatalogWritten>(),
+      );
+    });
+
+    test('a rule is removed by the id it was written with', () async {
+      final sync = await enrolled();
+
+      expect(
+        await sync.putRule(
+          const PutRule(
+            requestId: 'r1',
+            ruleId: ' rule-2 ',
+            rule: ThresholdRule(
+              metric: 'cpu.busy',
+              op: ThresholdOp.greaterThan,
+              raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
+              clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
+            ),
+            target: 'srv-a',
+          ),
+        ),
+        isA<CatalogWritten>(),
+      );
+      expect(
+        await sync.removeRule(
+          const RemoveRule(requestId: 'r2', ruleId: ' rule-2 '),
+        ),
+        isA<CatalogWritten>(),
+      );
+      expect([for (final r in await sync.rules()) r.id], isEmpty);
+    });
+
+    test('a rule removal whose seal is refused answers refused', () async {
+      // A stored rule whose id alone busts the rule cap: sealing the
+      // removal echoes the id, so it exceeds the cap.
+      final longId = 'rule-${'x' * 5000}';
+      await storeRecord(
+        KlabautermannRecordType.rule.idOf(longId),
+        encodeSyncedRule(
+          SyncedRule(
+            id: longId,
+            rule: const ThresholdRule(
+              metric: 'cpu.busy',
+              op: ThresholdOp.greaterThan,
+              raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
+              clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
+            ),
+          ),
+        ),
+      );
+      final sync = await enrolled();
+
+      final answer = await sync.removeRule(
+        RemoveRule(requestId: 'r3', ruleId: longId),
+      );
+
+      expect(
+        answer,
+        isA<CatalogWriteRefused>().having(
+          (r) => r.failure,
+          'failure',
+          CatalogWriteFailure.tooLarge,
+        ),
+      );
+    });
+
+    test("a server deletion whose pref retraction is refused answers "
+        'refused', () async {
+      // A stored `pref` whose id alone busts the pref cap: sealing the
+      // removal echoes the id, so it exceeds the cap.
+      final longId = 'srv-${'x' * 9000}';
+      await server.seedServer(fakeServer(longId, 'alpha'));
+      await storeRecord(
+        KlabautermannRecordType.pref.idOf(longId),
+        encodeServerPrefs(longId, const ServerPrefs(readOnly: true)),
+      );
+      final sync = await open();
+      final status = await sync.enroll(_enroll);
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+
+      final answer = await sync.deleteServer(
+        DeleteServer(requestId: 'r1', serverId: longId),
+      );
+
+      expect(
+        answer,
+        isA<CatalogWriteRefused>().having(
+          (r) => r.failure,
+          'failure',
+          CatalogWriteFailure.tooLarge,
+        ),
       );
     });
 
