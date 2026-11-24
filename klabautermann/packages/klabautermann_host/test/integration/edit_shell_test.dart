@@ -27,6 +27,8 @@ String? _which(String name) {
 
 final _busybox = _which('busybox');
 
+final _isRoot = (Process.runSync('id', ['-u']).stdout as String).trim() == '0';
+
 /// Each installed shell, as the words that start it.
 final _shells = <String, List<String>>{
   for (final name in ['dash', 'bash', 'mksh'])
@@ -400,6 +402,95 @@ void main() {
           expect(attributes.exitCode, 0, reason: '${attributes.stderr}');
           expect(_mode(temp), '640');
         },
+      );
+
+      /// A `stat` that reports [owner] as the target's owner and group
+      /// and the real ones for every other file.
+      void foreignOwner(String owner) => shim(
+        'stat',
+        'for a in "\$@"; do last=\$a; done; '
+            'if [ "\$last" = "$target" ] && [ "\$2" = %u:%g ]; then '
+            'echo $owner; exit 0; fi; exec /usr/bin/stat "\$@"',
+      );
+
+      // GNU cp, run by a user who may not chown, leaves the group as it
+      // was and exits 0 (OPS-1). The stand-ins play that user: `stat`
+      // shows a target with another group, `chown` is refused.
+      for (final cp in ['gnu', 'busybox']) {
+        test('$cp cp: an owner or group that cannot be carried over '
+            'refuses the edit', () async {
+          if (cp == 'busybox') busyboxCp();
+          foreignOwner('4242:4243');
+          shim(
+            'chown',
+            'echo "chown: changing ownership: Operation not permitted" >&2; '
+                'exit 1',
+          );
+          await run(EditCommands.writeTemp(temp), stdin: 'edited\n');
+
+          final attributes = await run(
+            EditCommands.copyAttributes(target, temp),
+          );
+          expect(attributes.exitCode, EditExit.ownerNotCarried);
+          expect(attributes.stderr, contains('Operation not permitted'));
+          expect(File(target).readAsStringSync(), 'original\n');
+        }, skip: ownTools(['stat', 'chown', 'cp']));
+      }
+
+      test('an owner cp did not carry over is set with chown', () async {
+        foreignOwner('4242:4243');
+        shim('chown', 'printf "%s\\n" "\$@" > "${dir.path}/chown.args"');
+        await run(EditCommands.writeTemp(temp), stdin: 'edited\n');
+
+        final attributes = await run(EditCommands.copyAttributes(target, temp));
+        expect(attributes.exitCode, 0, reason: '${attributes.stderr}');
+        expect(File('${dir.path}/chown.args').readAsLinesSync(), [
+          '--',
+          '4242:4243',
+          temp,
+        ]);
+        expect(_mode(temp), '640');
+      }, skip: ownTools(['stat', 'chown']));
+
+      test(
+        'as a user outside the file\'s group, the group is not dropped',
+        () async {
+          // The real thing, where the test runs as root and can drop to
+          // an account that owns the file without being in its group.
+          Process.runSync('chmod', ['0777', dir.path]);
+          Process.runSync('chown', ['65534:1', target]);
+          final drop = [
+            'setpriv',
+            '--reuid=65534',
+            '--regid=65534',
+            '--clear-groups',
+          ];
+          Future<ProcessResult> asNobody(List<String> argv, {String? stdin}) =>
+              run([
+                ...drop,
+                argv.first == 'sh' ? shell.first : argv.first,
+                if (argv.first == 'sh') ...shell.skip(1),
+                ...argv.sublist(1),
+              ], stdin: stdin);
+          final write = await asNobody(
+            EditCommands.writeTemp(temp),
+            stdin: 'edited\n',
+          );
+          expect(write.exitCode, 0, reason: '${write.stderr}');
+
+          final attributes = await asNobody(
+            EditCommands.copyAttributes(target, temp),
+          );
+          expect(attributes.exitCode, EditExit.ownerNotCarried);
+          expect(
+            (Process.runSync('stat', ['-c', '%u:%g', target]).stdout as String)
+                .trim(),
+            '65534:1',
+          );
+        },
+        skip: _isRoot && _which('setpriv') != null
+            ? null
+            : 'needs root and setpriv to drop to another account',
       );
 
       test('the fallback refuses a target with an ACL entry or an xattr, '

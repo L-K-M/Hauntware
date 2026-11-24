@@ -148,13 +148,31 @@ int _indexOf(List<int> bytes, int byte, int from) {
   return -1;
 }
 
+/// Whether systemd runs here as the system manager: sd_booted(3)'s test,
+/// which the probe makes too.
+final _systemdRuns = Directory('/run/systemd/system').existsSync();
+
+/// The collectors that ask the system manager. In a container, a chroot
+/// or WSL the `systemctl` command can be installed without a manager to
+/// answer it, and they then report `error`.
+const _systemdCollectors = {'units', 'timers'};
+
+/// Every section is `ok` or `missing`. Only where systemd is not
+/// running may a [_systemdCollectors] section report `error` instead, and
+/// then never `ok`: a manager that is not there cannot have answered.
 void _expectAllStatusesOkOrMissing(_Reply r) {
   for (final entry in r.ticks.entries) {
     for (final s in entry.value.sections) {
+      final noManager =
+          !_systemdRuns && _systemdCollectors.contains(s.collector);
       expect(
         s.status,
-        anyOf(SectionStatus.ok, SectionStatus.missing),
-        reason: 'seq ${entry.key} ${s.collector} reported ${s.status.name}',
+        noManager
+            ? anyOf(SectionStatus.error, SectionStatus.missing)
+            : anyOf(SectionStatus.ok, SectionStatus.missing),
+        reason:
+            'seq ${entry.key} ${s.collector} reported ${s.status.name}'
+            '${noManager ? ' without a running systemd' : ''}',
       );
     }
   }
@@ -369,8 +387,9 @@ void main() {
           expect(parsed.value.processes.any((p) => p.pid == 1), isTrue);
         }
 
-        // units and timers are `missing` where systemd is absent; when
-        // present their payload parses into a snapshot.
+        // units and timers are `missing` without systemctl and `error`
+        // where it has no manager to ask; when they answer, their
+        // payload parses into a snapshot.
         final units = r.ticks[1]!.section('units')!;
         if (units.status == SectionStatus.ok) {
           final u = parseUnits(

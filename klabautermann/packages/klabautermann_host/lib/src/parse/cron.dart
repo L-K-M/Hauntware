@@ -120,16 +120,24 @@ final class CronSnapshot {
   CronSnapshot({
     List<CronJob>? jobs,
     List<CronDirEntry>? dirEntries,
+    List<String>? unreadableSources,
     this.ownCrontabPresent,
     this.timeoutAbsent = false,
   }) : jobs = List.unmodifiable(jobs ?? []),
-       dirEntries = List.unmodifiable(dirEntries ?? []);
+       dirEntries = List.unmodifiable(dirEntries ?? []),
+       unreadableSources = List.unmodifiable(unreadableSources ?? []);
 
   /// All parsed job lines across every source, in payload order.
   final List<CronJob> jobs;
 
   /// Script names inside the four periodic directories.
   final List<CronDirEntry> dirEntries;
+
+  /// The system sources that exist and that the login user may not read:
+  /// `/etc/crontab`, `/etc/cron.d`, a file in it, or a `/etc/cron.<period>`
+  /// directory. Their jobs are unknown, not absent, so [jobs] and
+  /// [dirEntries] are partial while this is not empty.
+  final List<String> unreadableSources;
 
   /// Whether the invoking user has a crontab: null when `crontab` is not
   /// installed or the result is ambiguous (03 §7.7).
@@ -143,6 +151,7 @@ final class CronSnapshot {
     'dirEntries': dirEntries.map((e) => e.toJson()).toList(),
     'ownCrontabPresent': ownCrontabPresent,
     'timeoutAbsent': timeoutAbsent,
+    if (unreadableSources.isNotEmpty) 'unreadableSources': unreadableSources,
   };
 }
 
@@ -187,11 +196,19 @@ ParseResult<CronSnapshot> parseCron(String raw, ParseContext ctx) {
   );
   _parseCronD(blocks['cron_d'] ?? const [], jobs, warnings);
   _parseCronDirs(blocks['cron_dirs'] ?? const [], dirEntries, warnings);
+  final unreadable = <String>[
+    for (final line in blocks['unreadable'] ?? const <String>[])
+      if (_systemSource.hasMatch(line)) line,
+  ];
+  for (final source in unreadable) {
+    warnings.add('cron: $source is not readable');
+  }
 
   return ParseResult(
     CronSnapshot(
       jobs: jobs,
       dirEntries: dirEntries,
+      unreadableSources: unreadable,
       ownCrontabPresent: ownPresent,
       timeoutAbsent: split.timeoutAbsent,
     ),
@@ -246,8 +263,22 @@ List<CronJob> parseCrontabText(
   return [for (final job in parsed) job.withUser(user)];
 }
 
+/// A path the `unreadable` block may name: `/etc/crontab`, `/etc/cron.d`
+/// or a file in it, or a period directory.
+final _systemSource = RegExp(
+  r'^/etc/(crontab|cron\.d(/[^/]+)?|cron\.(hourly|daily|weekly|monthly))$',
+);
+
+/// What BusyBox's `crontab -l` says of a user without a crontab, with
+/// exit 1: `crontab: can't open 'root': No such file or directory`, or
+/// `can't change directory to` the spool where no user has one yet.
+final _busyboxNoCrontab = RegExp(
+  r"can't (open|change directory to) .*: No such file or directory",
+);
+
 /// The `crontab_meta` block: `tool=missing` or `rc=<n>`. rc 0 means a
 /// crontab exists; a nonzero rc with a "no crontab" note in the output
+/// (cronie, Vixie cron) or BusyBox's "can't open" for the missing file
 /// means the user simply has none (03 §7.7); anything else is ambiguous.
 bool? _crontabMeta(
   List<String>? lines,
@@ -271,7 +302,8 @@ bool? _crontabMeta(
     return null;
   }
   if (rc == 0) return true;
-  if (crontabLines.any((l) => l.toLowerCase().contains('no crontab'))) {
+  if (crontabLines.any((l) => l.toLowerCase().contains('no crontab')) ||
+      (rc == 1 && crontabLines.any(_busyboxNoCrontab.hasMatch))) {
     return false;
   }
   warnings.add('cron: crontab -l exited rc=$rc');

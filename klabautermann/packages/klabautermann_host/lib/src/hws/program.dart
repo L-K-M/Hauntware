@@ -49,7 +49,10 @@ const kSamplerStartCommand =
 /// (SYS-02).
 /// Version 14 caps each `procs` command line at [kProcsCmdlineByteCap]
 /// bytes and reports the cap in the `meta` block (D48).
-const kCollectorSetVersion = '14';
+/// Version 15 keeps `fs` `ok` when `df` failed on some mounts and printed
+/// the others, and has `cron` name the sources it could not read in an
+/// `unreadable` block instead of failing or reading them as empty.
+const kCollectorSetVersion = '15';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -484,8 +487,28 @@ c_core() {
 
 /// `fs` (03 §6.4, §7.3): `df -PT -B1` and `df -Pi` under `timeout 10`,
 /// because a stale NFS mount hangs `df`. The section status is the worse
-/// of the two runs; partial output still parses.
+/// of the two runs.
+///
+/// `df` exits 1 when it cannot read one mount (a dead sshfs or FUSE
+/// mount, a stale NFS handle, a mount the login user may not enter under
+/// BusyBox) and still prints every other row. `hw_dfst` reads such a run
+/// as `ok` when its table holds a row, so one broken mount does not cost
+/// the whole list; `df`'s complaint stays in the block as a `df: ` line,
+/// which the parser reports beside the rows. A run that timed out stays
+/// a timeout.
 const _kFsFragment = r"""
+hw_dfst() {
+  _s=$(hw_st "$1" "$2")
+  case $_s in
+    ok | timeout) ;;
+    *)
+      case $2 in
+        *'% /'*) _s=ok ;;
+      esac ;;
+  esac
+  printf %s "$_s"
+}
+
 c_fs() {
   st=ok; o=''
   if ! command -v df >/dev/null 2>&1; then
@@ -495,7 +518,7 @@ c_fs() {
   b=$(hw_run df -PT -B1 </dev/null 2>&1); rb=$?
   i=$(hw_run df -Pi </dev/null 2>&1); ri=$?
   o="== blocks ==$NL$b$NL== inodes ==$NL$i"
-  sb=$(hw_st "$rb" "$b"); si=$(hw_st "$ri" "$i")
+  sb=$(hw_dfst "$rb" "$b"); si=$(hw_dfst "$ri" "$i")
   case $sb:$si in
     ok:ok)
       st=ok ;;
@@ -1096,7 +1119,16 @@ c_user_timers() {
 /// empty, not an error; the meta block carries the exit code so the
 /// parser can tell), `/etc/crontab`, `/etc/cron.d/*` as name-prefixed
 /// lines, and the entry names of `cron.{hourly,daily,weekly,monthly}`.
+///
+/// A source the login user may not read (hardened hosts keep
+/// `/etc/crontab` 0600 and the directories 0700) is named in the
+/// `unreadable` block, one path per line, and the section stays `ok`: the
+/// sources that were read are not thrown away with it, and a closed
+/// directory does not read as an empty one. `hw_closed` is true for a
+/// directory that cannot be both listed and searched.
 const _kCronFragment = r"""
+hw_closed() { [ -d "$1" ] && ! { [ -r "$1" ] && [ -x "$1" ]; }; }
+
 c_cron() {
   st=ok; o=''
   if command -v crontab >/dev/null 2>&1; then
@@ -1105,15 +1137,18 @@ c_cron() {
   else
     o="== crontab_meta ==${NL}tool=missing$NL== crontab =="
   fi
+  _x=
   o="$o$NL== etc_crontab =="
   if [ -r /etc/crontab ]; then
     while IFS= read -r _l; do o="$o$NL$_l"; done </etc/crontab
   elif [ -e /etc/crontab ]; then
-    st=denied
+    _x="$_x$NL/etc/crontab"
   fi
   o="$o$NL== cron_d =="
+  hw_closed /etc/cron.d && _x="$_x$NL/etc/cron.d"
   for _f in /etc/cron.d/*; do
-    [ -f "$_f" ] && [ -r "$_f" ] || continue
+    [ -f "$_f" ] || continue
+    if [ ! -r "$_f" ]; then _x="$_x$NL$_f"; continue; fi
     _n=${_f##*/}
     while IFS= read -r _l; do
       o="$o$NL$_n	$_l"
@@ -1121,11 +1156,13 @@ c_cron() {
   done
   o="$o$NL== cron_dirs =="
   for _d in hourly daily weekly monthly; do
+    hw_closed "/etc/cron.$_d" && _x="$_x$NL/etc/cron.$_d"
     for _f in "/etc/cron.$_d"/*; do
       [ -e "$_f" ] || continue
       o="$o$NL$_d ${_f##*/}"
     done
   done
+  o="$o$NL== unreadable ==$_x"
 }
 """;
 

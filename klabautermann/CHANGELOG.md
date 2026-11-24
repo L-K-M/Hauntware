@@ -579,3 +579,23 @@
   closes the old machine's link and log streams and clears what was
   read there, including its Docker lists, details and disk use, then
   connects and reads the new endpoint again.
+- Saving a file no longer changes its group without saying so. Where
+  your login is not in the file's group, the save is refused before the
+  file is touched; it needs admin mode to keep the group.
+- An operation directory whose path holds non-ASCII characters
+  (`/home/jörg/...`) is cleaned up, pruned and read at its real path, so
+  an acknowledged result no longer comes back.
+- One mount `df` cannot read (a dead sshfs or FUSE mount, a stale NFS
+  handle) no longer blanks the filesystem list: the other mounts are
+  shown.
+- Filesystems whose source holds a space (`gdrive:My Drive`,
+  `//nas/Shared Docs`) show their real type, sizes and mount point.
+- A process can no longer blank the command lines of the processes
+  listed after it by forging a `==> pid/cmdline <==` line in its own
+  arguments.
+- Units with an escaped name (`systemd-fsck@dev-disk-by\x2duuid-...`)
+  open: status, logs and actions accept the `\` systemd writes.
+- An unreadable `/etc/crontab` no longer hides the cron jobs that were
+  read from your own crontab and `/etc/cron.d`.
+- On BusyBox, a login without a crontab reads as having none rather
+  than as unknown.
