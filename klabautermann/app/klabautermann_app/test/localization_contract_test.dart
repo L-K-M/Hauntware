@@ -100,6 +100,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'The engine stopped: ${exit.error}\n${exit.stack ?? ''}'",
     "''",
     r"'The engine did not restart: $error'",
+    r"'The engine restarted, but its run was not built: $error\n$stack'",
   },
   // The not-saved diagnostic; the Appearance tab prints it and shows its
   // own ARB text (themeNotSaved).
