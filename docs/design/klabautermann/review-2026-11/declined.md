@@ -377,3 +377,13 @@ Fix commit e242646; glm-review label added for round 2.
 - Minor engine_health.dart:59 fault after dispose: refuted; a cancelled subscription receives no further events.
 - Minor request_ids.dart `_ => null`: deferred to ENG-11, which removes catch-alls so the compiler checks exhaustiveness.
 - Minor container_terminals id-less OpenTerminal rejection, RunRefused without detail, refused forward ends as closed, app_undo_test RangeError, admin CR/LF as wrongPassword, EngineFault unredacted (shown only in a local debug print and dialog, never exported), PlanAction double answer (latent only), sampling test matching only the type: declined as minor or latent.
+- Follow-up: the AuditQuery fault report is declined after all. `AuditLog.query` already turns file errors into `unreadable` (audit_log.dart:118-124); the engine's catch is a last resort with no reachable throw to test.
+
+## #812 GLM round 1 (4836f38), merged at 4836f38
+- Minor threshold.dart:116 inverted band enforced only in fromJson, "one legacy record could take down the store": the store half is refuted. `KlabautermannRecords.rules()` decodes each record through `_tryDecode` and skips one that throws (klabautermann_records.dart:316-322). A constructor guard is declined: the editor and fromJson are the only entry points, and the constructor is used by tests with fixed values.
+- run_as_shell_test library-load `id` call, unchecked chmod, su applet note, boots_test flavour table, robustness_test stride: declined as test nits (minor-only round).
+
+## #807 GLM round 1 (0118867) and the implementer's triage (36efcfa)
+- procs.dart `_parseCmdline` "headers inside a skipped region are still processed": confirmed by reading, and by design. A header inside skipped text is judged by the same rules as anywhere else; a forger can only mark a bounded set of entries unavailable, never attribute its bytes to another pid, except for a pid that exited between the rows and the cmdline read, which is the same anywhere in the block (03 §7.2). Tests pin the jump-ahead, repeated-pid and mid-list forger cases (36efcfa).
+- Withdrawn pids keep stale `bytes`: declined, `bytes` is read only for entries that are non-null, and withdrawn entries are nulled.
+- edit_shell_test top-level `id`, shell_sampler relaxation by collector name, cron fixture comment, golden coverage: declined as test nits.
