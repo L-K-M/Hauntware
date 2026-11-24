@@ -16,7 +16,9 @@ enum SendFailure {
 /// request under its own request id and completes with the answer the
 /// engine sends for that id, which [answerOf] picks out of the events.
 /// A stopped engine, or one that stops before it answers, answers each
-/// read's no-link value. One per concern, for one engine run.
+/// read's no-link value, as does a [RequestRejected] that names the
+/// read's request and id: the engine refused that one read, and nothing
+/// else will answer it. One per concern, for one engine run.
 final class EngineReads<A> {
   EngineReads(
     this._engine,
@@ -35,7 +37,9 @@ final class EngineReads<A> {
   /// What a refused send answers.
   final SendFailure sendFailure;
   late final StreamSubscription<EngineEvent> _events;
-  final Map<String, (A Function(), Completer<A>)> _pending = {};
+  // By request id: the request's class name, as the engine names it in a
+  // rejection, the read's no-link value, and its answer.
+  final Map<String, (String, A Function(), Completer<A>)> _pending = {};
   bool _engineStopped = false;
 
   /// Sends [request], which carries [requestId], and completes with the
@@ -43,7 +47,7 @@ final class EngineReads<A> {
   Future<A> read(String requestId, EngineRequest request, A Function() noLink) {
     if (_engineStopped) return Future.value(noLink());
     final answer = Completer<A>();
-    _pending[requestId] = (noLink, answer);
+    _pending[requestId] = ('${request.runtimeType}', noLink, answer);
     try {
       _engine.send(request);
     } on StateError {
@@ -61,13 +65,26 @@ final class EngineReads<A> {
 
   void _onEvent(EngineEvent event) {
     if (_answerOf(event) case (final requestId, final answer)) {
-      _pending.remove(requestId)?.$2.complete(answer);
+      _pending.remove(requestId)?.$3.complete(answer);
+      return;
+    }
+    if (event case RequestRejected(:final requestName, :final requestId?)) {
+      // Ids are minted per concern, so the name tells this concern's read
+      // from another's with the same id.
+      if (_pending[requestId] case (
+        final name,
+        final noLink,
+        final answer,
+      ) when name == requestName) {
+        _pending.remove(requestId);
+        answer.complete(noLink());
+      }
     }
   }
 
   void _onEngineDone() {
     _engineStopped = true;
-    for (final (noLink, answer) in _pending.values) {
+    for (final (_, noLink, answer) in _pending.values) {
       answer.complete(noLink());
     }
     _pending.clear();

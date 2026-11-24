@@ -5,6 +5,8 @@ import 'dart:convert';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/admin/admin_mode.dart';
+import 'package:klabautermann_core/src/docker/docker_router.dart'
+    show DockerChannelUnavailable;
 import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operation_runner.dart';
@@ -615,6 +617,162 @@ void main() {
     ).run('plan-1', plan);
     expect(refused.failure, ActionFailure.stepFailed);
     expect((refused.failedStep, refused.httpStatus), (0, 409));
+  });
+
+  group('always one ActionFinished (ENG-1, OPS-2)', () {
+    final exec = _plan([
+      ExecStep(
+        path: '/v1.44/containers/abc/exec',
+        containerId: 'abc',
+        argv: const ['ls'],
+      ),
+    ]);
+
+    test('a full channel share on the endpoint fails the run as a '
+        'transport failure', () async {
+      final finished = await runner(
+        _Link((_, _) => _ok),
+        exec: (_, _) async => throw const DockerChannelUnavailable(),
+      ).run('plan-1', exec);
+
+      expect(finished.outcome, ActionOutcome.failed);
+      expect(finished.failure, ActionFailure.transport);
+      expect(events.whereType<ActionFinished>(), [same(finished)]);
+      expect(results.single.finished, same(finished));
+    });
+
+    test('an error no step names still ends the run with its answer, after '
+        'the cleanup', () async {
+      final link = _Link((_, _) => _ok);
+      final finished =
+          await runner(
+            link,
+            exec: (_, _) async => throw StateError('unexpected'),
+          ).run(
+            'plan-1',
+            _plan(
+              exec.steps,
+              cleanup: [
+                ShellStep(['cleanup']),
+              ],
+            ),
+          );
+
+      expect(finished.outcome, ActionOutcome.failed);
+      expect(finished.failure, ActionFailure.transport);
+      expect(events.whereType<ActionFinished>(), [same(finished)]);
+      expect(link.commands.single, contains("'cleanup'"));
+    });
+
+    test('a lender or a finished hook that throws does not lose the '
+        'answer', () async {
+      final link = _Link((_, _) => _ok);
+      final plan = _plan([
+        ShellStep(['true']),
+      ]);
+
+      final lent = await OperationRunner(
+        linkFor: (_) => link,
+        emit: events.add,
+        lend: <T>(_, _) async => throw StateError('no session'),
+      ).run('plan-1', plan);
+      expect(lent.failure, ActionFailure.transport);
+      expect(events.whereType<ActionFinished>(), [same(lent)]);
+
+      events.clear();
+      final hooked = await OperationRunner(
+        linkFor: (_) => link,
+        emit: events.add,
+        finished: (_) => throw StateError('audit'),
+      ).run('plan-2', plan);
+      expect(hooked.outcome, ActionOutcome.succeeded);
+      expect(events.whereType<ActionFinished>(), [same(hooked)]);
+    });
+  });
+
+  test('OPS-4: "Access denied" means admin mode is required only for a '
+      'step that asks polkit', () async {
+    const denied = RemoteCommandResult(
+      exitCode: 1,
+      stderr: "ERROR 1045 (28000): Access denied for user 'backup'\n",
+    );
+    final link = _Link((_, _) => denied);
+
+    final snippet = await runner(link).run(
+      'plan-1',
+      _plan([
+        ShellStep(['mysqldump', '--all-databases']),
+      ]),
+    );
+    expect(snippet.failure, ActionFailure.stepFailed);
+
+    final unit = await runner(link).run(
+      'plan-2',
+      _plan([
+        ShellStep([
+          'systemctl',
+          '--no-ask-password',
+          'restart',
+          '--',
+          'nginx.service',
+        ]),
+      ]),
+    );
+    expect(unit.failure, ActionFailure.adminRequired);
+  });
+
+  group('OPS-5: a power step', () {
+    OperationPlan power({Duration? timeout}) => _plan([
+      ShellStep(
+        ['reboot-now'],
+        endsLink: true,
+        timeout: timeout ?? StepTimeout.quick,
+      ),
+    ]);
+
+    test('that loses the link before its limit took effect', () async {
+      final finished = await runner(
+        _Link(
+          (_, _) =>
+              throw const RemoteCommandException('The connection is closed.'),
+        ),
+      ).run('plan-1', power());
+      expect(finished.outcome, ActionOutcome.succeeded);
+    });
+
+    test('that runs to its limit timed out: the host is still up', () async {
+      final finished = await runner(_TimingLink([])).run(
+        'plan-1',
+        _plan([
+          ShellStep(
+            ['slow'],
+            endsLink: true,
+            timeout: const Duration(milliseconds: 20),
+          ),
+        ]),
+      );
+      expect(finished.outcome, ActionOutcome.failed);
+      expect(finished.failure, ActionFailure.timedOut);
+      expect(finished.failedStep, 0);
+    });
+
+    test('whose channel closes without a status took effect, as a zero '
+        'status does; another status failed', () async {
+      for (final (exitCode, outcome) in [
+        (null, ActionOutcome.succeeded),
+        (0, ActionOutcome.succeeded),
+        (1, ActionOutcome.failed),
+      ]) {
+        final finished = await runner(
+          _Link((_, _) => RemoteCommandResult(exitCode: exitCode)),
+        ).run('plan-1', power());
+        expect(finished.outcome, outcome, reason: 'exit $exitCode');
+        if (outcome == ActionOutcome.failed) {
+          expect(finished.failure, ActionFailure.stepFailed);
+          expect(finished.exitCode, 1);
+        }
+      }
+    });
   });
 
   test('without a link, or when it fails, nothing is claimed to run', () async {

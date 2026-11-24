@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async' show unawaited;
 import 'dart:ui' show AppExitResponse;
 
@@ -335,6 +336,46 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(await exiting, AppExitResponse.cancel);
+    });
+
+    testWidgets('CTL-02: a quit that goes ahead stops the engine first, '
+        'once; a cancelled one leaves it running', (tester) async {
+      var stops = 0;
+      final harness = await pumpApp(
+        tester,
+        operations: true,
+        beforeExit: () async => stops++,
+      );
+      harness.engine.emit(OperationsChanged('srv-1', operations: [running()]));
+      await tester.pumpAndSettle();
+
+      final cancelled = tester.binding.handleRequestAppExit();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await cancelled, AppExitResponse.cancel);
+      expect(stops, 0);
+
+      final quitting = tester.binding.handleRequestAppExit();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quit'));
+      await tester.pumpAndSettle();
+      expect(await quitting, AppExitResponse.exit);
+      expect(stops, 1);
+
+      // The window close that follows shares the decision and the stop.
+      expect(await tester.binding.handleRequestAppExit(), AppExitResponse.exit);
+      expect(stops, 1);
+    });
+
+    test('CTL-02: the composition root stops the engine when the app '
+        'quits', () {
+      final main = File('lib/main.dart').readAsStringSync();
+      final guard = main.substring(main.indexOf('quitGuard = AppQuitGuard('));
+      expect(
+        guard.substring(0, guard.indexOf('\n  );')),
+        contains('return engine.shutdown();'),
+      );
     });
 
     testWidgets('a locked app can quit without an inaccessible question', (

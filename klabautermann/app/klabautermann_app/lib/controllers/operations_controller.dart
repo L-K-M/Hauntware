@@ -329,6 +329,27 @@ final class OperationsController extends ChangeNotifier {
         _footprintAsked.removeAll(refused);
         _footprintRefused.addAll(refused);
         notifyListeners();
+      case RequestRejected(:final requestName, :final reason)
+          when requestName == '$PlanAction':
+        // One preview is asked at a time, so the rejection is its answer.
+        _answer(
+          PlanRefused(ActionRefusalReason.engineUnavailable, detail: reason),
+        );
+      case RequestRejected(:final requestName, :final requestId?)
+          when requestName == '$RunAction':
+        // The engine took the plan and could not start it: nothing ran,
+        // and no ActionFinished follows.
+        if (_runs[requestId] is! RunFinished) {
+          _end(
+            requestId,
+            const RunRefused(ActionRefusalReason.engineUnavailable),
+          );
+        }
+      case RequestRejected(:final requestName, :final requestId?, :final reason)
+          when requestName == '$ReadEditable':
+        _editReads
+            .remove(requestId)
+            ?.complete(EditReadFailed(EditReadFailure.failed, detail: reason));
       case EditRead(:final requestId, :final result):
         _editReads.remove(requestId)?.complete(result);
       case AuditRecords(:final serverId):

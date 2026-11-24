@@ -361,6 +361,12 @@ import '../operations/plan_types.dart';
 ///
 /// Sync sign-out then joined v3 the same way (03 §4.3): the [SignOutSync]
 /// request, answered by [SyncStatus] for the new [SyncOperation.signOut].
+///
+/// Rejections by id and engine faults then joined v3 the same way:
+/// [RequestRejected] gained an optional `requestId`, the rejected
+/// request's own id where it carries one, so the app settles the one
+/// read or open that was refused, and [EngineFault] reports an error the
+/// engine caught at its last-resort boundary.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1826,10 +1832,29 @@ final class EngineReady extends EngineEvent {
 /// human-readable reason so unimplemented rows surface during development
 /// instead of going unanswered.
 final class RequestRejected extends EngineEvent {
-  const RequestRejected(this.requestName, this.reason);
+  const RequestRejected(this.requestName, this.reason, {this.requestId});
 
   final String requestName;
   final String reason;
+
+  /// The rejected request's own id, where it carries one: its
+  /// `requestId`, or the query, stream, watch, forward, terminal, plan,
+  /// operation or prompt id it names. The app settles that one request
+  /// with it instead of waiting on an answer that will not come. Null for
+  /// a request that names none.
+  final String? requestId;
+}
+
+/// The engine caught an error nothing else handled (its last-resort
+/// boundary) and goes on running: the work that threw is lost, every
+/// link, shell and stream stays up. [error] and [stack] are the error's
+/// text and stack trace, for a log and a bug report; they are not
+/// redacted, so the app shows them only where the user asks for detail.
+final class EngineFault extends EngineEvent {
+  const EngineFault(this.error, {this.stack = ''});
+
+  final String error;
+  final String stack;
 }
 
 /// The fleet the engine knows changed (03 §10.1): [entries] is the whole

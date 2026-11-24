@@ -191,6 +191,60 @@ void main() {
     expect(admin.session(_server)?.password, _password);
   });
 
+  test(
+    'OPS-2: a password with a line break is refused as wrong without '
+    'reaching the host, and the next one still turns admin mode on',
+    () async {
+      final admin = controller()..probed(_server, _profile());
+      final enabling = admin.enable(_server);
+      await pumpEventQueue();
+      final before = link.commands.length;
+
+      // Pasted text often ends in CR LF; the executor throws an
+      // ArgumentError for it, which nothing in the engine awaits.
+      await answer('$_password\r\n');
+      expect(link.commands, hasLength(before), reason: 'nothing was sent');
+      final retry =
+          events.whereType<Prompt>().last.request as ElevationPromptRequest;
+      expect(retry.retry, isTrue);
+
+      await answer(_password);
+      await enabling;
+      expect(states().last.phase, AdminModePhase.on);
+    },
+  );
+
+  test('OPS-2: a validation that throws something unlisted ends the attempt '
+      'as failed, and a later attempt runs', () async {
+    link = _SudoLink();
+    var throwing = true;
+    final admin = AdminModeController(
+      linkFor: (_) => link,
+      endpointOf: (_) => (host: 'web-1', port: 22, user: 'deploy'),
+      prompts: prompts,
+      emit: events.add,
+      now: () => now,
+      startTimer: (duration, callback) => _FakeTimer(duration, callback),
+      validate: (_, _, _) async {
+        if (throwing) throw StateError('unexpected');
+      },
+    )..probed(_server, _profile());
+
+    final enabling = admin.enable(_server);
+    await pumpEventQueue();
+    await answer(_password);
+    await enabling;
+    expect(states().last.phase, AdminModePhase.failed);
+    expect(states().last.failure, AdminFailure.unavailable);
+
+    throwing = false;
+    final again = admin.enable(_server);
+    await pumpEventQueue();
+    await answer(_password);
+    await again;
+    expect(states().last.phase, AdminModePhase.on);
+  });
+
   test('takes rung 4 when the host caches nothing', () async {
     final admin = controller(over: _SudoLink(cachesNothing: true))
       ..probed(_server, _profile());
