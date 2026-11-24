@@ -133,6 +133,7 @@ export 'src/masking.dart'
         MaskedValue,
         isSecretKey,
         maskUrlCredentials,
+        maskedDriverOptions,
         maskedEnvEntry,
         maskedLabels,
         maskedValueFor,

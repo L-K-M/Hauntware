@@ -2,19 +2,24 @@
 /// an inspected container's command line and health-check output, read
 /// as Processes reads a command line, the list's command line, which
 /// the list drops, the instruction of each layer of an image's history,
-/// and the command line of each of a container's processes.
+/// the command line of each of a container's processes, and the options
+/// of a log driver and of a volume's driver.
 library;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show
         ContainerConfig,
         ContainerHealth,
+        ContainerHostConfig,
         ContainerInspect,
         ContainerState,
         ContainerSummary,
         ContainerTop,
         ImageHistoryEntry,
-        MaskedValue;
+        LogConfig,
+        MaskedValue,
+        VolumeSummary,
+        maskedDriverOptions;
 
 import '../engine/protocol.dart';
 import '../sampling/argument_masking.dart';
@@ -23,7 +28,8 @@ import '../sampling/argument_masking.dart';
 /// program `Path`, which crosses as it is. `Entrypoint` and `Cmd`, the
 /// command the container was created with, are masked as one command
 /// line, so an option in one and its value in the next still mask. Each health check's output is masked as one
-/// argument. One budget bounds the tokens read across them all.
+/// argument. One budget bounds the tokens read across them all. The log
+/// driver's options cross as [maskedDriverOptions] shows them.
 ContainerDetails maskContainerInspect(ContainerInspect inspect) {
   final budget = ArgumentMaskingBudget();
   return ContainerDetails(
@@ -43,11 +49,56 @@ ContainerDetails maskContainerInspect(ContainerInspect inspect) {
       null => null,
       final config => _maskConfig(config, budget),
     },
-    hostConfig: inspect.hostConfig,
+    hostConfig: switch (inspect.hostConfig) {
+      null => null,
+      final host => _maskHostConfig(host),
+    },
     mounts: inspect.mounts,
     networkSettings: inspect.networkSettings,
   );
 }
+
+/// [host] with its log driver's options masked (`splunk-token`, a
+/// `loki-url` with credentials). Every other field crosses as it is; a
+/// field added to [ContainerHostConfig] is added here.
+ContainerHostConfig _maskHostConfig(ContainerHostConfig host) {
+  final log = host.logConfig;
+  if (log == null || log.config.isEmpty) return host;
+
+  return ContainerHostConfig(
+    networkMode: host.networkMode,
+    restartPolicy: host.restartPolicy,
+    logConfig: LogConfig(
+      type: log.type,
+      config: maskedDriverOptions(log.config),
+    ),
+    privileged: host.privileged,
+    readonlyRootfs: host.readonlyRootfs,
+    binds: host.binds,
+    memory: host.memory,
+    nanoCpus: host.nanoCpus,
+    pidMode: host.pidMode,
+    autoRemove: host.autoRemove,
+    capAdd: host.capAdd,
+  );
+}
+
+/// [volumes] as they may cross (VOL-01): each driver's options masked,
+/// such as a CIFS volume's `o=username=u,password=p`.
+List<VolumeSummary> maskVolumeOptions(List<VolumeSummary> volumes) => [
+  for (final volume in volumes)
+    volume.options.isEmpty
+        ? volume
+        : VolumeSummary(
+            name: volume.name,
+            driver: volume.driver,
+            mountpoint: volume.mountpoint,
+            scope: volume.scope,
+            createdAt: volume.createdAt,
+            labels: volume.labels,
+            options: maskedDriverOptions(volume.options),
+          ),
+];
 
 /// [history] as it may cross (02 IMG-04): each layer's instruction, such
 /// as `RUN |1 TOKEN=abc /bin/sh -c ...` or `ENV API_KEY=...`, masked as

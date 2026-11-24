@@ -677,10 +677,16 @@ void main() {
       for (final line in [
         'curl -s https://h && sudo -u www:data ls',
         'curl -s https://h; app -u me:x',
-        'curl -s https://h | app -H Authorization:x',
+        'curl -s https://h | app -b sid',
       ]) {
         expect(_shown(['sh', '-c', line]), ['sh', '-c', line]);
       }
+      // A secret header is one for every tool (SMP-02).
+      expect(_shown(['sh', '-c', 'curl -s https://h | app -H Cookie:x']), [
+        'sh',
+        '-c',
+        'curl -s https://h | app -H Cookie:$_mask',
+      ]);
     });
 
     test('a tool is found after a wrapper and inside a -c line', () {
@@ -707,6 +713,150 @@ void main() {
     });
   });
 
+  group('colon forms, token-only URL userinfo and secret headers outside '
+      'the known tools (SMP-02)', () {
+    test('a JSON body masks from the colon of a secret key', () {
+      expect(_shown(['curl', '-d', '{"password":"hunter2"}', 'https://h']), [
+        'curl',
+        '-d',
+        '{"password":$_mask',
+        'https://h',
+      ]);
+      expect(_shown(['curl', '--data-raw', '{"user": "me", "token": "abc"}']), [
+        'curl',
+        '--data-raw',
+        '{"user": "me", "token": $_mask',
+      ]);
+      // A key that only holds a key word is not the first match's end.
+      expect(_shown(['app', '{"path":"/keys/a","password":"hunter2"}']), [
+        'app',
+        '{"path":"/keys/a","password":$_mask',
+      ]);
+    });
+
+    test('a JSON body inside a -c line masks to the end of its shell word', () {
+      expect(
+        _shown(['sh', '-c', 'curl -d \'{"password":"hunter2"}\' https://h']),
+        ['sh', '-c', 'curl -d \'{"password":$_mask\' https://h'],
+      );
+      expect(
+        _shown(['sh', '-c', 'curl -d \'{"password": "a b", "x": 1}\' h']),
+        ['sh', '-c', 'curl -d \'{"password":$_mask\' h'],
+      );
+      expect(
+        _shown(['sh', '-c', r'curl -d "{\"api_key\":\"abc\"}" https://h']),
+        ['sh', '-c', 'curl -d "{\\"api_key\\":$_mask" https://h'],
+      );
+      // A cron line is read as one argument after an empty program.
+      expect(
+        _shown(['', '0 3 * * * curl -d {"token":"abc"} https://h'])[1],
+        '0 3 * * * curl -d {"token":$_mask https://h',
+      );
+    });
+
+    test('a key and colon alone mask the next token', () {
+      expect(_shown(['ansible -e db_password: hunter2 site.yml']), [
+        'ansible -e db_password: $_mask site.yml',
+      ]);
+      expect(_shown(['ps', 'row', 'password:', 'hunter2', 'x']), [
+        'ps',
+        'row',
+        'password:',
+        _mask,
+        'x',
+      ]);
+    });
+
+    test('a plain key:value masks its value', () {
+      expect(_shown(['app', 'password:hunter2', "'secret':'x'"]), [
+        'app',
+        'password:$_mask',
+        "'secret':$_mask",
+      ]);
+    });
+
+    test('a path or a host before or after the colon is no assignment', () {
+      for (final argv in [
+        ['docker', 'run', '-v', '/etc/ssl/private:/etc/ssl/private:ro', 'x'],
+        ['docker', 'pull', 'registry:5000/passbolt/passbolt:latest'],
+        ['scp', 'f', 'me@keyhost:dir'],
+        ['scp', 'f', 'keyhost:/srv/x'],
+        ['curl', 'https://auth.example.com:8443/x'],
+        ['env', 'PATH=/opt/keys/bin:/usr/bin'],
+        ['app', 'monkey', 'key', ':'],
+      ]) {
+        expect(_shown(argv), argv);
+      }
+    });
+
+    test('a token that is all of an http URL\'s userinfo is masked', () {
+      expect(
+        _shown(['git', 'clone', 'https://ghp_abcdefgh@github.com/org/repo']),
+        ['git', 'clone', 'https://$_mask@github.com/org/repo'],
+      );
+      expect(_shown(['sh', '-c', 'pip install git+https://tok@h/r.git']), [
+        'sh',
+        '-c',
+        'pip install git+https://$_mask@h/r.git',
+      ]);
+      // A login name of another scheme is no secret.
+      for (final url in [
+        'ssh://git@github.com/org/repo',
+        'postgres://app@db/x',
+        'https://example.com/a@b',
+        'https://example.com?to=a@b',
+      ]) {
+        expect(_shown(['app', url]), ['app', url]);
+      }
+    });
+
+    test('an Authorization header of a tool outside the table', () {
+      expect(
+        _shown(['python', 'client.py', '-H', 'Authorization: Bearer abc']),
+        ['python', 'client.py', '-H', 'Authorization:$_mask'],
+      );
+      expect(
+        _shown(['sh', '-c', 'python client.py -H "Authorization: Bearer abc"']),
+        ['sh', '-c', 'python client.py -H "Authorization:$_mask"'],
+      );
+      // A ps fallback row, one line or split at its spaces: the scheme
+      // and the credential after it.
+      expect(_shown(['python client.py -H Authorization: Bearer abc x']), [
+        'python client.py -H Authorization: $_mask $_mask x',
+      ]);
+      expect(
+        _shown(['python', 'c.py', '-H', 'Authorization:', 'Bearer', 'abc']),
+        ['python', 'c.py', '-H', 'Authorization:', _mask, _mask],
+      );
+      expect(_shown(['curl', '-H', 'Authorization:', 'Bearer', 'abc', 'h']), [
+        'curl',
+        '-H',
+        'Authorization:',
+        _mask,
+        _mask,
+        'h',
+      ]);
+      expect(_shown(['node', 'c.js', '--header', 'Cookie: sid=abc']), [
+        'node',
+        'c.js',
+        '--header',
+        'Cookie:$_mask',
+      ]);
+    });
+
+    test('never throws, whatever the tokens hold', () {
+      for (final argv in [
+        [':'],
+        ['x', ':', '":', "':", r'\:', 'key:', 'key":', 'key\\":', '"key'],
+        ['x', '://', 'http://', 'https://@', 'https://@h', 'http://a@'],
+        ['x', 'password:', ''],
+        ['x', '{"password":'],
+      ]) {
+        expect(() => maskCommandLine(argv), returnsNormally);
+      }
+    });
+  });
+
   test('masking takes time linear in an argument, whatever a host user '
       'puts in one', () {
     // An argument can hold 128 KiB (Linux's MAX_ARG_STRLEN), and every
@@ -728,6 +878,13 @@ void main() {
       '-H',
       '${'a' * 131071}:',
     ]);
+    // The colon rule reads a bounded number of key words, each name once.
+    final keys = 'key' * 43690;
+    expect(_shown(['sh', keys]), ['sh', keys]);
+    final names2 = 'key.' * 32768;
+    expect(_shown(['sh', names2]), ['sh', names2]);
+    final userinfo = 'https://${'a' * 131000}';
+    expect(_shown(['sh', userinfo]), ['sh', userinfo]);
     final names = 'curl ${'x/curl ' * 20000}';
     expect(_shown(['sh', names]), ['sh', names]);
     // A -c line's quoting is read once, and a kept prefix's quotes once.

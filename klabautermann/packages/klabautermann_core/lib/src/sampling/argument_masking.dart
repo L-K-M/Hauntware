@@ -44,7 +44,15 @@ final class ArgumentMaskingBudget {
 /// - the value of `name=value` whose name matches 03 §8.9's key pattern
 ///   (`--password=`, `-Dapp.token=`, `API_TOKEN=`), also where the name
 ///   runs through an earlier `=`, as in `--env=DB_PASSWORD=<value>`;
-/// - URL credentials (`scheme://user:pass@`) anywhere else.
+/// - the value of `name:value` whose name holds a key word, quoted or
+///   not, as a JSON body or a header carries it (`{"password":"x"}`,
+///   `Authorization: Bearer x`), and of a secret header ([_isSecretHeader])
+///   of any tool; a name that follows a `/` or an `@`, or a value that
+///   starts with `/`, is a path or a host and stays (`-v
+///   /etc/ssl/private:/x`). A name and colon alone mask the next token,
+///   and the one after an auth scheme;
+/// - URL credentials (`scheme://user:pass@`, and an http URL's userinfo
+///   that is one token, `https://<token>@host`) anywhere else.
 ///
 /// The token after an option whose name matches the key pattern
 /// (`--password <value>`, `-passin <value>`) is a value too, unless it
@@ -121,7 +129,11 @@ List<MaskedValue> maskCommandLine(
       }
 
       final end = first ? whole.length : _shellWordEnd(whole, match.start);
-      if (!first) reader.wordEnded(whole, tokenEnd: match.end, end: end);
+      // An argument that is one token (a ps fallback row's) ends as a
+      // shell word does: its value may be the next argument.
+      if (!first || end == match.end) {
+        reader.wordEnded(whole, tokenEnd: match.end, end: end);
+      }
       // A quote the kept prefix opens (`-u 'me:a b'`) stays closed.
       final hiddenTo = !first && _closesQuote(kept, whole.codeUnitAt(end - 1))
           ? end - 1
@@ -165,6 +177,50 @@ String? _keptBeforeValue(String token) {
   }
   return null;
 }
+
+/// The key words of one token the colon rule looks at. A token of a JSON
+/// body holds a few keys; the bound keeps a token a host user fills with
+/// key words linear.
+const _colonKeysRead = 8;
+
+/// What may follow a secret key's word up to its colon: the rest of the
+/// name, then the quote that closes it, escaped or not.
+final _nameToColon = RegExp(r'''[A-Za-z0-9_-]*\\?["']?:''');
+
+/// Where the colon of a secret `name:value` in [token] is (`password:x`,
+/// `{"token":"x"}`), or -1 when it holds none. A name right after a `/`
+/// or an `@` is a path's or a host's (`/etc/ssl/private:/x`,
+/// `me@keyhost:dir`), and so is one whose value starts with `/`.
+int _secretColon(String token) {
+  if (!token.contains(':')) return -1;
+
+  for (final key in secretKeyPattern.allMatches(token).take(_colonKeysRead)) {
+    final name = _nameToColon.matchAsPrefix(token, key.end);
+    if (name == null) continue;
+    final colon = name.end - 1;
+    if (colon + 1 < token.length && token.codeUnitAt(colon + 1) == _slash) {
+      continue;
+    }
+
+    var start = key.start;
+    while (start > 0 && _isNameCharacter(token.codeUnitAt(start - 1))) {
+      start--;
+    }
+    if (start > 0) {
+      final before = token.codeUnitAt(start - 1);
+      if (before == _slash || before == _at) continue;
+    }
+    return colon;
+  }
+  return -1;
+}
+
+const _slash = 0x2F;
+const _at = 0x40;
+
+/// A character of a key's name: a letter, a digit, `_`, `-` or `.`.
+bool _isNameCharacter(int unit) =>
+    _isAlphanumeric(unit) || unit == 0x5F || unit == 0x2D || unit == 0x2E;
 
 /// Where the shell word of [text] that starts at [start] ends: at the
 /// first space, tab or newline outside quotes, or at the text's end while
@@ -324,6 +380,19 @@ final class _CommandLineReader {
     }
   }
 
+  /// The part of [text] shown before its secret value by the rules of
+  /// every tool: [_keptBeforeValue], then the colon forms. A name and
+  /// colon alone are kept whole, their value still to come.
+  String? _keptOfAnyTool(String text) {
+    if (_keptBeforeValue(text) case final kept?) return kept;
+
+    final colon = _secretColon(text);
+    if (colon == -1) return _keptOfHeader(text, colonRequired: true);
+    _headerNameOnly = colon == text.length - 1;
+    _headerSchemeOnly = _isAuthScheme(text.substring(colon + 1));
+    return '${maskUrlCredentials(text.substring(0, colon))}:';
+  }
+
   String? _read(String text, {required bool program}) {
     if (program) {
       _command = _Command.named(text);
@@ -338,7 +407,7 @@ final class _CommandLineReader {
     _pendingIsHeader = false;
     if (pending != null && !(yieldsToOption && text.startsWith('-'))) {
       if (isHeader) _headerSchemeOnly = _isAuthScheme(text);
-      return _keptOfValue(text, pending) ?? _keptBeforeValue(text);
+      return _keptOfValue(text, pending) ?? _keptOfAnyTool(text);
     }
 
     if (text.length > 1 && text.startsWith('-')) return _readOption(text);
@@ -354,14 +423,14 @@ final class _CommandLineReader {
       _pendingYieldsToOption = true;
     }
 
-    if (option == null) return _keptBeforeValue(text);
+    if (option == null) return _keptOfAnyTool(text);
     // An attached value the tool's rule leaves visible may still hold a
     // secret assignment (`--header=X-Q: token=abc`); a bare option name
     // holds no value at all.
     if (option.attached case final attached?) {
       final kept = _keptOfValue(attached.value, option.shape);
       if (kept != null) return '${attached.name}$kept';
-      return _keptBeforeValue(text);
+      return _keptOfAnyTool(text);
     }
     return null;
   }
@@ -377,7 +446,7 @@ final class _CommandLineReader {
       }
       if (position == tool.commandOperand) {
         _command = _Command.named(text);
-        return _keptBeforeValue(text);
+        return _keptOfAnyTool(text);
       }
       if (position == tool.secretOperand?.call(command.letters)) return '';
       if (tool.headerOperands) {
@@ -391,7 +460,7 @@ final class _CommandLineReader {
         when !identical(named.tool, _command?.tool)) {
       _command = named;
     }
-    return _keptBeforeValue(text);
+    return _keptOfAnyTool(text);
   }
 
   void _endCommand() {
@@ -414,13 +483,17 @@ final class _CommandLineReader {
 
   /// The name and colon of a secret header (`Authorization: Bearer x`),
   /// after any opening quotes, or null for another header or none.
-  String? _keptOfHeader(String value) {
+  ///
+  /// With [colonRequired], a name without its colon is no header: outside
+  /// a header option's value it is any word (`ssh-key`).
+  String? _keptOfHeader(String value, {bool colonRequired = false}) {
     var start = 0;
     while (start < value.length && _quotes.contains(value.codeUnitAt(start))) {
       start++;
     }
     final colon = value.indexOf(':', start);
     if (colon == -1) {
+      if (colonRequired) return null;
       // `-H 'Authorization : x'`: a blank before the colon ends the token
       // at the name, so what follows it in the shell word or argument is
       // the value.

@@ -161,6 +161,55 @@ void main() {
     expect(read.deviceId, 'device-1');
   });
 
+  test("a one-off container command's secrets never reach the log or a "
+      'read of it (OPS-3)', () async {
+    final audit = log();
+    final plan = OperationPlan(
+      intent: ContainerExec(
+        _server,
+        containerId: 'db',
+        argv: const ['mysql', '-uroot', '-phunter2', '-e', 'show databases'],
+      ),
+      kind: OperationKind.containerExec,
+      targetName: 'db',
+      steps: [
+        ExecStep(
+          path: '/v1.52/containers/db/exec',
+          containerId: 'db',
+          argv: const ['mysql', '-uroot', '-phunter2', '-e', 'show databases'],
+        ),
+        ExecStep(
+          path: '/v1.52/containers/db/exec',
+          containerId: 'db',
+          argv: const ['curl', '-u', 'admin:hunter2', 'https://x'],
+        ),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: const RunnerFacts(identity: 'deploy'),
+    );
+    await audit.recordRun((
+      planId: 'plan-1',
+      plan: plan,
+      finished: const ActionFinished(
+        planId: 'plan-1',
+        outcome: ActionOutcome.succeeded,
+      ),
+      startedAt: now,
+      endedAt: now,
+    ));
+
+    expect(fileOf(_server).readAsStringSync(), isNot(contains('hunter2')));
+    final read = (await audit.query(_server)).records.single;
+    expect(read.steps, [
+      'POST /v1.52/containers/db/exec '
+          '{"Cmd":["mysql","-uroot","-p********","-e","show databases"],'
+          '"Tty":false}',
+      'POST /v1.52/containers/db/exec '
+          '{"Cmd":["curl","-u","admin:********","https://x"],"Tty":false}',
+    ]);
+    expect(jsonEncode(read.toJson()), isNot(contains('hunter2')));
+  });
+
   test('keeps the skipped syslog line of a run that succeeded', () async {
     final audit = log();
     final plan = OperationPlan(

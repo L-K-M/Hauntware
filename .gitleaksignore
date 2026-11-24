@@ -40,3 +40,7 @@ f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-a
 cfff9d0cc5809f0f651808d26d1280362b518741:klabautermann/packages/klabautermann_core/test/sampling/argument_masking_test.dart:curl-auth-user:614
 # The same synthetic redaction-test token, moved by the suite reformat.
 16a4983e6bb6f31ed00572c054dc9c03c64d603d:seance/packages/seance_core/test/llm_test.dart:github-pat:483
+# Synthetic `curl -u admin:hunter2` samples in the diagnostic bundle masking
+# tests (a ps row and a cron line the masker must hide). No credential.
+db5b4b340fdfe20ae46ac0affae7d1d114aed8e7:klabautermann/packages/klabautermann_core/test/logs/host_queries_test.dart:curl-auth-user:390
+db5b4b340fdfe20ae46ac0affae7d1d114aed8e7:klabautermann/packages/klabautermann_core/test/logs/host_queries_test.dart:curl-auth-user:479

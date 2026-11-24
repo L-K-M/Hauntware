@@ -5,7 +5,11 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/logs/host_queries.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
-    show RemoteCommandException, RemoteCommandResult, quoteShellWord;
+    show
+        RemoteCommandException,
+        RemoteCommandResult,
+        SecretRedactor,
+        quoteShellWord;
 import 'package:test/test.dart';
 
 import '../support/scripted_link.dart';
@@ -283,6 +287,296 @@ void main() {
     events.clear();
     final failed = (await ask(const DiagnosticBundleQuery())).payload;
     expect((failed as HostQueryFailed).failure, HostQueryFailure.noLink);
+  });
+
+  group('a diagnostic bundle crosses with its command lines masked by '
+      "8.9's argument rules (UIA-01)", () {
+    Future<DiagnosticBundle> read(DiagnosticBundle raw) async {
+      link = _RunLink((_) => fail('the bundle runs no command'));
+      await HostQueries(
+        linkFor: (_) => link,
+        systemdVersionOf: (_) => null,
+        emit: events.add,
+        readDiagnostics: (_) async => raw,
+      ).query(
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'q-1',
+          query: DiagnosticBundleQuery(),
+        ),
+      );
+      return (events.single as HostResult).payload as DiagnosticBundle;
+    }
+
+    /// The bundle's text as the export sheet's redactor leaves it.
+    String exported(DiagnosticBundle bundle) => [
+      for (final section in bundle.sections)
+        ...section.text.split('\n').map(SecretRedactor().redact),
+    ].join('\n');
+
+    String cmdline(int pid, List<String> argv) =>
+        '==> $pid/cmdline <==\n${argv.map((a) => '$a\x1f').join()}\n';
+
+    test('procs: each /proc cmdline record, read as its arguments', () async {
+      final procs = [
+        '== meta ==\ntotal=7\nselection=all\n== rows ==',
+        '1234 S 1 0 0 0 100 0 2048 mysql',
+        '== cmdline ==',
+        cmdline(1234, ['mysql', '-uroot', '-phunter2', 'db']),
+        cmdline(1235, ['curl', '-u', 'admin:hunter2', 'https://x']),
+        cmdline(1236, ['redis-cli', '-a', 'hunter2']),
+        cmdline(1237, ['app', '--password', 'hunter2']),
+        cmdline(1238, ['app', '--password=hunter2']),
+        cmdline(1239, ['psql', 'postgres://bob:hunter2@db/x']),
+        cmdline(1240, ['sshpass', '-p', 'hunter2', 'ssh', '-p', '22', 'h']),
+        cmdline(1241, ['docker', 'login', '-p', 'hunter2', 'reg']),
+        // An argument that holds a newline stays one argument.
+        cmdline(1242, ['sh', '-c', 'true\nPGPASSWORD=hunter2 pg_dump']),
+        cmdline(1243, ['app', '--password', 'hun\nter2', 'x']),
+      ].join('\n');
+      final bundle = await read(
+        DiagnosticBundle(
+          [
+            const DiagnosticSection(
+              collector: 'core',
+              status: 'ok',
+              text: 'cpu 1',
+            ),
+            DiagnosticSection(collector: 'procs', status: 'ok', text: procs),
+          ],
+          missing: const ['gpu'],
+        ),
+      );
+
+      expect(bundle.missing, ['gpu']);
+      expect(bundle.sections.first.text, 'cpu 1');
+      final section = bundle.sections.last;
+      expect((section.collector, section.status), ('procs', 'ok'));
+      expect(
+        section.text,
+        [
+          '== meta ==\ntotal=7\nselection=all\n== rows ==',
+          '1234 S 1 0 0 0 100 0 2048 mysql',
+          '== cmdline ==',
+          cmdline(1234, ['mysql', '-uroot', '-p********', 'db']),
+          cmdline(1235, ['curl', '-u', 'admin:********', 'https://x']),
+          cmdline(1236, ['redis-cli', '-a', '********']),
+          cmdline(1237, ['app', '--password', '********']),
+          cmdline(1238, ['app', '--password=********']),
+          cmdline(1239, ['psql', 'postgres://bob:********@db/x']),
+          cmdline(1240, ['sshpass', '-p', '********', 'ssh', '-p', '22', 'h']),
+          cmdline(1241, ['docker', 'login', '-p', '********', 'reg']),
+          cmdline(1242, ['sh', '-c', 'true\nPGPASSWORD=******** pg_dump']),
+          cmdline(1243, ['app', '--password', '********', 'x']),
+        ].join('\n'),
+      );
+      expect(exported(bundle), isNot(contains('hunter2')));
+      expect(exported(bundle), isNot(contains('ter2')));
+    });
+
+    test('procs: the rows of a ps fallback, and a reply without record '
+        'headers', () async {
+      for (final marker in ['== ps ==', '== ps_w ==']) {
+        events.clear();
+        final bundle = await read(
+          DiagnosticBundle([
+            DiagnosticSection(
+              collector: 'procs',
+              status: 'ok',
+              text:
+                  '== meta ==\ntotal=2\n== rows ==\n== cmdline ==\n$marker\n'
+                  '  PID  PPID USER     STAT   RSS COMMAND\n'
+                  ' 1234     1 root     S     2048 mysql -uroot -phunter2 db\n'
+                  ' 1235     1 root     S     2048 curl -u admin:hunter2 '
+                  'https://x\n'
+                  ' 1236     1 root     S     2048 redis-cli -a hunter2\n'
+                  ' 1237     1 root     S     2048 app --password hunter2',
+            ),
+          ]),
+        );
+        expect(
+          bundle.sections.single.text,
+          '== meta ==\ntotal=2\n== rows ==\n== cmdline ==\n$marker\n'
+          '  PID  PPID USER     STAT   RSS COMMAND\n'
+          ' 1234     1 root     S     2048 mysql -uroot -p******** db\n'
+          ' 1235     1 root     S     2048 curl -u admin:******** '
+          'https://x\n'
+          ' 1236     1 root     S     2048 redis-cli -a ********\n'
+          ' 1237     1 root     S     2048 app --password ********',
+        );
+      }
+
+      // `head` prints no header for a single file, and a host may send
+      // anything: a first word is never trusted to be a program.
+      events.clear();
+      final bundle = await read(
+        const DiagnosticBundle([
+          DiagnosticSection(
+            collector: 'procs',
+            status: 'ok',
+            text: '== cmdline ==\nPGPASSWORD=hunter2\x1fpg_dump\x1f',
+          ),
+          DiagnosticSection(
+            collector: 'procs',
+            status: 'error',
+            text: 'mysql -phunter2',
+          ),
+        ]),
+      );
+      expect(
+        bundle.sections.first.text,
+        '== cmdline ==\nPGPASSWORD=********\x1fpg_dump\x1f',
+      );
+      expect(bundle.sections.last.text, 'mysql -p********');
+
+      // Arguments are read at their separators wherever they stand.
+      events.clear();
+      final odd = await read(
+        const DiagnosticBundle([
+          DiagnosticSection(
+            collector: 'procs',
+            status: 'ok',
+            text: '== cmdline ==\n== ps ==\nmysql\x1f-phunter2\x1f',
+          ),
+          DiagnosticSection(
+            collector: 'procs',
+            status: 'ok',
+            text: 'mysql\x1f-phunter2\x1f',
+          ),
+          DiagnosticSection(
+            collector: 'cron',
+            status: 'ok',
+            text: 'mysql\x1f-phunter2\x1f',
+          ),
+        ]),
+      );
+      expect(
+        [for (final section in odd.sections) section.text],
+        [
+          '== cmdline ==\n== ps ==\nmysql\x1f-p********\x1f',
+          'mysql\x1f-p********\x1f',
+          'mysql\x1f-p********\x1f',
+        ],
+      );
+    });
+
+    test('procs: a ps block that does not follow the cmdline line at '
+        'once is never masked less', () async {
+      const rows =
+          ' 1234     1 root     S     2048 mysql -uroot -phunter2 db\n'
+          ' 1236     1 root     S     2048 redis-cli -a hunter2\n'
+          ' 1237     1 root     S     2048 app --password hunter2\n'
+          ' 1238     1 root     S     2048 docker login -p hunter2 reg\n'
+          ' 1239     1 root     S     2048 sh -c "true" PGPASSWORD=hunter2';
+      const masked =
+          ' 1234     1 root     S     2048 mysql -uroot -p******** db\n'
+          ' 1236     1 root     S     2048 redis-cli -a ********\n'
+          ' 1237     1 root     S     2048 app --password ********\n'
+          ' 1238     1 root     S     2048 docker login -p ******** reg\n'
+          ' 1239     1 root     S     2048 sh -c "true" PGPASSWORD=********';
+
+      // Blank lines between the two: still rows, masked row by row.
+      for (final between in ['\n', '\n \n\t\n']) {
+        events.clear();
+        final bundle = await read(
+          DiagnosticBundle([
+            DiagnosticSection(
+              collector: 'procs',
+              status: 'ok',
+              text: '== cmdline ==\n$between== ps ==\n$rows',
+            ),
+          ]),
+        );
+        expect(
+          bundle.sections.single.text,
+          '== cmdline ==\n$between== ps ==\n$masked',
+        );
+      }
+
+      // Anything else between them, or a ps line inside a record: read
+      // as records, whose arguments may span lines. Nothing shows.
+      for (final text in [
+        '== cmdline ==\nnote\n== ps ==\n$rows',
+        '== cmdline ==\n==> 1/cmdline <==\nsh\x1f-c\x1fa\n== ps ==\nb\x1f\n\n'
+            '==> 2/cmdline <==\napp\x1f--password\x1fhun\nter2\x1f\n$rows',
+        '== cmdline ==\n== ps ==x\n$rows',
+        '== ps ==\n== cmdline ==\n\n$rows',
+      ]) {
+        events.clear();
+        final shown = (await read(
+          DiagnosticBundle([
+            DiagnosticSection(collector: 'procs', status: 'ok', text: text),
+          ]),
+        )).sections.single.text;
+        expect(shown, isNot(contains('hunter2')), reason: text);
+        expect(shown, isNot(contains('ter2')), reason: text);
+      }
+    });
+
+    test('cron: every line of every crontab', () async {
+      final bundle = await read(
+        const DiagnosticBundle([
+          DiagnosticSection(
+            collector: 'cron',
+            status: 'ok',
+            text:
+                '== crontab_meta ==\nrc=0\n== crontab ==\n'
+                'DB_PASSWORD=hunter2\n'
+                '0 3 * * * mysqldump -phunter2 db | gzip\n'
+                '*/5 * * * * sshpass -p hunter2 ssh h\n'
+                '@daily PGPASSWORD=hunter2 pg_dump\n'
+                '== etc_crontab ==\n'
+                '17 * * * * root docker login -p hunter2 reg\n'
+                '== cron_d ==\n'
+                'backup\t0 4 * * * root app --password=hunter2\n'
+                'backup\t0 5 * * * root curl -u admin:hunter2 https://x\n'
+                '== cron_dirs ==\ndaily logrotate',
+          ),
+        ]),
+      );
+
+      expect(
+        bundle.sections.single.text,
+        '== crontab_meta ==\nrc=0\n== crontab ==\n'
+        'DB_PASSWORD=********\n'
+        '0 3 * * * mysqldump -p******** db | gzip\n'
+        '*/5 * * * * sshpass -p ******** ssh h\n'
+        '@daily PGPASSWORD=******** pg_dump\n'
+        '== etc_crontab ==\n'
+        '17 * * * * root docker login -p ******** reg\n'
+        '== cron_d ==\n'
+        'backup\t0 4 * * * root app --password=********\n'
+        'backup\t0 5 * * * root curl -u admin:******** https://x\n'
+        '== cron_dirs ==\ndaily logrotate',
+      );
+      expect(exported(bundle), isNot(contains('hunter2')));
+    });
+
+    test('a bundle of any shape is answered, never thrown on', () async {
+      for (final text in [
+        '',
+        '\n',
+        '== cmdline ==',
+        '== cmdline ==\n',
+        '== cmdline ==\n== ps ==',
+        '==> <==\n\x1f\x1f\n==> 1/cmdline <==',
+        '\x1f' * 70000,
+        'a ' * 70000,
+      ]) {
+        events.clear();
+        final bundle = await read(
+          DiagnosticBundle([
+            DiagnosticSection(collector: 'procs', status: 'ok', text: text),
+            DiagnosticSection(collector: 'cron', status: 'ok', text: text),
+          ]),
+        );
+        expect(bundle.sections, hasLength(2));
+        expect(
+          bundle.sections.first.text.split('\n').length,
+          text.split('\n').length,
+        );
+      }
+    });
   });
 
   test('the listening ports read runs its command and parses', () async {

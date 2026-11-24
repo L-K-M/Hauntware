@@ -12,6 +12,8 @@ import 'package:klabautermann_app/ui/diagnostic_bundle.dart';
 import 'package:klabautermann_app/ui/logs/log_export.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/logs/host_queries.dart'
+    show maskDiagnosticBundle;
 
 import 'support/fake_engine.dart';
 
@@ -130,6 +132,102 @@ void main() {
     await tester.pumpAndSettle();
     expect(host.saved, [('diagnostics.txt', 'redacted\n')]);
     expect(find.byType(BottomSheet), findsNothing);
+  });
+
+  testWidgets('the exported text carries no command-line secret, with '
+      'secrets included or not (UIA-01)', (tester) async {
+    String cmdline(int pid, List<String> argv) =>
+        '==> $pid/cmdline <==\n${argv.map((a) => '$a\x1f').join()}\n';
+    // As the engine answers the query: masked before it crosses.
+    final bundle = maskDiagnosticBundle(
+      DiagnosticBundle([
+        DiagnosticSection(
+          collector: 'procs',
+          status: 'ok',
+          text: [
+            '== meta ==\ntotal=5\n== rows ==\n== cmdline ==',
+            cmdline(1234, ['mysql', '-uroot', '-phunter2', 'db']),
+            cmdline(1235, ['curl', '-u', 'admin:hunter2', 'https://x']),
+            cmdline(1236, ['redis-cli', '-a', 'hunter2']),
+            cmdline(1237, ['app', '--password', 'hunter2']),
+            cmdline(1239, ['psql', 'postgres://bob:hunter2@db/x']),
+          ].join('\n'),
+        ),
+        const DiagnosticSection(
+          collector: 'cron',
+          status: 'ok',
+          text:
+              '== crontab_meta ==\nrc=0\n== crontab ==\n'
+              '0 3 * * * mysqldump -phunter2 db | gzip\n'
+              '0 4 * * * sshpass -p hunter2 ssh h\n'
+              '0 5 * * * PGPASSWORD=hunter2 pg_dump\n'
+              '0 6 * * * docker login -p hunter2 reg\n'
+              '0 7 * * * app --password=hunter2',
+        ),
+      ]),
+    );
+    const exported = [
+      '### procs ok',
+      '== meta ==',
+      'total=5',
+      '== rows ==',
+      '== cmdline ==',
+      '==> 1234/cmdline <==',
+      'mysql\x1f-uroot\x1f-p********\x1fdb\x1f',
+      '',
+      '==> 1235/cmdline <==',
+      'curl\x1f-u\x1fadmin:********\x1fhttps://x\x1f',
+      '',
+      '==> 1236/cmdline <==',
+      'redis-cli\x1f-a\x1f********\x1f',
+      '',
+      '==> 1237/cmdline <==',
+      'app\x1f--password\x1f********\x1f',
+      '',
+      '==> 1239/cmdline <==',
+      'psql\x1fpostgres://bob:********@db/x\x1f',
+      '',
+      '### cron ok',
+      '== crontab_meta ==',
+      'rc=0',
+      '== crontab ==',
+      '0 3 * * * mysqldump -p******** db | gzip',
+      '0 4 * * * sshpass -p ******** ssh h',
+      '0 5 * * * PGPASSWORD=******** pg_dump',
+      '0 6 * * * docker login -p ******** reg',
+      '0 7 * * * app --password=********',
+    ];
+
+    final query = await openBundle(tester);
+    engine.emit(
+      HostResult(serverId: 'srv-1', queryId: query.queryId, payload: bundle),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('also when you include secrets'), findsOne);
+
+    // Redacted: these are the lines the engine's redactor gets.
+    await tester.tap(find.text('Save…'));
+    await tester.pump();
+    final redact = engine.sentOfType<RedactLines>().single as RedactLines;
+    expect(redact.lines.skip(1), exported);
+    expect(redact.lines.join('\n'), isNot(contains('hunter2')));
+    engine.emit(RedactedLines(redact.requestId, redact.lines.join('\n')));
+    await tester.pumpAndSettle();
+
+    // With secrets included, the file is the lines as they crossed.
+    final again = await openBundle(tester);
+    engine.emit(
+      HostResult(serverId: 'srv-1', queryId: again.queryId, payload: bundle),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Include secrets'));
+    await tester.pump();
+    await tester.tap(find.text('Save…'));
+    await tester.pumpAndSettle();
+    final (name, text) = host.saved.single;
+    expect(name, 'diagnostics.txt');
+    expect(text.split('\n').skip(1), [...exported, '']);
+    expect(text, isNot(contains('hunter2')));
   });
 
   testWidgets('a server that is not connected says so', (tester) async {
