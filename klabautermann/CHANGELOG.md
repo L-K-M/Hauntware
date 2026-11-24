@@ -620,3 +620,16 @@
   every line is read, and a new search stops the one before it. A
   pattern that does not finish is stopped after five seconds with a note
   under the field.
+- A server's confirmation no longer covers its jump hosts on its own:
+  selecting a server also selects its unconfirmed hop rows, so one press
+  confirms the whole route, while deselecting a hop leaves it unconfirmed.
+  An address another device rewrote while the list was open stays
+  unconfirmed.
+- Importing ~/.ssh/config finishes quickly even when a Host pattern
+  makes a backtracking matcher try every placement of its wildcards.
+- Removing an alert rule finds it by the id it was written with, and a
+  removal whose synced record is refused says so instead of reporting
+  success.
+- While a long step borrows the slow sampler, panels show its missed
+  readings as gaps instead of stale values, and a probe the borrowing
+  interrupts costs no extra retry wait.

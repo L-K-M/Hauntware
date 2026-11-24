@@ -154,15 +154,26 @@ final class SyncedFleet {
   /// route that this device never confirmed. A hop confirmed before keeps
   /// its pin: when a sync changed it, it waits for its own confirmation,
   /// so confirming a server behind it never accepts the hop's new
-  /// endpoint unseen. A hop whose pin the store could not read counts as
-  /// pinned, for the same reason. Ids the account does not hold, and servers no pin
-  /// can describe (an empty host or hop id, a port out of range), are
-  /// skipped.
-  List<EndpointPin> pinsFor(Iterable<String> ids, DateTime now) {
+  /// endpoint unseen. With [shown], the endpoints the user looked at by
+  /// server id, an endpoint is pinned only while it still matches its
+  /// [ShownEndpoint]: a hop the confirmation did not show, or one a sync
+  /// rewrote since, stays unconfirmed rather than being accepted unseen.
+  /// A hop whose pin the store could not read counts as pinned, for the
+  /// same reason. Ids the account does not hold, and servers no pin can
+  /// describe (an empty host or hop id, a port out of range), are skipped.
+  List<EndpointPin> pinsFor(
+    Iterable<String> ids,
+    DateTime now, {
+    Map<String, ShownEndpoint>? shown,
+  }) {
     final pins = <String, EndpointPin>{};
     void add(String id) {
       final server = _byId[id];
       if (server == null || pins.containsKey(id)) return;
+      // A hop the confirmation never showed, or one whose address a sync
+      // moved after it was shown, is never pinned on the strength of
+      // another server's row.
+      if (shown != null && shown[id] != _shownEndpoint(id, server)) return;
       try {
         pins[id] = EndpointPin(
           serverId: id,
@@ -186,6 +197,15 @@ final class SyncedFleet {
     }
     return List.unmodifiable(pins.values);
   }
+
+  /// [id]'s endpoint as a [ShownEndpoint], the same shape the fleet
+  /// entry carries, to compare against what the app showed.
+  ShownEndpoint _shownEndpoint(String id, ServerConfig server) => ShownEndpoint(
+    host: server.host,
+    port: server.port,
+    user: server.username.isEmpty ? null : server.username,
+    jumpRoute: _jumpRoute(server, _routes[id]!, _byId),
+  );
 
   /// The ids of [server]'s jump hosts, first hop first, by following each
   /// `jumpHostId` back. A hop the account does not hold ends the route,

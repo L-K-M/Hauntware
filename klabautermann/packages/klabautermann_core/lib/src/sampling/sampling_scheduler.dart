@@ -289,6 +289,9 @@ final class SamplingScheduler {
       run.slowClosing = sampler.session.close();
     }
     await run.slowClosing;
+    // The lending cancels the session's state events, so nothing else
+    // arms its lost-readings timer.
+    _schedule(server, run, run.slow);
 
     var returned = false;
     return () {
@@ -296,6 +299,10 @@ final class SamplingScheduler {
       returned = true;
       if (--run.slowLent > 0 || !identical(server.run, run)) return;
       run.slowClosing = null;
+      // A lent sampler's timer is armed to report its due streams as
+      // lost; the replacement starts its own.
+      run.slow.timer?.cancel();
+      run.slow.timer = null;
       run.slow = _open(server, run, SamplerKind.slow);
     };
   }
@@ -550,8 +557,15 @@ final class SamplingScheduler {
           _answered(server, run);
         } else {
           run.probeAt = _elapsed() + run.probeRetry;
-          final doubled = run.probeRetry * 2;
-          run.probeRetry = doubled < _maxProbeRetry ? doubled : _maxProbeRetry;
+          // The session closed under the probe (a lending, a stop), so
+          // nothing failed and the next wait stays what it was.
+          if (outcome is! SamplerGap ||
+              outcome.reason != SamplerGapReason.closed) {
+            final doubled = run.probeRetry * 2;
+            run.probeRetry = doubled < _maxProbeRetry
+                ? doubled
+                : _maxProbeRetry;
+          }
         }
         _emitAll(server.pipeline.addProbe(outcome));
         if (outcome is SamplerReplied) {
@@ -764,8 +778,23 @@ final class SamplingScheduler {
   void _schedule(_Server server, _Run run, _Sampler sampler) {
     sampler.timer?.cancel();
     sampler.timer = null;
-    // A stopped session's link closed; the conditions say why.
-    if (sampler.session.state is SamplerStopped) return;
+    if (sampler.session.state is SamplerStopped) {
+      // A lent slow sampler cannot tick for as long as the user's step
+      // runs, and reports its due streams as readings lost, as a sampler
+      // in backoff does (03 §6.2). Any other stop is the link's or the
+      // fleet's, whose conditions already answer.
+      if (run.slowLent > 0 && sampler.kind == SamplerKind.slow) {
+        final next = _next(
+          run,
+          sampler,
+          (stream) => _losable(_profileOf(server), run, stream),
+        );
+        if (next != null) {
+          _arm(sampler, next, () => _lose(server, run, sampler));
+        }
+      }
+      return;
+    }
     if (!_canTick(run, sampler)) {
       final profile = _profileOf(server);
       final next = _next(
