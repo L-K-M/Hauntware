@@ -86,6 +86,10 @@ const ApiVersion apiVersionSystemDf153 = ApiVersion(1, 53);
 /// Build attestations fields, gated at 1.55 (03 §5.8).
 const ApiVersion apiVersionAttestations = ApiVersion(1, 55);
 
+/// The first API whose exec create and start take `ConsoleSize`; below
+/// it a shell is sized by a resize after the start.
+const ApiVersion apiVersionExecConsoleSize = ApiVersion(1, 42);
+
 /// The `/system/df` response shape for a negotiated version (03 §5.8).
 enum SystemDfShape { legacy, v152, v153 }
 
@@ -122,6 +126,9 @@ final class ApiFeatureGates {
 
   /// Image/build attestation fields exist.
   bool get hasAttestations => negotiated >= apiVersionAttestations;
+
+  /// Exec create and start take the terminal's size.
+  bool get hasExecConsoleSize => negotiated >= apiVersionExecConsoleSize;
 }
 
 /// What `GET /_ping` (or `HEAD`) reports in its headers (03 §5.8):

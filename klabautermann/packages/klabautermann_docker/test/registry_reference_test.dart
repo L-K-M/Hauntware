@@ -131,5 +131,18 @@ void main() {
       expect(spent.isSpent, isTrue);
       expect(RegistryRateLimit.fromHeaders(_headers({})), isNull);
     });
+
+    test('a window is a day at most, however many seconds are named', () {
+      Duration? window(String seconds) => RegistryRateLimit.fromHeaders(
+        _headers({'ratelimit-remaining': '0;w=$seconds'}),
+      )!.window;
+
+      expect(window('86400'), const Duration(hours: 24));
+      expect(window('315360000'), RegistryRateLimit.maxWindow);
+      expect(window('9000000000000'), RegistryRateLimit.maxWindow);
+      // Past what a Duration's microseconds can count.
+      expect(window('9223372036854775807'), RegistryRateLimit.maxWindow);
+      expect(RegistryRateLimit.maxWindow, const Duration(hours: 24));
+    });
   });
 }
