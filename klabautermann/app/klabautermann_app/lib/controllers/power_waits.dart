@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'fleet_controller.dart';
 import 'operations_controller.dart';
 
 /// How far `btime` may move between two readings of one boot: the kernel
@@ -14,6 +15,11 @@ const _sameBoot = Duration(seconds: 2);
 /// not answered: long enough for a slow firmware check and a disk check
 /// at boot. A later boot read after it still ends the wait.
 const Duration kRebootWaitTimeout = Duration(minutes: 15);
+
+/// How long a finished reboot's "answered again" line stays before its
+/// wait leaves: long enough to read where it showed, short enough that it
+/// does not follow the user around the app for the rest of the run.
+const Duration kPowerWaitBackHold = Duration(seconds: 30);
 
 /// Whether a reading is of a boot after the one the reboot started
 /// from: its [bootedAt] unlike [before] where that boot was read,
@@ -110,10 +116,12 @@ final class PowerWaits extends ChangeNotifier {
   PowerWaits({
     required this._core,
     this.operations,
+    this.fleet,
     this._now = DateTime.now,
     this._timeout = kRebootWaitTimeout,
   }) {
     operations?.addListener(_onRuns);
+    fleet?.addListener(_onFleet);
   }
 
   final ValueListenable<Sample?> Function(String serverId) _core;
@@ -123,8 +131,17 @@ final class PowerWaits extends ChangeNotifier {
   /// The runs' ends; without it, as in some tests, a wait stays running.
   final OperationsController? operations;
 
+  /// The fleet's changes: a server that leaves takes its readings with
+  /// it, disposed, so a wait still listening to them would never see the
+  /// server's next boot and would end as "not answered" while it is up.
+  /// Such waits go with the server instead.
+  final FleetController? fleet;
+
   final Map<String, PowerWait> _waits = {};
   final Map<String, _Follow> _follows = {};
+
+  /// The timers that end a finished reboot's short hold.
+  final Map<String, Timer> _holds = {};
 
   /// [serverId]'s power action and its wait, or null without one.
   PowerWait? waitFor(String serverId) => _waits[serverId];
@@ -136,6 +153,7 @@ final class PowerWaits extends ChangeNotifier {
   /// any earlier wait there.
   void start(String serverId, String planId, PowerVerb verb) {
     _stopFollowing(serverId);
+    _cancelHold(serverId);
     final core = _core(serverId);
     _waits[serverId] = PowerWait(
       planId: planId,
@@ -154,10 +172,42 @@ final class PowerWaits extends ChangeNotifier {
   /// Drops [serverId]'s wait, as Stop waiting does.
   void stop(String serverId) {
     _stopFollowing(serverId);
+    _cancelHold(serverId);
     if (_waits.remove(serverId) != null) notifyListeners();
   }
 
   void _stopFollowing(String serverId) => _follows.remove(serverId)?.cancel();
+
+  /// Drops the waits of servers the fleet no longer lists. Until the
+  /// engine's first fleet, [FleetController.servers] is only a seed, so
+  /// absence there is not a departure.
+  void _onFleet() {
+    final fleet = this.fleet;
+    if (fleet == null || !fleet.heardFleet) return;
+    var changed = false;
+    for (final entry in _waits.entries.toList()) {
+      if (fleet.servers.any((server) => server.id == entry.key)) continue;
+      _stopFollowing(entry.key);
+      _cancelHold(entry.key);
+      _waits.remove(entry.key);
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  void _cancelHold(String serverId) => _holds.remove(serverId)?.cancel();
+
+  /// Ends the wait once its answer has been readable for
+  /// [kPowerWaitBackHold]. A later power action starts a new wait, so
+  /// only a wait still in [PowerWaitPhase.back] goes.
+  void _holdBack(String serverId) {
+    _holds[serverId] = Timer(kPowerWaitBackHold, () {
+      _holds.remove(serverId);
+      if (_waits[serverId]?.phase != PowerWaitPhase.back) return;
+      _waits.remove(serverId);
+      notifyListeners();
+    });
+  }
 
   static DateTime? _bootedAt(Sample? sample) => switch (sample?.result) {
     final CoreResult core => core.bootedAt,
@@ -183,6 +233,7 @@ final class PowerWaits extends ChangeNotifier {
         // A run the host did not take leaves no wait.
         case RunFinished() || RunRefused():
           _stopFollowing(serverId);
+          _cancelHold(serverId);
           _waits.remove(serverId);
         case RunInProgress() || null:
           continue;
@@ -212,7 +263,9 @@ final class PowerWaits extends ChangeNotifier {
       return;
     }
     if (wait.verb == PowerVerb.reboot) {
+      _stopFollowing(serverId);
       _waits[serverId] = wait._to(PowerWaitPhase.back, backAfter: backAfter);
+      _holdBack(serverId);
       return;
     }
     _waits.remove(serverId);
@@ -242,6 +295,7 @@ final class PowerWaits extends ChangeNotifier {
         _waits.remove(serverId);
       case PowerWaitPhase.waiting || PowerWaitPhase.notBack:
         _waits[serverId] = wait._to(PowerWaitPhase.back, backAfter: sinceStart);
+        _holdBack(serverId);
       // A later boot before the host's answer: the run is what says the
       // action was taken, so the wait ends as soon as it does.
       case PowerWaitPhase.running:
@@ -266,10 +320,15 @@ final class PowerWaits extends ChangeNotifier {
   @override
   void dispose() {
     operations?.removeListener(_onRuns);
+    fleet?.removeListener(_onFleet);
     for (final follow in _follows.values) {
       follow.cancel();
     }
     _follows.clear();
+    for (final hold in _holds.values) {
+      hold.cancel();
+    }
+    _holds.clear();
     super.dispose();
   }
 }
@@ -289,7 +348,12 @@ final class _Follow {
   }
 
   void cancel() {
-    core.removeListener(onCore);
+    try {
+      core.removeListener(onCore);
+    } on FlutterError {
+      // The monitoring controller disposed these readings first: the
+      // listener goes with the notifier, which nothing retains now.
+    }
     timeout?.cancel();
   }
 }

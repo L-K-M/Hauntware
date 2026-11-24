@@ -190,6 +190,11 @@ final class FleetController extends ChangeNotifier {
 
   List<FleetServer> _servers;
 
+  /// Whether the engine's first [CatalogReplaced] has arrived: until
+  /// then [_servers] is only a seed, and a concern must not read an
+  /// absent id as a departure.
+  bool get heardFleet => _heardFleet;
+
   /// The synced servers whose endpoints wait for confirmation.
   List<FleetEntry> _pendingEndpoints = const [];
 
