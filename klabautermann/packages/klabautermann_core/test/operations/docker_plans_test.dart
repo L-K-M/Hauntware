@@ -650,6 +650,43 @@ void main() {
       expect(check.id, webId());
     });
 
+    test('the preview shows the command masked by 8.9\'s rules, and the '
+        'exec runs the real words (OPS-3)', () async {
+      const argv = ['mysql', '-uroot', '-phunter2', '-e', 'show databases'];
+      final plan = _planned(
+        await _plan(
+          ContainerExec(_server, containerId: 'web-1', argv: argv),
+          engine,
+        ),
+      );
+      final step = plan.steps.single as ExecStep;
+      expect(step.argv, argv);
+      expect(
+        step.display,
+        'POST /v1.52/containers/${webId()}/exec '
+        '{"Cmd":["mysql","-uroot","-p********","-e","show databases"],'
+        '"Tty":false}',
+      );
+
+      for (final secret in [
+        ['curl', '-u', 'admin:hunter2', 'https://x'],
+        ['redis-cli', '-a', 'hunter2'],
+        ['app', '--password', 'hunter2'],
+        ['psql', 'postgres://bob:hunter2@db/x'],
+        ['sh', '-c', 'PGPASSWORD=hunter2 pg_dump db'],
+      ]) {
+        final plan = _planned(
+          await _plan(
+            ContainerExec(_server, containerId: 'web-1', argv: secret),
+            engine,
+          ),
+        );
+        expect((plan.steps.single as ExecStep).argv, secret);
+        expect(plan.steps.single.display, isNot(contains('hunter2')));
+        expect(plan.preview.steps.single.display, isNot(contains('hunter2')));
+      }
+    });
+
     test('the linter reads the argv', () async {
       final plan = _planned(
         await _plan(

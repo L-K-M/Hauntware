@@ -11,6 +11,7 @@ import 'package:seance_core/seance_core.dart' show quoteShellWord;
 
 import '../engine/protocol.dart'
     show ActionFailure, ActionFinished, RevalidationFailure;
+import '../sampling/argument_masking.dart' show maskCommandLine;
 
 /// One step a plan runs: an exact shell command or an exact Docker API
 /// request. The preview renders these and the runner executes these; no
@@ -163,19 +164,30 @@ final class ExecStep extends PlanStep {
     required this.containerId,
     required Iterable<String> argv,
     this.user,
-  }) : argv = List.unmodifiable(argv);
+  }) : argv = List.unmodifiable(argv),
+       shownArgv = List.unmodifiable([
+         for (final word in maskCommandLine(List.of(argv))) word.display,
+       ]);
 
   /// The create request's versioned path.
   final String path;
   final String containerId;
+
+  /// The command as the exec runs it.
   final List<String> argv;
+
+  /// [argv] as the preview and the audit show it: the same words, with
+  /// what 8.9 masks masked, as for a cron line's command. Masked here,
+  /// for every exec step, so that no planner can leave it out.
+  final List<String> shownArgv;
   final String? user;
 
-  /// The create request and its body, as the API sends them.
+  /// The create request and its body, as the API sends them, with the
+  /// command's secrets masked ([shownArgv]).
   @override
   String get display =>
       'POST $path '
-      '${jsonEncode({'Cmd': argv, if (user != null) 'User': user, 'Tty': false})}';
+      '${jsonEncode({'Cmd': shownArgv, if (user != null) 'User': user, 'Tty': false})}';
 }
 
 /// What a plan needs of the session (03 §8.2): the login user's own
