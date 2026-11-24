@@ -781,6 +781,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Its background engine stopped, so nothing connects or updates any more. Quit and open Klabautermann again. If this keeps happening, include the details below in a bug report.';
 
   @override
+  String get engineRestartedTitle =>
+      'Klabautermann restarted its background engine';
+
+  @override
+  String get engineRestartedBody =>
+      'Its background engine stopped unexpectedly and was started again, so your servers reconnect and update as before. An action, shell, transfer or edit that was running when it stopped may not have finished; check it before you try it again. If this keeps happening, include the details below in a bug report.';
+
+  @override
   String get settingsWindowUnreachable =>
       'Settings cannot reach Klabautermann. Close this window and open Settings again.';
 
