@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'api_version.dart';
+import 'byte_read_buffer.dart';
 import 'duplex.dart';
 import 'errors.dart';
 import 'http_types.dart';
@@ -151,6 +152,8 @@ final class DockerHttpClient {
   });
 
   /// Closes every pooled and hijacked duplex and fails queued requests.
+  /// A duplex still opening is closed when its opener returns, and its
+  /// request fails.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -324,13 +327,19 @@ final class DockerHttpClient {
       unawaited(duplex.close());
       throw scope.abortError ?? const DockerCancelledException('cancelled');
     }
+    // [close] ran while the opener was pending: this duplex was in
+    // neither [_all] nor [_waiters], so nothing else closes it.
+    if (_closed) {
+      unawaited(duplex.close());
+      throw const DockerTransportException('client is closed');
+    }
     return _Connection(duplex, onIdle: _release, onDead: _drop);
   }
 
   /// The connection finished its request: reuse, hand to a queued
   /// request, or drop it (03 §5.5: `Connection: close` retires it).
   void _release(_Connection conn, {required bool keepAlive}) {
-    if (!conn.alive || !keepAlive || _closed) {
+    if (!conn.alive || !keepAlive || _closed || conn.hasStrayBytes) {
       conn.dispose();
       _drop(conn);
       return;
@@ -608,8 +617,7 @@ final class _Connection {
   final void Function(_Connection) onDead;
   late final StreamSubscription<List<int>> _sub;
 
-  final List<int> _buf = <int>[];
-  int _pos = 0;
+  final ByteReadBuffer _buf = ByteReadBuffer();
   Completer<void>? _dataReady;
   bool _eof = false;
   Object? _readError;
@@ -625,10 +633,15 @@ final class _Connection {
   /// Still carries bytes in at least the read direction.
   bool get alive => !_broken && !_eof && !_retired;
 
-  /// Fit to take another request.
-  bool get usable => alive && !_busy;
+  /// Bytes the peer sent that no request asked for: more than a body's
+  /// length, or anything on an idle connection. They would be read as
+  /// the start of the next response.
+  bool get hasStrayBytes => _available > 0;
 
-  int get _available => _buf.length - _pos;
+  /// Fit to take another request.
+  bool get usable => alive && !_busy && !hasStrayBytes;
+
+  int get _available => _buf.length;
 
   void markBusy() => _busy = true;
 
@@ -638,7 +651,7 @@ final class _Connection {
       h.add(chunk);
       return;
     }
-    _buf.addAll(chunk);
+    _buf.add(chunk);
     _wake();
   }
 
@@ -686,48 +699,28 @@ final class _Connection {
     return true;
   }
 
-  void _consume(int n) {
-    _pos += n;
-    if (_pos >= _buf.length) {
-      _buf.clear();
-      _pos = 0;
-      return;
-    }
-    if (_pos > 64 * 1024 && _pos * 2 > _buf.length) {
-      _buf.removeRange(0, _pos);
-      _pos = 0;
-    }
-  }
+  Uint8List _take(int n) => _buf.take(n);
 
-  Uint8List _take(int n) {
-    final out = Uint8List.fromList(_buf.sublist(_pos, _pos + n));
-    _consume(n);
-    return out;
-  }
-
-  Uint8List _takeAll() => _take(_available);
-
-  int _indexOfCrlf() {
-    for (var i = _pos; i + 1 < _buf.length; i++) {
-      if (_buf[i] == 0x0D && _buf[i + 1] == 0x0A) return i;
-    }
-    return -1;
-  }
+  Uint8List _takeAll() => _buf.takeAll();
 
   /// One CRLF-terminated line. Null only at EOF with an empty buffer;
   /// EOF mid-line is a protocol error, as is a line over [maxBytes].
   Future<String?> _readLine(int maxBytes, String what) async {
+    // How far the buffer is known to hold no CRLF, so a line that
+    // arrives in many reads is scanned once.
+    var scanned = 0;
     while (true) {
-      final idx = _indexOfCrlf();
+      final idx = _buf.indexOfCrlf(scanned);
       if (idx >= 0) {
-        final len = idx - _pos;
-        if (len > maxBytes) {
+        if (idx > maxBytes) {
           throw DockerProtocolException('$what exceeds $maxBytes bytes');
         }
-        final line = String.fromCharCodes(_buf, _pos, idx);
-        _consume(len + 2);
+        final line = String.fromCharCodes(_buf.view(0, idx));
+        _buf.skip(idx + 2);
         return line;
       }
+      // The last byte may be the CR of a pair still to come.
+      scanned = math.max(0, _available - 1);
       if (_available > maxBytes) {
         throw DockerProtocolException('$what exceeds $maxBytes bytes');
       }
@@ -889,6 +882,7 @@ final class _Connection {
   Stream<List<int>> attachBody(_Head head) {
     final ctl = _BodyCtl(this);
     _bodyCtl = ctl;
+    ctl.awaitListener();
     unawaited(_pumpBody(head, ctl));
     return ctl.controller.stream;
   }
@@ -999,7 +993,11 @@ final class _Connection {
   HijackedDuplex hijack() {
     _retired = true;
     _busy = false;
+    // Held back until the caller listens: without a listener the
+    // controller would queue every byte the duplex delivers.
+    _sub.pause();
     final ctl = StreamController<List<int>>(
+      onListen: _sub.resume,
       onPause: _sub.pause,
       onResume: _sub.resume,
       onCancel: () =>
@@ -1014,7 +1012,11 @@ final class _Connection {
       _duplex.closeWrite,
       () {
         unawaited(ctl.close());
-        return _duplex.close();
+        final closing = _duplex.close();
+        // A stream nobody listened to stays paused and never reports
+        // its end, so the pool hears of the close here.
+        onDead(this);
+        return closing;
       },
       stream: ctl.stream,
       sink: _duplex.sink,
@@ -1060,26 +1062,23 @@ final class _Connection {
 }
 
 /// The stream a body pump feeds. Pausing it pauses the duplex
-/// subscription (03 §5.5 backpressure); cancelling it aborts the
-/// connection, whose byte position is then unknowable. Once the body is
-/// fully read the connection serves other requests, so a consumer that
-/// still holds the stream no longer pauses it ([detach]).
+/// subscription (03 §5.5 backpressure), and so does not listening to it
+/// yet: a controller without a listener queues what it is given and
+/// reports no pause, so the pump would read the duplex as fast as it
+/// delivers. Cancelling it aborts the connection, whose byte position
+/// is then unknowable. Once the body is fully read the connection
+/// serves other requests, so a consumer that still holds the stream no
+/// longer pauses it ([detach]).
 final class _BodyCtl {
   _BodyCtl(this._conn) {
     controller = StreamController<List<int>>(
+      onListen: _resume,
       onPause: () {
-        if (!_attached) return;
+        if (!_attached || _paused) return;
         _paused = true;
         _conn._sub.pause();
       },
-      onResume: () {
-        final c = _resumed;
-        _resumed = null;
-        if (c != null && !c.isCompleted) c.complete();
-        if (!_paused) return;
-        _paused = false;
-        _conn._sub.resume();
-      },
+      onResume: _resume,
       onCancel: () {
         if (identical(_conn._bodyCtl, this)) {
           _conn.abort(
@@ -1092,10 +1091,30 @@ final class _BodyCtl {
 
   final _Connection _conn;
   late final StreamController<List<int>> controller;
+
+  /// Whether this body holds a pause on the connection's subscription:
+  /// from its start until a listener comes, then while that one pauses.
   bool _paused = false;
   Completer<void>? _resumed;
 
   bool get _attached => identical(_conn._bodyCtl, this);
+
+  /// Holds the duplex back until the body has a listener. Called once
+  /// the connection names this body as its own.
+  void awaitListener() {
+    if (controller.hasListener || _paused) return;
+    _paused = true;
+    _conn._sub.pause();
+  }
+
+  void _resume() {
+    final c = _resumed;
+    _resumed = null;
+    if (c != null && !c.isCompleted) c.complete();
+    if (!_paused) return;
+    _paused = false;
+    _conn._sub.resume();
+  }
 
   /// The connection was released: give back a pause this consumer holds
   /// on its subscription.
