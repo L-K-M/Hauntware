@@ -430,3 +430,9 @@ Fix commit e242646; glm-review label added for round 2.
 - Fixed in 8146421: a 0-minute anacron delay read "starting 0 minutes late"; it now reads "starting right away" (red/green in jobs_view_test).
 - services_view.dart:208 socket `rowKey` collision on `|`: refuted. systemd unit names allow only ASCII letters, digits, `:-_.\` and `@`, so the unit part cannot contain `|`, and the unit part fixes where the split falls within one unit's rows.
 - Declined as minor: redundant `.cast` in the socket tests, `cronRuns` computed twice per anacron row, two `setState`s in `_openFromPalette`, the retry test's total query count.
+
+## #821 GLM round 1 (68715c9): 1 actionable, all refuted, no push
+- safety_controller.dart:289 (major) "a transiently empty fleet wipes every local safety entry": refuted. `listed` reads `fleet.servers` when called (main.dart:605), not a snapshot. The engine sends `CatalogReplaced` before the prefs diff at startup and after every round (engine_isolate.dart:1273, 1155, 1213), so the first prefs notification sees no pref records, and the fleet controller subscribes before the prefs controller (main.dart:452 vs 590), so it holds each new catalog before `_keepLeaving` runs.
+- safety_controller.dart:290 (major) "an empty ServerSafety is stored per departed server": refuted. `_withLocal` removes an entry equal to the default (safety_controller.dart:221); the test asserts `saved.last.servers` is empty.
+- engine_vault.dart:60 injected store bypassed elsewhere: refuted, `FileVaultStore` is built only at engine_vault.dart:73.
+- safety_test null-`listed` case: declined as minor.
