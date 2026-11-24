@@ -20,3 +20,6 @@ tags:
   docker:
   inventory:
   sync:
+# A wedged shell test (an unread pipe or a hung child shell) would pin the
+# VM; cap every test instead, as klabautermann/dart_test.yaml does for CI.
+timeout: 60s

@@ -267,7 +267,7 @@ jobs:
         working-directory: klabautermann
         run: |
           set -euo pipefail
-          dart pub get
+          dart pub get --enforce-lockfile
           dirs=()
           for package in packages/*; do
             [[ -d "$package" ]] || continue
@@ -415,7 +415,7 @@ jobs:
       - name: Klabautermann — analyze and test app
         working-directory: klabautermann/app/klabautermann_app
         run: |
-          flutter pub get
+          flutter pub get --enforce-lockfile
           flutter analyze --no-pub
           flutter test --no-pub
 
@@ -1614,12 +1614,12 @@ jobs:
             klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj
       - name: Resolve workspace
         working-directory: klabautermann
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
       # The Séance license gate runs once, in client_poltergeist; the
       # tool allows one invocation, and docker and sums need that leg.
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Build
         working-directory: klabautermann/app/klabautermann_app
         # Built with pub against the committed lock, as client_poltergeist
