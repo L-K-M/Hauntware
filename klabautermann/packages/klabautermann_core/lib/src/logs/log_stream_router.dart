@@ -28,6 +28,7 @@ import '../admin/admin_mode.dart' show AdminSession;
 import '../admin/elevated_link.dart';
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
+import '../util/monotonic_clock.dart';
 import 'log_follower.dart';
 import 'log_service.dart';
 
@@ -55,11 +56,6 @@ LogService _defaultService(
   elevatedLink: elevatedLink,
 );
 
-Duration Function() _monotonicClock() {
-  final watch = Stopwatch()..start();
-  return () => watch.elapsed;
-}
-
 /// Owned by the engine isolate, which hands it the log requests and tells
 /// it what changed: [update] after a server's [LinkState], [activity],
 /// [disconnect], [retain] for the fleet and [close].
@@ -78,7 +74,7 @@ final class LogStreamRouter {
     this._startTimer = Timer.new,
     Duration Function()? elapsed,
   }) : _quotas = quotas ?? ChannelQuotas(),
-       _elapsed = elapsed ?? _monotonicClock() {
+       _elapsed = elapsed ?? monotonicClock() {
     // A slot another consumer of the server's link gave back may let a
     // waiting read start.
     _quotas.onFreed((serverId) => update(serverId));

@@ -21,6 +21,7 @@ import '../admin/admin_mode.dart' show AdminSession;
 import '../audit/audit_log.dart';
 import '../engine/protocol.dart';
 import '../sampling/sample_results.dart' show collectorUnavailable;
+import '../util/serial_queue.dart';
 import 'operations_shown.dart';
 
 /// How often a server with a running operation reads `ops` again [E]:
@@ -61,9 +62,9 @@ final class _Server {
   /// with when each launched.
   final Map<String, DateTime> unlisted = {};
 
-  /// The tail of this server's steps, run one after another (see
+  /// This server's step queue, run one after another (see
   /// [OperationTracker._serially]).
-  Future<void> steps = Future.value();
+  final SerialQueue steps = SerialQueue();
 }
 
 /// Follows every server's detached operations. The engine isolate owns
@@ -328,9 +329,7 @@ final class OperationTracker {
   Future<T> _serially<T>(String serverId, Future<T> Function() step) {
     final server = _servers[serverId];
     if (server == null) return step();
-    final result = server.steps.then((_) => step());
-    server.steps = result.then<void>((_) {}, onError: (Object _) {});
-    return result;
+    return server.steps.run(step);
   }
 
   // -- listing ----------------------------------------------------------

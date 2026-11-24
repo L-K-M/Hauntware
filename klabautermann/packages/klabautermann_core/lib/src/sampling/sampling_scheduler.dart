@@ -24,6 +24,7 @@ import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart' show kSamplerChannels;
+import '../util/monotonic_clock.dart';
 import 'sample_pipeline.dart';
 import 'sample_results.dart' show sampleStreamCollector;
 import 'sampler_session.dart';
@@ -103,11 +104,6 @@ DateTime _utcNow() => DateTime.now().toUtc();
 
 void _ignoreProbe(String serverId, HostProfile profile) {}
 
-Duration Function() _monotonicClock() {
-  final watch = Stopwatch()..start();
-  return () => watch.elapsed;
-}
-
 /// Runs the samplers of every subscribed server by 03 §6.4's scheduling
 /// rules. The engine isolate owns it, records requests in the
 /// [SamplingSubscriptions] it shares, and tells it what changed:
@@ -143,7 +139,7 @@ final class SamplingScheduler {
     this._startTimer = Timer.new,
     this._now = _utcNow,
     Duration Function()? elapsed,
-  }) : _elapsed = elapsed ?? _monotonicClock();
+  }) : _elapsed = elapsed ?? monotonicClock();
 
   final SamplingSubscriptions _subscriptions;
   final SshLink? Function(String serverId) _linkFor;

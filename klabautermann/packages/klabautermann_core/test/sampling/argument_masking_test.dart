@@ -184,6 +184,23 @@ void main() {
       ]);
     });
 
+    test(
+      'a backslash inside single quotes is literal, so the quote closes',
+      () {
+        expect(_shown(['sh', '-c', "app -p'a\\' b"]), [
+          'sh',
+          '-c',
+          'app -p$_mask b',
+        ]);
+        // A trailing backslash escapes nothing and masks on to the end.
+        expect(_shown(['sh', '-c', 'app --password=x\\']), [
+          'sh',
+          '-c',
+          'app --password=$_mask',
+        ]);
+      },
+    );
+
     test('a ps fallback keeps no boundaries: a value with spaces is masked '
         'up to its first space only', () {
       // `ps` joins arguments with spaces (7.2), so `--password 'a b'`
@@ -453,6 +470,16 @@ void main() {
         'a\nb',
         '-u',
         'me:$_mask',
+      ]);
+    });
+
+    test('a backslash before a newline in a -c line continues the command', () {
+      // The escape reaches past the newline's span, so the newline is no
+      // separator: the value's word runs through it to the next blank.
+      expect(_shown(['sh', '-c', 'app --password \\\nhunter2']), [
+        'sh',
+        '-c',
+        'app --password $_mask',
       ]);
     });
 

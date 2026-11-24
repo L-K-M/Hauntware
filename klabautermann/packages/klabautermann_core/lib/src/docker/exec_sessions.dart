@@ -28,6 +28,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart';
 import '../admin/safety_policy.dart';
 import '../engine/protocol.dart';
 import '../operations/plan_types.dart' show ExecStep;
+import '../util/monotonic_clock.dart';
 import 'docker_ladder.dart' show DockerRank;
 import 'docker_router.dart'
     show DockerChannelUnavailable, DockerEndpointUnavailable;
@@ -165,7 +166,7 @@ final class ExecSessions {
     this._startTimer = Timer.new,
     Duration Function()? elapsed,
     this._now = DateTime.now,
-  }) : _elapsed = elapsed ?? _monotonicClock();
+  }) : _elapsed = elapsed ?? monotonicClock();
 
   final ExecOpener _open;
   final ExecControl _control;
@@ -586,9 +587,4 @@ Future<void> _quietly(Future<Object?>? future) async {
   } on Object {
     // Teardown of a connection already gone.
   }
-}
-
-Duration Function() _monotonicClock() {
-  final watch = Stopwatch()..start();
-  return () => watch.elapsed;
 }
