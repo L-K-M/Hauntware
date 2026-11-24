@@ -1212,14 +1212,15 @@ bool _matchPattern(String text, String pattern) {
   var starPattern = -1;
   var starText = 0;
   while (t < text.length) {
-    if (p < pattern.length &&
+    // A `*` is a wildcard first, even against a `*` in the text.
+    if (p < pattern.length && pattern.codeUnitAt(p) == _star) {
+      starPattern = p++;
+      starText = t;
+    } else if (p < pattern.length &&
         (pattern.codeUnitAt(p) == _question ||
             pattern.codeUnitAt(p) == text.codeUnitAt(t))) {
       t++;
       p++;
-    } else if (p < pattern.length && pattern.codeUnitAt(p) == _star) {
-      starPattern = p++;
-      starText = t;
     } else if (starPattern >= 0) {
       p = starPattern + 1;
       t = ++starText;

@@ -60,6 +60,14 @@ void main() {
       expect(clock.elapsed, lessThan(const Duration(seconds: 1)));
     });
 
+    test('a `*` in the pattern is a wildcard even where the name has one', () {
+      // With a `?`, the pattern goes through the general matcher. Read
+      // literally, its first `*` would match the name's `*` and leave
+      // `a` against `b`.
+      expect(_applies('Host *a?', '*bac'), isTrue);
+      expect(_applies('Host x*?', 'x**'), isTrue);
+    });
+
     test('patterns match UTF-8 bytes, as match_pattern() does', () {
       // `?` is one byte, and é two.
       expect(_applies('Host caf?', 'café'), isFalse);
