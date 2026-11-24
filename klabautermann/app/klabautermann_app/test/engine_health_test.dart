@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/engine_health.dart';
+import 'package:klabautermann_app/controllers/engine_restarter.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/engine_health_notice.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -57,7 +58,7 @@ void main() {
     test('counts the faults the engine reports', () async {
       final engine = await spawn();
       addTearDown(engine.shutdown);
-      final health = EngineHealth()..follow(engine, expected: () => false);
+      final health = EngineHealth()..follow(engine);
       addTearDown(health.dispose);
 
       final heard = changed(health);
@@ -69,31 +70,160 @@ void main() {
       expect(health.stopped, isNull);
     });
 
-    test('says what an engine that died stopped on', () async {
-      final engine = await spawn();
-      addTearDown(engine.shutdown);
-      final health = EngineHealth()..follow(engine, expected: () => false);
+    test('a restarter restarts an engine that died, says so, and ends '
+        'the old run', () async {
+      final health = EngineHealth();
       addTearDown(health.dispose);
+      final first = _Run(await spawn());
+      final restarter = EngineRestarter<_Run>(
+        first: first,
+        spawn: spawn,
+        build: _Run.new,
+        health: health,
+        quitting: () => false,
+        settled: () async {},
+      );
+      addTearDown(() async {
+        await restarter.current.value.engine.shutdown();
+        restarter.dispose();
+      });
+
+      final swapped = Completer<void>();
+      restarter.current.addListener(swapped.complete);
+      first.engine.send(const Disconnect('srv-1'));
+      await swapped.future.timeout(const Duration(seconds: 10));
+      await pumpEventQueue();
+
+      final next = restarter.current.value;
+      expect(next, isNot(same(first)));
+      expect(health.stopped?.recovery, EngineRecovery.restarted);
+      expect(health.stopped?.error, contains('link table corrupt'));
+      expect(first.disposed, isTrue);
+      expect(next.disposed, isFalse);
+
+      // The new engine is followed: its faults count.
+      final heard = changed(health);
+      next.engine.send(const Connect('srv-2'));
+      await heard;
+      expect(health.lastFault?.error, 'fault for srv-2');
+    });
+
+    test('an engine that keeps stopping is left stopped after three '
+        'restarts in ten minutes', () async {
+      final health = EngineHealth();
+      addTearDown(health.dispose);
+      final restarter = EngineRestarter<_Run>(
+        first: _Run(await spawn()),
+        spawn: spawn,
+        build: _Run.new,
+        health: health,
+        quitting: () => false,
+        settled: () async {},
+        now: () => DateTime.utc(2026, 11, 24, 12),
+      );
+      addTearDown(() async {
+        await restarter.current.value.engine.shutdown();
+        restarter.dispose();
+      });
+
+      for (var restart = 0; restart < 3; restart++) {
+        final swapped = Completer<void>();
+        void onSwap() {
+          restarter.current.removeListener(onSwap);
+          swapped.complete();
+        }
+
+        restarter.current.addListener(onSwap);
+        restarter.current.value.engine.send(const Disconnect('srv-1'));
+        await swapped.future.timeout(const Duration(seconds: 10));
+      }
+      final last = restarter.current.value;
+      last.engine.send(const Disconnect('srv-1'));
+      await last.engine.exited.timeout(const Duration(seconds: 10));
+      await pumpEventQueue();
+
+      expect(restarter.current.value, same(last));
+      expect(health.stopped?.recovery, EngineRecovery.gaveUp);
+    });
+
+    test('an engine that does not start again is told as stopped', () async {
+      final health = EngineHealth();
+      addTearDown(health.dispose);
+      final first = _Run(await spawn());
+      final restarter = EngineRestarter<_Run>(
+        first: first,
+        spawn: () => Future.error(StateError('no isolate')),
+        build: _Run.new,
+        health: health,
+        quitting: () => false,
+        settled: () async {},
+      );
+      addTearDown(restarter.dispose);
 
       final heard = changed(health);
-      engine.send(const Disconnect('srv-1'));
+      first.engine.send(const Disconnect('srv-1'));
       await heard;
+      await pumpEventQueue();
 
+      expect(restarter.current.value, same(first));
+      expect(health.stopped?.recovery, EngineRecovery.gaveUp);
       expect(health.stopped?.error, contains('link table corrupt'));
     });
 
-    test("does not report the app's own shutdown as a stop", () async {
-      final engine = await spawn();
-      var quitting = false;
-      final health = EngineHealth()..follow(engine, expected: () => quitting);
+    test('a run that fails to build over a restarted engine leaves the '
+        'engine stopped and says so', () async {
+      final health = EngineHealth();
       addTearDown(health.dispose);
+      final first = _Run(await spawn());
+      IsolateEngineClient? spawned;
+      final restarter = EngineRestarter<_Run>(
+        first: first,
+        spawn: () async => spawned = await spawn(),
+        build: (_) => throw StateError('no controllers'),
+        health: health,
+        quitting: () => false,
+        settled: () async {},
+      );
+      addTearDown(restarter.dispose);
+
+      first.engine.send(const Disconnect('srv-1'));
+      await first.engine.exited.timeout(const Duration(seconds: 10));
+      while (health.stopped?.recovery != EngineRecovery.gaveUp) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+
+      expect(restarter.current.value, same(first));
+      expect(health.stopped?.error, contains('link table corrupt'));
+      // The engine nothing was built over is shut down.
+      await spawned!.exited.timeout(const Duration(seconds: 10));
+    });
+
+    test("does not report or restart after the app's own shutdown", () async {
+      var quitting = false;
+      final health = EngineHealth();
+      addTearDown(health.dispose);
+      final first = _Run(await spawn());
+      var spawned = 0;
+      final restarter = EngineRestarter<_Run>(
+        first: first,
+        spawn: () {
+          spawned++;
+          return spawn();
+        },
+        build: _Run.new,
+        health: health,
+        quitting: () => quitting,
+        settled: () async {},
+      );
+      addTearDown(restarter.dispose);
 
       quitting = true;
-      await engine.shutdown();
-      await engine.exited;
+      await first.engine.shutdown();
+      await first.engine.exited;
       await pumpEventQueue();
 
       expect(health.stopped, isNull);
+      expect(spawned, 0);
     });
   });
 
@@ -155,6 +285,7 @@ void main() {
       await pump(tester);
 
       health.reportStopped(const EngineStopped(error: 'Bad state: corrupt'));
+      // Gave up is the default recovery.
       await tester.pumpAndSettle();
       expect(
         find.text('Klabautermann stopped working in the background'),
@@ -180,5 +311,52 @@ void main() {
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.textContaining('Details:'), findsNothing);
     });
+
+    testWidgets('a restarted engine is told once its restart ran, and a '
+        'remount does not tell it again', (tester) async {
+      await pump(tester);
+
+      health.reportStopped(
+        const EngineStopped(
+          error: 'Bad state: corrupt',
+          recovery: EngineRecovery.restarting,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+
+      health.reportStopped(
+        const EngineStopped(
+          error: 'Bad state: corrupt',
+          recovery: EngineRecovery.restarted,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Klabautermann restarted its background engine'),
+        findsOneWidget,
+      );
+      expect(find.text('Details: Bad state: corrupt'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      // The restart remounts the app's tree, and this notice with it.
+      await tester.pumpWidget(const SizedBox());
+      await pump(tester);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    });
   });
+}
+
+/// An engine run with nothing built over it but a flag.
+final class _Run implements EngineRun {
+  _Run(this.engine);
+
+  @override
+  final IsolateEngineClient engine;
+  bool disposed = false;
+
+  @override
+  void dispose() => disposed = true;
 }

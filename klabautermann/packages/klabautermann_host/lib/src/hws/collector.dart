@@ -240,8 +240,11 @@ abstract final class ArgValidators {
   }
 }
 
+// systemd.unit(5): letters, digits, `:`, `-`, `_`, `.` and `\`, which
+// `systemd-escape` writes for a `-` in a path (`dev-disk-by\x2duuid`).
+// The name is validated before it is quoted, so the backslash is inert.
 final _unitNamePattern = RegExp(
-  '^[A-Za-z0-9:_.\\-]+(@[A-Za-z0-9:_.\\-]*)?\\.(service|socket|device|mount|'
+  '^[A-Za-z0-9:_.\\\\\\-]+(@[A-Za-z0-9:_.\\\\\\-]*)?\\.(service|socket|device|mount|'
   'automount|swap|target|path|timer|slice|scope)\$',
 );
 
