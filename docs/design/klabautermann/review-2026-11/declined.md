@@ -456,3 +456,8 @@ Every bullet has a test that came with its fix in #805/#806: http_pool_test (DKR
 - recovery_controller_test "never-answered coverage dropped": declined. Save and restore are deliberately unbounded so a late answer applies (`_request`'s doc, the CTL fix); a disconnect still fails them, and that test stays.
 - recovery_controller_test 100 ms waits: refuted. The test builds the controller with a 50 ms bound (line 47).
 - Declined as minor: `_holdBack` re-arm without cancel (start/stop already cancel), `_listed` never pruned (intended, per the reviewer too), the literal 5-minute pump, `_posted.clear()` order, `cancelAll()` scope (the app posts only alert notifications and, on iOS and macOS, the badge that counts them: system_notifications.dart:233, 272), the synchronous-send assumption in the save test.
+
+## #825 GLM round 1 (c446092): 3 actionable
+- Fixed in the next commit: operation_runner_test's API and launch unlisted-error tests did not show their throwing stub ran; both now assert it.
+- Declined as minor: the ENG-1 isolate test's wait loops have no failure guard (a failure is only slower to diagnose), the ENG-3 sync test leaves its parked keystore and recovery requests unanswered at teardown (the file passes in full and the isolate is shut down).
+- "Unexpected errors are reported as transport failures": a comment on ENG-1's design (always answer the request), outside this tests-only PR.
