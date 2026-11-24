@@ -675,15 +675,15 @@ void main() {
         ['psql', 'postgres://bob:hunter2@db/x'],
         ['sh', '-c', 'PGPASSWORD=hunter2 pg_dump db'],
       ]) {
-        final plan = _planned(
+        final masked = _planned(
           await _plan(
             ContainerExec(_server, containerId: 'web-1', argv: secret),
             engine,
           ),
         );
-        expect((plan.steps.single as ExecStep).argv, secret);
-        expect(plan.steps.single.display, isNot(contains('hunter2')));
-        expect(plan.preview.steps.single.display, isNot(contains('hunter2')));
+        expect((masked.steps.single as ExecStep).argv, secret);
+        expect(masked.steps.single.display, isNot(contains('hunter2')));
+        expect(masked.preview.steps.single.display, isNot(contains('hunter2')));
       }
     });
 

@@ -95,5 +95,6 @@ void main() {
       'token': _mask,
       'url': 'nfs://me:$_mask@nas/x',
     });
+    expect('${masked[1].options}', isNot(contains('ter2')));
   });
 }

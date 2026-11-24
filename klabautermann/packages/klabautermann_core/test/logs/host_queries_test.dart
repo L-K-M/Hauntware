@@ -460,6 +460,59 @@ void main() {
       );
     });
 
+    test('procs: a ps block that does not follow the cmdline line at '
+        'once is never masked less', () async {
+      const rows =
+          ' 1234     1 root     S     2048 mysql -uroot -phunter2 db\n'
+          ' 1236     1 root     S     2048 redis-cli -a hunter2\n'
+          ' 1237     1 root     S     2048 app --password hunter2\n'
+          ' 1238     1 root     S     2048 docker login -p hunter2 reg\n'
+          ' 1239     1 root     S     2048 sh -c "true" PGPASSWORD=hunter2';
+      const masked =
+          ' 1234     1 root     S     2048 mysql -uroot -p******** db\n'
+          ' 1236     1 root     S     2048 redis-cli -a ********\n'
+          ' 1237     1 root     S     2048 app --password ********\n'
+          ' 1238     1 root     S     2048 docker login -p ******** reg\n'
+          ' 1239     1 root     S     2048 sh -c "true" PGPASSWORD=********';
+
+      // Blank lines between the two: still rows, masked row by row.
+      for (final between in ['\n', '\n \n\t\n']) {
+        events.clear();
+        final bundle = await read(
+          DiagnosticBundle([
+            DiagnosticSection(
+              collector: 'procs',
+              status: 'ok',
+              text: '== cmdline ==\n$between== ps ==\n$rows',
+            ),
+          ]),
+        );
+        expect(
+          bundle.sections.single.text,
+          '== cmdline ==\n$between== ps ==\n$masked',
+        );
+      }
+
+      // Anything else between them, or a ps line inside a record: read
+      // as records, whose arguments may span lines. Nothing shows.
+      for (final text in [
+        '== cmdline ==\nnote\n== ps ==\n$rows',
+        '== cmdline ==\n==> 1/cmdline <==\nsh\x1f-c\x1fa\n== ps ==\nb\x1f\n\n'
+            '==> 2/cmdline <==\napp\x1f--password\x1fhun\nter2\x1f\n$rows',
+        '== cmdline ==\n== ps ==x\n$rows',
+        '== ps ==\n== cmdline ==\n\n$rows',
+      ]) {
+        events.clear();
+        final shown = (await read(
+          DiagnosticBundle([
+            DiagnosticSection(collector: 'procs', status: 'ok', text: text),
+          ]),
+        )).sections.single.text;
+        expect(shown, isNot(contains('hunter2')), reason: text);
+        expect(shown, isNot(contains('ter2')), reason: text);
+      }
+    });
+
     test('cron: every line of every crontab', () async {
       final bundle = await read(
         const DiagnosticBundle([
