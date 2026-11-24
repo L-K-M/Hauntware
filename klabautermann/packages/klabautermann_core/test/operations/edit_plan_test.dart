@@ -364,6 +364,35 @@ void main() {
       },
     );
 
+    test('a manifest cut at the output cap is not written over '
+        '(OPS-8)', () async {
+      host.files['/home/deploy/a'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'x\n',
+        rootOnly: false,
+      );
+      // What was read parses, so only the flag says rows are missing.
+      host.answers['klabautermann-read-if-present'] = const RemoteCommandResult(
+        exitCode: 0,
+        stdout: '',
+        truncated: true,
+      );
+
+      final attempt = await plan(
+        const FileTarget('/home/deploy/a'),
+        'y\n',
+        _sha('x\n'),
+      );
+      expect(attempt.plan, isNull);
+      expect(attempt.refusal, ActionRefusalReason.invalidTarget);
+      expect(attempt.detail, contains('too large'));
+      final read = host.commands.indexWhere(
+        (c) => c.contains('klabautermann-read-if-present'),
+      );
+      expect(host.outputCaps[read], kIndexReadMaxBytes);
+    });
+
     test('a planning step that fails on the host names itself, its exit '
         'code and its error output in the refusal', () async {
       host.files['/home/deploy/a'] = (

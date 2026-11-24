@@ -18,7 +18,8 @@ import 'package:seance_core/seance_core.dart'
         quoteShellWord;
 
 import '../admin/admin_mode.dart' show AdminSession;
-import '../docker/docker_router.dart' show DockerEndpointUnavailable;
+import '../docker/docker_router.dart'
+    show DockerChannelUnavailable, DockerEndpointUnavailable;
 import '../engine/protocol.dart';
 import 'detached_runner.dart' show LaunchFailure, LaunchResult;
 import 'operation_plan.dart';
@@ -100,7 +101,10 @@ final class OperationRunner {
 
   /// Runs [plan] as [planId]. The caller took it from the registry,
   /// checked its confirmation and, for [RequiredLevel.admin], handed the
-  /// admin [session]. Always ends with one [ActionFinished].
+  /// admin [session]. Always ends with exactly one [ActionFinished],
+  /// whatever a step, a callback or the lender throws: the engine starts
+  /// a run without awaiting it, so an error leaving here would have no
+  /// caller, and the app's run would stay pending.
   Future<ActionFinished> run(
     String planId,
     OperationPlan plan, {
@@ -112,17 +116,32 @@ final class OperationRunner {
     final lend = _lend;
     final needsSession =
         plan.detached || plan.steps.any((step) => step is ShellStep);
-    final finished = lend != null && needsSession
-        ? await lend(plan.intent.serverId, () => _run(planId, plan, session))
-        : await _run(planId, plan, session);
+    ActionFinished finished;
+    try {
+      finished = lend != null && needsSession
+          ? await lend(plan.intent.serverId, () => _run(planId, plan, session))
+          : await _run(planId, plan, session);
+    } on Object {
+      // _run answers every error of its own; this is the lender's.
+      finished = ActionFinished(
+        planId: planId,
+        outcome: ActionOutcome.failed,
+        failure: ActionFailure.transport,
+      );
+    }
     _emit(finished);
-    _finished?.call((
-      planId: planId,
-      plan: plan,
-      finished: finished,
-      startedAt: startedAt,
-      endedAt: _now(),
-    ));
+    try {
+      _finished?.call((
+        planId: planId,
+        plan: plan,
+        finished: finished,
+        startedAt: startedAt,
+        endedAt: _now(),
+      ));
+    } on Object {
+      // The run is answered; a hook that throws loses its own record,
+      // not the answer.
+    }
     return finished;
   }
 
@@ -211,17 +230,26 @@ final class OperationRunner {
           case ShellStep(endsLink: true) && final step:
             // The host going down can take the link before the exit
             // status arrives: that is the step taking effect (SYS-03).
+            // A run that fails at the step's limit did not take the link:
+            // the command hung, behind an inhibitor say, and the host is
+            // still up. A null status is a channel that closed without
+            // one, which a dying sshd leaves: the step took effect too.
             final RemoteCommandResult result;
+            final clock = Stopwatch()..start();
             try {
               result = await _runShell(link, step, session);
             } on RemoteCommandException {
+              if (clock.elapsed >= step.timeout) {
+                await _cleanUp(link, plan, session);
+                return failed(ActionFailure.timedOut, step: i);
+              }
               return ActionFinished(
                 planId: planId,
                 outcome: ActionOutcome.succeeded,
                 skippedSteps: skipped,
               );
             }
-            if (result.exitCode != 0) {
+            if (result.exitCode != null && result.exitCode != 0) {
               return failed(
                 ActionFailure.stepFailed,
                 step: i,
@@ -263,7 +291,7 @@ final class OperationRunner {
                 );
               }
               return failed(
-                !step.elevated && _polkitRefused.hasMatch(result.stderr)
+                _polkitRefusal(step, result.stderr)
                     ? ActionFailure.adminRequired
                     : ActionFailure.stepFailed,
                 step: i,
@@ -349,9 +377,19 @@ final class OperationRunner {
       return failed(ActionFailure.transport);
     } on DockerEndpointUnavailable {
       return failed(ActionFailure.transport);
+    } on DockerChannelUnavailable {
+      // The endpoint's channel share is full, as with a one-off command
+      // beside two followed logs on a relay: nothing ran.
+      return failed(ActionFailure.transport);
     } on ChannelOpenException {
       // The link refused the channel, at its session limit or closing. A
       // later channel may still open, so the cleanup is tried.
+      await _cleanUp(link, plan, session);
+      return failed(ActionFailure.transport);
+    } on Object {
+      // Nothing above names it, an ArgumentError from the executor's own
+      // checks say. The run still ends with its answer, after the
+      // cleanup, which swallows its own errors.
       await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     }
@@ -456,6 +494,19 @@ final class OperationRunner {
 final _polkitRefused = RegExp(
   r'Interactive authentication required|Access denied',
 );
+
+/// The flag of a step that asks polkit and fails fast where an agent
+/// would have asked (`HostCommands.systemctl`).
+const _noAskPassword = '--no-ask-password';
+
+/// Whether [step] failed because polkit refused it, so admin mode would
+/// help: only an unelevated step that asks polkit at all. Any other
+/// command's "Access denied", a database client's say, is its own
+/// failure, and admin mode does not apply to it.
+bool _polkitRefusal(ShellStep step, String stderr) =>
+    !step.elevated &&
+    step.argv.contains(_noAskPassword) &&
+    _polkitRefused.hasMatch(stderr);
 
 /// `klab_ticks`'s status for a process that is gone (proc_stat.dart).
 const _kTicksGone = 3;

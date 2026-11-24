@@ -49,7 +49,11 @@ void main() {
   late AnsweringLink link;
   late List<(String, SectionStatus, String)> opsReads;
 
-  SamplingScheduler build({bool readsOps = false}) => SamplingScheduler(
+  SamplingScheduler build({
+    bool readsOps = false,
+    void Function(String id)? onOpsRead,
+    void Function(Object error, StackTrace stack)? onFault,
+  }) => SamplingScheduler(
     subscriptions: subscriptions,
     linkFor: (id) => links[id],
     emit: events.add,
@@ -57,12 +61,16 @@ void main() {
     clearDeadPeerHint: (id, l) => hints.add(('clear', id, l)),
     probed: (id, profile) => probes.add(id),
     opsRead: readsOps
-        ? (id, section) => opsReads.add((
-            id,
-            section.status,
-            String.fromCharCodes(section.payload),
-          ))
+        ? (id, section) {
+            onOpsRead?.call(id);
+            opsReads.add((
+              id,
+              section.status,
+              String.fromCharCodes(section.payload),
+            ));
+          }
         : null,
+    onFault: onFault,
     openSampler: (l, kind) {
       final session = SamplerSession(
         link: l,
@@ -719,6 +727,24 @@ void main() {
       await settle();
       expect(next.linesOf(_slow).take(2), ['hw_o probe', 'hw_o ops']);
       expect(opsReads, hasLength(2));
+    });
+
+    test('SMP-09: a reply whose handling throws is reported and leaves the '
+        'slow sampler on its schedule, not busy for the run', () async {
+      await scheduler.close();
+      final faults = <Object>[];
+      scheduler = build(
+        readsOps: true,
+        onOpsRead: (_) => throw StateError('ops listing refused'),
+        onFault: (error, _) => faults.add(error),
+      );
+      link.onDemandPayloads['ops'] = 'dir user absent 0 /h/ops';
+      subscribe({SampleStream.fs});
+      await settle();
+
+      expect(faults, [isA<StateError>()]);
+      // The tick after the read that threw still goes out.
+      expect(link.linesOf(_slow), containsAllInOrder(['hw_o ops', 'hw_t fs']));
     });
 
     test('readOps reads again once the slow sampler is free; a read '

@@ -488,8 +488,22 @@ const List<String> kCronJournalIdentifiers = ['CRON', 'CROND', 'crond'];
 
 /// How a cron command runs as another user (JOB-19, 03 §7.7): util-linux
 /// `runuser`, which root runs without a password prompt or PAM session
-/// checks, or `su` where a host lacks it (BusyBox).
-enum RunAsTool { runuser, su }
+/// checks, or `su` where a host lacks it (BusyBox, Alpine).
+enum RunAsTool {
+  /// `runuser` where the host has it, else `su`, chosen on the host.
+  installed,
+  runuser,
+  su,
+}
+
+/// Runs `$2` as the user `$1` with `runuser`, or with `su` on a host
+/// without it. `su` takes its options before the user, which both the
+/// util-linux and the BusyBox one read.
+const String _kRunAsScript = r'''
+if command -v runuser >/dev/null 2>&1; then
+  exec runuser -u "$1" -- sh -c "$2"
+fi
+exec su -s /bin/sh -c "$2" "$1"''';
 
 /// The locale [HostCommands.commandLine] exports (03 §8.8, A11Y-08).
 enum CommandLocale {
@@ -1269,7 +1283,7 @@ printf '%s\\n' "\$o"''';
   static List<String> runCronCommand(
     String command, {
     String? asUser,
-    RunAsTool tool = RunAsTool.runuser,
+    RunAsTool tool = RunAsTool.installed,
   }) {
     if (command.trim().isEmpty || command.codeUnits.contains(0)) {
       throw HostCommandError('not a command', argument: command);
@@ -1277,6 +1291,14 @@ printf '%s\\n' "\$o"''';
     if (asUser == null) return ['sh', '-c', command];
     _check(ArgValidators.userName, asUser);
     return switch (tool) {
+      RunAsTool.installed => [
+        'sh',
+        '-c',
+        _kRunAsScript,
+        'klabautermann-run-as',
+        asUser,
+        command,
+      ],
       RunAsTool.runuser => ['runuser', '-u', asUser, '--', 'sh', '-c', command],
       RunAsTool.su => ['su', '-s', '/bin/sh', '-c', command, asUser],
     };

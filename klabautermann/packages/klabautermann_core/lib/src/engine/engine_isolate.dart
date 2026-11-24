@@ -93,6 +93,8 @@ import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'protocol.dart';
+import 'request_ids.dart';
+import 'serial_chain.dart';
 
 /// Redacts the lines an export carries (LOG-10, 03 §8.9), as the audit
 /// log and operation output are.
@@ -224,6 +226,13 @@ final class EngineStart {
 /// [subscriptions], when given, holds the sampling subscriptions, so
 /// tests can read them, and [endpointPinStore] replaces the endpoint pins
 /// [openEndpointPins] opens, so tests can fail their reads.
+///
+/// The whole engine runs inside one error zone, its last-resort boundary:
+/// an error no handler caught, which in the isolate's root zone would end
+/// the isolate with every link, shell and forward, goes out as an
+/// [EngineFault] and the engine goes on. Each piece of work started
+/// beside the request queue still answers its own failure; the boundary
+/// is for the one nobody foresaw.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
@@ -235,12 +244,74 @@ void engineMain(
   @visibleForTesting
   void Function(Future<void> Function() drain)? onSupportWrites,
 }) {
+  runZonedGuarded(
+    () => _runEngine(
+      start,
+      dial: dial,
+      testAuthenticator: testAuthenticator,
+      prober: prober,
+      syncTransport: syncTransport,
+      subscriptions: subscriptions,
+      endpointPinStore: endpointPinStore,
+      onSupportWrites: onSupportWrites,
+    ),
+    (error, stack) => _reportFault(start.uiPort, error, stack),
+  );
+}
+
+/// Tells the app of an [error] the engine caught rather than answered.
+void _reportFault(SendPort uiPort, Object error, StackTrace stack) =>
+    uiPort.send(EngineFault('$error', stack: '$stack'));
+
+void _runEngine(
+  EngineStart start, {
+  required LinkDialer dial,
+  required TestAuthenticatorFactory? testAuthenticator,
+  required Prober prober,
+  required SyncTransportFactory syncTransport,
+  required SamplingSubscriptions? subscriptions,
+  required EndpointPinStore? endpointPinStore,
+  required void Function(Future<void> Function() drain)? onSupportWrites,
+}) {
   final uiPort = start.uiPort;
   final commands = ReceivePort('klabautermann engine commands');
   uiPort.send(commands.sendPort);
 
-  void reject(EngineRequest request, String reason) =>
-      uiPort.send(RequestRejected(request.runtimeType.toString(), reason));
+  void reject(EngineRequest request, String reason) => uiPort.send(
+    RequestRejected(
+      request.runtimeType.toString(),
+      reason,
+      requestId: requestIdOf(request),
+    ),
+  );
+
+  void fault(Object error, StackTrace stack) =>
+      _reportFault(uiPort, error, stack);
+
+  // Starts [work] beside the request queue. Nothing awaits it, so its
+  // error has no caller to reach: [onError] answers it, and without one
+  // it is reported as a fault. Either way it never reaches the zone as an
+  // unhandled error.
+  void detach(
+    Future<void>? work, {
+    void Function(Object error, StackTrace stack)? onError,
+  }) {
+    if (work == null) return;
+    unawaited(
+      work.then<void>(
+        (_) {},
+        onError: (Object error, StackTrace stack) {
+          if (onError == null) return fault(error, stack);
+          // An answer that throws is a fault too, not an unhandled error.
+          try {
+            onError(error, stack);
+          } on Object catch (error, stack) {
+            fault(error, stack);
+          }
+        },
+      ),
+    );
+  }
 
   // Which streams each server's surfaces subscribed, and the cadence
   // profile (D45), which the scheduler below samples.
@@ -574,7 +645,7 @@ void engineMain(
         }
         // A root result's cleanup waits for admin mode (03 §7.17).
         if (event.phase == AdminModePhase.on) {
-          unawaited(operations?.adminOn(event.serverId));
+          detach(operations?.adminOn(event.serverId));
         }
       },
     );
@@ -740,11 +811,12 @@ void engineMain(
         profiles[serverId] = profile;
         admin?.probed(serverId, profile);
         verifyFootprint(serverId);
-        unawaited(capabilities?.probed(serverId, profile));
+        detach(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
       opsRead: (serverId, section) =>
-          unawaited(operations?.listed(serverId, section)),
+          detach(operations?.listed(serverId, section)),
+      onFault: fault,
     );
     hostQueries = HostQueries(
       linkFor: links.link,
@@ -927,8 +999,8 @@ void engineMain(
     // probe of a server starts, and no answer for it goes out, once the
     // app hears it left or lost its pin.
     probeFleet();
-    unawaited(capabilities?.forget(forgotten));
-    unawaited(history?.forget(forgotten));
+    detach(capabilities?.forget(forgotten));
+    detach(history?.forget(forgotten));
   }
 
   // Lists [servers] against this device's pins. A pin the store cannot
@@ -1015,11 +1087,19 @@ void engineMain(
   // a key derivation and the app's keystore answers, which arrive as
   // requests, and links, sampling and imports go on meanwhile.
   var syncTail = Future<void>.value();
+  // Each link completes normally whatever its body throws: [onError]
+  // answers the request that asked, and without one the error is
+  // reported as a fault.
+  void chain(
+    Future<void> Function() body, {
+    void Function(Object error)? onError,
+  }) {
+    syncTail = chainAfter(syncTail, body, onError: onError, onFault: fault);
+  }
+
   pinConfirmed = (pin) {
     if (!syncOpened) return;
-    syncTail = syncTail.then(
-      (_) => sync.publishPin(pin, release: start.pinPublicationRelease),
-    );
+    chain(() => sync.publishPin(pin, release: start.pinPublicationRelease));
   };
   // Null while no release is offered: the app's default state says so.
   PinPublicationState? pinPublicationState() {
@@ -1038,7 +1118,7 @@ void engineMain(
     Future<SyncStatus> Function() body, {
     String? requestId,
   }) {
-    syncTail = syncTail.then((_) async {
+    chain(() async {
       uiPort.send(
         SyncStatus(
           SyncPhase.running,
@@ -1073,7 +1153,14 @@ void engineMain(
       }
       if (status.phase == SyncPhase.succeeded) {
         uiPort.send(CatalogReplaced(fleetEntries()));
-        await sendServerPrefs();
+        // The round took, so it is answered as it ended even when the
+        // preferences it pulled cannot be sent on: records from other
+        // devices are encoded there, and the next round sends them again.
+        try {
+          await sendServerPrefs();
+        } on Object catch (error, stack) {
+          fault(error, stack);
+        }
       }
       uiPort.send(status.answering(requestId));
     });
@@ -1090,7 +1177,7 @@ void engineMain(
     String? confirm,
     bool confirmWritten = false,
   }) {
-    syncTail = syncTail.then((_) async {
+    chain(() async {
       final EngineEvent answer;
       try {
         answer = await body();
@@ -1185,7 +1272,12 @@ void engineMain(
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
         fleetSent = true;
-        await sendServerPrefs();
+        // The probes start whatever the stored preferences do.
+        try {
+          await sendServerPrefs();
+        } on Object catch (error, stack) {
+          fault(error, stack);
+        }
         probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
@@ -1321,7 +1413,10 @@ void engineMain(
             reject(message, 'no fleet server $serverId');
           case final queries:
             // Not awaited: the queue keeps serving while the host answers.
-            unawaited(queries.query(message));
+            detach(
+              queries.query(message),
+              onError: (error, _) => reject(message, 'host query: $error'),
+            );
         }
       case RedactLines(:final requestId, :final lines):
         uiPort.send(
@@ -1373,7 +1468,13 @@ void engineMain(
           case null:
             reject(message, 'links are off in this engine');
           case final forwards:
-            unawaited(forwards.open(message));
+            // Not awaited: the bind and the first channel take a while. A
+            // forward that throws rather than reporting its own state is
+            // refused by id, so its row does not stay opening.
+            detach(
+              forwards.open(message),
+              onError: (error, _) => reject(message, 'port forward: $error'),
+            );
         }
       case ClosePortForward(:final forwardId):
         forwards?.close(forwardId);
@@ -1482,16 +1583,18 @@ void engineMain(
       case ReadPinConflicts():
         // Behind any round already queued, so a read never races the diff
         // that round is about to change.
-        syncTail = syncTail.then((_) async {
-          uiPort.send(PinConflictsChanged(await sync.pinConflicts()));
-        });
+        chain(
+          () async =>
+              uiPort.send(PinConflictsChanged(await sync.pinConflicts())),
+          onError: (error) => reject(message, '$error'),
+        );
       case ResolvePinConflict(
         :final locator,
         :final keepLocal,
         :final localFingerprintSha256,
         :final pulledFingerprintSha256,
       ):
-        syncTail = syncTail.then((_) async {
+        chain(() async {
           try {
             final conflicts = await sync.resolvePinConflict(
               locator,
@@ -1547,7 +1650,7 @@ void engineMain(
         );
         // Off the request loop: the test waits on the network and on the
         // user's answers to its prompts.
-        unawaited(
+        detach(
           tester
               .test(
                 config,
@@ -1570,6 +1673,7 @@ void engineMain(
                   ),
                 ),
               ),
+          onError: (error, _) => reject(message, 'connection test: $error'),
         );
       case SetServerPrefs(:final requestId):
         runWrite(requestId, () => sync.setServerPrefs(message));
@@ -1746,7 +1850,7 @@ void engineMain(
         // serving the app meanwhile. A planner that throws rather than
         // refusing still answers, or the app's preview would stay
         // pending for good.
-        unawaited(
+        detach(
           attempt
               .catchError(
                 (Object error) => (
@@ -1772,6 +1876,10 @@ void engineMain(
                 final planId = plans.hold(held, linkGeneration: generation);
                 uiPort.send(ActionPlanned(planId, held.preview));
               }),
+          // What follows the planner can throw too, such as the audit
+          // line's own checks: the preview is refused, not left pending.
+          onError: (error, _) =>
+              refuse(ActionRefusalReason.engineUnavailable, detail: '$error'),
         );
       case FootprintQuery(:final serverId):
         if (!fleetIds.contains(serverId)) {
@@ -1811,14 +1919,21 @@ void engineMain(
           ),
         );
       case AuditQuery(:final serverId, :final after, :final limit):
-        final (:records, :next, :unreadable) = await audit.query(
-          serverId,
-          after: after,
-          limit: limit,
-        );
-        uiPort.send(
-          AuditRecords(serverId, records, next: next, unreadable: unreadable),
-        );
+        // The query names no id a rejection could echo, and the app
+        // matches answers by server: a read that throws answers as a log
+        // that could not be read, so the page waiting on it settles.
+        try {
+          final (:records, :next, :unreadable) = await audit.query(
+            serverId,
+            after: after,
+            limit: limit,
+          );
+          uiPort.send(
+            AuditRecords(serverId, records, next: next, unreadable: unreadable),
+          );
+        } on Object {
+          uiPort.send(AuditRecords(serverId, const [], unreadable: true));
+        }
       case AcknowledgeOperation(:final serverId, :final id):
         final tracker = operations;
         if (tracker == null) {
@@ -2307,7 +2422,7 @@ void engineMain(
           reject(message, 'no release is offered for pin publication');
           return;
         }
-        syncTail = syncTail.then((_) async {
+        chain(() async {
           try {
             await sync.setPinPublication(asserted ? release : null);
           } on Object {
@@ -2320,7 +2435,7 @@ void engineMain(
       case SetSyncSecrets(:final enabled):
         // Behind any sync operation already queued, which runs under the
         // switch as it was when it was asked for.
-        syncTail = syncTail.then((_) => sync.setSyncSecrets(enabled: enabled));
+        chain(() => sync.setSyncSecrets(enabled: enabled));
       case NewRecoveryCode(:final requestId):
         await replyToRecovery(
           requestId,
@@ -2329,25 +2444,37 @@ void engineMain(
             code: recovery.newCode(),
           ),
         );
+      // The four below wait for the vault's exclusive queue, which a sync
+      // round holds for its whole network phase and an enrollment across
+      // its key derivation. They are not awaited, as sync itself is not:
+      // the queue keeps serving prompts, shells and Shutdown meanwhile.
+      // Each joins the vault's queue before this returns, so they still
+      // run in request order, and replyToRecovery answers every failure.
       case SetRecoveryCode(:final requestId, :final code):
-        await replyToRecovery(requestId, () async {
-          await recovery.saveCode(code);
-          return RecoveryStatus(requestId: requestId, configured: true);
-        });
+        detach(
+          replyToRecovery(requestId, () async {
+            await recovery.saveCode(code);
+            return RecoveryStatus(requestId: requestId, configured: true);
+          }),
+        );
       case RecoveryStatusRequest(:final requestId):
-        await replyToRecovery(
-          requestId,
-          () async => RecoveryStatus(
-            requestId: requestId,
-            configured: await recovery.configured(),
+        detach(
+          replyToRecovery(
+            requestId,
+            () async => RecoveryStatus(
+              requestId: requestId,
+              configured: await recovery.configured(),
+            ),
           ),
         );
       case ExportVault(:final requestId):
-        await replyToRecovery(
-          requestId,
-          () async => VaultExported(
-            requestId: requestId,
-            bytes: await recovery.exportSecrets(),
+        detach(
+          replyToRecovery(
+            requestId,
+            () async => VaultExported(
+              requestId: requestId,
+              bytes: await recovery.exportSecrets(),
+            ),
           ),
         );
       case RestoreVault(
@@ -2356,20 +2483,22 @@ void engineMain(
         :final code,
         :final policy,
       ):
-        await replyToRecovery(requestId, () async {
-          final summary = await recovery.restoreSecrets(
-            export,
-            code,
-            policy: policy,
-          );
-          return VaultRestored(
-            requestId: requestId,
-            added: summary.added,
-            replaced: summary.replaced,
-            kept: summary.kept,
-            unreadable: summary.unreadable,
-          );
-        });
+        detach(
+          replyToRecovery(requestId, () async {
+            final summary = await recovery.restoreSecrets(
+              export,
+              code,
+              policy: policy,
+            );
+            return VaultRestored(
+              requestId: requestId,
+              added: summary.added,
+              replaced: summary.replaced,
+              kept: summary.kept,
+              unreadable: summary.unreadable,
+            );
+          }),
+        );
       case SetAdminMode(:final serverId, :final enabled):
         if (!fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');
@@ -2390,7 +2519,8 @@ void engineMain(
         }
         // Not awaited: the password prompt's answer comes through this
         // queue.
-        unawaited(admin!.enable(serverId));
+        // enable reports its own failures as AdminModeState.
+        detach(admin!.enable(serverId));
       case CancelAction(:final planId):
         pullCancels.cancel(planId);
       case RunAction(:final planId, :final confirmation):
@@ -2436,7 +2566,9 @@ void engineMain(
         if (session != null) admin?.touch(serverId);
         // Not awaited, like the reads: a plan's steps take as long as
         // they take, and the queue keeps serving the app meanwhile.
-        unawaited(
+        // The runner always answers with one ActionFinished, so an error
+        // here comes from after it and is a fault, not a second answer.
+        detach(
           planRunner.run(planId, plan, session: session).then((finished) {
             if (session != null) admin?.touch(serverId);
           }),
@@ -2565,8 +2697,8 @@ void engineMain(
                   entry.serverId,
             };
             if (unconfirmed.isNotEmpty) {
-              unawaited(capabilities!.forget(unconfirmed));
-              unawaited(history!.forget(unconfirmed));
+              detach(capabilities!.forget(unconfirmed));
+              detach(history!.forget(unconfirmed));
             }
           })
           .catchError((Object error) {
@@ -2592,6 +2724,7 @@ void engineMain(
                 ? message.runtimeType.toString()
                 : '<unknown>',
             'engine failed to start: $failure',
+            requestId: message is EngineRequest ? requestIdOf(message) : null,
           ),
         );
         return null;
@@ -2603,6 +2736,7 @@ void engineMain(
                 ? message.runtimeType.toString()
                 : '<unknown>',
             'engine error: $error',
+            requestId: message is EngineRequest ? requestIdOf(message) : null,
           ),
         );
       });

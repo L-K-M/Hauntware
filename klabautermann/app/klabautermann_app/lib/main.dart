@@ -42,6 +42,7 @@ import 'controllers/pin_publication_controller.dart';
 import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/editor_display.dart';
+import 'controllers/engine_health.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
@@ -241,6 +242,11 @@ Future<void> main(List<String> args) async {
     monitorSetDefault: monitorSetDefaultFor(defaultTargetPlatform),
     saveMonitorSet: settings.setMonitorSet,
   );
+  // What the engine says of its own health (ENG-4, ENG-6), followed
+  // after the fleet controller, which needs the client's first events.
+  // The quit's own shutdown is no stop to report.
+  var quitting = false;
+  final engineHealth = EngineHealth()..follow(engine, expected: () => quitting);
   // CN-09's Docker socket per server, chosen on this device and kept in
   // settings.json (03 §4.10, D54); a server the fleet drops or moves to
   // another endpoint loses its choice (SYN-08).
@@ -407,6 +413,14 @@ Future<void> main(List<String> args) async {
     contextOf: () => appNavigatorKey.currentContext,
     shells: () => monitoring.terminals.shells,
     lock: appLock,
+    // The engine's clean stop (CTL-02): it writes the history buckets
+    // still filling and ends the open shells with their audit records,
+    // which the process ending under it would cut off. The client bounds
+    // the wait, so a stuck engine cannot hold the quit.
+    beforeExit: () {
+      quitting = true;
+      return engine.shutdown();
+    },
   );
   EngineKeystoreResponder(
     engine,
@@ -690,6 +704,7 @@ Future<void> main(List<String> args) async {
       importStoreIssue: importStoreIssue,
       syncStoreIssues: engine.ready.syncStoreIssues,
       instanceLockIssue: instanceLockIssue,
+      engineHealth: engineHealth,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
       appVersion: appVersion,
