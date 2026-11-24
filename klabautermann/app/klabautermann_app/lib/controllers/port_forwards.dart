@@ -114,6 +114,19 @@ final class PortForwardsController extends ChangeNotifier {
       if (!_forwards.containsKey(forwardId)) return;
       _forwards[forwardId] = event;
       notifyListeners();
+      return;
+    }
+    // The engine refused the one open that carries this id, so no state
+    // for it follows: its row ends, as closed since the protocol names no
+    // end for it, rather than staying on opening.
+    if (event case RequestRejected(
+      :final requestName,
+      :final requestId?,
+    ) when requestName == '$OpenPortForward') {
+      final forward = _forwards[requestId];
+      if (forward == null || forward.ended != null) return;
+      _end(forward, PortForwardEnd.closed);
+      notifyListeners();
     }
   }
 

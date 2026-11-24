@@ -42,6 +42,75 @@ void main() {
       expect(check.newest, '6.1.0-13-amd64');
     });
 
+    test('a kernel of another flavour is not a newer one (HST-11)', () {
+      for (final (running, other) in [
+        ('5.14.0-503.el9.x86_64', '5.14.0-503.el9.x86_64+debug'),
+        ('5.14.0-503.el9.x86_64', '5.14.0-503.el9.x86_64+rt'),
+        ('6.8.0-45-generic', '6.8.0-1012-aws'),
+        ('6.8.0-45-generic', '6.8.0-45-lowlatency'),
+        ('6.1.0-13-amd64', '6.1.0-13-rt-amd64'),
+        ('6.1.0-13-amd64', '6.1.0-13-cloud-amd64'),
+        ('6.6.31+rpt-rpi-2712', '6.6.31+rpt-rpi-v8'),
+        ('6.6.1-arch1-1', '6.6.8-1-lts'),
+      ]) {
+        expect(
+          compareVersions(other, running),
+          greaterThan(0),
+          reason: '$other sorts above $running',
+        );
+        final check = parseKernels(read(running, [running, other]))!;
+        expect(check.state, KernelCheckState.current, reason: other);
+        expect(check.newest, running, reason: other);
+      }
+    });
+
+    test('a newer kernel of the running flavour still waits for a reboot, '
+        'beside another flavour', () {
+      for (final (running, newer, other) in [
+        ('6.8.0-45-generic', '6.8.0-48-generic', '6.8.0-1012-aws'),
+        (
+          '5.14.0-427.13.1.el9_4.x86_64',
+          '5.14.0-503.el9.x86_64',
+          '5.14.0-503.el9.x86_64+debug',
+        ),
+        ('6.1.0-13-amd64', '6.5.0-0.deb12.4-amd64', '6.1.0-13-rt-amd64'),
+      ]) {
+        final check = parseKernels(read(running, [other, newer, running]))!;
+        expect(check.state, KernelCheckState.newerInstalled, reason: newer);
+        expect(check.newest, newer);
+      }
+    });
+
+    test('a release names its flavour', () {
+      expect(
+        {
+          for (final release in [
+            '6.8.0-45-generic',
+            '6.8.0-1012-aws',
+            '6.1.0-13-rt-amd64',
+            '5.14.0-503.el9.x86_64',
+            '5.14.0-503.el9.x86_64+debug',
+            '6.6.31+rpt-rpi-v8',
+            '6.6.1-arch1-1',
+            '6.6.14-0-lts',
+            '6.9.3',
+          ])
+            release: kernelFlavour(release),
+        },
+        {
+          '6.8.0-45-generic': 'generic',
+          '6.8.0-1012-aws': 'aws',
+          '6.1.0-13-rt-amd64': 'rt-amd64',
+          '5.14.0-503.el9.x86_64': '',
+          '5.14.0-503.el9.x86_64+debug': '+debug',
+          '6.6.31+rpt-rpi-v8': '+rpt-rpi-v8',
+          '6.6.1-arch1-1': '',
+          '6.6.14-0-lts': 'lts',
+          '6.9.3': '',
+        },
+      );
+    });
+
     test('a running kernel whose modules are gone reads as removed', () {
       final check = parseKernels(
         read('5.15.0-88-generic', ['5.15.0-91-generic']),

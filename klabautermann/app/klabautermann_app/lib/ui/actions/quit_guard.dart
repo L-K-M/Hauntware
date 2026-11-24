@@ -17,6 +17,7 @@ final class AppQuitGuard {
     required this._contextOf,
     this._shells,
     this._lock,
+    this._beforeExit,
   }) {
     _exitRequests = AppLifecycleListener(onExitRequested: _requestExit);
   }
@@ -27,11 +28,35 @@ final class AppQuitGuard {
   /// The open shells at quit time, or null where the app has none.
   final List<ContainerShell> Function()? _shells;
   final AppLockSettings? _lock;
+
+  /// Runs once the quit is decided and before it is answered: the engine's
+  /// clean stop, which writes the history still in memory and the open
+  /// shells' closing audit records. It must bound its own wait; a quit is
+  /// never refused for it.
+  final Future<void> Function()? _beforeExit;
   late final AppLifecycleListener _exitRequests;
   Future<bool>? _pending;
+  Future<void>? _exiting;
   bool _accepted = false;
 
-  Future<bool> confirm() {
+  /// Whether the app may quit. A yes is final: the window close, the
+  /// application Quit and the last window closing all end the process, so
+  /// [_beforeExit] has run by the time this answers true.
+  Future<bool> confirm() async {
+    final quit = await _decide();
+    if (quit) await (_exiting ??= _prepareExit());
+    return quit;
+  }
+
+  Future<void> _prepareExit() async {
+    try {
+      await _beforeExit?.call();
+    } on Object {
+      // The quit goes ahead whatever the clean stop met.
+    }
+  }
+
+  Future<bool> _decide() {
     // The lock gate blocks navigator dialogs. Quitting stays possible
     // without authenticating or revealing the work behind the lock.
     if (_lock?.locked == true) return Future.value(true);

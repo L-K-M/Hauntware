@@ -376,7 +376,12 @@ final class DockerWatcher {
         query: {if (since != null) 'since': '${since.seconds}'},
         filters: {'type': _eventTypes},
       );
-      if (epoch != _epoch) return;
+      if (epoch != _epoch) {
+        // Detached while the request was under way: the stream is
+        // nobody's, and an unread body keeps its connection open.
+        unawaited(response.body.listen(null).cancel());
+        return;
+      }
       // A stream after a lost one leaves a gap in the timeline; with
       // `since` the engine replays what it still holds of it.
       if (_streamed && lostAt != null) {

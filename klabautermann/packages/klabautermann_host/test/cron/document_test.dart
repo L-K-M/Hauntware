@@ -172,15 +172,28 @@ void main() {
         '-c',
         'backup.sh',
       ]);
-      expect(HostCommands.runCronCommand('backup.sh', asUser: 'www-data'), [
-        'runuser',
-        '-u',
+      // By default the host picks the tool: BusyBox systems have no
+      // runuser (OPS-9).
+      final picked = HostCommands.runCronCommand(
+        'backup.sh',
+        asUser: 'www-data',
+      );
+      expect(picked.take(2), ['sh', '-c']);
+      expect(picked[2], contains(r'exec runuser -u "$1" -- sh -c "$2"'));
+      expect(picked[2], contains(r'exec su -s /bin/sh -c "$2" "$1"'));
+      expect(picked.sublist(3), [
+        'klabautermann-run-as',
         'www-data',
-        '--',
-        'sh',
-        '-c',
         'backup.sh',
       ]);
+      expect(
+        HostCommands.runCronCommand(
+          'backup.sh',
+          asUser: 'www-data',
+          tool: RunAsTool.runuser,
+        ),
+        ['runuser', '-u', 'www-data', '--', 'sh', '-c', 'backup.sh'],
+      );
       expect(
         HostCommands.runCronCommand(
           'backup.sh',

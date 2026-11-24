@@ -7,9 +7,9 @@
         "unit": "apt-daily.timer",
         "activates": "apt-daily.service",
         "nextUs": 1750003600000000,
-        "leftUs": 3600000000,
+        "leftUs": null,
         "lastUs": 1749996400000000,
-        "passedUs": 3600000000,
+        "passedUs": null,
         "nextText": null,
         "lastText": null
       },
@@ -23,9 +23,9 @@
         "unit": "logrotate.timer",
         "activates": "logrotate.service",
         "nextUs": 1750032000000000,
-        "leftUs": 32000000000,
+        "leftUs": null,
         "lastUs": 1749945600000000,
-        "passedUs": 54400000000,
+        "passedUs": null,
         "nextText": null,
         "lastText": null
       },

@@ -868,6 +868,18 @@
   "@engineFailedQuit": {
     "description": "Button on the engine-failed screen that quits the app."
   },
+  "engineFaultNotice": "Something went wrong in the background and was stopped. Klabautermann keeps running; if what you just asked for did not happen, try it again.",
+  "@engineFaultNotice": {
+    "description": "Notice shown when the app's background engine caught an unexpected error and went on running: one piece of work was lost, connections stay open."
+  },
+  "engineStoppedTitle": "Klabautermann stopped working in the background",
+  "@engineStoppedTitle": {
+    "description": "Title of the dialog shown when the app's background engine stopped by itself after the app had started."
+  },
+  "engineStoppedBody": "Its background engine stopped, so nothing connects or updates any more. Quit and open Klabautermann again. If this keeps happening, include the details below in a bug report.",
+  "@engineStoppedBody": {
+    "description": "Body of the dialog shown when the app's background engine stopped by itself: what it means and what to do."
+  },
   "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
   "@settingsWindowUnreachable": {
     "description": "Shown in the desktop settings window when the app does not answer it."
