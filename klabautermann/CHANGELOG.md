@@ -573,3 +573,5 @@
   a small phone with the keyboard up, instead of clipping their fields.
 - The alert rule editor refuses a hold time above 7 days instead of
   saving one that overflows into a negative duration.
+- In the Processes tree, the headers name the column that orders the
+  siblings and flip its direction when tapped.
