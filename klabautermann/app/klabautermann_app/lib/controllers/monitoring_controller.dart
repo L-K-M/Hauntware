@@ -817,8 +817,31 @@ final class MonitoringController extends ChangeNotifier {
         _server(serverId).gap(event);
       case UnitQueryResult(:final requestId):
         _unitQueries.remove(requestId)?.$2.complete(event);
+      case RequestRejected(:final requestName, :final requestId?):
+        _rejected(requestName, requestId);
       case EngineEvent():
         break;
+    }
+  }
+
+  /// The engine refused the request [requestName] with [requestId], for a
+  /// server that left its fleet say, so no answer follows: the read it
+  /// was answers as it does without a link, rather than staying pending.
+  /// Each id is checked against its own request's name, since the four
+  /// reads count their ids apart.
+  void _rejected(String requestName, String requestId) {
+    if (requestName == '$HostQuery') {
+      if (_hostQueries.remove(requestId) case (final serverId, final answer)) {
+        answer.complete(_noHostLink(serverId, requestId));
+      }
+    } else if (requestName == '$UnitQuery') {
+      if (_unitQueries.remove(requestId) case (final serverId, final answer)) {
+        answer.complete(_noUnitLink(serverId, requestId));
+      }
+    } else if (requestName == '$RedactLines') {
+      _redactions.remove(requestId)?.complete(null);
+    } else if (requestName == '$CheckTlsEndpoints') {
+      _tlsChecks.remove(requestId)?.complete(null);
     }
   }
 

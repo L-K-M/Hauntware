@@ -31,6 +31,38 @@ String _row(
     '${_pad(unit, _widths[4])}$activates';
 
 void main() {
+  test('JSON: a timer that never ran has no last run, and left and passed '
+      'are not read as spans (HST-7)', () {
+    // The shape systemd 255 prints (the captured runner fixture): `left`
+    // repeats `next`, `passed` is a monotonic stamp, and 0 means never.
+    final raw = [
+      '== timers_json ==',
+      '[{"next":1792189800000000,"left":1792189800000000,"last":0,'
+          '"passed":0,"unit":"sysstat-collect.timer",'
+          '"activates":"sysstat-collect.service"},'
+          '{"next":1792190340000000,"left":1792190340000000,'
+          '"last":1792189583013370,"passed":10101367,'
+          '"unit":"phpsessionclean.timer",'
+          '"activates":"phpsessionclean.service"},'
+          '{"next":0,"left":0,"last":1792189583013370,"passed":10101367,'
+          '"unit":"once.timer","activates":"once.service"}]',
+    ].join('\n');
+
+    final r = parseTimers(raw, _ctx);
+    expect(r.warnings, isEmpty);
+    final [never, ran, done] = r.value.timers;
+    expect(never.lastUs, isNull);
+    expect(never.lastUtc, isNull);
+    expect(never.nextUs, 1792189800000000);
+    expect(ran.lastUs, 1792189583013370);
+    expect(done.nextUs, isNull);
+    expect(done.nextUtc, isNull);
+    for (final t in r.value.timers) {
+      expect(t.leftUs, isNull, reason: t.unit);
+      expect(t.passedUs, isNull, reason: t.unit);
+    }
+  });
+
   test('JSON rows carry microsecond instants and the activated unit', () {
     final raw = [
       '== timers_json ==',
@@ -48,7 +80,9 @@ void main() {
     expect(t.unit, 'logrotate.timer');
     expect(t.activates, 'logrotate.service');
     expect(t.nextUs, 1750000000000000);
-    expect(t.leftUs, 3600000000);
+    // systemd's JSON holds stamps in `left` and `passed`, not spans.
+    expect(t.leftUs, isNull);
+    expect(t.passedUs, isNull);
     expect(
       t.nextUtc,
       DateTime.fromMicrosecondsSinceEpoch(1750000000000000, isUtc: true),

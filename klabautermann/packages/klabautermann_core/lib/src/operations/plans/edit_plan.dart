@@ -362,6 +362,7 @@ Future<_Manifest> _manifestStep(
       : c.link.run(
           HostCommands.commandLine(argv, quote: quoteShellWord),
           stdin: const [],
+          maxOutputBytes: kIndexReadMaxBytes,
         );
 
   final String path;
@@ -383,6 +384,13 @@ Future<_Manifest> _manifestStep(
     return _ManifestRefused(
       ActionRefusalReason.noLink,
       detail: _stepFailure('manifest read', read),
+    );
+  }
+  // A manifest cut at the output cap would be written back short.
+  if (read.truncated) {
+    return const _ManifestRefused(
+      ActionRefusalReason.invalidTarget,
+      detail: 'manifest read: too large to read whole',
     );
   }
   final parsed = parseFootprintManifest(read.stdout);

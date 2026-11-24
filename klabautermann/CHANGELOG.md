@@ -518,6 +518,19 @@
 - Settings > Appearance has a File editor section: choose a font, turn
   ligatures on or off, and set the text size. Every file editor and the
   compare view draw in the choice, kept on this device only.
+- The CPU gauge no longer drops a reading when the kernel's iowait
+  counter steps back.
+- A second kernel flavour beside the running one (a debug or realtime
+  build, another Ubuntu flavour, the Raspberry Pi's kernel for another
+  board) no longer shows as a newer kernel waiting for a reboot.
+- Run now for a cron job of another user works on hosts without
+  `runuser` (Alpine and other BusyBox systems): `su` runs it there.
+- Keep last and Remove backups read a backup index past 256 KiB as the
+  login user, and refuse an index or manifest that is too large to read
+  whole instead of failing for a reason that names something else.
+- A synced alert rule whose clear value lies on the breach side of its
+  raise value is refused, instead of raising and clearing on every
+  reading.
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
@@ -532,6 +545,30 @@
   of its window instead of the daemon's default size.
 - A container log follow whose stream cannot be read ends with the
   reason after three tries instead of reading again without a word.
+- An unexpected error in the background engine no longer ends it with
+  every connection, shell and port forward. The engine catches it,
+  keeps running and the app says that something went wrong; if the
+  engine stops all the same, the app says so with the cause.
+- A confirmed action always ends with a result, whatever fails while
+  it runs. Before, a one-off container command started while the
+  server's Docker channels were all in use could end the engine.
+- An admin password pasted with a line break at its end is refused as
+  wrong and asked for again, instead of stopping the engine.
+- A command that prints "Access denied" is no longer reported as
+  needing admin mode, unless it is a systemd action that polkit
+  refused.
+- A reboot or shutdown that hangs until its time limit is reported as
+  timed out, not as done, and one whose connection closes without an
+  exit status is reported as done, not as failed.
+- Panels no longer wait forever when the engine refuses a read, such
+  as a log listing for a server that a sync round just removed. One
+  refused container shell or connection test no longer fails the
+  others still opening.
+- Recovery settings no longer hold up prompts, shells and quitting
+  while a sync round waits on a slow server.
+- Quitting stops the engine cleanly first, so the last minutes of
+  history are written and open container shells get their closing
+  audit records.
 - A container's log no longer freezes the app on one long line. A line
   of digits or base64 without spaces took seconds to read for its level,
   and a URL followed by a long run of dots took seconds to colour, each

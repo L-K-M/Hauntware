@@ -202,6 +202,35 @@ void main() {
     );
   });
 
+  test('a rule whose clear value is on the breach side of raise is '
+      'refused (HST-10)', () {
+    Map<String, Object?> json(ThresholdOp op, double raise, double clear) => {
+      ..._rule().toJson(),
+      'op': op.name,
+      'raise': {'value': raise, 'for': 0},
+      'clear': {'value': clear, 'for': 0},
+    };
+
+    for (final op in [ThresholdOp.greaterThan, ThresholdOp.greaterOrEqual]) {
+      expect(
+        () => ThresholdRule.fromJson(json(op, 80, 90)),
+        throwsFormatException,
+        reason: op.name,
+      );
+      expect(ThresholdRule.fromJson(json(op, 80, 70)).clear.value, 70);
+      expect(ThresholdRule.fromJson(json(op, 80, 80)).clear.value, 80);
+    }
+    for (final op in [ThresholdOp.lessThan, ThresholdOp.lessOrEqual]) {
+      expect(
+        () => ThresholdRule.fromJson(json(op, 10, 5)),
+        throwsFormatException,
+        reason: op.name,
+      );
+      expect(ThresholdRule.fromJson(json(op, 10, 15)).clear.value, 15);
+      expect(ThresholdRule.fromJson(json(op, 10, 10)).clear.value, 10);
+    }
+  });
+
   test('a rule reads back from its JSON, and a malformed one is refused', () {
     final rule = _rule(
       raiseFor: const Duration(minutes: 5),

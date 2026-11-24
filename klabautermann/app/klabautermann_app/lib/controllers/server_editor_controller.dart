@@ -132,13 +132,13 @@ final class ServerEditorController {
             ?.completeError(ServerEditRefused(failure, detail));
       case ServerConnectionTested(:final requestId):
         _tests.remove(requestId)?.complete(event);
-      // A rejection names no request, but tests are the only requests here
-      // the engine rejects, and only all of them alike.
-      case RequestRejected(:final requestName, :final reason)
-          when requestName == '$TestServerConnection':
-        for (final id in [..._tests.keys]) {
-          _fail(id, ServerEditRefused(CatalogWriteFailure.other, reason));
-        }
+      // A rejection carries the id of the one request the engine refused:
+      // a test whose draft it found invalid, or any request here whose
+      // handling failed. The others in flight keep waiting for their own
+      // answers. The ids are this controller's own, so no other request's
+      // rejection names one.
+      case RequestRejected(:final requestId?, :final reason):
+        _fail(requestId, ServerEditRefused(CatalogWriteFailure.other, reason));
       default:
         break;
     }

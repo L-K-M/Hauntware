@@ -10,6 +10,8 @@ import 'dart:isolate';
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 
+import 'shell_matrix.dart';
+
 /// The entry points later PRs commit, by the detector output that runs
 /// their leg.
 const _entries = {
@@ -29,6 +31,7 @@ void main() {
   late YamlMap workflow;
   late YamlMap jobs;
   late String guard;
+  late Uri workflows;
 
   setUpAll(() async {
     final workspace = await Isolate.resolvePackageUri(
@@ -36,7 +39,8 @@ void main() {
     );
     if (workspace == null) throw StateError('Workspace package is unresolved.');
 
-    final path = workspace.resolve('../../.github/workflows/ci.yml');
+    workflows = workspace.resolve('../../.github/workflows/');
+    final path = workflows.resolve('ci.yml');
     workflow = loadYaml(await File.fromUri(path).readAsString()) as YamlMap;
     jobs = workflow['jobs'] as YamlMap;
     guard = _step(jobs[_detector], id: 'entries')['run'] as String;
@@ -170,6 +174,69 @@ void main() {
         ),
       );
       expect(runs, contains('dart test --reporter expanded test/integration'));
+    });
+
+    // The engine ships inside the app, so its packages are analyzed,
+    // formatted and tested on the Dart the pinned Flutter carries, not on
+    // whatever `stable` is that day.
+    test('the package job runs on the pinned Flutter\'s Dart', () {
+      final job = jobs['klabautermann_dart'] as YamlMap;
+      final uses = [
+        for (final step in (job['steps'] as YamlList).cast<YamlMap>())
+          if (step['uses'] case final String uses) uses,
+      ];
+      expect(uses.where((u) => u.startsWith('dart-lang/setup-dart')), isEmpty);
+      expect(
+        _step(job, uses: 'subosito/flutter-action@')['with']['flutter-version'],
+        r'${{ env.FLUTTER_VERSION }}',
+      );
+    });
+
+    // shell_matrix_test.dart fails on a missing shell or tool only where
+    // this variable asks for it; the job that sets it installs them.
+    test('the package job installs the real-shell matrix and requires it', () {
+      final job = jobs['klabautermann_dart'] as YamlMap;
+      expect(job['env'][requireShellMatrix], '1');
+      final install = _runs(job).singleWhere((r) => r.contains('apt-get'));
+      final words = install.split(RegExp(r'\s+'));
+      expect(words, containsAll(shellMatrixPackages));
+    });
+  });
+
+  group('lockfiles', () {
+    // A resolve that may rewrite the lockfile tests and ships versions no
+    // commit records.
+    for (final name in ['ci.yml', 'release.yml']) {
+      test('every Klabautermann resolve in $name enforces the lockfile', () {
+        final file = File.fromUri(workflows.resolve(name));
+        final all = (loadYaml(file.readAsStringSync()) as YamlMap)['jobs'];
+        final resolves = [
+          for (final MapEntry(:key, :value) in (all as YamlMap).entries)
+            for (final step in (value['steps'] as YamlList).cast<YamlMap>())
+              if ('${step['working-directory'] ?? value['defaults']?['run']?['working-directory']}'
+                  .startsWith('klabautermann'))
+                for (final line in '${step['run'] ?? ''}'.split('\n'))
+                  if (line.contains('pub get')) '$key: ${line.trim()}',
+        ];
+        expect(resolves, hasLength(greaterThanOrEqualTo(4)));
+        expect(resolves, everyElement(contains('--enforce-lockfile')));
+      });
+    }
+
+    test('every Klabautermann resolve in scripts/test.sh enforces the '
+        'lockfile', () {
+      final script = File.fromUri(
+        workflows.resolve('../../scripts/test.sh'),
+      ).readAsStringSync();
+      // The script runs each product in a subshell block of its own.
+      final resolves = [
+        for (final block in script.split(RegExp(r'^  \($', multiLine: true)))
+          if (block.contains('cd klabautermann'))
+            for (final line in block.split('\n'))
+              if (line.contains('pub get')) line.trim(),
+      ];
+      expect(resolves, hasLength(3));
+      expect(resolves, everyElement(contains('--enforce-lockfile')));
     });
   });
 

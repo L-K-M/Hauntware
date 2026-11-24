@@ -24,7 +24,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         kRootBackupsDir,
         kRootManifestPath;
 import 'package:seance_core/seance_core.dart'
-    show ElevatedExecutor, ElevationProbe;
+    show ElevatedExecutor, ElevationProbe, RemoteCommandResult;
 import 'package:test/test.dart';
 
 import '../support/edit_host.dart';
@@ -294,6 +294,36 @@ void main() {
         EditCommands.removeBackups(kRootBackupsDir, [r1.name]),
       );
       expect(p.hostWrites.first, HostWriteRow.rootBackups);
+    });
+
+    test('an index past the default output cap is read whole, and one '
+        'cut at the cap is refused rather than rewritten short '
+        '(OPS-8)', () async {
+      scope(kHostUserManifest, kHostUserBackups, [a1, b1, a2, a3]);
+      const intent = KeepLastBackups(
+        _server,
+        scope: FootprintScope.user,
+        count: 1,
+      );
+
+      await planned(intent);
+      final read = host.commands.indexWhere(
+        (c) => c.contains('klabautermann-read-if-present'),
+      );
+      expect(host.outputCaps[read], kIndexReadMaxBytes);
+      expect(kIndexReadMaxBytes, greaterThan(256 * 1024));
+
+      // The cut falls on a line end: every line parses, and only the
+      // flag says the rest is missing.
+      host.answers['klabautermann-read-if-present'] = RemoteCommandResult(
+        exitCode: 0,
+        stdout: encodeBackupIndex([a1, b1, a2]),
+        truncated: true,
+      );
+      final attempt = await planBackupRemoval(intent, context());
+      expect(attempt.plan, isNull);
+      expect(attempt.refusal, ActionRefusalReason.invalidTarget);
+      expect(attempt.detail, contains('too large'));
     });
 
     test('a plan that removes nothing, or an index with lines it would '
