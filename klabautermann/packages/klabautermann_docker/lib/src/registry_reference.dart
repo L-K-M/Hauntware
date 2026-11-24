@@ -184,8 +184,15 @@ final class RegistryChallenge {
 final class RegistryRateLimit {
   const RegistryRateLimit({this.limit, this.remaining, this.window});
 
+  /// The longest [window] a header is believed for. The seconds come
+  /// from the registry: unbounded, a 429 could leave it unchecked for
+  /// years, or name a time no `DateTime` holds.
+  static const Duration maxWindow = Duration(hours: 24);
+
   final int? limit;
   final int? remaining;
+
+  /// The window the registry named, [maxWindow] at most.
   final Duration? window;
 
   bool get isSpent => remaining == 0;
@@ -211,7 +218,11 @@ final class RegistryRateLimit {
       final kv = part.trim();
       if (!kv.startsWith('w=')) continue;
       final seconds = int.tryParse(kv.substring(2));
-      if (seconds != null && seconds > 0) window = Duration(seconds: seconds);
+      if (seconds == null || seconds <= 0) continue;
+      // Compared as seconds: a Duration of that many could overflow.
+      window = seconds >= maxWindow.inSeconds
+          ? maxWindow
+          : Duration(seconds: seconds);
     }
     if (count == null && window == null) return null;
     return (count: count, window: window);

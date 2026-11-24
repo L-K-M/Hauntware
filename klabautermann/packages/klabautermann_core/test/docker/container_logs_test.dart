@@ -380,6 +380,45 @@ void main() {
       expect(h.states(), [_waitingLink, _running]);
     });
 
+    test('a follow whose stream breaks the wire format three times '
+        'without a line ends as failed and says why (DKR-8)', () async {
+      // A frame of stream 9, which stdcopy does not have.
+      const broken = [9, 0, 0, 0, 0, 0, 0, 1, 0x61];
+      final h = _Harness();
+      await h.start();
+
+      // A line between two breaks starts the count again.
+      h.daemon.writeLogs(broken);
+      await h.settle();
+      await h.clock.elapse(const Duration(seconds: 1));
+      await h.settle();
+      h.daemon.writeLogs(_out(1, 'fine'));
+      await h.flush();
+      expect(h.requests('/logs'), hasLength(2));
+
+      for (final wait in [1, 2]) {
+        h.daemon.writeLogs(broken);
+        await h.settle();
+        expect(h.states(), [_waitingLink, _running]);
+        await h.clock.elapse(Duration(seconds: wait));
+        await h.settle();
+      }
+      expect(h.requests('/logs'), hasLength(4));
+
+      h.daemon.writeLogs(broken);
+      await h.settle();
+      await h.clock.elapse(const Duration(seconds: 30));
+      await h.settle();
+      expect(h.requests('/logs'), hasLength(4), reason: 'no fourth read');
+      expect(h.texts(), ['fine']);
+      expect(
+        h.states().last,
+        isA<LogStreamEnded>()
+            .having((e) => e.reason, 'reason', LogStreamEndReason.failed)
+            .having((e) => e.detail, 'detail', contains('stdcopy')),
+      );
+    });
+
     test('a window reads its last lines once and ends', () async {
       final h = _Harness();
       await h.start(window: 2, follow: false);

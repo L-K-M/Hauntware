@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'api_version.dart';
 import 'docker_client.dart';
 import 'docker_parse_result.dart';
 import 'duplex.dart';
@@ -301,7 +300,7 @@ extension DockerEndpoints on DockerClient {
         'Cmd': cmd,
         'User': ?user,
         'WorkingDir': ?workingDir,
-        if (consoleSize != null && apiVersion >= _execConsoleSizeSince)
+        if (consoleSize != null && gates.hasExecConsoleSize)
           'ConsoleSize': [consoleSize.rows, consoleSize.columns],
       },
       timeout: timeout,
@@ -331,7 +330,7 @@ extension DockerEndpoints on DockerClient {
     json: {
       'Detach': false,
       'Tty': tty,
-      if (consoleSize != null && apiVersion >= _execConsoleSizeSince)
+      if (consoleSize != null && gates.hasExecConsoleSize)
         'ConsoleSize': [consoleSize.rows, consoleSize.columns],
     },
     timeout: timeout,
@@ -666,9 +665,6 @@ enum DockerSignal {
   sigstop,
   sigcont,
 }
-
-/// The first API whose exec create and start take `ConsoleSize`.
-const _execConsoleSizeSince = ApiVersion(1, 42);
 
 String _seg(String value) => Uri.encodeComponent(value);
 

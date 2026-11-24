@@ -49,6 +49,12 @@ final _containerRef = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$');
 const _retryBase = Duration(seconds: 1);
 const _retryCap = Duration(seconds: 30);
 
+/// How many reads in a row may break the wire format without a line
+/// before a follow gives up. A stream the demultiplexer cannot read
+/// (a framing other than `Config.Tty` and the `Content-Type` say) breaks
+/// the same way each time, so reading again only hides the reason.
+const _protocolFailureLimit = 3;
+
 /// [at] as the Engine API's `since=` and `until=` take it.
 LogTimestamp? _timestamp(DateTime? at) {
   if (at == null) return null;
@@ -138,6 +144,11 @@ final class ContainerLogReader {
   Timer? _retry;
   int _retries = 0;
 
+  /// Reads in a row that broke the wire format before any line came,
+  /// and what the last framing choice warned of, for the reason given.
+  int _protocolFailures = 0;
+  String? _framingWarning;
+
   /// The end the engine gave, sent once the ring is out.
   LogStreamEnded? _ending;
   bool _ended = false;
@@ -164,6 +175,7 @@ final class ContainerLogReader {
     assert(_target == null && _ending == null && !_ended, 'not idle');
     _target = target;
     _retries = 0;
+    _protocolFailures = 0;
     final gap = _newest == null && _received > 0;
     unawaited(_open(target, _epoch));
     if (_ring.isNotEmpty || _dropped > 0) _schedule();
@@ -230,11 +242,13 @@ final class ContainerLogReader {
       }
       // Docker 20.10 and Podman send no Content-Type (D01), so Config.Tty
       // decides where the header is missing.
-      final framing = resolveLogFraming(
+      final choice = resolveLogFraming(
         negotiated: client.apiVersion,
         tty: inspect.tty,
         contentType: response.headers.value('Content-Type'),
-      ).framing;
+      );
+      final framing = choice.framing;
+      _framingWarning = choice.warning;
       var lines = joinTimestampedLogLines(
         framing == LogFraming.raw
             ? rawLogFrames(response.body)
@@ -285,7 +299,8 @@ final class ContainerLogReader {
   /// stopped or its connection failed, and it reads again after a
   /// backoff, since the newest line, over the same endpoint. A link or
   /// daemon that went also fails the router's pooled reads, which pause
-  /// it.
+  /// it. A follow that broke the wire format [_protocolFailureLimit]
+  /// times running, with no line between, ends as failed instead.
   void _lost(int epoch, Object? error) {
     if (epoch != _epoch) return;
     _closeConnection();
@@ -298,6 +313,17 @@ final class ContainerLogReader {
                     : LogStreamEndReason.oldestReached,
               )
             : LogStreamEnded(LogStreamEndReason.failed, detail: '$error'),
+      );
+    }
+
+    if (error is DockerProtocolException &&
+        ++_protocolFailures >= _protocolFailureLimit) {
+      final warning = _framingWarning;
+      return _endAfterRing(
+        LogStreamEnded(
+          LogStreamEndReason.failed,
+          detail: warning == null ? '$error' : '$error ($warning)',
+        ),
       );
     }
 
@@ -338,6 +364,7 @@ final class ContainerLogReader {
   void _line(TimestampedLogLine line) {
     _received++;
     _retries = 0;
+    _protocolFailures = 0;
     final at = line.timestamp;
     if (at != null && (_newest == null || at > _newest!)) _newest = at;
 
