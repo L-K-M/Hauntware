@@ -89,6 +89,21 @@ void main() {
     expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
   });
 
+  test('a buffer-cap 16 KiB line is read within a generous bound '
+      '(UIB-2)', () {
+    const length = 16 * 1024;
+    final line = 'http://${'.' * (length - 8)}a';
+    // Before the fix the tail's anchored pattern was tried from every
+    // start in the run, which took seconds for this one line.
+    final watch = Stopwatch()..start();
+    final tokens = logTokens(line);
+    expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+    expect(tokens, hasLength(1));
+    expect(tokens.single.kind, LogTokenKind.url);
+    expect(tokens.single.start, 0);
+    expect(tokens.single.end, length, reason: 'the final a stays in the URL');
+  });
+
   test('finds URLs and leaves sentence punctuation out', () {
     expect(_tokens('see https://example.com/a?b=1, then (http://x.test/).'), [
       ('https://example.com/a?b=1', LogTokenKind.url),
