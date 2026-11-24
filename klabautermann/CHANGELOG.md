@@ -569,3 +569,6 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- A server's confirmation no longer covers its jump hosts: each hop is
+  pinned only when you confirm it in its own row, so an address another
+  device rewrote while the list was open stays unconfirmed.
