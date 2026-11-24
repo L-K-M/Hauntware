@@ -12,7 +12,9 @@ void main() {
   test('main shows the failure and goes no further when the engine does '
       'not start', () {
     final main = File('lib/main.dart').readAsStringSync();
-    final spawn = main.indexOf('IsolateEngineClient.spawn(');
+    // The first spawn; a restart spawns the same way and is told by
+    // EngineHealthNotice instead.
+    final spawn = main.indexOf('engine = await spawnEngine();');
     final restore = main.indexOf('restoreMainWindow(');
     expect(spawn, greaterThan(restore));
 

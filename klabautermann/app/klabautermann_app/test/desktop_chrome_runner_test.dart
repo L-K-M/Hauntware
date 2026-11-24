@@ -132,9 +132,12 @@ void main() {
         'window\'s engine never does', () {
       final branch = main.indexOf('await runSettingsWindow();');
       final restore = main.indexOf('await restoreMainWindow(');
-      // The app's runApp; a second instance's notice (03 §4.10) runs
-      // earlier and never restores the window.
-      final runApp = main.indexOf(RegExp(r'runApp\(\s*KlabautermannApp\('));
+      // The app's runApp, over the current engine run's app; a second
+      // instance's notice (03 §4.10) runs earlier and never restores the
+      // window.
+      final runApp = main.indexOf(
+        RegExp(r'runApp\(\s*ValueListenableBuilder<_EngineRun>\('),
+      );
       expect(branch, isNonNegative);
       expect(restore, greaterThan(branch));
       expect(runApp, greaterThan(restore));

@@ -880,6 +880,14 @@
   "@engineStoppedBody": {
     "description": "Body of the dialog shown when the app's background engine stopped by itself: what it means and what to do."
   },
+  "engineRestartedTitle": "Klabautermann restarted its background engine",
+  "@engineRestartedTitle": {
+    "description": "Title of the dialog shown after the app's background engine stopped by itself and the app started a new one."
+  },
+  "engineRestartedBody": "Its background engine stopped unexpectedly and was started again, so your servers reconnect and update as before. An action, shell, transfer or edit that was running when it stopped may not have finished; check it before you try it again. If this keeps happening, include the details below in a bug report.",
+  "@engineRestartedBody": {
+    "description": "Body of the dialog shown after the app restarted its background engine: what happened, what may have been lost, and what to do."
+  },
   "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
   "@settingsWindowUnreachable": {
     "description": "Shown in the desktop settings window when the app does not answer it."
