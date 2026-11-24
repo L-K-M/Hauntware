@@ -4629,6 +4629,7 @@ class AppLocalizationsEn extends AppLocalizations {
       locale: localeName,
       other: 'starting $minutes minutes late',
       one: 'starting 1 minute late',
+      zero: 'starting right away',
     );
     return '$_temp0';
   }

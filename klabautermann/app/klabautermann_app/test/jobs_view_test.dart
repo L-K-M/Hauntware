@@ -278,6 +278,7 @@ void main() {
         anacronPeriodText(_l10n, AnacronPeriod.monthly()),
         'once a calendar month',
       );
+      expect(anacronDelayText(_l10n, 0), 'starting right away');
       expect(anacronDelayText(_l10n, 1), 'starting 1 minute late');
       expect(anacronDelayText(_l10n, 15), 'starting 15 minutes late');
       expect(anacronLastRunText(_l10n, day), 'Last ran Oct 24, 2026');

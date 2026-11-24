@@ -5894,7 +5894,7 @@ abstract class AppLocalizations {
   /// Jobs tab: how long anacron waits after it starts before it runs a job.
   ///
   /// In en, this message translates to:
-  /// **'{minutes, plural, =1{starting 1 minute late} other{starting {minutes} minutes late}}'**
+  /// **'{minutes, plural, =0{starting right away} =1{starting 1 minute late} other{starting {minutes} minutes late}}'**
   String jobsAnacronDelayMinutes(int minutes);
 
   /// Jobs tab: the day an anacron job last ran; day is a short date.

@@ -5622,7 +5622,7 @@
   "@jobsAnacronPeriodMonthly": {
     "description": "Jobs tab: an anacron job's once-a-month period."
   },
-  "jobsAnacronDelayMinutes": "{minutes, plural, =1{starting 1 minute late} other{starting {minutes} minutes late}}",
+  "jobsAnacronDelayMinutes": "{minutes, plural, =0{starting right away} =1{starting 1 minute late} other{starting {minutes} minutes late}}",
   "@jobsAnacronDelayMinutes": {
     "description": "Jobs tab: how long anacron waits after it starts before it runs a job.",
     "placeholders": {
