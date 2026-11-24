@@ -575,3 +575,7 @@
   again is left stopped, and the app says to quit and open it again.
 - Synced read-only switches and protected marks apply from the moment
   the app starts, not only after the first sync round.
+- An import or sync that moves a kept server to another endpoint
+  closes the old machine's link and log streams and clears what was
+  read there, including its Docker lists, details and disk use, then
+  connects and reads the new endpoint again.
