@@ -541,11 +541,18 @@ final class EngineSync {
       // Held as a round holds it, so no save or pulled secret lands in the
       // vault or the catalog while they are cleared.
       await _vault.exclusive(() async {
+        // The credentials go first: the list of entries to delete is the
+        // servers file, which the catalog deletes below, so a sign-out
+        // stopped after this and retried would read an empty catalog and
+        // leave the account's credentials behind.
         final secretRefs = {
           for (final server in await _servers.load())
             if (server.secretRef case final ref? when !isReservedVaultId(ref))
               ref,
         };
+        for (final ref in secretRefs) {
+          await _vault.store.deleteSecret(ref);
+        }
         for (final name in [_syncRecordsFileName, _serversFileName]) {
           final file = File(_path(name));
           if (await file.exists()) await file.delete();
@@ -553,9 +560,6 @@ final class EngineSync {
         _openCatalog();
         await _klabautermannRecords.clear();
         await _snippets.clear();
-        for (final ref in secretRefs) {
-          await _vault.store.deleteSecret(ref);
-        }
         await enrollment.clear();
         _account = null;
       });
@@ -696,7 +700,8 @@ final class EngineSync {
       }
       if (secret != null) await writer.secretSaved(secretId);
       if (config.excludeFromSync && existing?.excludeFromSync != true) {
-        await _retractPrefs(writes, config.id);
+        final retracted = await _retractPrefs(writes, config.id);
+        if (retracted != null) return _refused(requestId, retracted);
       }
       return CatalogWritten(
         requestId: requestId,
@@ -791,7 +796,10 @@ final class EngineSync {
           return _refused(request.requestId, CatalogWriteFailure.unknownTarget);
         }
         await writes.coordinator.writer.deleteServer(existing);
-        await _retractPrefs(writes, existing.id);
+        final retracted = await _retractPrefs(writes, existing.id);
+        if (retracted != null) {
+          return _refused(request.requestId, retracted);
+        }
         return CatalogWritten(
           requestId: request.requestId,
           serverId: existing.id,
@@ -850,11 +858,15 @@ final class EngineSync {
   /// Seals the removal of the alert rule [request] names (03 §4.8).
   Future<EngineEvent> removeRule(RemoveRule request) =>
       _write(request.requestId, (writes) async {
-        final recordId = KlabautermannRecordType.rule.idOf(request.ruleId);
+        final ruleId = request.ruleId.trim();
+        final recordId = KlabautermannRecordType.rule.idOf(ruleId);
         if (!_klabautermannRecords.isLive(recordId)) {
           return _refused(request.requestId, CatalogWriteFailure.unknownTarget);
         }
-        await _sealKlabautermann(writes, recordId, removedPayload(recordId));
+        if (await _sealKlabautermann(writes, recordId, removedPayload(recordId))
+            case final failure?) {
+          return _refused(request.requestId, failure);
+        }
         return CatalogWritten(requestId: request.requestId);
       });
 
@@ -936,11 +948,14 @@ final class EngineSync {
   }
 
   /// Seals the removal of [serverId]'s `pref` record when the store holds
-  /// a live one.
-  Future<void> _retractPrefs(_Writes writes, String serverId) async {
+  /// a live one. Returns why the seal was refused, or null.
+  Future<CatalogWriteFailure?> _retractPrefs(
+    _Writes writes,
+    String serverId,
+  ) async {
     final recordId = KlabautermannRecordType.pref.idOf(serverId);
-    if (!_klabautermannRecords.isLive(recordId)) return;
-    await _sealKlabautermann(writes, recordId, removedPayload(recordId));
+    if (!_klabautermannRecords.isLive(recordId)) return null;
+    return _sealKlabautermann(writes, recordId, removedPayload(recordId));
   }
 
   static bool _decodes(void Function() decode) {
