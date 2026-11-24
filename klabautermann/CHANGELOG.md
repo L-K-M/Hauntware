@@ -571,3 +571,6 @@
   audit records.
 - Importing ~/.ssh/config finishes quickly even when a Host pattern
   makes a backtracking matcher try every placement of its wildcards.
+- Removing an alert rule finds it by the id it was written with, and a
+  removal whose synced record is refused says so instead of reporting
+  success.
