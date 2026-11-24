@@ -95,19 +95,30 @@ final class ThresholdRule {
   final RuleEvalScope evalScope;
 
   /// Reads [toJson]'s shape strictly, ignoring keys it does not name: a
-  /// [FormatException] for a missing or mistyped field or a name no enum
-  /// value has.
+  /// [FormatException] for a missing or mistyped field, a name no enum
+  /// value has, or a `clear` value on the breach side of `raise`
+  /// ([hasInvertedBand]). The editor refuses such a band; a record from
+  /// another client or a compromised device must not get past this
+  /// either, since it raises and clears on every observation.
   factory ThresholdRule.fromJson(Map<String, Object?> json) {
     final metric = json['metric'];
     if (metric is! String || metric.isEmpty) {
       throw const FormatException('a rule has no metric');
     }
+    final op = _byName(ThresholdOp.values, json['op'], 'op');
+    final raise = ThresholdBound.fromJson(json['raise']);
+    final clear = ThresholdBound.fromJson(json['clear']);
+    if (hasInvertedBand(op, raise: raise.value, clear: clear.value)) {
+      throw const FormatException(
+        'a rule clears on the breach side of its raise value',
+      );
+    }
     return ThresholdRule(
       metric: metric,
       scope: _byName(RuleScope.values, json['scope'], 'scope'),
-      op: _byName(ThresholdOp.values, json['op'], 'op'),
-      raise: ThresholdBound.fromJson(json['raise']),
-      clear: ThresholdBound.fromJson(json['clear']),
+      op: op,
+      raise: raise,
+      clear: clear,
       severity: _byName(AlertSeverity.values, json['severity'], 'severity'),
       evalScope: _byName(RuleEvalScope.values, json['evalScope'], 'evalScope'),
     );
@@ -187,6 +198,20 @@ bool thresholdHolds(ThresholdOp op, double value, double threshold) =>
       ThresholdOp.lessThan => value < threshold,
       ThresholdOp.lessOrEqual => value <= threshold,
     };
+
+/// Whether [clear] lies strictly on the breach side of [raise] under
+/// [op]: above it for the greater-than operators, below it for the
+/// less-than ones. With such a band a value between the two is a breach
+/// that also counts as cleared, so the rule flips on every observation.
+/// A `clear` equal to `raise` is a band of no width, which is allowed.
+bool hasInvertedBand(
+  ThresholdOp op, {
+  required double raise,
+  required double clear,
+}) => switch (op) {
+  ThresholdOp.greaterThan || ThresholdOp.greaterOrEqual => clear > raise,
+  ThresholdOp.lessThan || ThresholdOp.lessOrEqual => clear < raise,
+};
 
 /// One evaluation step of the hysteresis state machine (03 §7.19):
 /// `ok -> pending -> firing -> resolving -> ok`. Pure and total: a null

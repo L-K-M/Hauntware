@@ -91,7 +91,17 @@ final class EngineRestarter<R extends EngineRun> {
 
     // Built in this turn, with no await before it: the controllers all
     // hear the new engine's startup events (CTL-01).
-    final next = _build(engine);
+    final R next;
+    try {
+      next = _build(engine);
+    } on Object catch (error, stack) {
+      debugPrint(
+        'The engine restarted, but its run was not built: $error\n$stack',
+      );
+      unawaited(engine.shutdown());
+      _health.reportStopped(EngineStopped(error: exit.error));
+      return;
+    }
     current.value = next;
     _follow(next);
     _health.reportStopped(
@@ -99,8 +109,11 @@ final class EngineRestarter<R extends EngineRun> {
     );
 
     // The swap's frame unmounts the widgets over the old controllers.
-    await _settled();
-    run.dispose();
+    try {
+      await _settled();
+    } finally {
+      run.dispose();
+    }
   }
 
   void dispose() {

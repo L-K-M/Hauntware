@@ -596,6 +596,51 @@ void main() {
       }
     });
 
+    test('refuses a pane width or a threshold level that is not finite, '
+        'and saves the next setting as before (SMP-10)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+      final store = await DeviceSettingsStore.open(file);
+      await store.setShellSidebarWidth(320);
+      await store.setThresholds({
+        'cpu': [60, 75, 95],
+      });
+
+      for (final value in [double.nan, double.infinity, -double.infinity]) {
+        await expectLater(
+          store.setShellSidebarWidth(value),
+          throwsArgumentError,
+        );
+        await expectLater(
+          store.setShellInspectorWidth(value),
+          throwsArgumentError,
+        );
+        await expectLater(
+          store.setThresholds({
+            'cpu': [60, 75, 95],
+            'memory': [60, value, 95],
+          }),
+          throwsArgumentError,
+        );
+      }
+
+      // Nothing refused was kept, so it cannot fail a later save.
+      expect(store.shellSidebarWidth, 320);
+      expect(store.shellInspectorWidth, isNull);
+      expect(store.thresholds, {
+        'cpu': [60.0, 75.0, 95.0],
+      });
+      await store.setShellInspectorWidth(400);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _shellSidebarWidthKey: 320.0,
+        _thresholdsKey: {
+          'cpu': [60.0, 75.0, 95.0],
+        },
+        _shellInspectorWidthKey: 400.0,
+      });
+    });
+
     test('keeps the threshold levels across reloads and skips damaged '
         'entries (OV-11)', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});

@@ -76,11 +76,17 @@ final class CpuPercentages {
 }
 
 /// CPU occupancy between [previous] and [next] (03 §6.4). `null` when the
-/// total jiffy delta is zero or negative, or when any primary field
-/// decreased (a reset starts a new series, CN-04). The guest fields are
-/// excluded from the total because the kernel already accounts them in
-/// user and nice (proc_stat(5)); a guest decrease is tolerated rather
-/// than treated as a reset.
+/// total jiffy delta is zero or negative, or when a primary field other
+/// than iowait decreased (a reset starts a new series, CN-04). The guest
+/// fields are excluded from the total because the kernel already accounts
+/// them in user and nice (proc_stat(5)); a guest decrease is tolerated
+/// rather than treated as a reset.
+///
+/// iowait is the one primary field the kernel lets run backwards
+/// (Documentation/filesystems/proc.rst: it "will decrease in certain
+/// conditions"), so its decrease counts as no iowait in the interval
+/// instead of costing the reading. A real reset shows in the other
+/// fields, and in the uptime and `btime` the caller compares.
 CpuPercentages? cpuDeltaPercent(CpuTimes previous, CpuTimes next) {
   const primary = CpuTimes.guest; // fields below guest form the total
   final len = previous.jiffies.length > next.jiffies.length
@@ -92,7 +98,7 @@ CpuPercentages? cpuDeltaPercent(CpuTimes previous, CpuTimes next) {
     final p = i < previous.jiffies.length ? previous.jiffies[i] : 0;
     final n = i < next.jiffies.length ? next.jiffies[i] : 0;
     if (n < p) {
-      if (i < primary) return null;
+      if (i < primary && i != CpuTimes.iowait) return null;
       continue;
     }
     deltas[i] = n - p;
@@ -108,7 +114,10 @@ CpuPercentages? cpuDeltaPercent(CpuTimes previous, CpuTimes next) {
 
 /// Busy percent per `cpuN` name present in both maps (03 §6.4, CPU-02):
 /// the busy jiffy delta over the busy plus idle delta. A decrease (a
-/// reset, CN-04) or a zero total delta yields no entry.
+/// reset, CN-04) or a zero total delta yields no entry. The idle sum
+/// holds iowait, which may run backwards by itself; the sum cannot tell
+/// that from a reset, and counting it as no idle time would read as a
+/// fully busy core, so such an interval stays without an entry too.
 Map<String, double> perCpuBusyPercent(
   Map<String, CoreCpuTimes> previous,
   Map<String, CoreCpuTimes> next,

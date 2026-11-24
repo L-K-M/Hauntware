@@ -77,6 +77,39 @@ void main() {
       );
     });
 
+    test('iowait running backwards counts as no iowait, not as a reset '
+        '(HST-6)', () {
+      // The kernel documents that iowait may decrease; the other fields
+      // advanced, so the interval has a reading.
+      final p = cpuDeltaPercent(
+        _cpu('cpu', [100, 0, 100, 800, 50, 0, 0, 0, 0, 0]),
+        _cpu('cpu', [200, 0, 200, 1600, 45, 0, 0, 0, 0, 0]),
+      )!;
+      expect(p.iowait, 0);
+      expect(p.user, closeTo(10, 1e-9));
+      expect(p.idle, closeTo(80, 1e-9));
+      expect(p.busy, closeTo(20, 1e-9));
+
+      // A reset still shows in every other primary field.
+      for (final field in [
+        CpuTimes.user,
+        CpuTimes.system,
+        CpuTimes.idle,
+        CpuTimes.steal,
+      ]) {
+        final next = [200, 0, 200, 1600, 45, 0, 0, 10, 0, 0];
+        next[field] = 0;
+        expect(
+          cpuDeltaPercent(
+            _cpu('cpu', [100, 0, 100, 800, 50, 0, 0, 5, 0, 0]),
+            _cpu('cpu', next),
+          ),
+          isNull,
+          reason: 'field $field',
+        );
+      }
+    });
+
     test('a guest decrease is tolerated, not a reset', () {
       final p = cpuDeltaPercent(
         _cpu('cpu', [100, 0, 100, 800, 0, 0, 0, 0, 10, 0]),

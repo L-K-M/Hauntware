@@ -42,7 +42,10 @@ final class SystemdTimer {
   /// when never (`n/a`) or unparseable.
   final int? nextUs, lastUs;
 
-  /// Relative microseconds for the LEFT and PASSED columns.
+  /// Relative microseconds for the LEFT and PASSED columns of the text
+  /// table. Null on the JSON path: systemd's JSON repeats `next` in
+  /// `left` and puts a monotonic stamp in `passed`, neither of them a
+  /// span; [nextUs] and [lastUs] carry what is known there.
   final int? leftUs, passedUs;
 
   /// The raw NEXT and LAST cells on the text path: they are rendered in
@@ -270,7 +273,11 @@ final _monotonicBases = {
 
 /// `list-timers --output=json` rows: objects with `next`, `left`,
 /// `last`, `passed` (finite microseconds or null), `unit` and
-/// `activates`. Unknown keys are tolerated.
+/// `activates`. Unknown keys are tolerated. A `next` or `last` of 0 is
+/// systemd's "never" (a timer that has not run prints `"last":0`), not
+/// the epoch; `left` and `passed` are stamps here, not the spans
+/// [SystemdTimer.leftUs] and [SystemdTimer.passedUs] hold, and are not
+/// read.
 List<SystemdTimer> _parseTimersJson(List<String> lines, List<String> warnings) {
   final text = lines.join('\n').trim();
   if (text.isEmpty) return const [];
@@ -301,9 +308,7 @@ List<SystemdTimer> _parseTimersJson(List<String> lines, List<String> warnings) {
         unit: unit,
         activates: _str(e['activates']),
         nextUs: _instantUsec(e['next'], warnings),
-        leftUs: _usec(e['left']),
         lastUs: _instantUsec(e['last'], warnings),
-        passedUs: _usec(e['passed']),
       ),
     );
   }
@@ -330,10 +335,12 @@ int? _usec(Object? v) {
 const _maxInstantUs = 8640000000000000000;
 
 /// An absolute microsecond field ([_usec]) that [SystemdTimer.nextUtc] and
-/// [SystemdTimer.lastUtc] can convert: a value beyond [DateTime]'s range
-/// warns and reads as unknown instead of making those getters throw.
+/// [SystemdTimer.lastUtc] can convert: 0 is "never" and reads as unknown,
+/// and a value beyond [DateTime]'s range warns and reads as unknown
+/// instead of making those getters throw.
 int? _instantUsec(Object? v, List<String> warnings) {
   final us = _usec(v);
+  if (us == 0) return null;
   if (us == null || (us >= -_maxInstantUs && us <= _maxInstantUs)) return us;
   warnings.add('timers_json: instant out of range');
   return null;

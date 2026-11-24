@@ -130,6 +130,12 @@ abstract final class EditExit {
   /// change the directory's entries, so root must not write there (03
   /// §7.17, §9's threat table).
   static const int userWritableDirectory = 106;
+
+  /// [EditCommands.copyAttributes]: the temp could not be given the
+  /// target's owner and group. The login user is not in the file's
+  /// group, so the rename would have changed who can read it; the edit
+  /// needs admin mode.
+  static const int ownerNotCarried = 107;
 }
 
 /// What [EditCommands.readFile]'s first line says of the file: its
@@ -235,9 +241,19 @@ const String _kWriteTempScript = r'set -C; umask 077; cat > "$1"';
 /// (with the ACL) and xattrs; elsewhere `stat` gives numeric owner and
 /// mode, after checking that no ACL entry or xattr would be dropped. The
 /// exits are [EditExit.aclNotCarried] and [EditExit.xattrNotCarried].
+///
+/// GNU `cp` run without the privilege to `chown` leaves the temp's owner
+/// or group as it was, says nothing and exits 0, so its result is read
+/// back with `stat`. A difference is set with `chown`, which also clears
+/// the set-id bits `chmod` then restores; a `chown` that is refused exits
+/// [EditExit.ownerNotCarried] with its own words on stderr.
 const String _kCopyAttributesScript = r'''
 t=$1 tmp=$2
 if cp --attributes-only --preserve=mode,ownership,xattr -- "$t" "$tmp" 2>/dev/null; then
+  o=$(stat -c %u:%g -- "$t") && n=$(stat -c %u:%g -- "$tmp") || exit
+  [ "$o" != "$n" ] || exit 0
+  m=$(stat -c %a -- "$t") || exit
+  chown -- "$o" "$tmp" && chmod -- "$m" "$tmp" || exit 107
   exit 0
 fi
 if command -v getfacl >/dev/null 2>&1; then
@@ -251,7 +267,8 @@ if command -v getfattr >/dev/null 2>&1; then
   fi
 fi
 o=$(stat -c %u:%g -- "$t") && m=$(stat -c %a -- "$t") || exit
-chown -- "$o" "$tmp" && chmod -- "$m" "$tmp"''';
+chown -- "$o" "$tmp" || exit 107
+chmod -- "$m" "$tmp"''';
 
 /// Prints the target's directory with every symlink resolved, then exits
 /// 0 when it and each directory above it is owned by root and writable by
@@ -417,6 +434,8 @@ abstract final class EditCommands {
   /// D67's recipe. Where `cp --attributes-only` is refused (BusyBox), it
   /// exits [EditExit.aclNotCarried] or [EditExit.xattrNotCarried] rather
   /// than drop what it cannot copy.
+  /// Exits [EditExit.ownerNotCarried] when the temp
+  /// cannot be given the target's owner and group.
   static List<String> copyAttributes(String target, String temp) {
     _checkPair(target, temp);
     return [

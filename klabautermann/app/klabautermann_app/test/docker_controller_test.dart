@@ -231,6 +231,145 @@ void main() {
     expect(queries(), hasLength(1));
   });
 
+  group('an endpoint change (SYN-08)', () {
+    final at = DateTime(2026, 10, 15, 14, 30);
+
+    const web = FleetEntry(
+      serverId: 'srv-1',
+      label: 'web-1',
+      host: 'web-1.example.net',
+      port: kSshDefaultPort,
+      user: 'alice',
+      origin: FleetEntryOrigin.sshConfig,
+    );
+    const movedWeb = FleetEntry(
+      serverId: 'srv-1',
+      label: 'web-1',
+      host: 'web-2.example.net',
+      port: kSshDefaultPort,
+      user: 'alice',
+      origin: FleetEntryOrigin.sshConfig,
+    );
+
+    List<DockerWatch> watches() => engine.sentOfType<DockerWatch>().cast();
+
+    /// Shows web's tab and views and reads one container and image each.
+    Future<void> watchWeb() async {
+      docker
+        ..openView('srv-1')
+        ..watchContainers('srv-1')
+        ..watchSummary('srv-1')
+        ..watchImages('srv-1');
+      await emit(dockerReady('srv-1'));
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+      );
+      await emit(dockerImageList('srv-1', [dockerImage('i-1')], at: at));
+    }
+
+    test('an EndpointChanged resets the kept server\'s state in place, '
+        'ends what the old machine owed, and re-sends the watches once '
+        'the link rises', () async {
+      final details = docker.openContainer('srv-1', 'c-1');
+      await emit(CatalogReplaced([web]));
+      final read = docker.readStackFile(
+        'srv-1',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      await watchWeb();
+      expect(docker.containersFor('srv-1').value.containers, hasLength(1));
+
+      await emit(const EndpointChanged('srv-1'));
+
+      expect(docker.endpointFor('srv-1').value, isNull);
+      expect(docker.engineFor('srv-1').value, isNull);
+      expect(docker.composeFor('srv-1').value, isNull);
+      expect(docker.containersFor('srv-1').value.containers, isNull);
+      expect(docker.imagesFor('srv-1').value.images, isNull);
+      expect(details.value.failure?.failure, DockerQueryFailure.cancelled);
+      expect(
+        await read,
+        isA<DockerQueryFailed>().having(
+          (failure) => failure.failure,
+          'failure',
+          DockerQueryFailure.cancelled,
+        ),
+      );
+
+      // The views are still counted, so their watches go out again once
+      // the link to the new endpoint is up. The summary waits for an
+      // endpoint.
+      final before = watches().map((watch) => watch.watchId).toSet();
+      await emit(const LinkState('srv-1', LinkReady()));
+      final resent = [
+        for (final watch in watches())
+          if (!before.contains(watch.watchId)) watch,
+      ];
+      expect(
+        resent.any((watch) => watch.watchId.startsWith('containers-')),
+        isTrue,
+      );
+      expect(
+        resent.any((watch) => watch.watchId.startsWith('images-')),
+        isTrue,
+      );
+      expect(
+        resent.any((watch) => watch.watchId.startsWith('summary-')),
+        isFalse,
+      );
+
+      await emit(dockerReady('srv-1'));
+      expect(
+        watches().any((watch) => watch.watchId.startsWith('summary-')),
+        isTrue,
+      );
+
+      // The fleet that follows carries the moved endpoint. That is the
+      // same move, not a second one, so what the new machine answered
+      // since the link rose stays.
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-2')], at: at),
+      );
+      expect(docker.containersFor('srv-1').value.containers, hasLength(1));
+      await emit(CatalogReplaced([movedWeb]));
+      expect(
+        docker.containersFor('srv-1').value.containers,
+        hasLength(1),
+        reason: 'the fleet after an EndpointChanged is not another move',
+      );
+    });
+
+    test('a CatalogReplaced that moves a kept id to another endpoint '
+        'resets it, and the same endpoint changes nothing', () async {
+      await emit(CatalogReplaced([web]));
+      await watchWeb();
+
+      await emit(CatalogReplaced([web]));
+      expect(
+        docker.containersFor('srv-1').value.containers,
+        hasLength(1),
+        reason: 'the same machine keeps what was read',
+      );
+
+      await emit(CatalogReplaced([movedWeb]));
+      expect(docker.endpointFor('srv-1').value, isNull);
+      expect(docker.engineFor('srv-1').value, isNull);
+      expect(docker.containersFor('srv-1').value.containers, isNull);
+
+      final before = watches().map((watch) => watch.watchId).toSet();
+      await emit(const LinkState('srv-1', LinkReady()));
+      expect(
+        watches().any(
+          (watch) =>
+              !before.contains(watch.watchId) &&
+              watch.watchId.startsWith('containers-'),
+        ),
+        isTrue,
+      );
+    });
+  });
+
   test('sends nothing once the engine stopped', () async {
     await emit(dockerReady('srv-1'));
     await engine.close();

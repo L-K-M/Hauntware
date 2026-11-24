@@ -153,6 +153,8 @@ final class IsolateEngineClient implements EngineClient {
         scheduleMicrotask(() {
           final waiting = held;
           held = null;
+          // An engine that exited in between closed the stream.
+          if (events.isClosed) return;
           waiting?.forEach(events.add);
         });
       },
