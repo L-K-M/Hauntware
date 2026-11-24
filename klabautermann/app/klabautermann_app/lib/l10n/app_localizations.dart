@@ -7521,6 +7521,12 @@ abstract class AppLocalizations {
   /// **'Also remove these containers'**
   String get actionPreviewRemoveOrphans;
 
+  /// Toast when an action is tapped while another action's preview is still being planned.
+  ///
+  /// In en, this message translates to:
+  /// **'Another action is being prepared.'**
+  String get actionPreviewBusy;
+
   /// A warning in the action preview; warning is the engine's PlanWarning name.
   ///
   /// In en, this message translates to:

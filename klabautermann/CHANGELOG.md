@@ -577,3 +577,10 @@
   siblings and flip its direction when tapped.
 - The Jobs tab no longer calls its list stale under the cellular saver,
   which reads cron and timers only once per subscription.
+- A detached operation's output and a timer's run output say when
+  their read is opening, refused or failed, with a Retry, instead of
+  showing an empty box.
+- A stack's compose profiles are read again when you switch to another
+  server, so a stack of the same name shows that server's profiles.
+- An action tapped while another action's preview is being prepared
+  says so instead of doing nothing.

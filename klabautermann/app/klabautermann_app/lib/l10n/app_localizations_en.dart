@@ -5925,6 +5925,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionPreviewRemoveOrphans => 'Also remove these containers';
 
   @override
+  String get actionPreviewBusy => 'Another action is being prepared.';
+
+  @override
   String actionPreviewWarning(String warning) {
     String _temp0 = intl.Intl.selectLogic(warning, {
       'profileGatedServices':
