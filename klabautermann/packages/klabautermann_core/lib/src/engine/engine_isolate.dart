@@ -995,6 +995,22 @@ void _runEngine(
     packageReports.forget(forgotten);
     diskTrees.forget(forgotten);
     profiles.removeWhere((id, _) => forgotten.contains(id));
+    // A kept import whose endpoint changed names another machine, so its
+    // link and log streams would otherwise go on serving the old one. A
+    // synced server belongs to [applySynced]: one it moved waits for the
+    // user's confirmation, and one whose pins could not be read stays
+    // undialed until they are.
+    final importedIds = {for (final entry in fleet.entries) entry.serverId};
+    for (final id in forgotten) {
+      if (!importedIds.contains(id)) continue;
+      logs?.disconnect(id);
+      links?.disconnect(id);
+      if (viewed.contains(id)) {
+        links?.connect(id, purpose: ConnectPurpose.interactive);
+      } else if (monitored.contains(id)) {
+        links?.connect(id, purpose: ConnectPurpose.background);
+      }
+    }
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
     // app hears it left or lost its pin.

@@ -34,6 +34,7 @@ import 'support/scripted_link.dart';
 
 const _web = 'ssh-config:web';
 const _webConfig = 'Host web\n  HostName 192.0.2.10\n  User me\n';
+const _movedWebConfig = 'Host web\n  HostName 192.0.2.99\n  User me\n';
 const _otherConfig = 'Host other\n  HostName 192.0.2.11\n  User me\n';
 const _bastionConfig = 'Host bastion\n  HostName 192.0.2.1\n  User me\n';
 
@@ -528,6 +529,35 @@ void main() {
       engine.send(AnswerPrompt(prompt.promptId, const PromptTrustAnswer(true)));
       expect(await engine.rejected(), 'AnswerPrompt');
       expect(links, isEmpty);
+    });
+  });
+
+  group('a server whose endpoint changes (03 §4.7, SYN-08)', () {
+    test('a re-import under another HostName closes the old link and '
+        'dials the new one', () async {
+      final engine = await startEngine();
+      await engine.import(_webConfig);
+      await connectWeb(engine);
+      final oldLink = links.single;
+      expect(dials.single.config.host, '192.0.2.10');
+
+      engine.send(const ImportSshConfig(_movedWebConfig));
+      await engine.until<CatalogReplaced>();
+      await engine.until<SshConfigImported>();
+
+      expect(oldLink.closes, 1, reason: "the old machine's link goes");
+      // The view is still open, so the new endpoint is dialed again.
+      final prompt = await engine.until<Prompt>();
+      engine.send(AnswerPrompt(prompt.promptId, const PromptTrustAnswer(true)));
+      while (true) {
+        if (await engine.until<LinkState>() case final state
+            when state.status is LinkReady) {
+          expect(state.serverId, _web);
+          break;
+        }
+      }
+      expect(links.last, isNot(same(oldLink)));
+      expect(dials.last.config.host, '192.0.2.99');
     });
   });
 

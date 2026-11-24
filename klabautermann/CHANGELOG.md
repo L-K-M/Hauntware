@@ -569,3 +569,7 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- An import or sync that moves a kept server to another endpoint
+  closes the old machine's link and log streams and clears what was
+  read there, including its Docker lists, details and disk use, then
+  connects and reads the new endpoint again.
