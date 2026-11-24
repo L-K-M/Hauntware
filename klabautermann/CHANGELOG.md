@@ -603,3 +603,12 @@
   gap is damaged; the damaged slot reads as empty.
 - A 10-minute history bucket no longer counts a minute's readings twice
   after the app restarts within that minute.
+- A container's log no longer freezes the app on one long line. A line
+  of digits or base64 without spaces took seconds to read for its level,
+  and a URL followed by a long run of dots took seconds to colour, each
+  time the row was drawn; both now take well under a millisecond.
+- A regular-expression search of the loaded log lines no longer freezes
+  the app. It runs in the background, the field says "Searching…" until
+  every line is read, and a new search stops the one before it. A
+  pattern that does not finish is stopped after five seconds with a note
+  under the field.
