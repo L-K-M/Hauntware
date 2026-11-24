@@ -397,3 +397,9 @@ Fix commit e242646; glm-review label added for round 2.
 ## #811 (secret masking), checks before merge
 - Gitleaks: the implementer's f0e2b2c added the two synthetic `curl -u` samples to `.gitleaksignore`; Secret scan passed at f0e2b2c.
 - `_maskedProcsText` under-masking: none found. Lines up to `== cmdline ==` pass unmasked, but the sampler (program.dart:967-990) always writes that header before any `== ps ==` or `== ps_w ==` block, and only `== meta ==` and stat rows (no arguments) come before it. A host that reorders its own output only exposes its own data.
+
+## #815 GLM round 1 (49c6d82), fixes in 936cffd
+- Fixed: a run that throws while built over a restarted engine (now shut down and reported as stopped, with a red/green test); the old run is disposed in a `finally`; the held-event replay skips a closed stream; the CHANGELOG restart count; `EngineStopped.recovery` documented.
+- Refuted, major: cadence and cadence-cap listeners leak (removed by the run's disposers in main.dart); KlabautermannApp updated in place (it is a StatelessWidget whose `_RemountOnChange` remounts on a new `(fleet, monitoring, prompts)` identity).
+- Refuted, minor: previous quit guard not disposed and per-run controllers not disposed (both in the run's disposers); settings window inputs rebuilt per run (the new host rebinds the window through `replacing`).
+- Declined: `takeFaultNotice` consumes faults inside the quiet window (same behaviour as the notice before #815, by design: a repeating error is told once per minute); EngineHealth dispose guard and EngineRestarter.dispose not shutting the engine down (both live for the launch and are never disposed in the app); unguarded `readPinConflicts` (unchanged code from before the PR).
