@@ -74,8 +74,10 @@ Future<void> previewAndRun(
     // The opener may have left the tree while the host planned, as a
     // phone row's button does after its page popped. The preview is
     // already paid for, so the captured root overlay shows it anyway.
+    // An engine restart remounts the whole app, root overlay included;
+    // then nothing is left to show it.
+    if (!context.mounted && !overlay.mounted) return;
     final host = context.mounted ? context : overlay.context;
-    if (!host.mounted) return;
 
     switch (answer) {
       case PlanRefused(:final reason, :final detail) when onRefused != null:

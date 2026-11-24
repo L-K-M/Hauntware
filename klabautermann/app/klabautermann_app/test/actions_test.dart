@@ -509,6 +509,39 @@ void main() {
     expect(find.text('This acts on sshd.service.'), findsOneWidget);
   });
 
+  testWidgets('a plan answered after the whole app left the tree shows '
+      'nothing and does not throw', (tester) async {
+    final engine = FakeEngineClient();
+    final operations = OperationsController(engine);
+    addTearDown(() async {
+      operations.dispose();
+      await engine.close();
+    });
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () => previewAndRun(context, operations, _intent),
+            child: const Text('restart'),
+          ),
+        ),
+        operations: operations,
+      ),
+    );
+
+    await tester.tap(find.text('restart'));
+    await tester.pump();
+    expect(operations.planning, isTrue);
+
+    // An engine restart remounts the app, root overlay included.
+    await tester.pumpWidget(const SizedBox());
+    engine.emit(
+      ActionPlanned('plan-1', _preview(tier: ConfirmationTier.acknowledge)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+  });
+
   test('planCommandsText writes a pasteable script: sudo for an '
       'elevated step, a note before stdin content, API requests as '
       'comments', () {
