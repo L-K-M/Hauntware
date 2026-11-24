@@ -614,12 +614,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/services_view.dart': {
     // systemd's spelling of load and sub states and the dot before a unit
     // type, matched against server data; the panel shows ARB text for
-    // what does not match (chartUnknownValue).
+    // what does not match (chartUnknownValue). The socket table's stable
+    // column ids and row key (SVC-10), which tests find rows by.
     "'[A-Z]'",
     r"'-${capital[0]!.toLowerCase()}'",
     r"r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$'",
     "'.'",
+    r"'${ServerPanel.services.name}.sockets'",
+    r"'${socket.unit}|${socket.listen}'",
+    "'listen'",
+    "'unit'",
+    "'activates'",
   },
+  // An anacron command's words and a directory path's trailing slash,
+  // which match `/etc/cron.daily` in a job's command (JOB-04).
+  'lib/ui/jobs_view.dart': {r"r'\s+'", r"'$directory/'"},
   'lib/services/macos_titlebar.dart': {
     // The 04 §12.3 method channel name.
     "'klabautermann/window'",

@@ -669,3 +669,9 @@
   server, so a stack of the same name shows that server's profiles.
 - An action tapped while another action's preview is being prepared
   says so instead of doing nothing.
+- The Jobs tab shows anacron's periodic jobs with their period, delay,
+  command and last-run day, and a cron directory they drive names the
+  matching job's timing instead of reading as unknown.
+- The Services tab has a Sockets view beside the units, listing what each
+  socket listens on, its unit and the units it activates. Tapping one
+  opens its unit's page.

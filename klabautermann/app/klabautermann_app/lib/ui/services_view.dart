@@ -1,8 +1,15 @@
+import 'dart:async' show unawaited;
+
+import 'package:flutter/material.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/log_reads.dart';
 import '../controllers/log_streams.dart';
+import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'server_surfaces.dart' show ServerPanel;
+import 'sortable_table.dart';
+import 'unit_details.dart' show unitQueryFailureText;
 
 /// How many recent journal records a unit's page reads (SVC-04, 03 §7.5:
 /// `journalctl -u <unit> -o json -n 50`).
@@ -130,6 +137,155 @@ List<UnitFilter<T>> filterChoices<T extends Enum>(
       if (shown.contains(value)) (any: false, value: value),
     if (shown.contains(null)) (any: false, value: null),
   ];
+}
+
+/// SVC-10's listening sockets (03 §7.5): the system manager's
+/// `systemctl list-sockets`, each row naming what it listens on, its
+/// socket unit and the units a connection starts. Tapping a row opens
+/// that unit's page, as the units list does. The read runs as the login
+/// user; a newer answer replaces an older one.
+class SocketsView extends StatefulWidget {
+  const SocketsView({
+    super.key,
+    required this.monitoring,
+    required this.serverId,
+    required this.onOpenUnit,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+
+  /// Opens the page of the unit a socket row names.
+  final ValueChanged<String> onOpenUnit;
+
+  @override
+  State<SocketsView> createState() => _SocketsViewState();
+}
+
+class _SocketsViewState extends State<SocketsView> {
+  UnitPayload? _answer;
+
+  /// Counts reads, so an answer a newer read replaced is dropped.
+  int _reads = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_read());
+  }
+
+  @override
+  void didUpdateWidget(SocketsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.serverId != widget.serverId) unawaited(_read());
+  }
+
+  Future<void> _read() async {
+    final read = ++_reads;
+    final result = await widget.monitoring.queryUnit(
+      widget.serverId,
+      const SocketsQuery(),
+    );
+    if (!mounted || read != _reads) return;
+    setState(() => _answer = result.payload);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final answer = _answer;
+    if (answer == null) {
+      return _notice(theme, Icons.hourglass_empty, l10n.servicesSocketsWaiting);
+    }
+    return switch (answer) {
+      UnitSocketsPayload(:final sockets) =>
+        sockets.isEmpty
+            ? _notice(theme, Icons.info_outline, l10n.servicesSocketsEmpty)
+            : SortableTable<UnitSocket>(
+                tableId: '${ServerPanel.services.name}.sockets',
+                columns: _columns(l10n),
+                rows: sockets,
+                // systemd lists a unit once per listen address, so both
+                // name the row.
+                rowKey: (socket) => '${socket.unit}|${socket.listen}',
+                onRowActivated: (socket) => widget.onOpenUnit(socket.unit),
+              ),
+      final UnitQueryFailed failed => _notice(
+        theme,
+        Icons.error_outline,
+        unitQueryFailureText(l10n, failed),
+        failed.detail,
+      ),
+      _ => _notice(
+        theme,
+        Icons.error_outline,
+        l10n.unitQueryFailed(UnitQueryFailure.failed.name),
+      ),
+    };
+  }
+
+  List<SortableTableColumn<UnitSocket>> _columns(AppLocalizations l10n) => [
+    SortableTableColumn(
+      id: 'listen',
+      label: l10n.servicesSocketsColumnListen,
+      text: (socket) => socket.listen,
+      sortKey: (socket) => socket.listen,
+      extent: const FlexColumnExtent(3),
+    ),
+    SortableTableColumn(
+      id: 'unit',
+      label: l10n.servicesSocketsColumnUnit,
+      text: (socket) => socket.unit,
+      sortKey: (socket) => socket.unit,
+      extent: const FlexColumnExtent(2),
+    ),
+    SortableTableColumn(
+      id: 'activates',
+      label: l10n.servicesSocketsColumnActivates,
+      text: (socket) => socket.activates.isEmpty
+          ? l10n.servicesSocketsNoActivates
+          : socket.activates.join(l10n.fleetRowListSeparator),
+      sortKey: (socket) => socket.activates.join(),
+      extent: const FlexColumnExtent(3),
+    ),
+  ];
+
+  /// A state rather than a list, at the view's start edge.
+  Widget _notice(
+    ThemeData theme,
+    IconData icon,
+    String text, [
+    String? detail,
+  ]) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: Semantics(
+      liveRegion: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 4,
+              children: [
+                Text(text),
+                if (detail != null && detail.isNotEmpty)
+                  Text(
+                    detail,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// What a unit's page says about its log [read] in place of, or above,

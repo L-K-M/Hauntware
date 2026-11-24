@@ -206,8 +206,7 @@ void main() {
   test('why runs are unknown, and where systemd lists one run only', () {
     expect(
       runsUnknownText(_l10n, JobRunsUnknown.anacron),
-      'anacron runs this directory; its timing is not shown in this '
-      'version.',
+      'anacron runs this directory; its table lists no job for it.',
     );
     expect(
       runsUnknownText(_l10n, JobRunsUnknown.noDriver),
@@ -224,5 +223,85 @@ void main() {
     expect(listsOneElapse(HostProfile(systemdVersion: 239)), isTrue);
     expect(listsOneElapse(HostProfile(systemdVersion: 242)), isFalse);
     expect(listsOneElapse(HostProfile()), isFalse);
+  });
+
+  group('anacron timing (JOB-04)', () {
+    final day = DateTime.utc(2026, 10, 24);
+
+    AnacronJob job({
+      AnacronPeriod? period,
+      int delayMinutes = 5,
+      String identifier = 'cron.daily',
+      String command = 'run-parts --report /etc/cron.daily',
+      DateTime? lastRun,
+    }) => AnacronJob(
+      period: period ?? AnacronPeriod.days(1),
+      delayMinutes: delayMinutes,
+      identifier: identifier,
+      command: command,
+      lastRun: lastRun,
+    );
+
+    test('matches the directory an anacron job runs', () {
+      final jobs = [
+        job(),
+        job(
+          period: AnacronPeriod.monthly(),
+          identifier: 'cron.monthly',
+          command: 'run-parts /etc/cron.monthly',
+        ),
+      ];
+      expect(anacronJobFor(jobs, '/etc/cron.daily')?.identifier, 'cron.daily');
+      expect(
+        anacronJobFor(jobs, '/etc/cron.monthly')?.identifier,
+        'cron.monthly',
+      );
+      // anacron never runs the hourly directory, and a path with a
+      // trailing slash is the same directory.
+      expect(anacronJobFor(jobs, '/etc/cron.hourly'), isNull);
+      expect(
+        anacronJobFor([
+          job(
+            identifier: 'cron.weekly',
+            command: 'run-parts /etc/cron.weekly/',
+          ),
+        ], '/etc/cron.weekly')?.identifier,
+        'cron.weekly',
+      );
+      expect(anacronJobFor(const [], '/etc/cron.daily'), isNull);
+    });
+
+    test("words a job's period, delay and last run", () {
+      expect(anacronPeriodText(_l10n, AnacronPeriod.days(1)), 'every day');
+      expect(anacronPeriodText(_l10n, AnacronPeriod.days(7)), 'every 7 days');
+      expect(
+        anacronPeriodText(_l10n, AnacronPeriod.monthly()),
+        'once a calendar month',
+      );
+      expect(anacronDelayText(_l10n, 0), 'starting right away');
+      expect(anacronDelayText(_l10n, 1), 'starting 1 minute late');
+      expect(anacronDelayText(_l10n, 15), 'starting 15 minutes late');
+      expect(anacronLastRunText(_l10n, day), 'Last ran Oct 24, 2026');
+      expect(anacronLastRunText(_l10n, null), 'Never ran');
+    });
+
+    test('a cron row driven by anacron shows its timing', () {
+      final match = job(lastRun: day);
+      expect(
+        anacronScheduleText(_l10n, match),
+        'anacron runs this directory every day, starting 5 minutes late; '
+        'it last ran Oct 24, 2026.',
+      );
+      expect(
+        anacronScheduleText(_l10n, job()),
+        'anacron runs this directory every day, starting 5 minutes late; '
+        'it has never run.',
+      );
+      expect(
+        anacronNextText(_l10n, match),
+        'anacron: every day, last ran Oct 24, 2026',
+      );
+      expect(anacronNextText(_l10n, job()), 'anacron: every day, never ran');
+    });
   });
 }
