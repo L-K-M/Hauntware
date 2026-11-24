@@ -43,6 +43,11 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
   /// Closes the window on ⌘W and ⌘⇧W (see `installCloseShortcut`).
   private var closeShortcutMonitor: Any?
 
+  /// A quit review hides without taking the user's close path. While it is
+  /// active, an unrelated request to open Settings must not cover the main
+  /// window's confirmation dialog.
+  private var quitConfirmationSuppressed = false
+
   init(mainWindow: NSWindow, messenger: FlutterBinaryMessenger) {
     self.mainWindow = mainWindow
     mainMessenger = messenger
@@ -50,12 +55,19 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
       name: Self.controlChannel, binaryMessenger: messenger)
     super.init()
     control.setMethodCallHandler { [weak self] call, result in
-      guard call.method == "open" else {
+      switch call.method {
+      case "open":
+        self?.open()
+        result(nil)
+      case "yieldForQuitConfirmation":
+        let wasVisible = self?.yieldForQuitConfirmation() ?? false
+        result(wasVisible)
+      case "restoreAfterQuitConfirmation":
+        self?.restoreAfterQuitConfirmation()
+        result(nil)
+      default:
         result(FlutterMethodNotImplemented)
-        return
       }
-      self?.open()
-      result(nil)
     }
     messenger.setMessageHandlerOnChannel(Self.linkChannel) {
       [weak self] message, reply in
@@ -82,7 +94,9 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
   private func open() {
     if let window = window {
       // Shows it again if it was closed, and brings it forward either way.
-      window.makeKeyAndOrderFront(nil)
+      if !quitConfirmationSuppressed {
+        window.makeKeyAndOrderFront(nil)
+      }
       return
     }
 
@@ -132,6 +146,20 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
     window.makeKeyAndOrderFront(nil)
   }
 
+  /// Hides without taking the user's close path, so Dart keeps the Settings
+  /// page and any draft fields mounted while the main window asks to quit.
+  private func yieldForQuitConfirmation() -> Bool {
+    guard let window = window, window.isVisible else { return false }
+    quitConfirmationSuppressed = true
+    window.orderOut(nil)
+    return true
+  }
+
+  private func restoreAfterQuitConfirmation() {
+    quitConfirmationSuppressed = false
+    window?.makeKeyAndOrderFront(nil)
+  }
+
   /// ⌘W and ⌘⇧W close this window, as they close any window on the Mac.
   ///
   /// The window has to claim them before AppKit dispatches the event. The
@@ -175,6 +203,7 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
   /// than close. Programmatic `close()` does not ask, which is how `close()`
   /// above ends it for good.
   func windowShouldClose(_ sender: NSWindow) -> Bool {
+    quitConfirmationSuppressed = false
     sender.orderOut(nil)
     control.invokeMethod("closed", arguments: nil)
     return false
@@ -185,6 +214,7 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
     else { return }
     closing.delegate = nil
     window = nil
+    quitConfirmationSuppressed = false
     if let monitor = closeShortcutMonitor {
       NSEvent.removeMonitor(monitor)
       closeShortcutMonitor = nil

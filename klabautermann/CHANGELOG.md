@@ -562,3 +562,6 @@
   stopped, and the app says to quit and open it again.
 - Synced read-only switches and protected marks apply from the moment
   the app starts, not only after the first sync round.
+- On macOS, Windows and Linux, a quit question no longer opens behind
+  the Settings window: Settings steps aside while the main window asks,
+  and comes back if you cancel.

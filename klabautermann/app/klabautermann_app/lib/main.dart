@@ -558,6 +558,8 @@ Future<void> main(List<String> args) async {
         quitting = true;
         return engine.shutdown();
       },
+      // Built below in this run; the question hides it while it asks.
+      settingsWindow: () => settingsWindow,
     );
     EngineKeystoreResponder(
       engine,

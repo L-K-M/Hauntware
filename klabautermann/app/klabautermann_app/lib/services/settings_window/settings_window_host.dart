@@ -31,6 +31,7 @@ import '../../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../../controllers/sync_sign_out.dart' show SyncSignOutSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/threshold_scope.dart' show ThresholdMetric;
+import '../../ui/actions/quit_guard.dart' show QuitSettingsWindow;
 import '../stored_safety.dart';
 import 'settings_window_link.dart';
 
@@ -93,6 +94,13 @@ SettingsWindowHost? settingsWindowHostFor(
   TargetPlatform.fuchsia => null,
 };
 
+/// The control channel's methods for a quit question, beside ghost_desktop's
+/// `open` and `closed`; the runners match them by name.
+enum QuitConfirmationMethod {
+  yieldForQuitConfirmation,
+  restoreAfterQuitConfirmation,
+}
+
 /// Opens Settings in a native window of its own and serves it from the
 /// app's isolate. Desktop only; the composition root builds none on a
 /// phone, where Settings is a route.
@@ -100,7 +108,7 @@ SettingsWindowHost? settingsWindowHostFor(
 /// The window is a second engine (D32): everything it shows comes from
 /// this host's snapshots and everything it changes runs here, so it never
 /// starts an engine isolate (D18), a store or sync of its own.
-final class SettingsWindowHost {
+final class SettingsWindowHost implements QuitSettingsWindow {
   /// [requestAppExit] answers the window's quit question; by default the
   /// app's own observers. [appVersion] is the app's (`readAppVersion`),
   /// which the window's about row shows.
@@ -130,7 +138,8 @@ final class SettingsWindowHost {
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
     SettingsWindowHost? replacing,
-  }) : _appearance = appearance,
+  }) : _control = control,
+       _appearance = appearance,
        _announcements = announcements,
        _deviceName = deviceName,
        _monitorSet = monitorSet,
@@ -192,6 +201,7 @@ final class SettingsWindowHost {
     );
   }
 
+  final MethodChannel _control;
   final AppearanceSettings _appearance;
   final AnnouncementSettings _announcements;
   final DeviceNameSettings _deviceName;
@@ -225,6 +235,27 @@ final class SettingsWindowHost {
   /// False when the runner has no settings window (a build from before it
   /// existed, or a test), so the caller can push the settings route.
   Future<bool> open(SettingsTab tab) => _engine.open(tab);
+
+  /// Gets a showing window out of the way of the main window's quit
+  /// question (Séance's 85b48f21c). Not a close: the runner sends no
+  /// `closed`, so the window's page and draft fields stay mounted. False
+  /// from a runner that predates the method.
+  @override
+  Future<bool> yieldForQuitConfirmation() async {
+    try {
+      return await _control.invokeMethod<bool>(
+            QuitConfirmationMethod.yieldForQuitConfirmation.name,
+          ) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> restoreAfterQuitConfirmation() => _control.invokeMethod<void>(
+    QuitConfirmationMethod.restoreAfterQuitConfirmation.name,
+  );
 
   void dispose() => _engine.dispose();
 

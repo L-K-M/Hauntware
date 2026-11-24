@@ -9,6 +9,17 @@ import '../../controllers/operations_controller.dart';
 import '../../controllers/container_terminals.dart';
 import '../../l10n/app_localizations.dart';
 
+/// The desktop Settings window, as far as a quit question needs it: out
+/// of the way while the main window asks (Séance's 85b48f21c, ARC-01).
+abstract interface class QuitSettingsWindow {
+  /// Hides a showing window without the user's close path, so its page
+  /// and draft fields stay mounted; true when it was showing.
+  Future<bool> yieldForQuitConfirmation();
+
+  /// Shows a window [yieldForQuitConfirmation] hid again.
+  Future<void> restoreAfterQuitConfirmation();
+}
+
 /// Window close, application Quit and the Settings engine share one
 /// decision, including when closing the last window triggers Quit too.
 final class AppQuitGuard {
@@ -18,6 +29,7 @@ final class AppQuitGuard {
     this._shells,
     this._lock,
     this._beforeExit,
+    this._settingsWindow,
   }) {
     _exitRequests = AppLifecycleListener(onExitRequested: _requestExit);
   }
@@ -34,6 +46,10 @@ final class AppQuitGuard {
   /// shells' closing audit records. It must bound its own wait; a quit is
   /// never refused for it.
   final Future<void> Function()? _beforeExit;
+
+  /// The desktop Settings window, which the question must not open
+  /// behind; null on phones.
+  final QuitSettingsWindow? Function()? _settingsWindow;
   late final AppLifecycleListener _exitRequests;
   Future<bool>? _pending;
   Future<void>? _exiting;
@@ -79,6 +95,7 @@ final class AppQuitGuard {
           _operations,
           _contextOf,
           shells: _shells?.call() ?? const [],
+          settingsWindow: _settingsWindow?.call(),
         ),
         locked.future,
       ]);
@@ -105,11 +122,14 @@ final class AppQuitGuard {
 /// [contextOf] finds the app's navigator; a close it cannot reach, which
 /// happens only before the first frame, closes without asking because
 /// nothing can be edited or run that early. [shells] are the open shells,
-/// of which the question names each container.
+/// of which the question names each container. A showing [settingsWindow]
+/// is hidden while the question is open, since the question is in the
+/// main window, and shown again unless the app quits.
 Future<bool> confirmQuitWhileRunning(
   OperationsController operations,
   BuildContext? Function() contextOf, {
   List<ContainerShell> shells = const [],
+  QuitSettingsWindow? settingsWindow,
 }) async {
   final unsaved = operations.unsavedEdits;
   final running = operations.runningDetachedCount;
@@ -120,6 +140,42 @@ Future<bool> confirmQuitWhileRunning(
   if (unsaved.isEmpty && running == 0 && liveShells.isEmpty) return true;
   final context = contextOf();
   if (context == null) return true;
+
+  var yielded = false;
+  if (settingsWindow != null) {
+    try {
+      yielded = await settingsWindow.yieldForQuitConfirmation();
+    } on Object catch (error, stack) {
+      // A runner without the method asks in the main window as before.
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: error, stack: stack),
+      );
+    }
+  }
+  var quit = false;
+  try {
+    if (!context.mounted) return quit;
+    quit = await _askQuit(context, unsaved, running, liveShells);
+    return quit;
+  } finally {
+    if (yielded && !quit) {
+      try {
+        await settingsWindow!.restoreAfterQuitConfirmation();
+      } on Object catch (error, stack) {
+        FlutterError.reportError(
+          FlutterErrorDetails(exception: error, stack: stack),
+        );
+      }
+    }
+  }
+}
+
+Future<bool> _askQuit(
+  BuildContext context,
+  List<String> unsaved,
+  int running,
+  List<ContainerShell> liveShells,
+) async {
   final l10n = AppLocalizations.of(context);
   final materialL10n = MaterialLocalizations.of(context);
   if (unsaved.isNotEmpty) {

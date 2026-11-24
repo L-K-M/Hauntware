@@ -45,8 +45,9 @@ runner does; those lines are ledgered under "Main window chrome" below.
 
 Not copied, because Klabautermann does not need them yet:
 
-- Séance's terminal Edit-menu routing in `MainFlutterWindow.swift`; the
-  app has no terminal.
+- Séance's terminal Edit-menu routing in `MainFlutterWindow.swift`. The
+  app has a container terminal, but its Edit commands are Dart menu
+  commands (`lib/ui/menus/`), so no native routing is needed.
 - Poltergeist's multi-view semantics routing in
   `PoltergeistFlutterViewController.m`; Klabautermann shows one Flutter
   view per engine.
@@ -98,8 +99,10 @@ plugin first. Reviewed at the copy commit above:
 
 ## Desktop settings window runners
 
-Copied at `ddb8cd690891a6967b0b42ae11a30e26e56f2c7e` (M1, A8; the files
-are unchanged at `2e61152e`). Owner: Klabautermann maintains its copy;
+Copied at `ddb8cd690891a6967b0b42ae11a30e26e56f2c7e` (M1, A8). Brought
+in step with Séance's `85b48f21c` (the quit question's
+`yieldForQuitConfirmation` and `restoreAfterQuitConfirmation`, ARC-01)
+and `1c5afda76` (the transparent Linux view). Owner: Klabautermann maintains its copy;
 Séance owns the canonical runners, and Poltergeist carries the other copy
 (`poltergeist/docs/PORTS.md`, "Settings window runners"). The Dart side
 is not copied: ghost_desktop's link engine
@@ -108,18 +111,17 @@ under Klabautermann's own channels, method table and sections in
 `app/klabautermann_app/lib/services/settings_window/`.
 
 Séance's set is the source because it is the closest working copy:
-like Klabautermann it has one main window and one engine, and its view
-keeps the template's background. Poltergeist's differs only in names,
-its transparent Linux view and comments, and it is itself a port of
-Séance's.
+like Klabautermann it has one main window and one engine. Poltergeist's
+differs in names and comments, lacks the quit question's two methods,
+and is itself a port of Séance's.
 
 | Klabautermann file | Source (last changed) | Divergences |
 |---|---|---|
-| `klabautermann/app/klabautermann_app/macos/Runner/SettingsWindow.swift` | `seance/app/seance_app/macos/Runner/SettingsWindow.swift` (`f9bd1e1`) | Channels `klabautermann/settings_window` and `klabautermann/settings_link`, argument `--klabautermann-settings-window`, `KlabautermannFlutterViewController` (Séance's controller, copied in the section above), provenance note. Comments point at Klabautermann's and ghost_desktop's Dart files, and the ⌘W comment names no terminal tabs, since the app's window binds no ⌘W yet. |
-| `klabautermann/app/klabautermann_app/linux/runner/settings_window.{h,cc}` | `seance/app/seance_app/linux/runner/settings_window.{h,cc}` (`f9bd1e1`) | Channels, argument, title `Klabautermann Settings`, the main window's data key `klabautermann-settings-window`, provenance note. Template background, as Séance's. |
+| `klabautermann/app/klabautermann_app/macos/Runner/SettingsWindow.swift` | `seance/app/seance_app/macos/Runner/SettingsWindow.swift` (`85b48f21c`) | Channels `klabautermann/settings_window` and `klabautermann/settings_link`, argument `--klabautermann-settings-window`, `KlabautermannFlutterViewController` (Séance's controller, copied in the section above), provenance note. Comments point at Klabautermann's and ghost_desktop's Dart files, and the ⌘W comment names no terminal tabs, since the app's window binds no ⌘W yet. |
+| `klabautermann/app/klabautermann_app/linux/runner/settings_window.{h,cc}` | `seance/app/seance_app/linux/runner/settings_window.{h,cc}` (`1c5afda76`) | Channels, argument, title `Klabautermann Settings`, the main window's data key `klabautermann-settings-window`, provenance note. Transparent view, as Séance's. |
 | `klabautermann/app/klabautermann_app/linux/runner/window_title.{h,cc}` | `seance/app/seance_app/linux/runner/window_title.{h,cc}` (`f9bd1e1`) | Provenance note in the header; the `.cc` is byte-identical. It is the `flutter create` title code that `my_application.cc` carried inline; both windows now call it. |
-| `klabautermann/app/klabautermann_app/windows/runner/settings_window.{h,cpp}` | `seance/app/seance_app/windows/runner/settings_window.{h,cpp}` (`f9bd1e1`) | Channels, argument, title `Klabautermann Settings`, provenance note spelled ASCII for MSVC. |
-| Wiring: `MainFlutterWindow.swift` (the `settingsWindow` property, the host's creation and the `close()` override), `my_application.cc` (`settings_window_install` after the plugins, `window_title_apply`), `flutter_window.{h,cpp}` (the `settings_window_` member, created after the plugins and reset first in `OnDestroy`), both runner `CMakeLists.txt` | The same lines in Séance's files (`f9bd1e1`) | `flutter_window.{h,cpp}` now equal Séance's. The Linux main window keeps its 1280 by 720 size and the macOS window its `flutter create` frame. |
+| `klabautermann/app/klabautermann_app/windows/runner/settings_window.{h,cpp}` | `seance/app/seance_app/windows/runner/settings_window.{h,cpp}` (`85b48f21c`) | Channels, argument, title `Klabautermann Settings`, provenance note spelled ASCII for MSVC. |
+| Wiring: `MainFlutterWindow.swift` (the `settingsWindow` property, the host's creation and the `close()` override), `my_application.cc` (`settings_window_install` after the plugins, `window_title_apply`), `flutter_window.{h,cpp}` (the `settings_window_` member, created after the plugins and reset first in `OnDestroy`), both runner `CMakeLists.txt` | The same lines in Séance's files (`f9bd1e1`) | `flutter_window.{h,cpp}` equal Séance's except its deep-link lines (`deep_link_scheme.h`, `MarkPrimaryDeepLinkWindow`, `35c2f20b6`), which Klabautermann does not need: it registers no URL scheme. The Linux main window keeps its 1280 by 720 size and the macOS window its `flutter create` frame. |
 | `klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj` (one file reference, the Runner group entry, one Sources build file) | Séance's wiring of `SettingsWindow.swift` (`f9bd1e1`) | Own object ids `D7A6C0DE2F8E4A1B00000005` and `D7A6C0DE2F8E4A1B00000006`. |
 
 The runners are byte relays with a control channel, so nothing native
