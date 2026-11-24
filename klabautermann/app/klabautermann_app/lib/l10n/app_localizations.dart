@@ -13437,6 +13437,12 @@ abstract class AppLocalizations {
   /// **'Enter 0 or more minutes.'**
   String get alertRuleMinutesInvalid;
 
+  /// Rule editor error: a hold time is above the largest one the editor accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter at most 10080 minutes (7 days).'**
+  String get alertRuleMinutesTooLong;
+
   /// Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold.
   ///
   /// In en, this message translates to:

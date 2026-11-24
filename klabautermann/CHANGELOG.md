@@ -571,3 +571,5 @@
   audit records.
 - The admin-mode password, threshold and sync sign-out dialogs scroll on
   a small phone with the keyboard up, instead of clipping their fields.
+- The alert rule editor refuses a hold time above 7 days instead of
+  saving one that overflows into a negative duration.

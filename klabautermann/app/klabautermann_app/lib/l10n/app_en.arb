@@ -12658,6 +12658,10 @@
   "@alertRuleMinutesInvalid": {
     "description": "Rule editor error: a duration is not a number of minutes, 0 or more."
   },
+  "alertRuleMinutesTooLong": "Enter at most 10080 minutes (7 days).",
+  "@alertRuleMinutesTooLong": {
+    "description": "Rule editor error: a hold time is above the largest one the editor accepts."
+  },
   "alertRuleClearAboveRaise": "The clear value must not be above the raise value.",
   "@alertRuleClearAboveRaise": {
     "description": "Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold."

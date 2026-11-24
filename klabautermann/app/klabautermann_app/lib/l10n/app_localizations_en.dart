@@ -10484,6 +10484,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get alertRuleMinutesInvalid => 'Enter 0 or more minutes.';
 
   @override
+  String get alertRuleMinutesTooLong => 'Enter at most 10080 minutes (7 days).';
+
+  @override
   String get alertRuleClearAboveRaise =>
       'The clear value must not be above the raise value.';
 
