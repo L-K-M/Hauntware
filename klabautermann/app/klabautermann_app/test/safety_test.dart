@@ -121,6 +121,7 @@ void main() {
     SafetyController controller({
       SafetyPolicy initial = const SafetyPolicy(),
       bool saveFails = false,
+      bool Function(String serverId)? listed,
     }) {
       final safety = SafetyController(
         initial: initial,
@@ -130,6 +131,7 @@ void main() {
           saved.add(policy);
         },
         prefs: prefs,
+        listed: listed,
       );
       addTearDown(safety.dispose);
       return safety;
@@ -358,7 +360,40 @@ void main() {
       prefs
         ..syncing.add('srv-1')
         ..records['srv-1'] = const ServerPrefs(readOnly: true, marks: {'db'});
-      final safety = controller();
+      final safety = controller(listed: (_) => true);
+
+      prefs.syncing.clear();
+      prefs.notifyListeners();
+
+      final kept = saved.last.servers['srv-1']!;
+      expect(kept.readOnly, isTrue);
+      expect(kept.marks, {'db'});
+      expect(safety.value.servers['srv-1']!.readOnly, isTrue);
+    });
+
+    test('a server that left the fleet leaves no local entry', () {
+      prefs
+        ..syncing.add('srv-1')
+        ..records['srv-1'] = const ServerPrefs(readOnly: true, marks: {'db'});
+      final safety = controller(
+        listed: (_) => false,
+        initial: const SafetyPolicy(
+          servers: {'srv-1': ServerSafety(management: true)},
+        ),
+      );
+
+      prefs.syncing.clear();
+      prefs.notifyListeners();
+
+      expect(saved.last.servers, isEmpty);
+      expect(safety.value.servers, isEmpty);
+    });
+
+    test('a server excluded from sync but still listed keeps its entry', () {
+      prefs
+        ..syncing.add('srv-1')
+        ..records['srv-1'] = const ServerPrefs(readOnly: true, marks: {'db'});
+      final safety = controller(listed: (_) => true);
 
       prefs.syncing.clear();
       prefs.notifyListeners();

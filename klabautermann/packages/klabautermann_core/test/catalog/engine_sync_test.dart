@@ -41,6 +41,23 @@ const _enroll = EnrollSync(
   encryptionPassphrase: fakeSyncPassword,
 );
 
+/// A vault store whose [deleteSecret] fails its first [failures] calls, so
+/// a sign-out can be stopped between its steps.
+final class _FailingDeleteStore extends FileVaultStore {
+  _FailingDeleteStore(super.file, this.failures);
+
+  int failures;
+
+  @override
+  Future<void> deleteSecret(String id) async {
+    if (failures > 0) {
+      failures--;
+      throw const FileSystemException('injected failure');
+    }
+    return super.deleteSecret(id);
+  }
+}
+
 void main() {
   late Directory support;
   late FakeSyncServer server;
@@ -69,6 +86,7 @@ void main() {
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     String? deviceId = _deviceId,
     ConflictAwareHostKeyStore? hostKeys,
+    FileVaultStore? store,
   }) async {
     late final EngineSync sync;
     vault = EngineVault(
@@ -76,6 +94,7 @@ void main() {
       access: access,
       keystore: keystore,
       enrolled: () => sync.account != null,
+      store: store,
     );
     return sync = await EngineSync.open(
       supportDirectory: support,
@@ -1261,7 +1280,9 @@ void main() {
 
     // An account holding a server with a synced credential, a pref, a
     // rule and a snippet, enrolled with the secrets switch on.
-    Future<(EngineSync, ConflictAwareHostKeyStore)> enrolled() async {
+    Future<(EngineSync, ConflictAwareHostKeyStore)> enrolled({
+      FileVaultStore? store,
+    }) async {
       await server.seedServer(
         fakeServer(
           'srv-a',
@@ -1299,7 +1320,7 @@ void main() {
       );
       final hostKeys = InMemoryConflictAwareHostKeyStore();
       await hostKeys.put(pinned);
-      final sync = await open(hostKeys: hostKeys);
+      final sync = await open(hostKeys: hostKeys, store: store);
       await sync.setSyncSecrets(enabled: true);
       final status = await sync.enroll(_enroll);
       expect(status.phase, SyncPhase.succeeded, reason: status.detail);
@@ -1396,6 +1417,24 @@ void main() {
 
       expect(status.phase, SyncPhase.succeeded, reason: status.detail);
       expect(keystore.apiKeys, isEmpty);
+    });
+
+    test('a sign-out stopped at a credential delete is retried and forgets '
+        'the account\'s credentials', () async {
+      final (sync, _) = await enrolled(
+        store: _FailingDeleteStore(file('vault.json'), 1),
+      );
+
+      final failed = await sync.signOut();
+      expect(failed.phase, SyncPhase.failed);
+      expect(sync.account, isNotNull, reason: 'still enrolled');
+      // The servers are still listed, so the retry knows the entries.
+      expect(file('servers.json').existsSync(), isTrue);
+
+      final retried = await sync.signOut();
+
+      expect(retried.phase, SyncPhase.succeeded, reason: retried.detail);
+      expect(await vault.read('secret-a'), isNull);
     });
   });
 

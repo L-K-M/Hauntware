@@ -562,3 +562,9 @@
   stopped, and the app says to quit and open it again.
 - Synced read-only switches and protected marks apply from the moment
   the app starts, not only after the first sync round.
+- Signing out deletes the account's saved credentials before its server
+  list, so a sign-out that fails partway and is retried cannot leave them
+  behind in the vault.
+- Signing out also drops the removed servers' safety entries from this
+  device, instead of keeping their read-only switches and marks under
+  raw server ids and pushing them again at the next sign-in.
