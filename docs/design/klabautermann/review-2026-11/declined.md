@@ -439,3 +439,8 @@ Fix commit e242646; glm-review label added for round 2.
 
 ## DKR-12 (test gaps): already covered, no PR
 Every bullet has a test that came with its fix in #805/#806: http_pool_test (DKR-2 close during open, DKR-3 unlistened body and hijack, DKR-7 stray bytes on an idle connection), docker_router_test (DKR-1 non-Docker error), exec_sessions_test (DKR-5 below API 1.42), image_updates_test (DKR-4 image behind a cached tag). Each was checked to fail with its fix lines undone (2026-11-24).
+
+## #824 GLM round 1 (22ed32d): 0 actionable, no push
+- stack_logs_test "the inserted older line is never asserted": refuted as a request. A paused view keeps an older line back until it follows again (UIB-3's fix, covered by "a paused view keeps an older line back until it follows again"), so it must not appear here.
+- log_tokens_test 1 s wall-clock bound: declined. It matches the sibling UIB-2 test; the fixed path takes about 2 ms and the broken one 3.4 s.
+- Captured `ScrollPosition`: declined as minor; the Scrollable's state is reused across the batch and the test failed red as intended.
