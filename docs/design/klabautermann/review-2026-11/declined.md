@@ -387,3 +387,13 @@ Fix commit e242646; glm-review label added for round 2.
 - procs.dart `_parseCmdline` "headers inside a skipped region are still processed": confirmed by reading, and by design. A header inside skipped text is judged by the same rules as anywhere else; a forger can only mark a bounded set of entries unavailable, never attribute its bytes to another pid, except for a pid that exited between the rows and the cmdline read, which is the same anywhere in the block (03 §7.2). Tests pin the jump-ahead, repeated-pid and mid-list forger cases (36efcfa).
 - Withdrawn pids keep stale `bytes`: declined, `bytes` is read only for entries that are non-null, and withdrawn entries are nulled.
 - edit_shell_test top-level `id`, shell_sampler relaxation by collector name, cron fixture comment, golden coverage: declined as test nits.
+
+## #814 GLM round 1 (f21c8a6)
+- log_search.dart:309 unsafe `as LogLine` cast: refuted. `_find(seq) >= 0` means the seq is in `_lines`, which `_takeCounts` fills only from `LogLine` entries; seqs are stable row identities.
+- log_search.dart:413 stale matches on a regex restart: refuted. `_searchAll` clears `_lines`, `_total` and `_current` before `_forgetPattern` and the first question.
+- log_pattern_worker.dart:101 release-mode `assert(_pending == null)`: declined. The only caller asks one question at a time (`_askWorker` returns while `_asked != null`).
+- log_tokens.dart:83 empty-range guard, duplicated test helper, line_reading_test assertion on non-matches: declined as minor.
+
+## #811 (secret masking), checks before merge
+- Gitleaks: the implementer's f0e2b2c added the two synthetic `curl -u` samples to `.gitleaksignore`; Secret scan passed at f0e2b2c.
+- `_maskedProcsText` under-masking: none found. Lines up to `== cmdline ==` pass unmasked, but the sampler (program.dart:967-990) always writes that header before any `== ps ==` or `== ps_w ==` block, and only `== meta ==` and stat rows (no arguments) come before it. A host that reorders its own output only exposes its own data.
