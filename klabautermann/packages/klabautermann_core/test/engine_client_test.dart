@@ -27,6 +27,28 @@ void main() {
     expect(() => client.send(const RunSyncRound()), throwsStateError);
   });
 
+  test('ENG-6: an engine that dies after the handshake says what it died '
+      'of', () async {
+    final client = await IsolateEngineClient.spawn(
+      supportDirectory: support.path,
+      entryPoint: _dieAfterHello,
+    );
+    addTearDown(client.shutdown);
+
+    final exit = await client.exited.timeout(const Duration(seconds: 5));
+    expect(exit.error, contains('link table corrupt'));
+    expect(exit.stack, isNotEmpty);
+  });
+
+  test('an engine that stops on Shutdown exits without an error', () async {
+    final client = await IsolateEngineClient.spawn(
+      supportDirectory: support.path,
+    );
+    await client.shutdown();
+
+    expect((await client.exited).error, isNull);
+  });
+
   test('a real engine whose startup fails refuses Hello with the error, '
       'rather than dying unhandled', () async {
     await expectLater(
@@ -78,6 +100,17 @@ void _failWhileStarting(EngineStart start) {
   Future<void>(
     () => throw const FileSystemException('support directory unreadable'),
   );
+}
+
+/// An engine that completes the handshake and then meets an unhandled
+/// error, which ends a spawned isolate.
+void _dieAfterHello(EngineStart start) {
+  final commands = ReceivePort();
+  start.uiPort.send(commands.sendPort);
+  commands.listen((_) {
+    start.uiPort.send(const EngineReady(kEngineProtocolVersion));
+    throw StateError('link table corrupt');
+  });
 }
 
 /// An engine that completes the handshake and then exits on its own, as
