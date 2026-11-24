@@ -657,6 +657,13 @@ final class MonitoringController extends ChangeNotifier {
     _send(SetCadenceProfile(profile));
   }
 
+  /// The 6.4 column the engine samples [serverId] at: the app's, or its
+  /// cap's when that is slower, as the scheduler resolves it.
+  CadenceProfile cadenceFor(String serverId) => switch (_caps[serverId]) {
+    final cap? when cap.index > _cadence.index => cap,
+    _ => _cadence,
+  };
+
   /// Caps each server in [caps] at its column and lifts the caps of those
   /// left out (SAF-19), telling the engine only what changed.
   void setCadenceCaps(Map<String, CadenceProfile> caps) {

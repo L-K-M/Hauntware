@@ -575,3 +575,5 @@
   saving one that overflows into a negative duration.
 - In the Processes tree, the headers name the column that orders the
   siblings and flip its direction when tapped.
+- The Jobs tab no longer calls its list stale under the cellular saver,
+  which reads cron and timers only once per subscription.
