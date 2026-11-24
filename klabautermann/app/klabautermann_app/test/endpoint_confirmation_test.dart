@@ -68,6 +68,24 @@ Future<AppHarness> _withPending(
   return harness;
 }
 
+/// A server behind a pending jump host, with the hop listed as its own
+/// row, as the engine's confirmation list shows it.
+final _hopFleet = CatalogReplaced([
+  _synced('s', EndpointConfirmation.unconfirmed, jumpRoute: ['label-h']),
+  _synced('h', EndpointConfirmation.unconfirmed),
+]);
+
+Future<AppHarness> _withHopFleet(WidgetTester tester) async {
+  final harness = await pumpApp(tester);
+  harness.engine.emit(_hopFleet);
+  await tester.pumpAndSettle();
+  return harness;
+}
+
+/// The last confirmation request the fake engine received.
+ConfirmEndpoints _lastConfirm(AppHarness harness) =>
+    harness.engine.sentOfType<ConfirmEndpoints>().last as ConfirmEndpoints;
+
 /// [finder] within the confirmation list, not the fleet behind it.
 Finder _inList(Finder finder) =>
     find.descendant(of: find.byType(Dialog), matching: finder);
@@ -242,6 +260,117 @@ void main() {
       ['a'],
       ['a'],
     ]);
+  });
+
+  testWidgets('selecting a server also selects its pending hop rows, so '
+      'one press confirms the whole route', (tester) async {
+    final harness = await _withHopFleet(tester);
+    await _openList(tester);
+
+    expect(_checked(tester, 's'), isFalse);
+    expect(_checked(tester, 'h'), isFalse);
+
+    await tester.tap(_inList(find.text('label-s')));
+    await tester.pumpAndSettle();
+    expect(_checked(tester, 's'), isTrue);
+    // The hop row becomes selected with the address it showed.
+    expect(_checked(tester, 'h'), isTrue);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm 2 servers'));
+    await tester.pump();
+
+    final request = _lastConfirm(harness);
+    expect(request.serverIds, ['s', 'h']);
+    expect(request.shown, {
+      's': const ShownEndpoint(
+        host: 's.example.com',
+        port: 2222,
+        user: 'deploy',
+        jumpRoute: ['label-h'],
+      ),
+      'h': const ShownEndpoint(
+        host: 'h.example.com',
+        port: 2222,
+        user: 'deploy',
+      ),
+    });
+  });
+
+  testWidgets('toggling a hop off again leaves it out of the confirmation', (
+    tester,
+  ) async {
+    final harness = await _withHopFleet(tester);
+    await _openList(tester);
+
+    await tester.tap(_inList(find.text('label-s')));
+    await tester.pumpAndSettle();
+    await tester.tap(_inList(find.text('label-h')));
+    await tester.pumpAndSettle();
+    expect(_checked(tester, 'h'), isFalse);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm 1 server'));
+    await tester.pump();
+
+    final request = _lastConfirm(harness);
+    expect(request.serverIds, ['s']);
+    expect(request.shown!.keys, ['s']);
+  });
+
+  testWidgets('confirm all shown sends a server together with its hop rows', (
+    tester,
+  ) async {
+    final harness = await _withHopFleet(tester);
+    await _openList(tester);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Confirm all shown'));
+    await tester.pump();
+
+    final request = _lastConfirm(harness);
+    expect(request.serverIds, ['s', 'h']);
+    expect(request.shown!.keys, ['s', 'h']);
+  });
+
+  testWidgets('a confirmation that leaves a hop unshown says the hop still '
+      'needs confirming, not that an address changed', (tester) async {
+    final harness = await _withHopFleet(tester);
+    await _openList(tester);
+
+    // The search hides the hop, so selecting the server cannot select it.
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search servers'),
+      's.example',
+    );
+    await tester.pumpAndSettle();
+    expect(_inList(find.text('label-h')), findsNothing);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Confirm all shown'));
+    await tester.pump();
+    expect(_lastConfirm(harness).serverIds, ['s']);
+
+    // The engine pinned only s, so s waits behind its unpinned hop.
+    harness.engine.emit(
+      CatalogReplaced([
+        _synced('s', EndpointConfirmation.changed, jumpRoute: ['label-h']),
+        _synced('h', EndpointConfirmation.unconfirmed),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(_title), findsOneWidget);
+    expect(
+      find.text(
+        'Some servers still need confirming: confirm the jump hosts they go '
+        'through too.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        "A server's address changed while you confirmed it. Check it again, "
+        'then confirm.',
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('a confirmation carries the endpoint each row showed, and a '
