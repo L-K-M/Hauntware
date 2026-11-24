@@ -15,9 +15,11 @@ const Duration _faultNoticeInterval = Duration(minutes: 1);
 
 /// Tells the user what [EngineHealth] hears (ENG-4, ENG-6): a toast when
 /// the engine caught an error and went on, since what they just asked for
-/// may not have happened, and a dialog when the engine stopped, since
-/// nothing connects or updates any more. Mounted on the home route, which
-/// stays under every other route.
+/// may not have happened, and a dialog when the engine stopped: that it
+/// was restarted, or that nothing connects or updates any more when it
+/// could not be. Mounted on the home route, which stays under every other
+/// route. What it told is kept in [EngineHealth], since a restart
+/// remounts it.
 class EngineHealthNotice extends StatefulWidget {
   const EngineHealthNotice({
     super.key,
@@ -38,10 +40,6 @@ class EngineHealthNotice extends StatefulWidget {
 }
 
 class _EngineHealthNoticeState extends State<EngineHealthNotice> {
-  int _faultsTold = 0;
-  DateTime? _faultToldAt;
-  bool _stopTold = false;
-
   @override
   void initState() {
     super.initState();
@@ -72,54 +70,51 @@ class _EngineHealthNoticeState extends State<EngineHealthNotice> {
     if (!mounted || health == null) return;
     final l10n = AppLocalizations.of(context);
 
-    if (health.faultCount > _faultsTold) {
-      _faultsTold = health.faultCount;
-      final now = widget.now();
-      final last = _faultToldAt;
-      if (last == null || now.difference(last) >= _faultNoticeInterval) {
-        _faultToldAt = now;
-        showTopToast(
-          Overlay.of(context, rootOverlay: true),
-          message: l10n.engineFaultNotice,
-          duration: _noticeDuration,
-        );
-      }
-    }
-
-    final stopped = health.stopped;
-    if (stopped != null && !_stopTold) {
-      _stopTold = true;
-      unawaited(
-        showDialog<void>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(l10n.engineStoppedTitle),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.engineStoppedBody),
-                  if (stopped.error case final error?) ...[
-                    const SizedBox(height: 12),
-                    SelectableText(l10n.engineFailedDetail(error)),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                autofocus: true,
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(
-                  MaterialLocalizations.of(dialogContext).okButtonLabel,
-                ),
-              ),
-            ],
-          ),
-        ),
+    if (health.takeFaultNotice(widget.now(), _faultNoticeInterval)) {
+      showTopToast(
+        Overlay.of(context, rootOverlay: true),
+        message: l10n.engineFaultNotice,
+        duration: _noticeDuration,
       );
     }
+
+    final stopped = health.takeStopNotice();
+    if (stopped == null) return;
+    final restarted = stopped.recovery == EngineRecovery.restarted;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            restarted ? l10n.engineRestartedTitle : l10n.engineStoppedTitle,
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  restarted ? l10n.engineRestartedBody : l10n.engineStoppedBody,
+                ),
+                if (stopped.error case final error?) ...[
+                  const SizedBox(height: 12),
+                  SelectableText(l10n.engineFailedDetail(error)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              autofocus: true,
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(
+                MaterialLocalizations.of(dialogContext).okButtonLabel,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
