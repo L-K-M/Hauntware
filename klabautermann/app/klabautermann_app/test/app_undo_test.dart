@@ -464,6 +464,47 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
     });
 
+    testWidgets('the Settings window steps aside while the question is '
+        'open and comes back unless the app quits (ARC-01)', (tester) async {
+      final harness = await pumpApp(tester, operations: true);
+      final settings = _QuitSettingsWindow();
+      final guard = AppQuitGuard(
+        operations: harness.operations!,
+        contextOf: () => appNavigatorKey.currentContext,
+        settingsWindow: () => settings,
+      );
+      addTearDown(guard.dispose);
+
+      // Nothing to ask: the window stays where it is.
+      expect(await guard.confirm(), isTrue);
+      expect(settings.calls, isEmpty);
+
+      final asking = AppQuitGuard(
+        operations: harness.operations!,
+        contextOf: () => appNavigatorKey.currentContext,
+        settingsWindow: () => settings,
+      );
+      addTearDown(asking.dispose);
+      harness.engine.emit(OperationsChanged('srv-1', operations: [running()]));
+      await tester.pumpAndSettle();
+
+      final cancelled = asking.confirm();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(settings.calls, ['yield']);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await cancelled, isFalse);
+      expect(settings.calls, ['yield', 'restore']);
+
+      final quitting = asking.confirm();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quit'));
+      await tester.pumpAndSettle();
+      expect(await quitting, isTrue);
+      expect(settings.calls, ['yield', 'restore', 'yield']);
+    });
+
     testWidgets('unsaved edits are asked about before running operations', (
       tester,
     ) async {
@@ -574,4 +615,20 @@ void main() {
       expect(await exiting, AppExitResponse.cancel);
     });
   });
+}
+
+/// A Settings window that was showing, recording what the quit guard asks.
+final class _QuitSettingsWindow implements QuitSettingsWindow {
+  final List<String> calls = [];
+
+  @override
+  Future<bool> yieldForQuitConfirmation() async {
+    calls.add('yield');
+    return true;
+  }
+
+  @override
+  Future<void> restoreAfterQuitConfirmation() async {
+    calls.add('restore');
+  }
 }

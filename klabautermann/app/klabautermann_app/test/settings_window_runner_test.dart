@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart'
     show GhostSettingsControlMethod;
+import 'package:klabautermann_app/services/settings_window/settings_window_host.dart'
+    show QuitConfirmationMethod;
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 
 import 'support/native_sources.dart';
@@ -32,6 +34,19 @@ void main() {
         GhostSettingsControlMethod.closed.name,
       ]) {
         expect(source, contains('"$name"'), reason: '$platform $name');
+      }
+    }
+  });
+
+  test('every runner hides the window for a quit question and shows it '
+      'again (ARC-01, Séance 85b48f21c)', () {
+    for (final MapEntry(key: platform, value: source) in runners.entries) {
+      for (final method in QuitConfirmationMethod.values) {
+        expect(
+          source,
+          contains('"${method.name}"'),
+          reason: '$platform ${method.name}',
+        );
       }
     }
   });

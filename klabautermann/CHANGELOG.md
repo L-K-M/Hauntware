@@ -675,3 +675,6 @@
 - The Services tab has a Sockets view beside the units, listing what each
   socket listens on, its unit and the units it activates. Tapping one
   opens its unit's page.
+- On macOS, Windows and Linux, a quit question no longer opens behind
+  the Settings window: Settings steps aside while the main window asks,
+  and comes back if you cancel.
