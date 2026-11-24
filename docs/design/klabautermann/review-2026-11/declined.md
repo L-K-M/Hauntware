@@ -420,3 +420,13 @@ Fix commit e242646; glm-review label added for round 2.
 - Outside diff, "putRule and saveServer discard the seal result": refuted. `putRule` (engine_sync.dart:847) and `setServerPrefs` (:822) refuse on a non-null `_sealKlabautermann` result; `saveServer` does not use that seal but `CatalogWriter.saveServer`, whose only outcomes are `written` and `refusedPullOnly`, and it checks the latter.
 - Staged writes before a mid-flight refusal in `saveServer`: declined. After the config is saved only `_retractPrefs` can refuse, with a removal payload far under any cap or pull-only, which `_write` and `writer.saveServer` refuse earlier.
 - sampling_scheduler.dart:300 a stale run's lost-readings timer stays armed, engine_sync_test.dart:365 unclosed injected store: declined as minor (a run stopped during the lending await can get one timer, which fires once and `_lose` returns on the stale run at sampling_scheduler.dart:921; the test store dies with the test's temp directory).
+
+## #818 GLM round 1 (588aa93): 0 actionable
+- Fixed in 1383dec: action_preview.dart:79, a plan answered after the whole app was remounted (an engine restart) read the disposed root overlay's context and threw. Red/green test in actions_test.dart.
+- Declined as minor or informational: the redundant `.cast` and missing `orElse` in stacks_panel_test, the Column in detached_operations (the reviewer itself says no change is needed), the hard-coded 10080 in `alertRuleMinutesTooLong` (English only, the limit is a fixed product rule), the thresholds_tab_test view setup order, the captured `host` in run_output_sheet_test. `TableRowOrder` exists (CI compiles it).
+
+## #820 GLM round 1 (b6e9f95): 1 actionable, refuted
+- jobs_panel.dart:205 "raw enum name shown to users": refuted. `jobsAnacronFailed` is an ICU `select` on the `JobHistoryFailure` name with prose for each case and an `other` fallback; nothing shows the identifier.
+- Fixed in 8146421: a 0-minute anacron delay read "starting 0 minutes late"; it now reads "starting right away" (red/green in jobs_view_test).
+- services_view.dart:208 socket `rowKey` collision on `|`: refuted. systemd unit names allow only ASCII letters, digits, `:-_.\` and `@`, so the unit part cannot contain `|`, and the unit part fixes where the split falls within one unit's rows.
+- Declined as minor: redundant `.cast` in the socket tests, `cronRuns` computed twice per anacron row, two `setState`s in `_openFromPalette`, the retry test's total query count.
