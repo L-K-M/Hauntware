@@ -602,6 +602,8 @@ Future<void> main(List<String> args) async {
               .firstOrNull
               ?.displayName ??
           serverId,
+      listed: (serverId) =>
+          fleet.servers.any((server) => server.id == serverId),
       prefs: serverPrefs,
     );
 

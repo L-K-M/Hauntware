@@ -633,3 +633,9 @@
 - While a long step borrows the slow sampler, panels show its missed
   readings as gaps instead of stale values, and a probe the borrowing
   interrupts costs no extra retry wait.
+- Signing out deletes the account's saved credentials before its server
+  list, so a sign-out that fails partway and is retried cannot leave them
+  behind in the vault.
+- Signing out also drops the removed servers' safety entries from this
+  device, instead of keeping their read-only switches and marks under
+  raw server ids and pushing them again at the next sign-in.
