@@ -569,3 +569,5 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- Importing ~/.ssh/config finishes quickly even when a Host pattern
+  makes a backtracking matcher try every placement of its wildcards.

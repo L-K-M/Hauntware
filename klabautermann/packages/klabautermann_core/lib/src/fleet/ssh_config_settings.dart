@@ -1202,35 +1202,35 @@ String _utf8Bytes(String text) {
 
 /// ssh's `match_pattern()` on [text] and [pattern] as [_utf8Bytes] gives
 /// them: `*` matches any run of bytes, `?` any one, and every other byte
-/// itself.
-bool _matchPattern(String text, String pattern, [int t = 0, int p = 0]) {
-  while (true) {
-    if (p == pattern.length) return t == text.length;
-
-    final character = pattern.codeUnitAt(p);
-    if (character == _star) {
-      while (p < pattern.length && pattern.codeUnitAt(p) == _star) {
-        p++;
-      }
-      if (p == pattern.length) return true;
-
-      final next = pattern.codeUnitAt(p);
-      for (; t < text.length; t++) {
-        if ((next == _question || text.codeUnitAt(t) == next) &&
-            _matchPattern(text, pattern, t, p)) {
-          return true;
-        }
-      }
+/// itself. One backtrack point, the last `*`, keeps this linear in
+/// practice; OpenSSH's recursive matcher is exponential on a pattern of
+/// many `*` groups the text cannot satisfy, and an import parses in the
+/// engine's request queue.
+bool _matchPattern(String text, String pattern) {
+  var t = 0;
+  var p = 0;
+  var starPattern = -1;
+  var starText = 0;
+  while (t < text.length) {
+    if (p < pattern.length &&
+        (pattern.codeUnitAt(p) == _question ||
+            pattern.codeUnitAt(p) == text.codeUnitAt(t))) {
+      t++;
+      p++;
+    } else if (p < pattern.length && pattern.codeUnitAt(p) == _star) {
+      starPattern = p++;
+      starText = t;
+    } else if (starPattern >= 0) {
+      p = starPattern + 1;
+      t = ++starText;
+    } else {
       return false;
     }
-
-    if (t == text.length) return false;
-    if (character != _question && character != text.codeUnitAt(t)) {
-      return false;
-    }
-    t++;
+  }
+  while (p < pattern.length && pattern.codeUnitAt(p) == _star) {
     p++;
   }
+  return p == pattern.length;
 }
 
 /// A `match_pattern()` pattern, read once. A pattern whose only wildcard

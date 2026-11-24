@@ -44,6 +44,22 @@ void main() {
       expect(_applies('Host Web', 'web'), isFalse);
     });
 
+    test('a hostile Host pattern finishes quickly', () {
+      // Nine `*` groups, each able to start anywhere in a name of
+      // nothing but `a`, and a `?b` it cannot satisfy: a backtracking
+      // matcher tries every placement of the groups, an exponential
+      // number, while the import runs in the request queue.
+      final name = 'a' * 38;
+      final clock = Stopwatch()..start();
+      expect(_applies('Host *a*a*a*a*a*a*a*a*a*?b*', name), isFalse);
+      expect(
+        _applies('Host *a*a*a*a*a*a*a*a*a*?b*', '${'a' * 37}b'),
+        isTrue,
+        reason: 'the same matcher still reads `?` as one byte',
+      );
+      expect(clock.elapsed, lessThan(const Duration(seconds: 1)));
+    });
+
     test('patterns match UTF-8 bytes, as match_pattern() does', () {
       // `?` is one byte, and é two.
       expect(_applies('Host caf?', 'café'), isFalse);
