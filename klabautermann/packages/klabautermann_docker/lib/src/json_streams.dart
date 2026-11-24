@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
 
+import 'byte_read_buffer.dart';
 import 'errors.dart';
 
 /// Record separator used by `application/json-seq` (RFC 7464).
@@ -70,34 +71,36 @@ Stream<R> _pipe<I, R>(
 /// [maxJsonStreamItemBytes] ends the stream with a
 /// [DockerProtocolException].
 Stream<String> byteStreamToLines(Stream<List<int>> body) {
-  final pending = <int>[];
+  final pending = ByteReadBuffer();
   // How far [pending] is known to hold no newline, so a long line that
   // arrives in many chunks is scanned once.
   var scanned = 0;
 
   void emitLines(StreamSink<String> out, {required bool flush}) {
-    var start = 0;
-    for (var i = scanned; i < pending.length; i++) {
-      if (pending[i] != 0x0A) continue;
-      if (i - start > maxJsonStreamItemBytes) throw _tooLong('line');
-      final line = _decodeLine(pending, start, i);
+    for (
+      var end = pending.indexOf(0x0A, scanned);
+      end >= 0;
+      end = pending.indexOf(0x0A)
+    ) {
+      if (end > maxJsonStreamItemBytes) throw _tooLong('line');
+      final line = _decodeLine(pending.view(0, end));
+      pending.skip(end + 1);
       if (line.isNotEmpty) out.add(line);
-      start = i + 1;
     }
-    if (start > 0) pending.removeRange(0, start);
     scanned = pending.length;
     if (pending.length > maxJsonStreamItemBytes) throw _tooLong('line');
     if (flush && pending.isNotEmpty) {
-      final line = _decodeLine(pending, 0, pending.length);
-      if (line.isNotEmpty) out.add(line);
+      final line = _decodeLine(pending.view(0, pending.length));
       pending.clear();
+      scanned = 0;
+      if (line.isNotEmpty) out.add(line);
     }
   }
 
   return _pipe<List<int>, String>(
     body,
     onData: (chunk, out) {
-      pending.addAll(chunk);
+      pending.add(chunk);
       emitLines(out, flush: false);
     },
     onDone: (out) => emitLines(out, flush: true),
@@ -110,12 +113,17 @@ DockerProtocolException _tooLong(String what) => DockerProtocolException(
 
 /// Decodes one raw line: leading RS bytes and a trailing CR are dropped
 /// before UTF-8 decoding.
-String _decodeLine(List<int> bytes, int start, int end) {
+String _decodeLine(Uint8List bytes) {
+  var start = 0;
+  var end = bytes.length;
   while (start < end && bytes[start] == _rs) {
     start++;
   }
   if (end > start && bytes[end - 1] == 0x0D) end--;
-  return utf8.decode(bytes.sublist(start, end), allowMalformed: true);
+  return utf8.decode(
+    Uint8List.sublistView(bytes, start, end),
+    allowMalformed: true,
+  );
 }
 
 /// Scans a byte stream for concatenated JSON values without separators

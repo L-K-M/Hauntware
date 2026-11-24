@@ -677,9 +677,173 @@ void main() {
       await next;
       expect(farm.opens, 1);
     });
+
+    test('a body nobody listens to yet is not read ahead (DKR-3)', () async {
+      final daemon = FakeDaemon();
+      final client = DockerHttpClient(() async => daemon.pair.client);
+      final sent = client.sendBytes(getX('/events'));
+      await daemon.gotBytes(1);
+      daemon.feed(
+        wireResponse('200 OK', headers: {'Transfer-Encoding': 'chunked'}),
+      );
+      final res = await sent;
+
+      // The caller looks at the head and takes its time: the events that
+      // arrive meanwhile wait in the duplex, not in memory here.
+      final event = utf8Of('${'x' * 1022}\r\n');
+      final frame = [...utf8Of('400\r\n'), ...event, ...utf8Of('\r\n')];
+      for (var i = 0; i < 64; i++) {
+        daemon.feed(frame);
+        await pumpEventQueue(times: 2);
+      }
+      await pumpEventQueue();
+      expect(daemon.pair.clientReadPaused, isTrue);
+
+      daemon.feed(utf8Of('0\r\n\r\n'));
+      final read = await res.body
+          .fold<int>(0, (n, chunk) => n + chunk.length)
+          .timeout(const Duration(seconds: 2));
+      expect(read, 64 * 1024);
+      expect(daemon.pair.clientReadPaused, isFalse);
+    });
+
+    test('a hijacked duplex nobody listens to yet is not read ahead '
+        '(DKR-3)', () async {
+      final daemon = FakeDaemon();
+      final client = DockerHttpClient(() async => daemon.pair.client);
+      final sent = client.sendHijack(
+        const DockerHttpRequest(
+          method: 'POST',
+          path: '/v1.44/exec/abc/start',
+          upgrade: true,
+        ),
+      );
+      await daemon.gotBytes(1);
+      daemon.feed(
+        latin1.encode(
+          'HTTP/1.1 101 UPGRADED\r\n'
+          'Connection: Upgrade\r\nUpgrade: tcp\r\n\r\nFIRST',
+        ),
+      );
+      final res = await sent;
+      daemon.feed(utf8Of('SECOND'));
+      await pumpEventQueue();
+      expect(daemon.pair.clientReadPaused, isTrue);
+
+      final received = StringBuffer();
+      final sub = res.body.stream.map(latin1.decode).listen(received.write);
+      await pumpEventQueue();
+      expect(received.toString(), 'FIRSTSECOND');
+      expect(daemon.pair.clientReadPaused, isFalse);
+      await res.body.close();
+      await sub.cancel();
+    });
+  });
+
+  group('stray bytes (DKR-7)', () {
+    final ok = wireResponse(
+      '200 OK',
+      headers: {'Content-Length': '2'},
+      body: utf8Of('hi'),
+    );
+    final stale = wireResponse(
+      '200 OK',
+      headers: {'Content-Length': '5'},
+      body: utf8Of('stale'),
+    );
+
+    Future<void> nextOpensAnother(
+      DaemonFarm farm,
+      DockerHttpClient client,
+    ) async {
+      final next = client.sendBuffered(getX('/y'));
+      await pumpEventQueue();
+      expect(farm.opens, 2, reason: 'the connection with stray bytes is gone');
+      await farm.daemons[1].gotBytes(1);
+      farm.daemons[1].feed(ok);
+      expect(utf8.decode((await next).body), 'hi');
+      await farm.daemons[0].closed.future.timeout(const Duration(seconds: 2));
+      expect(client.connectionCount, 1);
+    }
+
+    test('bytes after a complete body retire the connection instead of '
+        'answering the next request', () async {
+      final farm = DaemonFarm();
+      final client = farm.client();
+      final first = client.sendBuffered(getX());
+      await farm.daemons[0].gotBytes(1);
+      farm.daemons[0].feed([...ok, ...stale]);
+      expect(utf8.decode((await first).body), 'hi');
+
+      await nextOpensAnother(farm, client);
+    });
+
+    test('bytes that arrive on an idle connection retire it', () async {
+      final farm = DaemonFarm();
+      final client = farm.client();
+      final first = client.sendBuffered(getX());
+      await farm.daemons[0].gotBytes(1);
+      farm.daemons[0].feed(ok);
+      await first;
+      farm.daemons[0].feed(stale);
+      await pumpEventQueue();
+
+      await nextOpensAnother(farm, client);
+    });
   });
 
   group('client close', () {
+    test('close while a duplex opens closes it and fails the request '
+        '(DKR-2)', () async {
+      final daemon = FakeDaemon();
+      final opened = Completer<ByteDuplex>();
+      final client = DockerHttpClient(() => opened.future);
+      final sent = client.sendLines(getX('/events'));
+      final failed = expectThrows<DockerTransportException>(
+        sent.timeout(const Duration(seconds: 1)),
+      );
+      await pumpEventQueue();
+      await client.close();
+
+      opened.complete(daemon.pair.client);
+      await failed;
+      await daemon.closed.future.timeout(const Duration(seconds: 2));
+      expect(daemon.received, isEmpty, reason: 'no request was written');
+      expect(client.connectionCount, 0);
+    });
+
+    test('close while a queued request\'s duplex opens closes it too '
+        '(DKR-2)', () async {
+      final first = FakeDaemon();
+      final second = FakeDaemon();
+      final opened = Completer<ByteDuplex>();
+      var opens = 0;
+      final client = DockerHttpClient(
+        () => opens++ == 0 ? Future.value(first.pair.client) : opened.future,
+        maxConnections: 1,
+      );
+      final r1 = client.sendBuffered(getX('/a'));
+      await first.gotBytes(1);
+      final r2 = client.sendBuffered(getX('/b'));
+      final failed = expectThrows<DockerTransportException>(
+        r2.timeout(const Duration(seconds: 1)),
+      );
+      await pumpEventQueue();
+
+      // The first connection dies, so the queued request opens its own.
+      unawaited(first.hangup());
+      await expectThrows<DockerException>(r1);
+      await pumpEventQueue();
+      expect(opens, 2);
+      await client.close();
+
+      opened.complete(second.pair.client);
+      await failed;
+      await second.closed.future.timeout(const Duration(seconds: 2));
+      expect(second.received, isEmpty);
+      expect(client.connectionCount, 0);
+    });
+
     test('close fails in-flight and queued requests', () async {
       final farm = DaemonFarm();
       final client = farm.client(maxConnections: 1);
