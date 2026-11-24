@@ -288,7 +288,11 @@ ParseResult<OpsListing> parseOps(List<int> payload) {
   while (at < payload.length) {
     var nl = payload.indexOf(0x0a, at);
     if (nl < 0) nl = payload.length;
-    final line = latin1.decode(payload.sublist(at, nl));
+    // The `dir` line carries a path, which the host prints in its own
+    // bytes: UTF-8 wherever the launch resolved the same directory. Read
+    // as Latin-1, a non-ASCII path would name another directory when the
+    // tracker sends it back.
+    final line = utf8.decode(payload.sublist(at, nl), allowMalformed: true);
     at = nl + 1;
 
     if (line.isEmpty || line == kTimeoutAbsentMarker) continue;

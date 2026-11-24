@@ -829,14 +829,23 @@ class _LogSearchFieldState extends State<LogSearchField> {
             labelText: l10n.logsPanelSearchLabel,
             // The journal's PCRE2 reads some patterns Dart's engine does
             // not (inline flags), so the server may still take one.
-            errorText: search.invalidPattern
-                ? (onSearchServer == null
-                      ? l10n.logsPanelSearchInvalid
-                      : l10n.logsPanelSearchInvalidLocal)
-                : null,
-            suffixText: search.query.isEmpty || search.invalidPattern
+            errorText: switch (search) {
+              LogSearch(invalidPattern: true) =>
+                onSearchServer == null
+                    ? l10n.logsPanelSearchInvalid
+                    : l10n.logsPanelSearchInvalidLocal,
+              LogSearch(tooCostly: true) => l10n.logsPanelSearchTooCostly,
+              _ => null,
+            },
+            suffixText:
+                search.query.isEmpty ||
+                    search.invalidPattern ||
+                    search.tooCostly
                 ? null
                 : switch (search.currentNumber) {
+                    // A pattern is still reading the rows held: the
+                    // count so far would read as the whole.
+                    _ when search.searching => l10n.logsPanelSearchSearching,
                     final number? => l10n.logsPanelSearchPosition(
                       number,
                       search.total,

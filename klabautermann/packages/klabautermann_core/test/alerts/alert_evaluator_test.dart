@@ -87,6 +87,12 @@ void main() {
     // A clear under way starts over too; the alert stays raised.
     expect(alerts.observe('web', _cpuAt(60), _at(1230)), isEmpty);
     alerts.gap('web', {SampleStream.overview});
+    // The alert is firing again since it was raised, not since the clear
+    // began (SMP-07).
+    final restored = alerts.stateOf('r-cpu', 'web')!;
+    expect(restored.phase, RulePhase.firing);
+    expect(restored.since, _at(1200));
+    expect(restored.firedSince, isNull);
     expect(alerts.observe('web', _cpuAt(60), _at(1300)), isEmpty);
     expect(alerts.observe('web', _cpuAt(60), _at(1320)), isEmpty);
     expect(alerts.observe('web', _cpuAt(60), _at(1330)).single.raised, isFalse);

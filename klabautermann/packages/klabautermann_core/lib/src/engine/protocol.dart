@@ -533,8 +533,12 @@ final class ImportSshConfig extends EngineRequest {
 /// With [shown], the endpoints the user looked at by server id, a server
 /// is confirmed only while its endpoint still matches the one shown: a
 /// sync that changed it in the meantime leaves it unconfirmed, and the
-/// fleet that answers lists it as waiting again. The app always sends
-/// [shown]; without it, as in tests, each endpoint is taken as it stands.
+/// fleet that answers lists it as waiting again. A hop on a confirmed
+/// route is pinned only when [shown] carries it too and it still matches:
+/// a hop the user never confirmed in its own row, or one a sync rewrote
+/// since, stays unconfirmed, so the servers behind it wait. The app
+/// always sends [shown]; without it, as in tests, each endpoint is taken
+/// as it stands.
 final class ConfirmEndpoints extends EngineRequest {
   const ConfirmEndpoints(this.serverIds, {this.shown});
 
@@ -542,9 +546,10 @@ final class ConfirmEndpoints extends EngineRequest {
   final Map<String, ShownEndpoint>? shown;
 }
 
-/// A synced server's endpoint as the confirmation list showed it
-/// ([ConfirmEndpoints.shown]): the [FleetEntry] fields a confirmation
-/// pins.
+/// A synced server's or jump host's endpoint as the confirmation list
+/// showed it ([ConfirmEndpoints.shown]): the [FleetEntry] fields a
+/// confirmation pins. A route's hops need their own entries here; the
+/// route on a server names them by label only.
 @immutable
 final class ShownEndpoint {
   const ShownEndpoint({
