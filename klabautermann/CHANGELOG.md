@@ -574,3 +574,6 @@
 - Removing an alert rule finds it by the id it was written with, and a
   removal whose synced record is refused says so instead of reporting
   success.
+- While a long step borrows the slow sampler, panels show its missed
+  readings as gaps instead of stale values, and a probe the borrowing
+  interrupts costs no extra retry wait.
