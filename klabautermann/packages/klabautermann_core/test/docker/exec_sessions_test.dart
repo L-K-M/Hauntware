@@ -178,12 +178,18 @@ void main() {
   // The endpoint's pooled client, for the short calls.
   late DockerClient pool;
 
+  // The version every client negotiated.
+  late ApiVersion apiVersion;
+
+  DockerClient pooled() => DockerClient(
+    DockerHttpClient(() async => daemon.connect().client),
+    apiVersion: apiVersion,
+  );
+
   setUp(() {
     daemon = _ExecDaemon();
-    pool = DockerClient(
-      DockerHttpClient(() async => daemon.connect().client),
-      apiVersion: const ApiVersion(1, 44),
-    );
+    apiVersion = const ApiVersion(1, 44);
+    pool = pooled();
     events = [];
     audits = [];
     leases = 0;
@@ -202,7 +208,7 @@ void main() {
                 () async => daemon.connect().client,
                 maxConnections: 1,
               ),
-              apiVersion: const ApiVersion(1, 44),
+              apiVersion: apiVersion,
             ),
             release: () => released++,
           ),
@@ -393,6 +399,29 @@ void main() {
     await settle();
     expect(daemon.resizes.last, 'e1 80x24');
     expect(daemon.resizes, isNot(contains('e1 0x24')));
+  });
+
+  test('below API 1.42, where create and start take no size, the shell is '
+      'sized once after the start (DKR-5)', () async {
+    apiVersion = const ApiVersion(1, 41);
+    pool = pooled();
+    sessions.open(_open(), _policy);
+    await settle();
+    expect(daemon.bodies['create e1'], isNot(contains('ConsoleSize')));
+    expect(daemon.bodies['start e1'], isNot(contains('ConsoleSize')));
+    expect(daemon.resizes, ['e1 120x40']);
+
+    sessions.resize(const TerminalResize('t-1', columns: 100, rows: 30));
+    await settle();
+    expect(daemon.resizes, ['e1 120x40', 'e1 100x30']);
+  });
+
+  test('from API 1.42 the create carries the size, and no resize follows '
+      'the start', () async {
+    sessions.open(_open(), _policy);
+    await settle();
+    expect(daemon.bodies['create e1']?['ConsoleSize'], [40, 120]);
+    expect(daemon.resizes, isEmpty);
   });
 
   test('input while the exec starts is passed on once it runs', () async {

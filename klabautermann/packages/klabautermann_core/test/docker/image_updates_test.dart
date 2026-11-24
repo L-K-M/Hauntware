@@ -202,6 +202,44 @@ void main() {
     expect(host.commands, hasLength(3), reason: 'stale after six hours');
   });
 
+  test(
+    'a row is for the image its tag named: a pull behind the tag is '
+    'checked again at once, and a tag that is gone is forgotten (DKR-4)',
+    () async {
+      image('sha256:i1', ['busybox:1'], repoDigests: ['busybox@$_old']);
+      image(
+        'sha256:i2',
+        ['quay.io/a/b:1'],
+        repoDigests: ['quay.io/a/b@$_node'],
+      );
+      host.blocks['busybox:1'] = _head(200, digest: _node);
+      host.blocks['quay.io/a/b:1'] = _head(200, digest: _node);
+
+      final first = await check() as DockerImageUpdatesPayload;
+      expect(
+        first.rows.first.comparison.status,
+        ImageUpdateStatus.updateAvailable,
+      );
+      expect(first.rows.first.imageId, 'sha256:i1');
+
+      // The pull: the tag names a new image, and the other tag is removed.
+      daemon.images.clear();
+      daemon.inspects.clear();
+      image('sha256:i3', ['busybox:1'], repoDigests: ['busybox@$_node']);
+      now = now.add(const Duration(minutes: 1));
+      final pulled = await check() as DockerImageUpdatesPayload;
+
+      expect(host.commands, hasLength(2), reason: 'the new image is read');
+      expect(host.commands.last, contains('busybox:1'));
+      expect(pulled.rows.single.imageId, 'sha256:i3');
+      expect(pulled.rows.single.comparison.status, ImageUpdateStatus.upToDate);
+      expect(cache.row('quay.io/a/b:1'), isNull);
+
+      await check();
+      expect(host.commands, hasLength(2), reason: 'fresh for the same image');
+    },
+  );
+
   test('a 429 leaves that registry alone for the window it named, without '
       'another route', () async {
     image('sha256:i1', ['busybox:1'], repoDigests: ['busybox@$_old']);
@@ -225,6 +263,26 @@ void main() {
     host.blocks['busybox:1'] = _head(200, digest: _old);
     final after = await check(refresh: true) as DockerImageUpdatesPayload;
     expect(after.rows.first.comparison.status, ImageUpdateStatus.upToDate);
+  });
+
+  test('a 429 that names an absurd window backs off for a day at most '
+      '(DKR-1)', () async {
+    image('sha256:i1', ['busybox:1'], repoDigests: ['busybox@$_old']);
+    // Past what a DateTime can hold when added to the clock.
+    host.blocks['busybox:1'] = _head(429, remaining: '0;w=9000000000000');
+
+    final first = await check() as DockerImageUpdatesPayload;
+    expect(first.rows.single.comparison.issue, ImageUpdateIssue.rateLimited);
+    expect(first.rows.single.rateLimit?.window, RegistryRateLimit.maxWindow);
+
+    now = now.add(RegistryRateLimit.maxWindow - const Duration(minutes: 1));
+    await check(refresh: true);
+    expect(host.commands, hasLength(1), reason: 'still backing off');
+
+    now = now.add(const Duration(minutes: 1));
+    host.blocks['busybox:1'] = _head(200, digest: _old);
+    final after = await check(refresh: true) as DockerImageUpdatesPayload;
+    expect(after.rows.single.comparison.status, ImageUpdateStatus.upToDate);
   });
 
   test('a private registry is read through buildx, and a containerd '

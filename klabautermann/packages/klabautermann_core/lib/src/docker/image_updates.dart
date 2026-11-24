@@ -1,6 +1,6 @@
 /// IMG-05's digest update check (03 §7.14, D68): the local digests from
 /// the daemon, the registry digests from the host, compared, and kept
-/// for six hours per reference.
+/// for six hours per reference while it names the same image.
 library;
 
 import 'dart:convert';
@@ -75,6 +75,7 @@ Future<DockerPayload> checkImageUpdates({
           if (_target(tag, reference) case final target?)
             (tag: tag, reference: reference, image: image, target: target),
   ];
+  _forgetChanged(cache, entries);
 
   final due = [
     for (final entry in entries)
@@ -170,6 +171,15 @@ RegistryHeadTarget? _target(String tag, RegistryReference reference) {
   } on HostCommandError {
     return null;
   }
+}
+
+/// Forgets each row whose tag is gone or names another image by now: a
+/// row compares one image's digests, so after a pull behind its tag it
+/// would say "update available" of the image just pulled. Such a tag is
+/// due again at once, its registry's backoff permitting.
+void _forgetChanged(ImageUpdateCache cache, List<_Entry> entries) {
+  final imageIds = {for (final entry in entries) entry.tag: entry.image.id};
+  cache._rows.removeWhere((tag, row) => imageIds[tag] != row.imageId);
 }
 
 bool _stale(ImageUpdateRow? row, DateTime now) =>

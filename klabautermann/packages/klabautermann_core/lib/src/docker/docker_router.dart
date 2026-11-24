@@ -925,11 +925,13 @@ final class DockerRouter {
     session.idle?.cancel();
     session.idle = null;
     endpoint.inFlight++;
-    final (:payload, :warnings, :routeDropped) = await _read(
-      endpoint,
-      query.query,
-    );
-    endpoint.inFlight--;
+    final _Read result;
+    try {
+      result = await _read(endpoint, query.query);
+    } finally {
+      endpoint.inFlight--;
+    }
+    final (:payload, :warnings, :routeDropped) = result;
 
     final current = identical(session.endpoint, endpoint);
     _emit(
@@ -1039,6 +1041,20 @@ final class DockerRouter {
         payload: failure,
         warnings: const <String>[],
         routeDropped: dropped,
+      );
+    } on Object catch (e) {
+      // Nothing else is meant to leave a read, but what it parses comes
+      // from the host and its registries. [_run] is not awaited, so an
+      // error here would be unhandled in the engine isolate and end it
+      // for every server. Only the type is named: the message could
+      // repeat host output that was never masked.
+      return (
+        payload: DockerQueryFailed(
+          DockerQueryFailure.connectionFailed,
+          detail: 'the read ended with an unexpected error (${e.runtimeType})',
+        ),
+        warnings: const <String>[],
+        routeDropped: false,
       );
     }
   }

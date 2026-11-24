@@ -358,8 +358,12 @@ final class ExecSessions {
       }
       terminal.pendingInput.clear();
       if (terminal.inputEnded) unawaited(_quietly(response.body.closeWrite()));
-      // A resize while the exec started; the create took the size before.
-      if (terminal.size != size) _sendSize(terminal);
+      // A resize while the exec started; the create took the size
+      // before. Below API 1.42 it took none, and the PTY has the daemon's
+      // default until this first resize, as the Docker CLI sends one.
+      if (terminal.size != size || !lease.client.gates.hasExecConsoleSize) {
+        _sendSize(terminal);
+      }
     } on DockerEndpointUnavailable catch (e) {
       await _end(
         terminal,

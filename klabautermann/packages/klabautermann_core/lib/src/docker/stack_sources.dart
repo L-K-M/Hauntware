@@ -710,7 +710,11 @@ extension on StackSources {
         final bytes = head.toBytes();
         final newline = bytes.indexOf(0x0A);
         if (newline < 0) continue;
-        size = int.tryParse(ascii.decode(bytes.sublist(0, newline)).trim());
+        // Whatever the host printed first: a line that is no number,
+        // ASCII or not, is a failed read.
+        size = int.tryParse(
+          ascii.decode(bytes.sublist(0, newline), allowInvalid: true).trim(),
+        );
         if (size == null) break;
         sink.add(bytes.sublist(newline + 1));
       } else {

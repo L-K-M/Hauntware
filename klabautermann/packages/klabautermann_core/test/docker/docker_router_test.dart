@@ -858,6 +858,43 @@ void main() {
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       expect((await h.state()).failure, DockerEndpointFailure.unreachable);
     });
+
+    test('a read that throws something other than a Docker error is '
+        'answered as failed, keeps the endpoint, and the relay still '
+        'closes when idle (DKR-1)', () async {
+      final h = _Harness();
+      h.forwarding
+        ..relayDaemon = (EngineDaemon()
+          ..routes['/v1.52/images/json'] = jsonEncode([
+            {
+              'Id': 'sha256:i1',
+              'RepoTags': ['alpine:3.22'],
+            },
+          ]))
+        ..probeAnswers[_rootful] = _disabled
+        ..answer = (command) => command.contains('hws-registry')
+            ? Future.error(StateError('not a Docker error'))
+            : null;
+      await h.open();
+      await h.resolve(_profile([_rootful], tools: tools));
+
+      final failed = h.query(const DockerImageUpdatesQuery());
+      expect(
+        await h.result(failed),
+        _failed(
+          DockerQueryFailure.connectionFailed,
+        ).having((f) => f.detail, 'detail', contains('StateError')),
+      );
+
+      // The endpoint stands and answers the next query on the same relay.
+      final id = h.query(const DockerImagesQuery());
+      expect(await h.result(id), isA<DockerImagesPayload>());
+      expect(h.forwarding.relays, hasLength(1));
+
+      // The failed read gave its count back, so the idle close runs.
+      await h.clock.elapse(const Duration(seconds: 30));
+      expect(h.forwarding.relays.single.closeCalls, 1);
+    });
   });
 
   group('docker program (CN-16)', () {
