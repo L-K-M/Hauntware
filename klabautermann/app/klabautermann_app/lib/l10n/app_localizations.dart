@@ -4979,6 +4979,18 @@ abstract class AppLocalizations {
   /// **'Not shown here: this engine cannot read the pattern, but the server may'**
   String get logsPanelSearchInvalidLocal;
 
+  /// Error under the log search field in regular expression mode when matching the pattern against the loaded lines did not finish in time, so the search was stopped and shows no matches.
+  ///
+  /// In en, this message translates to:
+  /// **'The search stopped: this pattern takes too long to match these lines'**
+  String get logsPanelSearchTooCostly;
+
+  /// Shown at the end of the log search field, in place of the number of matches, while a regular expression is still being matched against the loaded lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching…'**
+  String get logsPanelSearchSearching;
+
   /// Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown.
   ///
   /// In en, this message translates to:

@@ -992,6 +992,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The search's initial empty query.
   'lib/ui/logs/log_search.dart': {"''"},
+  // The pattern worker isolate's name in a debugger.
+  'lib/ui/logs/log_pattern_worker.dart': {"'log search'"},
   'lib/ui/logs/log_tokens.dart': {
     // LOG-07's token patterns (URLs, IP addresses, HTTP status codes):
     // matched against server output, never shown.
