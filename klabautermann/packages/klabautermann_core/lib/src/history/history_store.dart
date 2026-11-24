@@ -207,10 +207,30 @@ final class _Accumulator {
 
   final DateTime start;
   final HistoryProvenance provenance;
+
+  /// Every reading of the bucket, which a write stores.
   final Map<AlertMetric, HistoryStat> values = {};
 
-  void add(AlertMetric metric, HistoryStat stat) =>
-      values.update(metric, (held) => held.merge(stat), ifAbsent: () => stat);
+  /// The readings [add] took: [values] without the slot's stored ones.
+  /// A stored minute was folded into its 10-minute bucket when it was
+  /// written, so only these fold into it when the minute closes again.
+  final Map<AlertMetric, HistoryStat> added = {};
+
+  /// Takes a reading, or a closed minute's.
+  void add(AlertMetric metric, HistoryStat stat) {
+    _merge(values, metric, stat);
+    _merge(added, metric, stat);
+  }
+
+  /// Takes what the bucket's slot held before this accumulator began.
+  void addStored(AlertMetric metric, HistoryStat stat) =>
+      _merge(values, metric, stat);
+
+  static void _merge(
+    Map<AlertMetric, HistoryStat> into,
+    AlertMetric metric,
+    HistoryStat stat,
+  ) => into.update(metric, (held) => held.merge(stat), ifAbsent: () => stat);
 
   HistoryBucket get bucket => HistoryBucket(
     start: start,
@@ -223,7 +243,10 @@ final class _Accumulator {
 /// server's readings into the current 1-minute bucket, writes the bucket
 /// once a reading of a later minute arrives, and folds written minutes
 /// into the current 10-minute bucket, which it writes with each minute.
-/// A bucket continued after a restart keeps its earlier readings. Reads
+/// A bucket continued after a restart keeps its earlier readings, each
+/// counted once. A write or a read that fails, on the disk or on a slot
+/// that holds garbage, costs that bucket or that slot and nothing after
+/// it. Reads
 /// include the buckets still filling. It writes files only with exclusive
 /// access to the support directory, one file operation at a time in call
 /// order, reads included; otherwise it keeps the rings in memory for the
@@ -381,12 +404,12 @@ final class HistoryStore {
       );
       for (var slot = 0; slot < _gapSlots; slot++) {
         final offset = _headerBytes + slot * _gapSlotBytes;
-        final start = gapData.getInt64(offset);
-        if (start == 0) continue;
-        final gapFrom = _fromSeconds(start);
+        final gapFrom = _fromSeconds(gapData.getInt64(offset));
         final gapUntil = _fromSeconds(gapData.getInt64(offset + 8));
         final cause = gapData.getUint8(offset + 16);
-        if (gapUntil.isBefore(from) ||
+        if (gapFrom == null ||
+            gapUntil == null ||
+            gapUntil.isBefore(from) ||
             gapFrom.isAfter(until) ||
             cause >= GapCause.values.length) {
           continue;
@@ -437,8 +460,9 @@ final class HistoryStore {
               await directory.delete(recursive: true);
             }
           }
-        } on FileSystemException {
-          // A ring left behind is purged at the next open.
+        } on Object {
+          // A ring left behind is purged at the next open. Any error, as
+          // in [_queue]: the queue must not end with this server.
         }
       });
     }
@@ -448,7 +472,10 @@ final class HistoryStore {
   /// Writes [minute] and folds it into its 10-minute bucket, which is
   /// written too: an exit without [flush] then costs only the filling
   /// minute. A held 10-minute bucket of another start was written when
-  /// its last minute closed.
+  /// its last minute closed. Only the readings [minute] took itself are
+  /// folded: the ones it merged from its slot went into the 10-minute
+  /// bucket when the minute was written before, at a [flush] before a
+  /// restart or before the clock stepped back into it.
   void _closeMinute(String serverId, _Accumulator minute) {
     _write(serverId, HistoryTier.minute, minute);
 
@@ -458,7 +485,7 @@ final class HistoryStore {
       serverId,
       () => _begin(serverId, HistoryTier.tenMinutes, start),
     );
-    minute.values.forEach(ten.add);
+    minute.added.forEach(ten.add);
     _write(serverId, HistoryTier.tenMinutes, ten);
     _minute.remove(serverId);
   }
@@ -482,7 +509,9 @@ final class HistoryStore {
         ),
         0,
       );
-      if (stored?.start == start) stored!.values.forEach(accumulator.add);
+      if (stored?.start == start) {
+        stored!.values.forEach(accumulator.addStored);
+      }
     });
     return accumulator;
   }
@@ -511,8 +540,10 @@ final class HistoryStore {
       try {
         final rings = await _ringsOf(serverId);
         if (rings != null) await body(rings);
-      } on FileSystemException {
-        // A write the disk refused costs that bucket, not the run.
+      } on Object {
+        // A write the disk refused costs that bucket, not the run. So
+        // does any other error: one that escaped would fail the tail,
+        // and every later write of every server would be skipped.
       }
     });
   }
@@ -671,9 +702,9 @@ final class HistoryStore {
   }
 
   static HistoryBucket? _decodeBucket(ByteData data, int offset) {
-    final start = data.getInt64(offset);
+    final start = _fromSeconds(data.getInt64(offset));
     final provenance = data.getUint8(offset + 8);
-    if (start == 0 ||
+    if (start == null ||
         provenance == 0 ||
         provenance > HistoryProvenance.values.length) {
       return null;
@@ -691,7 +722,7 @@ final class HistoryStore {
       );
     }
     return HistoryBucket(
-      start: _fromSeconds(start),
+      start: start,
       provenance: HistoryProvenance.values[provenance - 1],
       values: Map.unmodifiable(values),
     );
@@ -700,9 +731,22 @@ final class HistoryStore {
   static int _seconds(DateTime at) =>
       at.toUtc().millisecondsSinceEpoch ~/ Duration.millisecondsPerSecond;
 
-  static DateTime _fromSeconds(int seconds) =>
-      DateTime.fromMillisecondsSinceEpoch(
-        seconds * Duration.millisecondsPerSecond,
-        isUtc: true,
-      );
+  /// The time a slot stores as [seconds], or null for an empty slot (0)
+  /// and for one that holds garbage, a torn write or bit rot: a count no
+  /// [DateTime] can hold.
+  static DateTime? _fromSeconds(int seconds) {
+    if (seconds == 0 ||
+        seconds < -_maxDateTimeSeconds ||
+        seconds > _maxDateTimeSeconds) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(
+      seconds * Duration.millisecondsPerSecond,
+      isUtc: true,
+    );
+  }
+
+  /// The seconds either side of the epoch a [DateTime] spans: 100,000,000
+  /// days.
+  static const _maxDateTimeSeconds = 8640000000000;
 }

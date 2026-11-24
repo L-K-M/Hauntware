@@ -1184,6 +1184,41 @@ void main() {
       );
     });
 
+    testWidgets('after an engine restart the open window is served from '
+        'the new run\'s settings', (tester) async {
+      final remote = await connectWindow(tester);
+      final oldName = deviceName;
+      final newName = DeviceNameController(
+        stored: 'Restarted',
+        fallback: 'Klabautermann on Linux',
+        apply: (_) {},
+      );
+      addTearDown(newName.dispose);
+
+      SettingsWindowHost(
+        appearance: appearance,
+        announcements: announcements,
+        deviceName: newName,
+        appVersion: _appVersion,
+        monitorSet: fleet.monitorSettings,
+        safety: safety,
+        syncSecrets: newSyncSecrets(),
+        control: _control,
+        link: _appLink,
+        replacing: host,
+      );
+      await tester.runAsync(pumpEventQueue);
+      expect(remote.deviceName.value, 'Restarted');
+
+      // The old run's controller no longer reaches the window.
+      await tester.runAsync(() => oldName.setDeviceName('Gone'));
+      await tester.runAsync(pumpEventQueue);
+      expect(remote.deviceName.value, 'Restarted');
+      await tester.runAsync(() => newName.setDeviceName('Laptop'));
+      await tester.runAsync(pumpEventQueue);
+      expect(remote.deviceName.value, 'Laptop');
+    });
+
     testWidgets('the Sync tab\'s switch changes the app\'s sync passwords '
         'through the link (SYN-02)', (tester) async {
       final remote = await pumpBothWindows(

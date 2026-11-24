@@ -75,6 +75,25 @@ void main() {
     entryPoint: _countingEngine,
   );
 
+  test('CTL-01: main builds everything over an engine run in one turn', () {
+    final main = File('lib/main.dart').readAsStringSync();
+    final start = main.indexOf(
+      '_EngineRun startRun(IsolateEngineClient engine) {',
+    );
+    final end = main.indexOf('final runs = EngineRestarter<_EngineRun>(');
+    expect(start, isNonNegative);
+    expect(end, greaterThan(start));
+
+    // No await anywhere in the builder, so no controller subscribes after
+    // the engine's startup events went out to the others.
+    expect(main.substring(start, end), isNot(contains('await ')));
+    // And nothing over the engine is built between the spawn and it.
+    final spawned = main.indexOf('engine = await spawnEngine();');
+    expect(spawned, isNonNegative);
+    final between = main.substring(spawned, start);
+    expect(between, isNot(contains('(engine')));
+  });
+
   test('a restarted engine\'s samples are kept from seq 1', () async {
     final first = await spawn();
     final firstMonitoring = MonitoringController(first);

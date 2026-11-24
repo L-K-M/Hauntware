@@ -832,8 +832,9 @@ final class MonitoringController extends ChangeNotifier {
   }
 
   /// The engine refused the request [requestName] with [requestId], for a
-  /// server that left its fleet say, so no answer follows: the read it
-  /// was answers as it does without a link, rather than staying pending.
+  /// server that left its fleet say, so no answer follows: the read
+  /// waiting on it settles as one without a link would, rather than
+  /// staying pending.
   /// Each id is checked against its own request's name, since the four
   /// reads count their ids apart.
   void _rejected(String requestName, String requestId) {
