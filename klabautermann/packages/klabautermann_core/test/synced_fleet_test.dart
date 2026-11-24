@@ -201,6 +201,46 @@ void main() {
       expect(after.serverConfig('edge'), isNull);
     });
 
+    test('a confirmation pins a hop only when it showed that endpoint', () {
+      final listed = SyncedFleet([edge, web]);
+      final shown = {
+        for (final entry in listed.entries)
+          entry.serverId: ShownEndpoint.of(entry),
+      };
+
+      // The hop was among the rows the user confirmed, and it still
+      // matches: it pins with the server.
+      expect(
+        [
+          for (final pin in listed.pinsFor(
+            ['web'],
+            at,
+            shown: {'web': shown['web']!, 'edge': shown['edge']!},
+          ))
+            pin.serverId,
+        ],
+        ['web', 'edge'],
+      );
+
+      // A sync moved the hop after the list showed it: the stale shown
+      // endpoint matches nothing, so the hop stays unpinned.
+      final moved = SyncedFleet([
+        edge.copyWith(host: 'moved.example.com'),
+        web,
+      ]);
+      expect(
+        [
+          for (final pin in moved.pinsFor(
+            ['web'],
+            at,
+            shown: {'web': shown['web']!, 'edge': shown['edge']!},
+          ))
+            pin.serverId,
+        ],
+        ['web'],
+      );
+    });
+
     test('a pin the store could not read fails closed, marks the servers '
         'behind it, and is never replaced', () {
       final pins = pinsOf([edge, web])..remove('edge');
