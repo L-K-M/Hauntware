@@ -518,6 +518,19 @@
 - Settings > Appearance has a File editor section: choose a font, turn
   ligatures on or off, and set the text size. Every file editor and the
   compare view draw in the choice, kept on this device only.
+- The CPU gauge no longer drops a reading when the kernel's iowait
+  counter steps back.
+- A second kernel flavour beside the running one (a debug or realtime
+  build, another Ubuntu flavour, the Raspberry Pi's kernel for another
+  board) no longer shows as a newer kernel waiting for a reboot.
+- Run now for a cron job of another user works on hosts without
+  `runuser` (Alpine and other BusyBox systems): `su` runs it there.
+- Keep last and Remove backups read a backup index past 256 KiB as the
+  login user, and refuse an index or manifest that is too large to read
+  whole instead of failing for a reason that names something else.
+- A synced alert rule whose clear value lies on the breach side of its
+  raise value is refused, instead of raising and clearing on every
+  reading.
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
