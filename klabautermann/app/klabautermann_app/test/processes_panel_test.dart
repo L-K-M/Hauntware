@@ -195,6 +195,12 @@ Future<_Panel> _pump(
 
 Finder _row(int pid) => find.byKey(ValueKey('procs.row.$pid'));
 
+/// What [id]'s header says about its sort, or null when it names none.
+String? _sortedValue(WidgetTester tester, String id) => tester
+    .widget<Semantics>(find.byKey(ValueKey('procs.column.$id')))
+    .properties
+    .value;
+
 /// The pids the panel shows, top to bottom.
 List<int> _order(WidgetTester tester) {
   const prefix = 'procs.row.';
@@ -266,6 +272,30 @@ void main() {
     await tester.enterText(find.byType(TextField), 'mysqld');
     await tester.pumpAndSettle();
     expect(_order(tester), [1, 812]);
+  });
+
+  testWidgets('the tree still names and flips the column ordering its '
+      'siblings', (tester) async {
+    final panel = await _pump(tester);
+    await panel.all(tester);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Tree'));
+    await tester.pumpAndSettle();
+    expect(_order(tester), [1, 2041, 812, 2, 3100]);
+
+    // The header announces the sort the siblings follow.
+    expect(_sortedValue(tester, 'cpu'), 'Sorted descending');
+
+    await tester.tap(find.byKey(const ValueKey('procs.column.cpu')));
+    await tester.pumpAndSettle();
+    expect(_sortedValue(tester, 'cpu'), 'Sorted ascending');
+    expect(_order(tester), [1, 812, 2041, 2, 3100]);
+
+    // A second click flips the direction instead of restarting there.
+    await tester.tap(find.byKey(const ValueKey('procs.column.cpu')));
+    await tester.pumpAndSettle();
+    expect(_sortedValue(tester, 'cpu'), 'Sorted descending');
+    expect(_order(tester), [1, 2041, 812, 2, 3100]);
   });
 
   testWidgets('PRC-06: zombies and processes stuck on I/O are flagged in '

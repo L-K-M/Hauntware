@@ -43,6 +43,7 @@ import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/editor_display.dart';
 import 'controllers/engine_health.dart';
+import 'controllers/engine_restarter.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
@@ -179,85 +180,12 @@ Future<void> main(List<String> args) async {
     confirmClose: () => quitGuard?.confirm() ?? Future.value(true),
   );
 
-  // D18: all SSH, sampling, parsing, Docker, sync and rule evaluation run
-  // in the engine isolate; the UI sends plain-data requests and listens.
-  // The engine keeps its own files in the same support directory (03
-  // §4.10) and reports what it found wrong with them in its handshake.
-  // Links are on (03 §10.1): opening a server's view connects to it, and
-  // the prompt controller below shows the host-key and keyboard prompts
-  // a connect raises. The engine writes its capability cache and
-  // `host_keys.json`, and syncs, only while this process holds the
-  // directory alone; otherwise it keeps this run's pins in memory (D59,
-  // D61, D63). It gets the device id read above, after the lock, so
-  // enrollment never reads an id another process may have minted.
-  // Probes are on too (FL-04): the engine probes confirmed endpoints and
-  // the fleet rows show the answers.
-  // The window is already shown, so an engine that cannot start is told
-  // there rather than leaving it blank.
-  final IsolateEngineClient engine;
-  try {
-    engine = await IsolateEngineClient.spawn(
-      supportDirectory: supportDirectory.path,
-      linksEnabled: true,
-      probesEnabled: true,
-      supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
-      deviceId: settings.deviceId,
-    );
-  } on Object catch (error) {
-    debugPrint('The engine did not start: $error');
-    runApp(
-      EngineFailedApp(
-        detail: error.toString(),
-        onQuit: () => unawaited(
-          ServicesBinding.instance.exitApplication(AppExitType.required),
-        ),
-      ),
-    );
-    return;
-  }
-  final importStoreIssue = engine.ready.importStoreIssue;
-  if (importStoreIssue != null) {
-    debugPrint(
-      'ssh_config_imports.json: ${importStoreIssue.kind.name} '
-      '${importStoreIssue.detail ?? ''}',
-    );
-  }
-
-  // FL-02: desktops get the ssh_config import; phones get no source.
-  // FleetController subscribes to engine.events before any other
-  // listener: the client holds the startup CatalogReplaced (the saved
-  // imports) for its first listener only, so another one subscribing
-  // first could take it and leave the rail empty until the next import.
-  final fleet = FleetController(
-    engine,
-    sshConfig: sshConfigSourceFor(defaultTargetPlatform, Platform.environment),
-    // The rail's pinned shortlist (03 §10.3), device-local in
-    // settings.json as Séance keeps its pins.
-    pinnedServerIds: settings.pinnedServerIds,
-    savePins: settings.setPinnedServerIds,
-    // FL-21's monitor set (03 §4.3 step 4), device-local in settings.json:
-    // until the user chooses one, every eligible server on a desktop and
-    // none on a phone.
-    monitorSet: settings.monitorSet,
-    monitorSetDefault: monitorSetDefaultFor(defaultTargetPlatform),
-    saveMonitorSet: settings.setMonitorSet,
-  );
-  // What the engine says of its own health (ENG-4, ENG-6), followed
-  // after the fleet controller, which needs the client's first events.
-  // The quit's own shutdown is no stop to report.
+  // What the engine says of its own health (ENG-4, ENG-6) and of its
+  // stops, for the launch: it outlives each engine run. The quit's own
+  // shutdown is no stop to report or restart.
   var quitting = false;
-  final engineHealth = EngineHealth()..follow(engine, expected: () => quitting);
-  // CN-09's Docker socket per server, chosen on this device and kept in
-  // settings.json (03 §4.10, D54); a server the fleet drops or moves to
-  // another endpoint loses its choice (SYN-08).
-  final dockerEndpointChoices = DockerEndpointChoices(
-    stored: settings.dockerEndpointOverrides,
-    save: settings.setDockerEndpointOverride,
-    purge: settings.purgeDockerEndpointOverrides,
-  )..followFleet(fleet);
-  // Spawned once per launch: a restarted engine would be a new client
-  // with new controllers over it, whose seq floors start empty (D44), and
-  // KlabautermannApp remounts its tree when handed them.
+  final engineHealth = EngineHealth();
+
   // STK-08's scan folders per server, device-local in settings.json until
   // the pref record syncs them (M5 plan M05).
   final stackFolders = StackFolders(
@@ -280,27 +208,6 @@ Future<void> main(List<String> args) async {
     stored: settings.containerColumns,
     save: settings.setContainerColumns,
   );
-  final monitoring = MonitoringController(
-    engine,
-    attentionAcks: attentionAcks,
-    dockerEndpointChoices: dockerEndpointChoices,
-    stackFolders: stackFolders,
-    tlsEndpoints: tlsEndpoints,
-    containerColumns: containerColumns,
-  );
-  // The host-key and keyboard-interactive prompts the engine raises while
-  // it connects, shown one at a time over every route.
-  final prompts = PromptController(engine);
-  // Admin mode per server (03 §8.2): the engine runs it and holds the
-  // password; the header's chip asks and shows its state.
-  final admin = AdminController(engine);
-  // In-app alerts (ALR-01): the engine evaluates the synced rules on live
-  // samples; the fleet list and rows show what they raise.
-  final alerts = AlertCenter(engine);
-  // The synced rules behind them, and the editor's writes (03 §4.8).
-  final alertRules = AlertRulesController(engine);
-  // Séance's synced snippets, run on a server (AUT-01).
-  final snippets = SnippetsController(engine);
 
   // Every log view's text size and wrapping (A11Y-12), kept per device.
   final logDisplay = LogDisplayController(
@@ -330,9 +237,9 @@ Future<void> main(List<String> args) async {
     display: settings.serverTimes ? TimeDisplay.server : TimeDisplay.device,
     save: settings.setServerTimes,
   );
-  // Their system notifications (ALR-01), worded in the device's locale
-  // as it is when each posts, and switched on per device in
-  // settings.json.
+  // System notifications (ALR-01), worded in the device's locale as it is
+  // when each posts. Started before the engine: everything built over an
+  // engine is built in one turn after its spawn (CTL-01).
   AppLocalizations deviceStrings() => lookupAppLocalizations(
     basicLocaleListResolution(
       PlatformDispatcher.instance.locales,
@@ -345,55 +252,11 @@ Future<void> main(List<String> args) async {
     channelDescription: startStrings.alertNotificationChannelDetail,
     openAction: startStrings.alertNotificationOpen,
   ));
-  final alertNotifications = AlertNotificationsController(
-    engine,
-    notifications: systemNotifications,
-    textOf: (raise) => alertNotificationText(
-      deviceStrings(),
-      raise,
-      server:
-          fleet.servers
-              .where((server) => server.id == raise.serverId)
-              .firstOrNull
-              ?.displayName ??
-          raise.serverId,
-    ),
-    enabled: settings.alertNotifications,
-    save: settings.setAlertNotifications,
-  );
-  // The app icon badge (ALR-02): the unseen raised alerts while their
-  // notifications are on, on iOS and macOS. It lasts as long as the app.
-  if (systemNotifications != null) {
-    AppBadgeController(
-      alerts: alerts,
-      notifications: alertNotifications,
-      sink: systemNotifications,
-    );
-  }
-  // Action previews and runs (03 §8.5): the engine plans and runs them;
-  // the app shows the preview and the results.
-  final operations = OperationsController(
-    engine,
-    auditInMemory: engine.ready.auditInMemory,
-  );
-  // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
-  // for, and the OS keystore the engine's sync reaches through this
-  // isolate, which alone can call the keystore plugin (D62).
-  // Pin publication (D15, M5 plan M07): offered only once a release with
-  // Séance's #56 fix is named, which the engine reports at start.
-  final pinPublication = PinPublicationController(
-    engine,
-    initial: engine.ready.pinPublication,
-  );
-  final sync = SyncController(
-    engine,
-    account: engine.ready.syncAccount,
-    pinPublication: pinPublication,
-  );
-  // In-app server editing (FL-03): offered while enrolled (P16).
-  final serverEditor = ServerEditorController(engine);
+
   // The app lock (SAF-20), device-local in settings.json: the engine's
-  // keystore reads wait for it, and admin mode ends when it engages.
+  // keystore reads wait for it, and admin mode ends when it engages, in
+  // whichever engine run is current.
+  void Function() turnOffAdmin = () {};
   final appLock = AppLockController(
     authenticator: LocalDeviceAuthenticator(
       reason: () => lookupAppLocalizations(
@@ -406,33 +269,8 @@ Future<void> main(List<String> args) async {
     supported: appLockSupportedOn(defaultTargetPlatform),
     enabled: settings.appLock,
     save: settings.setAppLock,
-    onLocked: admin.turnOffAll,
+    onLocked: () => turnOffAdmin(),
   );
-  quitGuard = AppQuitGuard(
-    operations: operations,
-    contextOf: () => appNavigatorKey.currentContext,
-    shells: () => monitoring.terminals.shells,
-    lock: appLock,
-    // The engine's clean stop (CTL-02): it writes the history buckets
-    // still filling and ends the open shells with their audit records,
-    // which the process ending under it would cut off. The client bounds
-    // the wait, so a stuck engine cannot hold the quit.
-    beforeExit: () {
-      quitting = true;
-      return engine.shutdown();
-    },
-  );
-  EngineKeystoreResponder(
-    engine,
-    klabautermannMasterKeyManager(),
-    guard: appLock.read,
-  );
-  // The quarantine diff at startup: the engine needs the keystore above to
-  // read the account's host-key records, so the read follows it.
-  unawaited(sync.readPinConflicts());
-  for (final issue in engine.ready.syncStoreIssues) {
-    debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
-  }
   final appearance = appearanceFromSettings(settings);
   // 03 §9.5 item 1: the first-run card shows until dismissed on this
   // device, which settings.json keeps.
@@ -453,23 +291,11 @@ Future<void> main(List<String> args) async {
     save: settings.setThresholds,
   );
 
-  // The polling budget (SAF-19), kept per device in settings.json; the
+  // The polling budget (SAF-19), kept per device in settings.json; each
   // engine samples at its 6.4 column from the start and follows changes.
   final cadence = CadenceController(
     preset: CadencePreset.parse(settings.cadence),
     save: settings.setCadence,
-  );
-  void applyCadence() => monitoring.setCadenceProfile(
-    cadence.value.profileOn(defaultTargetPlatform),
-  );
-  applyCadence();
-  cadence.addListener(applyCadence);
-
-  // SYS-03's waits after power actions, for the run: a reboot drops the
-  // link and ends admin mode, and its wait outlasts that.
-  final powerWaits = PowerWaits(
-    core: (serverId) => monitoring.sampleFor(serverId, SampleStream.core),
-    operations: operations,
   );
 
   // OV-08's pinned services, kept per device in settings.json.
@@ -509,43 +335,17 @@ Future<void> main(List<String> args) async {
     saveSidebarWidth: settings.setShellSidebarWidth,
     saveInspectorWidth: settings.setShellInspectorWidth,
   );
-  // The app's own undo history (K3): one for the run; edit.undo/redo and
-  // the delete toast's Undo step it.
+  // The app's own undo history (K3): one for the launch; edit.undo/redo
+  // and the delete toast's Undo step it.
   final undoHistory = GhostUndoHistory();
   // Each server's cap (SAF-19), kept per device like the preset and sent
-  // to the engine from the start; a cap outlives the fleet.
+  // to each engine from its start; a cap outlives the fleet.
   final cadenceCaps = CadenceCapsController(
     caps: {
       for (final MapEntry(:key, :value) in settings.cadenceCaps.entries)
         key: ?CadenceCap.parse(value),
     },
     save: settings.setCadenceCap,
-  );
-  void applyCadenceCaps() => monitoring.setCadenceCaps({
-    for (final MapEntry(:key, :value) in cadenceCaps.value.entries)
-      key: value.profile,
-  });
-  applyCadenceCaps();
-  cadenceCaps.addListener(applyCadenceCaps);
-
-  // The synced servers' preferences (03 §4.8), as the engine reports their
-  // `pref` records.
-  final serverPrefs = ServerPrefsController(engine);
-
-  // The safety preferences (M4 plan M4), in settings.json and, for synced
-  // servers, their read-only switches and marks in their `pref` records
-  // (M5 plan M06); applied to the engine now, since it starts with every
-  // server observe-only, and on every change.
-  final safety = safetyFromSettings(
-    settings,
-    engine,
-    labelOf: (serverId) =>
-        fleet.servers
-            .where((server) => server.id == serverId)
-            .firstOrNull
-            ?.displayName ??
-        serverId,
-    prefs: serverPrefs,
   );
 
   // FL-16's admin memory, off per server until the user turns it on and
@@ -556,54 +356,6 @@ Future<void> main(List<String> args) async {
     remembered: settings.adminMemory,
     save: settings.setAdminMemory,
   );
-  AdminRearm(
-    engine: engine,
-    admin: admin,
-    remembered: adminMemory,
-    visibleServers: monitoring.visibleServers,
-    safety: safety,
-    appLock: appLock,
-  );
-
-  // The device name the host syslog line gives (SAF-13, M5 plan Q6),
-  // device-local in settings.json and applied to the engine now, since it
-  // names no device until told.
-  final deviceName = DeviceNameController(
-    stored: settings.deviceName,
-    fallback: defaultDeviceName(defaultTargetPlatform),
-    apply: (name) {
-      try {
-        engine.send(SetDeviceName(name));
-      } on StateError {
-        // A stopped engine runs nothing; the next one gets the name at
-        // its spawn.
-      }
-    },
-    save: settings.setDeviceName,
-  );
-
-  // The "sync passwords" switch (SYN-02), device-local in settings.json
-  // and applied to the engine now, since it starts with the switch off.
-  final syncSecrets = SyncSecretsController(
-    syncSecrets: settings.syncSecrets,
-    apply: (enabled) {
-      try {
-        engine.send(SetSyncSecrets(enabled: enabled));
-      } on StateError {
-        // A stopped engine syncs nothing; the next one gets the switch at
-        // its spawn.
-      }
-    },
-    save: settings.setSyncSecrets,
-  );
-
-  // CRED-05's recovery settings over the engine's vault, with the file
-  // panels beside it. The status reloads when the app lock releases a
-  // keystore that was locked at launch.
-  final recovery = RecoveryController(engine, PlatformRecoveryFiles());
-  appLock.addListener(() {
-    if (!appLock.locked) recovery.refreshAfterUnlock();
-  });
 
   // SAF-08's notice heads the Docker tab until dismissed on this device,
   // which settings.json keeps (03 §8.4).
@@ -638,80 +390,407 @@ Future<void> main(List<String> args) async {
     ),
   );
 
-  // Desktop only: the runners there host the settings window; phones keep
-  // the settings route.
-  final settingsWindow = settingsWindowHostFor(
-    defaultTargetPlatform,
-    appearance: appearance,
-    announcements: announcements,
-    thresholds: thresholds,
-    deviceName: deviceName,
-    appVersion: appVersion,
-    monitorSet: fleet.monitorSettings,
-    safety: safety,
-    appLock: appLock,
-    syncSecrets: syncSecrets,
-    pinPublication: pinPublication,
-    pinConflicts: sync,
-    accountSize: sync.accountSize,
-    signOut: SyncSignOut(sync, fleet),
-    cadence: cadence,
-    cadenceCaps: cadenceCaps,
-    adminMemory: adminMemory,
-    logDisplay: logDisplay,
-    editorDisplay: editorDisplay,
-    timeDisplay: timeDisplay,
-    recovery: recovery,
-    updateChecks: updates,
+  // D18: all SSH, sampling, parsing, Docker, sync and rule evaluation run
+  // in the engine isolate; the UI sends plain-data requests and listens.
+  // The engine keeps its own files in the same support directory (03
+  // §4.10) and reports what it found wrong with them in its handshake.
+  // Links are on (03 §10.1): opening a server's view connects to it, and
+  // the prompt controller below shows the host-key and keyboard prompts
+  // a connect raises. The engine writes its capability cache and
+  // `host_keys.json`, and syncs, only while this process holds the
+  // directory alone; otherwise it keeps this run's pins in memory (D59,
+  // D61, D63). It gets the device id read above, after the lock, so
+  // enrollment never reads an id another process may have minted.
+  // Probes are on too (FL-04): the engine probes confirmed endpoints and
+  // the fleet rows show the answers. A restart spawns the same way.
+  Future<IsolateEngineClient> spawnEngine() => IsolateEngineClient.spawn(
+    supportDirectory: supportDirectory.path,
+    linksEnabled: true,
+    probesEnabled: true,
+    supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
+    deviceId: settings.deviceId,
   );
 
-  runApp(
-    KlabautermannApp(
+  // The window is already shown, so an engine that cannot start is told
+  // there rather than leaving it blank.
+  final IsolateEngineClient engine;
+  try {
+    engine = await spawnEngine();
+  } on Object catch (error) {
+    debugPrint('The engine did not start: $error');
+    runApp(
+      EngineFailedApp(
+        detail: error.toString(),
+        onQuit: () => unawaited(
+          ServicesBinding.instance.exitApplication(AppExitType.required),
+        ),
+      ),
+    );
+    return;
+  }
+
+  // Desktop only: the runners there host the settings window, which
+  // outlives engine runs; phones keep the settings route.
+  SettingsWindowHost? settingsWindow;
+
+  // Everything over one engine run (D44): built in one turn with no
+  // await, so every controller hears the engine's startup fleet and
+  // preferences (CTL-01), and built again over a restarted engine.
+  _EngineRun startRun(IsolateEngineClient engine) {
+    final importStoreIssue = engine.ready.importStoreIssue;
+    if (importStoreIssue != null) {
+      debugPrint(
+        'ssh_config_imports.json: ${importStoreIssue.kind.name} '
+        '${importStoreIssue.detail ?? ''}',
+      );
+    }
+    for (final issue in engine.ready.syncStoreIssues) {
+      debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
+    }
+
+    // FL-02: desktops get the ssh_config import; phones get no source.
+    final fleet = FleetController(
+      engine,
+      sshConfig: sshConfigSourceFor(
+        defaultTargetPlatform,
+        Platform.environment,
+      ),
+      // The rail's pinned shortlist (03 §10.3), device-local in
+      // settings.json as Séance keeps its pins.
+      pinnedServerIds: settings.pinnedServerIds,
+      savePins: settings.setPinnedServerIds,
+      // FL-21's monitor set (03 §4.3 step 4), device-local in
+      // settings.json: until the user chooses one, every eligible server
+      // on a desktop and none on a phone.
+      monitorSet: settings.monitorSet,
+      monitorSetDefault: monitorSetDefaultFor(defaultTargetPlatform),
+      saveMonitorSet: settings.setMonitorSet,
+    );
+    // CN-09's Docker socket per server, chosen on this device and kept in
+    // settings.json (03 §4.10, D54); a server the fleet drops or moves to
+    // another endpoint loses its choice (SYN-08). While this launch cannot
+    // see the whole catalog, an omitted server is not proof of departure,
+    // so its stored choice is kept.
+    final fleetComplete =
+        instanceLockIssue == null &&
+        importStoreIssue == null &&
+        engine.ready.syncStoreIssues.isEmpty;
+    final dockerEndpointChoices = DockerEndpointChoices(
+      stored: settings.dockerEndpointOverrides,
+      save: settings.setDockerEndpointOverride,
+      purge: settings.purgeDockerEndpointOverrides,
+      fleetComplete: fleetComplete,
+    )..followFleet(fleet);
+    final monitoring = MonitoringController(
+      engine,
+      attentionAcks: attentionAcks,
+      dockerEndpointChoices: dockerEndpointChoices,
+      stackFolders: stackFolders,
+      tlsEndpoints: tlsEndpoints,
+      containerColumns: containerColumns,
+    );
+    // The host-key and keyboard-interactive prompts the engine raises
+    // while it connects, shown one at a time over every route.
+    final prompts = PromptController(engine);
+    // Admin mode per server (03 §8.2): the engine runs it and holds the
+    // password; the header's chip asks and shows its state.
+    final admin = AdminController(engine);
+    turnOffAdmin = admin.turnOffAll;
+    // In-app alerts (ALR-01): the engine evaluates the synced rules on
+    // live samples; the fleet list and rows show what they raise.
+    final alerts = AlertCenter(engine);
+    // The synced rules behind them, and the editor's writes (03 §4.8).
+    final alertRules = AlertRulesController(engine);
+    // Séance's synced snippets, run on a server (AUT-01).
+    final snippets = SnippetsController(engine);
+    // Their system notifications (ALR-01), switched on per device in
+    // settings.json.
+    final alertNotifications = AlertNotificationsController(
+      engine,
+      notifications: systemNotifications,
+      textOf: (raise) => alertNotificationText(
+        deviceStrings(),
+        raise,
+        server:
+            fleet.servers
+                .where((server) => server.id == raise.serverId)
+                .firstOrNull
+                ?.displayName ??
+            raise.serverId,
+      ),
+      enabled: settings.alertNotifications,
+      save: settings.setAlertNotifications,
+    );
+    // The app icon badge (ALR-02): the unseen raised alerts while their
+    // notifications are on, on iOS and macOS.
+    final badge = systemNotifications == null
+        ? null
+        : AppBadgeController(
+            alerts: alerts,
+            notifications: alertNotifications,
+            sink: systemNotifications,
+          );
+    // Action previews and runs (03 §8.5): the engine plans and runs them;
+    // the app shows the preview and the results.
+    final operations = OperationsController(
+      engine,
+      auditInMemory: engine.ready.auditInMemory,
+    );
+    // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
+    // for, and the OS keystore the engine's sync reaches through this
+    // isolate, which alone can call the keystore plugin (D62).
+    // Pin publication (D15, M5 plan M07): offered only once a release with
+    // Séance's #56 fix is named, which the engine reports at start.
+    final pinPublication = PinPublicationController(
+      engine,
+      initial: engine.ready.pinPublication,
+    );
+    final sync = SyncController(
+      engine,
+      account: engine.ready.syncAccount,
+      pinPublication: pinPublication,
+    );
+    // In-app server editing (FL-03): offered while enrolled (P16).
+    final serverEditor = ServerEditorController(engine);
+    final runQuitGuard = quitGuard = AppQuitGuard(
+      operations: operations,
+      contextOf: () => appNavigatorKey.currentContext,
+      shells: () => monitoring.terminals.shells,
+      lock: appLock,
+      // The engine's clean stop (CTL-02): it writes the history buckets
+      // still filling and ends the open shells with their audit records,
+      // which the process ending under it would cut off. The client bounds
+      // the wait, so a stuck engine cannot hold the quit.
+      beforeExit: () {
+        quitting = true;
+        return engine.shutdown();
+      },
+      // Built below in this run; the question hides it while it asks.
+      settingsWindow: () => settingsWindow,
+    );
+    EngineKeystoreResponder(
+      engine,
+      klabautermannMasterKeyManager(),
+      guard: appLock.read,
+    );
+
+    void applyCadence() => monitoring.setCadenceProfile(
+      cadence.value.profileOn(defaultTargetPlatform),
+    );
+    applyCadence();
+    cadence.addListener(applyCadence);
+
+    // SYS-03's waits after power actions, for the run: a reboot drops the
+    // link and ends admin mode, and its wait outlasts that.
+    final powerWaits = PowerWaits(
+      core: (serverId) => monitoring.sampleFor(serverId, SampleStream.core),
+      operations: operations,
       fleet: fleet,
-      monitoring: monitoring,
-      prompts: prompts,
+    );
+
+    void applyCadenceCaps() => monitoring.setCadenceCaps({
+      for (final MapEntry(:key, :value) in cadenceCaps.value.entries)
+        key: value.profile,
+    });
+    applyCadenceCaps();
+    cadenceCaps.addListener(applyCadenceCaps);
+
+    // The synced servers' preferences (03 §4.8), as the engine reports
+    // their `pref` records.
+    final serverPrefs = ServerPrefsController(engine);
+
+    // The safety preferences (M4 plan M4), in settings.json and, for
+    // synced servers, their read-only switches and marks in their `pref`
+    // records (M5 plan M06); applied to the engine now, since it starts
+    // with every server observe-only, and on every change.
+    final safety = safetyFromSettings(
+      settings,
+      engine,
+      labelOf: (serverId) =>
+          fleet.servers
+              .where((server) => server.id == serverId)
+              .firstOrNull
+              ?.displayName ??
+          serverId,
+      listed: (serverId) =>
+          fleet.servers.any((server) => server.id == serverId),
+      prefs: serverPrefs,
+    );
+
+    final adminRearm = AdminRearm(
+      engine: engine,
+      admin: admin,
+      remembered: adminMemory,
+      visibleServers: monitoring.visibleServers,
+      safety: safety,
+      appLock: appLock,
+    );
+
+    // The device name the host syslog line gives (SAF-13, M5 plan Q6),
+    // device-local in settings.json and applied to the engine now, since
+    // it names no device until told.
+    final deviceName = DeviceNameController(
+      stored: settings.deviceName,
+      fallback: defaultDeviceName(defaultTargetPlatform),
+      apply: (name) {
+        try {
+          engine.send(SetDeviceName(name));
+        } on StateError {
+          // A stopped engine runs nothing; the next run tells its own.
+        }
+      },
+      save: settings.setDeviceName,
+    );
+
+    // The "sync passwords" switch (SYN-02), device-local in settings.json
+    // and applied to the engine now, since it starts with the switch off.
+    final syncSecrets = SyncSecretsController(
+      syncSecrets: settings.syncSecrets,
+      apply: (enabled) {
+        try {
+          engine.send(SetSyncSecrets(enabled: enabled));
+        } on StateError {
+          // A stopped engine syncs nothing; the next run tells its own.
+        }
+      },
+      save: settings.setSyncSecrets,
+    );
+
+    // CRED-05's recovery settings over the engine's vault, with the file
+    // panels beside it. The status reloads when the app lock releases a
+    // keystore that was locked at launch.
+    final recovery = RecoveryController(engine, PlatformRecoveryFiles());
+    void refreshRecovery() {
+      if (!appLock.locked) recovery.refreshAfterUnlock();
+    }
+
+    appLock.addListener(refreshRecovery);
+
+    // The quarantine diff at startup: the engine needs the keystore above
+    // to read the account's host-key records, so the read follows it.
+    unawaited(sync.readPinConflicts());
+
+    settingsWindow = settingsWindowHostFor(
+      defaultTargetPlatform,
       appearance: appearance,
-      coverage: coverage,
       announcements: announcements,
       thresholds: thresholds,
-      cadence: cadence,
-      pinnedServices: pinnedServices,
-      powerWaits: powerWaits,
-      overviewLayout: overviewLayout,
-      fleetDensity: fleetDensity,
-      cadenceCaps: cadenceCaps,
-      adminMemory: adminMemory,
       deviceName: deviceName,
+      appVersion: appVersion,
+      monitorSet: fleet.monitorSettings,
       safety: safety,
       appLock: appLock,
       syncSecrets: syncSecrets,
       pinPublication: pinPublication,
-      recovery: recovery,
-      admin: admin,
-      alerts: alerts,
-      alertRules: alertRules,
-      snippets: snippets,
+      pinConflicts: sync,
+      accountSize: sync.accountSize,
+      signOut: SyncSignOut(sync, fleet),
+      cadence: cadence,
+      cadenceCaps: cadenceCaps,
+      adminMemory: adminMemory,
       logDisplay: logDisplay,
       editorDisplay: editorDisplay,
       timeDisplay: timeDisplay,
-      alertNotifications: alertNotifications,
-      operations: operations,
-      dockerNotice: dockerNotice,
-      updates: updates,
-      sync: sync,
-      serverEditor: serverEditor,
-      settingsIssue: settings.issue,
-      importStoreIssue: importStoreIssue,
-      syncStoreIssues: engine.ready.syncStoreIssues,
-      instanceLockIssue: instanceLockIssue,
-      engineHealth: engineHealth,
-      openSettingsWindow: settingsWindow?.open,
-      toolbarBand: toolbarBand,
-      appVersion: appVersion,
-      handOff: handOff,
-      navigation: WorkspaceNavigation(fleet),
-      windowPanes: windowPanes,
-      undoHistory: undoHistory,
+      recovery: recovery,
+      updateChecks: updates,
+      replacing: settingsWindow,
+    );
+
+    return _EngineRun(
+      engine: engine,
+      app: KlabautermannApp(
+        fleet: fleet,
+        monitoring: monitoring,
+        prompts: prompts,
+        appearance: appearance,
+        coverage: coverage,
+        announcements: announcements,
+        thresholds: thresholds,
+        cadence: cadence,
+        pinnedServices: pinnedServices,
+        powerWaits: powerWaits,
+        overviewLayout: overviewLayout,
+        fleetDensity: fleetDensity,
+        cadenceCaps: cadenceCaps,
+        adminMemory: adminMemory,
+        deviceName: deviceName,
+        safety: safety,
+        appLock: appLock,
+        syncSecrets: syncSecrets,
+        pinPublication: pinPublication,
+        recovery: recovery,
+        admin: admin,
+        alerts: alerts,
+        alertRules: alertRules,
+        snippets: snippets,
+        logDisplay: logDisplay,
+        editorDisplay: editorDisplay,
+        timeDisplay: timeDisplay,
+        alertNotifications: alertNotifications,
+        operations: operations,
+        dockerNotice: dockerNotice,
+        updates: updates,
+        sync: sync,
+        serverEditor: serverEditor,
+        settingsIssue: settings.issue,
+        importStoreIssue: importStoreIssue,
+        syncStoreIssues: engine.ready.syncStoreIssues,
+        instanceLockIssue: instanceLockIssue,
+        engineHealth: engineHealth,
+        openSettingsWindow: settingsWindow?.open,
+        toolbarBand: toolbarBand,
+        appVersion: appVersion,
+        handOff: handOff,
+        navigation: WorkspaceNavigation(fleet),
+        windowPanes: windowPanes,
+        undoHistory: undoHistory,
+      ),
+      // In the reverse order of the above, once the widgets over them are
+      // gone. Whatever outlives the run (the stores, the lock, the
+      // settings window) only loses this run's listeners.
+      disposers: [
+        () => appLock.removeListener(refreshRecovery),
+        recovery.dispose,
+        adminRearm.dispose,
+        safety.dispose,
+        serverPrefs.dispose,
+        () => cadenceCaps.removeListener(applyCadenceCaps),
+        powerWaits.dispose,
+        () => cadence.removeListener(applyCadence),
+        runQuitGuard.dispose,
+        serverEditor.dispose,
+        sync.dispose,
+        pinPublication.dispose,
+        operations.dispose,
+        ?badge?.dispose,
+        alertNotifications.dispose,
+        snippets.dispose,
+        alertRules.dispose,
+        alerts.dispose,
+        admin.dispose,
+        prompts.dispose,
+        monitoring.dispose,
+        dockerEndpointChoices.dispose,
+        fleet.dispose,
+      ],
+    );
+  }
+
+  // The first run, and a new one each time an engine stops by itself
+  // (owner decision 3): the app tree remounts on the new controllers and
+  // the user is told.
+  final runs = EngineRestarter<_EngineRun>(
+    first: startRun(engine),
+    spawn: spawnEngine,
+    build: startRun,
+    health: engineHealth,
+    quitting: () => quitting,
+  );
+
+  runApp(
+    ValueListenableBuilder<_EngineRun>(
+      valueListenable: runs.current,
+      builder: (context, run, _) => run.app,
     ),
   );
   // The launch-time check fires beside the window bring-up: the banner
@@ -731,5 +810,35 @@ Future<void> _checkForUpdate(
     await updateCheck.checkForUpdate(appVersion);
   } catch (_) {
     // The update check is best-effort; a failure must never affect startup.
+  }
+}
+
+/// One engine run and what main built over it: the app to show and what
+/// to end once it is replaced.
+final class _EngineRun implements EngineRun {
+  _EngineRun({
+    required this.engine,
+    required this.app,
+    required this._disposers,
+  });
+
+  @override
+  final IsolateEngineClient engine;
+
+  /// The app over this run's controllers; a new run's remounts the tree.
+  final KlabautermannApp app;
+
+  final List<void Function()> _disposers;
+
+  @override
+  void dispose() {
+    for (final dispose in _disposers) {
+      try {
+        dispose();
+      } on Object catch (error, stack) {
+        // One controller that fails to let go must not keep the others.
+        debugPrint('Ending an engine run: $error\n$stack');
+      }
+    }
   }
 }

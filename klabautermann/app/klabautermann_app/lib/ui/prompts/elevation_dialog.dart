@@ -57,6 +57,9 @@ class _ElevationDialogState extends State<_ElevationDialog> {
     final theme = Theme.of(context);
     return AlertDialog(
       title: Text(l10n.elevationTitle(widget.host)),
+      // The field autofocuses, so a phone's keyboard covers most of a
+      // small screen; the content must scroll rather than clip (UIA-02).
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

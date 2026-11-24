@@ -12,7 +12,8 @@ import 'package:seance_core/catalog.dart'
         ConflictAwareHostKeyStore,
         FileVaultStore,
         InMemoryConflictAwareHostKeyStore,
-        RecordCrypto;
+        RecordCrypto,
+        SyncTuple;
 import 'package:seance_core/seance_core.dart'
     show
         ApiError,
@@ -40,6 +41,23 @@ const _enroll = EnrollSync(
   password: fakeSyncPassword,
   encryptionPassphrase: fakeSyncPassword,
 );
+
+/// A vault store whose [deleteSecret] fails its first [failures] calls, so
+/// a sign-out can be stopped between its steps.
+final class _FailingDeleteStore extends FileVaultStore {
+  _FailingDeleteStore(super.file, this.failures);
+
+  int failures;
+
+  @override
+  Future<void> deleteSecret(String id) async {
+    if (failures > 0) {
+      failures--;
+      throw const FileSystemException('injected failure');
+    }
+    return super.deleteSecret(id);
+  }
+}
 
 void main() {
   late Directory support;
@@ -69,6 +87,7 @@ void main() {
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     String? deviceId = _deviceId,
     ConflictAwareHostKeyStore? hostKeys,
+    FileVaultStore? store,
   }) async {
     late final EngineSync sync;
     vault = EngineVault(
@@ -76,6 +95,7 @@ void main() {
       access: access,
       keystore: keystore,
       enrolled: () => sync.account != null,
+      store: store,
     );
     return sync = await EngineSync.open(
       supportDirectory: support,
@@ -358,6 +378,20 @@ void main() {
       final sync = await open();
       await sync.enroll(_enroll);
       return sync;
+    }
+
+    /// Puts [payload] in the engine's record store under [id], as a store
+    /// another build wrote could hold it.
+    Future<void> storeRecord(String id, Map<String, Object?> payload) async {
+      final records = await KlabautermannRecordStore.open(
+        support,
+        access: SupportDirectoryAccess.exclusive,
+      );
+      await records.put(
+        id,
+        const SyncTuple(updatedAt: 1, deviceId: 'device-a'),
+        payload,
+      );
     }
 
     test('a save seals the server, and the next round pushes exactly its '
@@ -710,6 +744,96 @@ void main() {
           const RemoveRule(requestId: 'r2', ruleId: 'rule-1'),
         ),
         isA<CatalogWritten>(),
+      );
+    });
+
+    test('a rule is removed by the id it was written with', () async {
+      final sync = await enrolled();
+
+      expect(
+        await sync.putRule(
+          const PutRule(
+            requestId: 'r1',
+            ruleId: ' rule-2 ',
+            rule: ThresholdRule(
+              metric: 'cpu.busy',
+              op: ThresholdOp.greaterThan,
+              raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
+              clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
+            ),
+            target: 'srv-a',
+          ),
+        ),
+        isA<CatalogWritten>(),
+      );
+      expect(
+        await sync.removeRule(
+          const RemoveRule(requestId: 'r2', ruleId: ' rule-2 '),
+        ),
+        isA<CatalogWritten>(),
+      );
+      expect([for (final r in await sync.rules()) r.id], isEmpty);
+    });
+
+    test('a rule removal whose seal is refused answers refused', () async {
+      // A stored rule whose id alone busts the rule cap: sealing the
+      // removal echoes the id, so it exceeds the cap.
+      final longId = 'rule-${'x' * 5000}';
+      await storeRecord(
+        KlabautermannRecordType.rule.idOf(longId),
+        encodeSyncedRule(
+          SyncedRule(
+            id: longId,
+            rule: const ThresholdRule(
+              metric: 'cpu.busy',
+              op: ThresholdOp.greaterThan,
+              raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
+              clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
+            ),
+          ),
+        ),
+      );
+      final sync = await enrolled();
+
+      final answer = await sync.removeRule(
+        RemoveRule(requestId: 'r3', ruleId: longId),
+      );
+
+      expect(
+        answer,
+        isA<CatalogWriteRefused>().having(
+          (r) => r.failure,
+          'failure',
+          CatalogWriteFailure.tooLarge,
+        ),
+      );
+    });
+
+    test("a server deletion whose pref retraction is refused answers "
+        'refused', () async {
+      // A stored `pref` whose id alone busts the pref cap: sealing the
+      // removal echoes the id, so it exceeds the cap.
+      final longId = 'srv-${'x' * 9000}';
+      await server.seedServer(fakeServer(longId, 'alpha'));
+      await storeRecord(
+        KlabautermannRecordType.pref.idOf(longId),
+        encodeServerPrefs(longId, const ServerPrefs(readOnly: true)),
+      );
+      final sync = await open();
+      final status = await sync.enroll(_enroll);
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+
+      final answer = await sync.deleteServer(
+        DeleteServer(requestId: 'r1', serverId: longId),
+      );
+
+      expect(
+        answer,
+        isA<CatalogWriteRefused>().having(
+          (r) => r.failure,
+          'failure',
+          CatalogWriteFailure.tooLarge,
+        ),
       );
     });
 
@@ -1261,7 +1385,9 @@ void main() {
 
     // An account holding a server with a synced credential, a pref, a
     // rule and a snippet, enrolled with the secrets switch on.
-    Future<(EngineSync, ConflictAwareHostKeyStore)> enrolled() async {
+    Future<(EngineSync, ConflictAwareHostKeyStore)> enrolled({
+      FileVaultStore? store,
+    }) async {
       await server.seedServer(
         fakeServer(
           'srv-a',
@@ -1299,7 +1425,7 @@ void main() {
       );
       final hostKeys = InMemoryConflictAwareHostKeyStore();
       await hostKeys.put(pinned);
-      final sync = await open(hostKeys: hostKeys);
+      final sync = await open(hostKeys: hostKeys, store: store);
       await sync.setSyncSecrets(enabled: true);
       final status = await sync.enroll(_enroll);
       expect(status.phase, SyncPhase.succeeded, reason: status.detail);
@@ -1396,6 +1522,24 @@ void main() {
 
       expect(status.phase, SyncPhase.succeeded, reason: status.detail);
       expect(keystore.apiKeys, isEmpty);
+    });
+
+    test('a sign-out stopped at a credential delete is retried and forgets '
+        'the account\'s credentials', () async {
+      final (sync, _) = await enrolled(
+        store: _FailingDeleteStore(file('vault.json'), 1),
+      );
+
+      final failed = await sync.signOut();
+      expect(failed.phase, SyncPhase.failed);
+      expect(sync.account, isNotNull, reason: 'still enrolled');
+      // The servers are still listed, so the retry knows the entries.
+      expect(file('servers.json').existsSync(), isTrue);
+
+      final retried = await sync.signOut();
+
+      expect(retried.phase, SyncPhase.succeeded, reason: retried.detail);
+      expect(await vault.read('secret-a'), isNull);
     });
   });
 

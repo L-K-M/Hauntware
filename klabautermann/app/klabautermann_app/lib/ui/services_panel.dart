@@ -42,6 +42,10 @@ const double _logSheetMinShare = 0.25;
 /// The unit table's columns, whose names key them.
 enum _Column { unit, load, active, sub, description }
 
+/// Which list the Services tab shows: the units or the listening sockets
+/// (SVC-10). Sockets are read as the system manager only.
+enum _ServicesView { units, sockets }
+
 /// Where a unit's page shows SVC-04's recent journal lines.
 enum UnitLogPlacement {
   /// Under the unit's states.
@@ -91,6 +95,10 @@ class _ServicesPanelState extends State<ServicesPanel> {
   /// Whose units the panel lists: the system manager's, or the login
   /// user's own (SVC-09), whose stream it subscribes while it shows them.
   UnitScope _scope = UnitScope.system;
+
+  /// The list the tab shows (SVC-10), which outlives tab switches with
+  /// the panel built once opened.
+  _ServicesView _view = _ServicesView.units;
 
   /// The subscription that reads the login user's units while [_scope]
   /// is theirs and the panel shows; this panel's own, as each sampled
@@ -181,9 +189,12 @@ class _ServicesPanelState extends State<ServicesPanel> {
   }
 
   /// Reads the login user's units while they are listed and the panel
-  /// shows; the system's come with the panel's own streams.
+  /// shows; the system's come with the panel's own streams, and sockets
+  /// have no user manager (SVC-10).
   void _followUser() {
-    if (_scope == UnitScope.user && widget.visible) {
+    if (_scope == UnitScope.user &&
+        _view == _ServicesView.units &&
+        widget.visible) {
       widget.monitoring.subscribe(widget.serverId, _userSubscription, const {
         SampleStream.userUnits,
       });
@@ -204,13 +215,32 @@ class _ServicesPanelState extends State<ServicesPanel> {
     _followUser();
   }
 
+  /// Shows [view], closing any open page. Leaving the login user's units
+  /// ends their subscription until the units show again.
+  void _setView(_ServicesView view) {
+    if (view == _view) return;
+    setState(() {
+      _view = view;
+      _open = null;
+      _returnFocus = null;
+    });
+    _followUser();
+  }
+
   void _onUnits() => setState(() {});
 
   /// Opens [unit]'s page, unless its name ends in no unit type: a text
   /// row the host misread names no unit whose journal it could read.
   void _openUnit(SystemdUnit unit) {
-    if (_open?.name == unit.unit || unitStatesOf(unit).type == null) return;
-    setState(() => _open = (name: unit.unit, key: GlobalKey()));
+    if (unitStatesOf(unit).type == null) return;
+    _openNamed(unit.unit);
+  }
+
+  /// Opens the page of [name], which a socket's unit names even when the
+  /// unit list has not read it (SVC-10).
+  void _openNamed(String name) {
+    if (_open?.name == name) return;
+    setState(() => _open = (name: name, key: GlobalKey()));
   }
 
   /// Opens the unit the command palette asked for, once this server's.
@@ -221,6 +251,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
 
     // The palette lists the system manager's units.
     _setScope(UnitScope.system);
+    setState(() => _view = _ServicesView.units);
     if (_open?.name == unit) return;
     setState(() => _open = (name: unit, key: GlobalKey()));
   }
@@ -291,25 +322,53 @@ class _ServicesPanelState extends State<ServicesPanel> {
               children: [
                 Align(
                   alignment: AlignmentDirectional.centerStart,
-                  child: SegmentedButton<UnitScope>(
+                  child: SegmentedButton<_ServicesView>(
                     showSelectedIcon: false,
                     segments: [
                       ButtonSegment(
-                        value: UnitScope.system,
-                        label: Text(l10n.servicesScopeSystem),
+                        value: _ServicesView.units,
+                        label: Text(l10n.servicesViewUnits),
                       ),
                       ButtonSegment(
-                        value: UnitScope.user,
-                        label: Text(l10n.servicesScopeUser),
+                        value: _ServicesView.sockets,
+                        label: Text(l10n.servicesViewSockets),
                       ),
                     ],
-                    selected: {_scope},
-                    onSelectionChanged: (selected) =>
-                        _setScope(selected.single),
+                    selected: {_view},
+                    onSelectionChanged: (selected) => _setView(selected.single),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Expanded(child: _list(l10n, units, result, wide: wide)),
+                if (_view == _ServicesView.units) ...[
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: SegmentedButton<UnitScope>(
+                      showSelectedIcon: false,
+                      segments: [
+                        ButtonSegment(
+                          value: UnitScope.system,
+                          label: Text(l10n.servicesScopeSystem),
+                        ),
+                        ButtonSegment(
+                          value: UnitScope.user,
+                          label: Text(l10n.servicesScopeUser),
+                        ),
+                      ],
+                      selected: {_scope},
+                      onSelectionChanged: (selected) =>
+                          _setScope(selected.single),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(child: _list(l10n, units, result, wide: wide)),
+                ] else
+                  Expanded(
+                    child: SocketsView(
+                      monitoring: widget.monitoring,
+                      serverId: widget.serverId,
+                      onOpenUnit: _openNamed,
+                    ),
+                  ),
               ],
             ),
           ),

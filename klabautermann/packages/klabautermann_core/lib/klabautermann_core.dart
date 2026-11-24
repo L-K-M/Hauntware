@@ -238,6 +238,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         userCrontabSource;
 
 export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
+// The 03 §6.4 period a stream samples at under a cadence column, which
+// the UI reads to judge freshness; null for a stream the profile reads
+// once per subscription.
+export 'src/sampling/sampling_scheduler.dart' show samplingPeriod;
 // Pause and Resume rewrite a cron line through the edit pipeline
 // (JOB-07): the crontab that holds it and the text with it toggled.
 export 'src/jobs/cron_pause.dart' show cronPauseTarget, togglePausedCronJob;

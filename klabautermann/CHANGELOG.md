@@ -531,6 +531,14 @@
 - A synced alert rule whose clear value lies on the breach side of its
   raise value is refused, instead of raising and clearing on every
   reading.
+- A stack's logs no longer jump to the oldest line while you read them.
+  Lines of several containers that arrive together are put in time
+  order before they show, and a paused view keeps a late older line back
+  until it follows again, so open fields and the current search match
+  stay where they are.
+- A stack's logs keep reading after a redeploy: the recreated
+  containers are read in the old ones' places, under the same chips,
+  while the Stacks view lists them.
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
@@ -569,6 +577,107 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- When the background engine stops by itself, the app starts a new one,
+  reloads its views and tells you what stopped it and what may not have
+  finished. After three restarts within ten minutes, an engine that stops
+  again is left stopped, and the app says to quit and open it again.
+- Synced read-only switches and protected marks apply from the moment
+  the app starts, not only after the first sync round.
+- An import or sync that moves a kept server to another endpoint
+  closes the old machine's link and log streams and clears what was
+  read there, including its Docker lists, details and disk use, then
+  connects and reads the new endpoint again.
+- Saving a file no longer changes its group without saying so. Where
+  your login is not in the file's group, the save is refused before the
+  file is touched; it needs admin mode to keep the group.
+- An operation directory whose path holds non-ASCII characters
+  (`/home/jörg/...`) is cleaned up, pruned and read at its real path, so
+  an acknowledged result no longer comes back.
+- One mount `df` cannot read (a dead sshfs or FUSE mount, a stale NFS
+  handle) no longer blanks the filesystem list: the other mounts are
+  shown.
+- Filesystems whose source holds a space (`gdrive:My Drive`,
+  `//nas/Shared Docs`) show their real type, sizes and mount point.
+- A process can no longer blank the command lines of the processes
+  listed after it by forging a `==> pid/cmdline <==` line in its own
+  arguments.
+- Units with an escaped name (`systemd-fsck@dev-disk-by\x2duuid-...`)
+  open: status, logs and actions accept the `\` systemd writes.
+- An unreadable `/etc/crontab` no longer hides the cron jobs that were
+  read from your own crontab and `/etc/cron.d`.
+- On BusyBox, a login without a crontab reads as having none rather
+  than as unknown.
+- History keeps recording for every server when one stored bucket or
+  gap is damaged; the damaged slot reads as empty.
+- A 10-minute history bucket no longer counts a minute's readings twice
+  after the app restarts within that minute.
+- A container's log no longer freezes the app on one long line. A line
+  of digits or base64 without spaces took seconds to read for its level,
+  and a URL followed by a long run of dots took seconds to colour, each
+  time the row was drawn; both now take well under a millisecond.
+- A regular-expression search of the loaded log lines no longer freezes
+  the app. It runs in the background, the field says "Searching…" until
+  every line is read, and a new search stops the one before it. A
+  pattern that does not finish is stopped after five seconds with a note
+  under the field.
+- A server's confirmation no longer covers its jump hosts on its own:
+  selecting a server also selects its unconfirmed hop rows, so one press
+  confirms the whole route, while deselecting a hop leaves it unconfirmed.
+  An address another device rewrote while the list was open stays
+  unconfirmed.
+- Importing ~/.ssh/config finishes quickly even when a Host pattern
+  makes a backtracking matcher try every placement of its wildcards.
+- Removing an alert rule finds it by the id it was written with, and a
+  removal whose synced record is refused says so instead of reporting
+  success.
+- While a long step borrows the slow sampler, panels show its missed
+  readings as gaps instead of stale values, and a probe the borrowing
+  interrupts costs no extra retry wait.
+- Signing out deletes the account's saved credentials before its server
+  list, so a sign-out that fails partway and is retried cannot leave them
+  behind in the vault.
+- Signing out also drops the removed servers' safety entries from this
+  device, instead of keeping their read-only switches and marks under
+  raw server ids and pushing them again at the next sign-in.
+- A finished reboot or shutdown wait now leaves on its own: the
+  "answered again" line stays only briefly, and a shutdown offers Stop
+  waiting so the power buttons come back instead of staying hidden.
+- Raised-alert notifications are withdrawn when their engine run ends
+  and at the start of the next one, so none is left in the system's
+  notification list with no alert behind it.
+- A reboot wait whose server leaves the fleet ends with it instead of
+  reporting the server as not answered after it has come back.
+- A recovery code, export or restore that takes longer than the bounded
+  status read still reports what the engine did, rather than failing
+  while the vault keeps the change.
+- Docker socket choices survive a launch that cannot read the whole
+  catalog, such as another instance holding the support directory or an
+  unreadable store; they go once a later fleet shows the server really
+  left or moved.
+- The admin-mode password, threshold and sync sign-out dialogs scroll on
+  a small phone with the keyboard up, instead of clipping their fields.
+- The alert rule editor refuses a hold time above 7 days instead of
+  saving one that overflows into a negative duration.
+- In the Processes tree, the headers name the column that orders the
+  siblings and flip its direction when tapped.
+- The Jobs tab no longer calls its list stale under the cellular saver,
+  which reads cron and timers only once per subscription.
+- A detached operation's output and a timer's run output say when
+  their read is opening, refused or failed, with a Retry, instead of
+  showing an empty box.
+- A stack's compose profiles are read again when you switch to another
+  server, so a stack of the same name shows that server's profiles.
+- An action tapped while another action's preview is being prepared
+  says so instead of doing nothing.
+- The Jobs tab shows anacron's periodic jobs with their period, delay,
+  command and last-run day, and a cron directory they drive names the
+  matching job's timing instead of reading as unknown.
+- The Services tab has a Sockets view beside the units, listing what each
+  socket listens on, its unit and the units it activates. Tapping one
+  opens its unit's page.
+- On macOS, Windows and Linux, a quit question no longer opens behind
+  the Settings window: Settings steps aside while the main window asks,
+  and comes back if you cancel.
 - The diagnostic bundle masks secrets in process command lines and cron
   lines (`-p<secret>`, `curl -u user:pass`, `--password <value>`, URL
   credentials) as the Processes and Jobs tabs do, also when you include

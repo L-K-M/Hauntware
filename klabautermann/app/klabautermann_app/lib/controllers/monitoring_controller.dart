@@ -657,6 +657,13 @@ final class MonitoringController extends ChangeNotifier {
     _send(SetCadenceProfile(profile));
   }
 
+  /// The 6.4 column the engine samples [serverId] at: the app's, or its
+  /// cap's when that is slower, as the scheduler resolves it.
+  CadenceProfile cadenceFor(String serverId) => switch (_caps[serverId]) {
+    final cap? when cap.index > _cadence.index => cap,
+    _ => _cadence,
+  };
+
   /// Caps each server in [caps] at its column and lifts the caps of those
   /// left out (SAF-19), telling the engine only what changed.
   void setCadenceCaps(Map<String, CadenceProfile> caps) {
@@ -825,8 +832,9 @@ final class MonitoringController extends ChangeNotifier {
   }
 
   /// The engine refused the request [requestName] with [requestId], for a
-  /// server that left its fleet say, so no answer follows: the read it
-  /// was answers as it does without a link, rather than staying pending.
+  /// server that left its fleet say, so no answer follows: the read
+  /// waiting on it settles as one without a link would, rather than
+  /// staying pending.
   /// Each id is checked against its own request's name, since the four
   /// reads count their ids apart.
   void _rejected(String requestName, String requestId) {

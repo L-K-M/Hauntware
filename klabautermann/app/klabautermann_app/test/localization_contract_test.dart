@@ -86,13 +86,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The menu_checks method channel's name, matched by the macOS runner's
     // MenuChecks.swift peer; never rendered.
     "'klabautermann/menu_checks'",
+    // A run's controller that failed to end, for a debug log only.
+    r"'Ending an engine run: $error\n$stack'",
   },
   // Engine health debugPrint diagnostics; EngineHealthNotice tells the
   // user in ARB text.
   'lib/controllers/engine_health.dart': {
+    r"'The engine caught an error: ${fault.error}\n${fault.stack}'",
+  },
+  // The restarter's debug log; EngineHealthNotice tells the user in ARB
+  // text.
+  'lib/controllers/engine_restarter.dart': {
     r"'The engine stopped: ${exit.error}\n${exit.stack ?? ''}'",
     "''",
-    r"'The engine caught an error: ${fault.error}\n${fault.stack}'",
+    r"'The engine did not restart: $error'",
+    r"'The engine restarted, but its run was not built: $error\n$stack'",
   },
   // The not-saved diagnostic; the Appearance tab prints it and shows its
   // own ARB text (themeNotSaved).
@@ -606,12 +614,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/services_view.dart': {
     // systemd's spelling of load and sub states and the dot before a unit
     // type, matched against server data; the panel shows ARB text for
-    // what does not match (chartUnknownValue).
+    // what does not match (chartUnknownValue). The socket table's stable
+    // column ids and row key (SVC-10), which tests find rows by.
     "'[A-Z]'",
     r"'-${capital[0]!.toLowerCase()}'",
     r"r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$'",
     "'.'",
+    r"'${ServerPanel.services.name}.sockets'",
+    r"'${socket.unit}|${socket.listen}'",
+    "'listen'",
+    "'unit'",
+    "'activates'",
   },
+  // An anacron command's words and a directory path's trailing slash,
+  // which match `/etc/cron.daily` in a job's command (JOB-04).
+  'lib/ui/jobs_view.dart': {r"r'\s+'", r"'$directory/'"},
   'lib/services/macos_titlebar.dart': {
     // The 04 §12.3 method channel name.
     "'klabautermann/window'",
@@ -1020,11 +1037,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The search's initial empty query.
   'lib/ui/logs/log_search.dart': {"''"},
+  // The pattern worker isolate's name in a debugger.
+  'lib/ui/logs/log_pattern_worker.dart': {"'log search'"},
   'lib/ui/logs/log_tokens.dart': {
     // LOG-07's token patterns (URLs, IP addresses, HTTP status codes):
     // matched against server output, never shown.
     r"""r'''\b(?:https?|wss?|ftp)://[^\s<>"'`]+'''""",
-    r"""r'[.,;:!?)\]}]+$'""",
     r"""r'(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)'""",
     r"""'(?<![\\w.])(?:$_octet\\.){3}$_octet(?::\\d{1,5}|/\\d{1,2})?(?!\\.?\\w)'""",
     r"""r'(?<![\w:])(?:'""",

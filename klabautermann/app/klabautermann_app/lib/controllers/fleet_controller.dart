@@ -32,7 +32,7 @@ final class FleetServer {
       searchText: entry.searchText,
       locatorConflict: entry.locatorConflict,
       monitorEligibility: monitorEligibilityOf(entry),
-      endpoint: _endpoint(entry),
+      endpoint: endpointKey(entry),
     );
   }
 
@@ -73,7 +73,7 @@ final class FleetServer {
   /// `user@host:port`, then each jump hop as its source names it. The
   /// local account a missing login stands for is left out: it is the
   /// same on this device for as long as the key is kept.
-  static String _endpoint(FleetEntry entry) => [
+  static String endpointKey(FleetEntry entry) => [
     '${entry.user ?? ''}@${entry.host}:${entry.port}',
     ...?entry.jumpRoute,
   ].join(' ');
@@ -189,6 +189,11 @@ final class FleetController extends ChangeNotifier {
   late final StreamSubscription<EngineEvent> _events;
 
   List<FleetServer> _servers;
+
+  /// Whether the engine's first [CatalogReplaced] has arrived: until
+  /// then [_servers] is only a seed, and a concern must not read an
+  /// absent id as a departure.
+  bool get heardFleet => _heardFleet;
 
   /// The synced servers whose endpoints wait for confirmation.
   List<FleetEntry> _pendingEndpoints = const [];

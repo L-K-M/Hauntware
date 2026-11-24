@@ -83,6 +83,7 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
     SafetyPolicy initial = const SafetyPolicy(),
     required this._apply,
     this._labelOf,
+    this._listed,
     this._save,
     this._prefs,
   }) : _local = initial,
@@ -98,6 +99,11 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
   SafetyPolicy _value;
   final void Function(SafetyPolicy policy) _apply;
   final String Function(String serverId)? _labelOf;
+
+  /// Whether the fleet still lists a server id, so a `pref` record the
+  /// engine still reports for an id that left is not kept here. Null when
+  /// the caller has no fleet to ask.
+  final bool Function(String serverId)? _listed;
   final Future<void> Function(SafetyPolicy policy)? _save;
   final ServerPrefsSource? _prefs;
 
@@ -274,20 +280,28 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
   }
 
   /// A server whose record the engine still reports but which no longer
-  /// syncs (excluded, or gone from the account) keeps its switch and
-  /// marks on this device.
+  /// syncs keeps its switch and marks on this device while the fleet still
+  /// lists it (excluded from sync). One that left the fleet instead loses
+  /// its stored entry, so signing in again cannot push it back.
   void _keepLeaving() {
     final prefs = _prefs!;
     var kept = false;
     for (final MapEntry(key: id, value: synced) in prefs.prefs.entries) {
-      if (prefs.syncs(id) ||
-          !_holdsSynced(
-            ServerSafety(
-              readOnly: synced.readOnly,
-              marks: synced.marks,
-              hostAuditLine: synced.hostAuditLine,
-            ),
-          )) {
+      if (prefs.syncs(id)) continue;
+      if (_listed?.call(id) == false) {
+        if (_local.servers.containsKey(id)) {
+          _local = _withLocal(id, const ServerSafety());
+          kept = true;
+        }
+        continue;
+      }
+      if (!_holdsSynced(
+        ServerSafety(
+          readOnly: synced.readOnly,
+          marks: synced.marks,
+          hostAuditLine: synced.hostAuditLine,
+        ),
+      )) {
         continue;
       }
       final stored = _local.servers[id];

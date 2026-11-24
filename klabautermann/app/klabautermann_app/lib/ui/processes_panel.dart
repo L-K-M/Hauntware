@@ -273,9 +273,10 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 columns: columns,
                 rows: rows,
                 rowKey: (row) => row.pid,
-                // The tree is already in order; a header still picks the
-                // order of siblings.
-                sort: _tree ? null : _sort,
+                // The tree's rows come pre-ordered; a header still picks
+                // the order of siblings, so it shows and flips that sort.
+                sort: _sort,
+                rowOrder: _tree ? TableRowOrder.asGiven : TableRowOrder.bySort,
                 onSort: (sort) => setState(() => _sort = sort),
                 onRowActivated: open,
                 // PRC-02's signals, where actions are allowed (M4 E21).

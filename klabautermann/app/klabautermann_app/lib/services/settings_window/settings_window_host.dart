@@ -31,6 +31,7 @@ import '../../controllers/sync_controller.dart' show PinConflictsSettings;
 import '../../controllers/sync_sign_out.dart' show SyncSignOutSettings;
 import '../../controllers/threshold_controller.dart';
 import '../../ui/threshold_scope.dart' show ThresholdMetric;
+import '../../ui/actions/quit_guard.dart' show QuitSettingsWindow;
 import '../stored_safety.dart';
 import 'settings_window_link.dart';
 
@@ -60,6 +61,7 @@ SettingsWindowHost? settingsWindowHostFor(
   TimeDisplaySettings? timeDisplay,
   RecoverySettings? recovery,
   UpdateCheckSettings? updateChecks,
+  SettingsWindowHost? replacing,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -85,11 +87,19 @@ SettingsWindowHost? settingsWindowHostFor(
     timeDisplay: timeDisplay,
     recovery: recovery,
     updateChecks: updateChecks,
+    replacing: replacing,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
   TargetPlatform.fuchsia => null,
 };
+
+/// The control channel's methods for a quit question, beside ghost_desktop's
+/// `open` and `closed`; the runners match them by name.
+enum QuitConfirmationMethod {
+  yieldForQuitConfirmation,
+  restoreAfterQuitConfirmation,
+}
 
 /// Opens Settings in a native window of its own and serves it from the
 /// app's isolate. Desktop only; the composition root builds none on a
@@ -98,7 +108,7 @@ SettingsWindowHost? settingsWindowHostFor(
 /// The window is a second engine (D32): everything it shows comes from
 /// this host's snapshots and everything it changes runs here, so it never
 /// starts an engine isolate (D18), a store or sync of its own.
-final class SettingsWindowHost {
+final class SettingsWindowHost implements QuitSettingsWindow {
   /// [requestAppExit] answers the window's quit question; by default the
   /// app's own observers. [appVersion] is the app's (`readAppVersion`),
   /// which the window's about row shows.
@@ -127,7 +137,9 @@ final class SettingsWindowHost {
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
-  }) : _appearance = appearance,
+    SettingsWindowHost? replacing,
+  }) : _control = control,
+       _appearance = appearance,
        _announcements = announcements,
        _deviceName = deviceName,
        _monitorSet = monitorSet,
@@ -147,41 +159,49 @@ final class SettingsWindowHost {
        _timeDisplay = timeDisplay,
        _recovery = recovery,
        _updateChecks = updateChecks {
+    final sections = GhostSettingsSections(
+      snapshot: _snapshot,
+      handleCall: _handleCall,
+      changes: [
+        appearance,
+        announcements,
+        deviceName,
+        monitorSet,
+        safety,
+        syncSecrets,
+        ?thresholds,
+        ?pinPublication,
+        ?pinConflicts,
+        ?accountSize,
+        ?signOut,
+        ?appLock,
+        ?cadence,
+        ?cadenceCaps,
+        ?adminMemory,
+        ?logDisplay,
+        ?editorDisplay,
+        ?timeDisplay,
+        ?recovery,
+        ?updateChecks,
+      ],
+    );
+    // An engine restart builds new settings over the new controllers;
+    // the window, which outlives them, is served from those from now on.
+    if (replacing != null) {
+      _engine = replacing._engine..attach(sections);
+      return;
+    }
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
       initialTab: SettingsTab.general,
-      sections: GhostSettingsSections(
-        snapshot: _snapshot,
-        handleCall: _handleCall,
-        changes: [
-          appearance,
-          announcements,
-          deviceName,
-          monitorSet,
-          safety,
-          syncSecrets,
-          ?thresholds,
-          ?pinPublication,
-          ?pinConflicts,
-          ?accountSize,
-          ?signOut,
-          ?appLock,
-          ?cadence,
-          ?cadenceCaps,
-          ?adminMemory,
-          ?logDisplay,
-          ?editorDisplay,
-          ?timeDisplay,
-          ?recovery,
-          ?updateChecks,
-        ],
-      ),
+      sections: sections,
       encodeError: encodeLinkError,
       requestAppExit: requestAppExit,
     );
   }
 
+  final MethodChannel _control;
   final AppearanceSettings _appearance;
   final AnnouncementSettings _announcements;
   final DeviceNameSettings _deviceName;
@@ -215,6 +235,27 @@ final class SettingsWindowHost {
   /// False when the runner has no settings window (a build from before it
   /// existed, or a test), so the caller can push the settings route.
   Future<bool> open(SettingsTab tab) => _engine.open(tab);
+
+  /// Gets a showing window out of the way of the main window's quit
+  /// question (Séance's 85b48f21c). Not a close: the runner sends no
+  /// `closed`, so the window's page and draft fields stay mounted. False
+  /// from a runner that predates the method.
+  @override
+  Future<bool> yieldForQuitConfirmation() async {
+    try {
+      return await _control.invokeMethod<bool>(
+            QuitConfirmationMethod.yieldForQuitConfirmation.name,
+          ) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> restoreAfterQuitConfirmation() => _control.invokeMethod<void>(
+    QuitConfirmationMethod.restoreAfterQuitConfirmation.name,
+  );
 
   void dispose() => _engine.dispose();
 

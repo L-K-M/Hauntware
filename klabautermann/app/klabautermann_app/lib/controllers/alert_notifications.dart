@@ -37,8 +37,15 @@ final class AlertNotificationsController extends ChangeNotifier {
     this._save,
   }) : _notifications = notifications,
        _enabled = enabled && notifications != null {
-    _events = engine.events.listen(_onEngineEvent);
+    _events = engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     if (_enabled) unawaited(_recheckPermission());
+    // A run's alerts are gone when it ends, so a notification it posted
+    // must not outlive them in the system's list. This run has no record
+    // of an earlier one's ids, so it withdraws all of them at its start.
+    final notifications = _notifications;
+    if (notifications != null) {
+      unawaited(_quietly(notifications.cancelAll()));
+    }
   }
 
   final SystemNotifications? _notifications;
@@ -108,6 +115,15 @@ final class AlertNotificationsController extends ChangeNotifier {
     if (permitted || _set || !_enabled || _disposed) return;
     _enabled = false;
     notifyListeners();
+  }
+
+  /// The engine ended: this run's alerts are gone, so its notifications
+  /// go with them rather than staying in the system's list.
+  void _onEngineDone() {
+    final notifications = _notifications;
+    _posted.clear();
+    if (notifications == null || _disposed) return;
+    unawaited(_quietly(notifications.cancelAll()));
   }
 
   /// One id per rule and server, stable within the run.
