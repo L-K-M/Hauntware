@@ -96,6 +96,21 @@ void main() {
     test('unitName accepts the systemd grammar', () {
       expect(ArgValidators.unitName('nginx.service'), isNull);
       expect(ArgValidators.unitName('foo@bar.service'), isNull);
+      // systemd-escape writes `\x2d` for a `-` in a path or device name
+      // (HST-3); these are the captured runner fixture's own units.
+      for (final name in [
+        r'run-credentials-systemd\x2dresolved.service.mount',
+        r'dev-disk-azure-os\x2dpart1.device',
+        r'systemd-fsck@dev-disk-by\x2duuid-0a1b.service',
+        r'systemd-cryptsetup@luks\x2d0a1b.service',
+      ]) {
+        expect(ArgValidators.unitName(name), isNull, reason: name);
+        expect(
+          () => HostCommands.unitLoadState(name),
+          returnsNormally,
+          reason: name,
+        );
+      }
       expect(ArgValidators.unitName('foo'), isNotNull);
       expect(ArgValidators.unitName('foo bar.service'), isNotNull);
       expect(ArgValidators.unitName(''), isNotNull);

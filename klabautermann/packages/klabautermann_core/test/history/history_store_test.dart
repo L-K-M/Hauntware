@@ -220,9 +220,11 @@ void main() {
         await first.flush();
 
         final second = await open({_web});
-        second
-          ..observe(_web, _cpu(40), _at(100))
-          ..observe(_web, _cpu(50), _at(180));
+        second.observe(_web, _cpu(40), _at(100));
+        // As in the app: a minute closes long after it began, once the
+        // stored minute was merged into it.
+        await second.idle;
+        second.observe(_web, _cpu(50), _at(180));
         await second.flush();
 
         final minute = await second.read(
@@ -241,6 +243,147 @@ void main() {
         expect((stat.min, stat.max, stat.mean, stat.count), (10, 50, 30, 5));
       },
     );
+
+    test('a minute begun again in the same run, after a flush or a clock '
+        'step back, counts each reading once in its 10-minute bucket '
+        '(SMP-05)', () async {
+      final store = await open({_web});
+      store
+        ..observe(_web, _cpu(10), _at(0))
+        ..observe(_web, _cpu(20), _at(10));
+      await store.flush();
+      store.observe(_web, _cpu(30), _at(20));
+      await store.idle;
+      store.observe(_web, _cpu(40), _at(120));
+      await store.idle;
+      // The clock steps back two minutes, into the first minute again.
+      store.observe(_web, _cpu(60), _at(30));
+      await store.flush();
+
+      final minute = await store.read(_web, HistoryTier.minute, now: _at(200));
+      final first = minute.buckets.firstWhere((b) => b.start == _at(0));
+      expect(first.values[AlertMetric.cpuBusy]!.count, 4);
+      final ten = await store.read(_web, HistoryTier.tenMinutes, now: _at(200));
+      final stat = ten.buckets.single.values[AlertMetric.cpuBusy]!;
+      expect((stat.min, stat.max, stat.mean, stat.count), (10, 60, 32, 5));
+    });
+
+    test('a ring slot that holds garbage costs that slot, not the history '
+        'of every server (SMP-04)', () async {
+      final first = await open({_web, _db});
+      first
+        ..observe(_web, _cpu(10), _at(0))
+        ..gap(_web, _at(0), _at(30), GapCause.readingLost);
+      await first.flush();
+
+      // Every slot of the server's rings as a torn write or bit rot may
+      // leave one: a start no DateTime holds, a valid provenance.
+      void corrupt(String name, int slots) {
+        final ring = File('${support.path}/history/$_web/$name.ring');
+        final bytes = ring.readAsBytesSync();
+        const header = 16;
+        final slotBytes = (bytes.length - header) ~/ slots;
+        for (var slot = 0; slot < slots; slot++) {
+          final at = header + slot * slotBytes;
+          bytes
+            ..[at] = 0x7f
+            ..fillRange(at + 1, at + 8, 0xff)
+            ..[at + 8] = 1;
+        }
+        ring.writeAsBytesSync(bytes);
+      }
+
+      for (final tier in HistoryTier.values) {
+        corrupt(tier.name, tier.slots);
+      }
+      corrupt('gaps', 256);
+
+      final second = await open({_web, _db});
+      second
+        ..observe(_web, _cpu(40), _at(120))
+        ..observe(_db, _cpu(50), _at(120))
+        ..gap(_web, _at(130), _at(150), GapCause.disconnected)
+        ..observe(_web, _cpu(60), _at(180))
+        ..observe(_db, _cpu(70), _at(180));
+      await second.flush();
+
+      for (final (server, means) in [
+        (_web, [40, 60]),
+        (_db, [50, 70]),
+      ]) {
+        final range = await second.read(
+          server,
+          HistoryTier.minute,
+          now: _at(200),
+        );
+        expect(
+          [for (final b in range.buckets) b.values[AlertMetric.cpuBusy]!.mean],
+          means,
+          reason: server,
+        );
+      }
+      final web = await second.read(_web, HistoryTier.minute, now: _at(200));
+      expect(
+        [for (final g in web.gaps) (g.from, g.until, g.cause)],
+        [(_at(130), _at(150), GapCause.disconnected)],
+      );
+      final ten = await second.read(
+        _web,
+        HistoryTier.tenMinutes,
+        now: _at(200),
+      );
+      expect(ten.buckets.single.values[AlertMetric.cpuBusy]!.count, 2);
+    });
+
+    test('a ring file cut short reads as empty slots past its end, while '
+        'open and at the next start', () async {
+      final store = await open({_web});
+      store
+        ..observe(_web, _cpu(10), _at(0))
+        ..gap(_web, _at(0), _at(30), GapCause.readingLost)
+        ..observe(_web, _cpu(20), _at(60));
+      await store.flush();
+
+      final minute = File(
+        '${support.path}/history/$_web/${HistoryTier.minute.name}.ring',
+      );
+      final gaps = File('${support.path}/history/$_web/gaps.ring');
+      // Mid-slot, then shorter than the header.
+      for (final cut in [(await minute.length()) ~/ 2 + 5, 21, 7, 0]) {
+        for (final ring in [minute, gaps]) {
+          final file = await ring.open(mode: FileMode.append);
+          await file.truncate(cut);
+          await file.close();
+        }
+
+        final open_ = await store.read(_web, HistoryTier.minute, now: _at(90));
+        expect(open_.buckets, hasLength(lessThanOrEqualTo(2)), reason: '$cut');
+        final ten = await store.read(
+          _web,
+          HistoryTier.tenMinutes,
+          now: _at(90),
+        );
+        expect(ten.buckets.single.values[AlertMetric.cpuBusy]!.count, 2);
+
+        final reopened = await open({_web});
+        await reopened.read(_web, HistoryTier.minute, now: _at(90));
+        reopened
+          ..observe(_web, _cpu(30), _at(120))
+          ..gap(_web, _at(130), _at(140), GapCause.disconnected);
+        await reopened.flush();
+        final after = await reopened.read(
+          _web,
+          HistoryTier.minute,
+          now: _at(150),
+        );
+        expect(
+          after.buckets.map((b) => b.start),
+          contains(_at(120)),
+          reason: '$cut',
+        );
+        expect(after.gaps.map((g) => g.from), contains(_at(130)));
+      }
+    });
 
     test('an exit without a flush loses at most the filling minute', () async {
       final first = await open({_web});

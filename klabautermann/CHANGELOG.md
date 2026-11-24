@@ -531,6 +531,14 @@
 - A synced alert rule whose clear value lies on the breach side of its
   raise value is refused, instead of raising and clearing on every
   reading.
+- A stack's logs no longer jump to the oldest line while you read them.
+  Lines of several containers that arrive together are put in time
+  order before they show, and a paused view keeps a late older line back
+  until it follows again, so open fields and the current search match
+  stay where they are.
+- A stack's logs keep reading after a redeploy: the recreated
+  containers are read in the old ones' places, under the same chips,
+  while the Stacks view lists them.
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
@@ -569,6 +577,54 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- When the background engine stops by itself, the app starts a new one,
+  reloads its views and tells you what stopped it and what may not have
+  finished. After three restarts within ten minutes, an engine that stops
+  again is left stopped, and the app says to quit and open it again.
+- Synced read-only switches and protected marks apply from the moment
+  the app starts, not only after the first sync round.
+- An import or sync that moves a kept server to another endpoint
+  closes the old machine's link and log streams and clears what was
+  read there, including its Docker lists, details and disk use, then
+  connects and reads the new endpoint again.
+- Saving a file no longer changes its group without saying so. Where
+  your login is not in the file's group, the save is refused before the
+  file is touched; it needs admin mode to keep the group.
+- An operation directory whose path holds non-ASCII characters
+  (`/home/jörg/...`) is cleaned up, pruned and read at its real path, so
+  an acknowledged result no longer comes back.
+- One mount `df` cannot read (a dead sshfs or FUSE mount, a stale NFS
+  handle) no longer blanks the filesystem list: the other mounts are
+  shown.
+- Filesystems whose source holds a space (`gdrive:My Drive`,
+  `//nas/Shared Docs`) show their real type, sizes and mount point.
+- A process can no longer blank the command lines of the processes
+  listed after it by forging a `==> pid/cmdline <==` line in its own
+  arguments.
+- Units with an escaped name (`systemd-fsck@dev-disk-by\x2duuid-...`)
+  open: status, logs and actions accept the `\` systemd writes.
+- An unreadable `/etc/crontab` no longer hides the cron jobs that were
+  read from your own crontab and `/etc/cron.d`.
+- On BusyBox, a login without a crontab reads as having none rather
+  than as unknown.
+- History keeps recording for every server when one stored bucket or
+  gap is damaged; the damaged slot reads as empty.
+- A 10-minute history bucket no longer counts a minute's readings twice
+  after the app restarts within that minute.
+- A container's log no longer freezes the app on one long line. A line
+  of digits or base64 without spaces took seconds to read for its level,
+  and a URL followed by a long run of dots took seconds to colour, each
+  time the row was drawn; both now take well under a millisecond.
+- A regular-expression search of the loaded log lines no longer freezes
+  the app. It runs in the background, the field says "Searching…" until
+  every line is read, and a new search stops the one before it. A
+  pattern that does not finish is stopped after five seconds with a note
+  under the field.
+- A server's confirmation no longer covers its jump hosts on its own:
+  selecting a server also selects its unconfirmed hop rows, so one press
+  confirms the whole route, while deselecting a hop leaves it unconfirmed.
+  An address another device rewrote while the list was open stays
+  unconfirmed.
 - The Jobs tab shows anacron's periodic jobs with their period, delay,
   command and last-run day, and a cron directory they drive names the
   matching job's timing instead of reading as unknown.

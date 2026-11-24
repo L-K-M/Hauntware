@@ -121,6 +121,32 @@ class _EndpointConfirmationDialogState
   bool _busy = false;
   String? _error;
 
+  /// Toggles [entry]. Turning a server on also turns on every shown row
+  /// that is one of its pending jump hosts, recording each row's
+  /// [ShownEndpoint], so one press confirms the whole route and the user
+  /// sees the hop rows become selected with their addresses. A hop the
+  /// search hides is left alone: nothing pins what nobody saw. Turning a
+  /// row off again is allowed; the engine then leaves that hop
+  /// unconfirmed.
+  void _toggle(FleetEntry entry, List<FleetEntry> shownRows, bool on) {
+    setState(() {
+      if (!on) {
+        _selected.remove(entry.serverId);
+        return;
+      }
+      _selected[entry.serverId] = ShownEndpoint.of(entry);
+      final route = entry.jumpRoute;
+      if (route == null) return;
+      // The route names hops by their row label, the only identity the
+      // confirmation list carries for them.
+      for (final hop in shownRows) {
+        if (hop.serverId != entry.serverId && route.contains(hop.label)) {
+          _selected[hop.serverId] = ShownEndpoint.of(hop);
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _search.dispose();
@@ -216,15 +242,7 @@ class _EndpointConfirmationDialogState
             _EndpointRow(
               entry: entry,
               selected: _isSelected(entry),
-              onChanged: _busy
-                  ? null
-                  : (on) => setState(() {
-                      if (on) {
-                        _selected[entry.serverId] = ShownEndpoint.of(entry);
-                      } else {
-                        _selected.remove(entry.serverId);
-                      }
-                    }),
+              onChanged: _busy ? null : (on) => _toggle(entry, shown, on),
             ),
         if (error != null) ...[
           const SizedBox(height: 12),

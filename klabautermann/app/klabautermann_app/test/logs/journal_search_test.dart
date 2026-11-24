@@ -42,6 +42,14 @@ JournalEntry _entry(
   return (logs, search);
 }
 
+/// Waits until the pattern worker has answered everything [search]
+/// asked it (LOG-06): a regular expression is matched off this isolate.
+Future<void> _answered(LogSearch search) async {
+  while (search.searching || search.working) {
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+  }
+}
+
 Future<void> _pump(
   WidgetTester tester,
   LogViewController logs,
@@ -137,7 +145,8 @@ void main() {
       expect(search.total, 0);
     });
 
-    test('reads the query as a regular expression while asked (LOG-06)', () {
+    test('reads the query as a regular expression while asked '
+        '(LOG-06)', () async {
       final (logs, search) = _logs();
       logs.add(['GET /a 200', 'GET /b 502', 'post /c 404', 'none']);
 
@@ -145,18 +154,24 @@ void main() {
         ..setRegex(true)
         ..setQuery(r'(get|post) \S+ [45]\d\d');
       expect(search.invalidPattern, isFalse);
+      await _answered(search);
       expect(search.total, 2);
+      // The matches' places come from the worker once a view asked.
+      expect(search.matchesIn(logs[1] as LogLine), isEmpty);
+      await _answered(search);
       expect(search.matchesIn(logs[1] as LogLine), const [
         TextMatch(start: 0, end: 10),
       ]);
 
       search.setCaseSensitive(true);
+      await _answered(search);
       expect(search.total, 1, reason: 'only the lower-case post line');
 
       // A pattern that matches no characters finds nothing to show.
       search
         ..setCaseSensitive(false)
         ..setQuery('x*');
+      await _answered(search);
       expect(search.total, 0);
 
       // Plain text again: the parentheses are characters.
@@ -167,7 +182,7 @@ void main() {
       expect(search.invalidPattern, isFalse);
     });
 
-    test('reads a Unicode property class as the server does', () {
+    test('reads a Unicode property class as the server does', () async {
       final (logs, search) = _logs();
       logs.add(['Ärger', 'ärger']);
       search
@@ -175,16 +190,18 @@ void main() {
         ..setCaseSensitive(true)
         ..setQuery(r'\p{Lu}rger');
       expect(search.invalidPattern, isFalse);
+      await _answered(search);
       expect(search.total, 1);
     });
 
-    test('accepts an escaped literal that PCRE2 accepts too', () {
+    test('accepts an escaped literal that PCRE2 accepts too', () async {
       final (logs, search) = _logs();
       logs.add(['a-b', 'a b']);
       search
         ..setRegex(true)
         ..setQuery(r'a\-b');
       expect(search.invalidPattern, isFalse);
+      await _answered(search);
       expect(search.total, 1);
     });
 
@@ -685,6 +702,49 @@ void main() {
 
     expect(logs.following.value, isFalse);
     expect(_row('a Needle'), findsOneWidget);
+    final runs = (tester.widget<RichText>(_row('a Needle')).text as TextSpan)
+        .children!
+        .cast<TextSpan>();
+    expect(runs.map((run) => run.text), ['a ', 'Needle']);
+    expect(runs.last.style!.backgroundColor, isNotNull);
+    expect(runs.last.style!.decoration, TextDecoration.underline);
+  });
+
+  testWidgets('a pattern\'s match is marked once the worker placed it '
+      '(LOG-06)', (tester) async {
+    final (logs, search) = _logs();
+    await _pump(tester, logs, search);
+    logs.add([for (var i = 0; i < 100; i++) i == 10 ? 'a Needle' : 'l $i']);
+    await tester.pump();
+
+    /// Lets the worker answer on the real event loop, then draws.
+    Future<void> answered() async {
+      do {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump();
+      } while (search.searching || search.working);
+      await tester.pump();
+    }
+
+    search
+      ..setRegex(true)
+      ..setQuery('ne+dle');
+    await answered();
+    expect(search.total, 1);
+
+    search.next();
+    await tester.pump();
+    expect(logs.following.value, isFalse);
+    expect(_row('a Needle'), findsOneWidget);
+    // Drawn without its mark first: the row asked for the match's place.
+    expect(
+      (tester.widget<RichText>(_row('a Needle')).text as TextSpan).children,
+      hasLength(1),
+    );
+
+    await answered();
     final runs = (tester.widget<RichText>(_row('a Needle')).text as TextSpan)
         .children!
         .cast<TextSpan>();

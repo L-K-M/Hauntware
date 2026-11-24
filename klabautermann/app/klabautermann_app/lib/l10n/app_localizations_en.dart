@@ -781,6 +781,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Its background engine stopped, so nothing connects or updates any more. Quit and open Klabautermann again. If this keeps happening, include the details below in a bug report.';
 
   @override
+  String get engineRestartedTitle =>
+      'Klabautermann restarted its background engine';
+
+  @override
+  String get engineRestartedBody =>
+      'Its background engine stopped unexpectedly and was started again, so your servers reconnect and update as before. An action, shell, transfer or edit that was running when it stopped may not have finished; check it before you try it again. If this keeps happening, include the details below in a bug report.';
+
+  @override
   String get settingsWindowUnreachable =>
       'Settings cannot reach Klabautermann. Close this window and open Settings again.';
 
@@ -3850,6 +3858,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get logsPanelSearchInvalidLocal =>
       'Not shown here: this engine cannot read the pattern, but the server may';
+
+  @override
+  String get logsPanelSearchTooCostly =>
+      'The search stopped: this pattern takes too long to match these lines';
+
+  @override
+  String get logsPanelSearchSearching => 'Searching…';
 
   @override
   String get logsPanelSearchServer => 'Search the whole journal on the server';

@@ -278,6 +278,11 @@ void main() {
     expect(attributes, contains('exit ${EditExit.aclNotCarried}\n'));
     expect(attributes, contains('exit ${EditExit.xattrNotCarried}\n'));
     expect(
+      'exit ${EditExit.ownerNotCarried}\n'.allMatches(attributes),
+      hasLength(2),
+      reason: 'after cp and in the fallback',
+    );
+    expect(
       EditCommands.backupFile(_target, kRootBackupsDir)[2],
       contains('"\$d/$kEditBackupIndexName"'),
     );

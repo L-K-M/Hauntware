@@ -389,6 +389,13 @@ void main() {
     await tester.enterText(find.byType(TextField).last, r'(timed|unexp\w+) ');
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
     expect(find.textContaining('Not shown here'), findsNothing);
+    // A worker isolate matches the pattern, on the real event loop.
+    while (find.text('Searching…').evaluate().isNotEmpty) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await tester.pump();
+    }
     expect(find.text('2 matches'), findsOneWidget);
   });
 
