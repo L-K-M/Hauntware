@@ -436,3 +436,6 @@ Fix commit e242646; glm-review label added for round 2.
 - safety_controller.dart:290 (major) "an empty ServerSafety is stored per departed server": refuted. `_withLocal` removes an entry equal to the default (safety_controller.dart:221); the test asserts `saved.last.servers` is empty.
 - engine_vault.dart:60 injected store bypassed elsewhere: refuted, `FileVaultStore` is built only at engine_vault.dart:73.
 - safety_test null-`listed` case: declined as minor.
+
+## DKR-12 (test gaps): already covered, no PR
+Every bullet has a test that came with its fix in #805/#806: http_pool_test (DKR-2 close during open, DKR-3 unlistened body and hijack, DKR-7 stray bytes on an idle connection), docker_router_test (DKR-1 non-Docker error), exec_sessions_test (DKR-5 below API 1.42), image_updates_test (DKR-4 image behind a cached tag). Each was checked to fail with its fix lines undone (2026-11-24).
