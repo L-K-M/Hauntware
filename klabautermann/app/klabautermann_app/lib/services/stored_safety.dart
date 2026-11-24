@@ -23,6 +23,7 @@ SafetyController safetyFromSettings(
   DeviceSettingsStore settings,
   EngineClient engine, {
   String Function(String serverId)? labelOf,
+  bool Function(String serverId)? listed,
   ServerPrefsSource? prefs,
 }) => SafetyController(
   initial: decodeStoredSafety(settings.safety),
@@ -35,6 +36,7 @@ SafetyController safetyFromSettings(
     }
   },
   labelOf: labelOf,
+  listed: listed,
   save: (policy) => settings.setSafety(encodeStoredSafety(policy)),
   prefs: prefs,
 );

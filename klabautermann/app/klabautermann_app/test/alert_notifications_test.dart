@@ -25,6 +25,10 @@ final class _FakeNotifications implements SystemNotifications {
   final shown = <int, ({String title, String body})>{};
   final cancelled = <int>[];
 
+  /// How many times the whole notification list was withdrawn, which a
+  /// run does at its start and when its engine ends.
+  int cancelAllCount = 0;
+
   @override
   Future<bool> requestPermission() async {
     permissionRequests++;
@@ -43,6 +47,9 @@ final class _FakeNotifications implements SystemNotifications {
 
   @override
   Future<void> cancel(int id) async => cancelled.add(id);
+
+  @override
+  Future<void> cancelAll() async => cancelAllCount++;
 
   final badges = <int>[];
 
@@ -125,6 +132,27 @@ void main() {
         ..emit(_change('r2', raised: false));
       await pumpEventQueue();
       expect(fake.cancelled, [fake.shown.keys.single]);
+    });
+
+    test('a new run withdraws what an earlier run left', () async {
+      controller(notifications: fake);
+      await pumpEventQueue();
+      expect(fake.cancelAllCount, 1);
+    });
+
+    test('the engine ending withdraws the run\'s notifications', () async {
+      final notifications = controller(notifications: fake, enabled: true);
+      await pumpEventQueue();
+      final withdrawalsAtStart = fake.cancelAllCount;
+
+      engine.emit(_change('r1', raised: true));
+      await pumpEventQueue();
+      expect(fake.shown, hasLength(1));
+
+      await engine.endEvents();
+      await pumpEventQueue();
+      expect(fake.cancelAllCount, withdrawalsAtStart + 1);
+      expect(notifications.enabled, isTrue);
     });
 
     test('a stored "on" whose permission the system revoked since shows '

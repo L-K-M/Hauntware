@@ -541,11 +541,18 @@ final class EngineSync {
       // Held as a round holds it, so no save or pulled secret lands in the
       // vault or the catalog while they are cleared.
       await _vault.exclusive(() async {
+        // The credentials go first: the list of entries to delete is the
+        // servers file, which the catalog deletes below, so a sign-out
+        // stopped after this and retried would read an empty catalog and
+        // leave the account's credentials behind.
         final secretRefs = {
           for (final server in await _servers.load())
             if (server.secretRef case final ref? when !isReservedVaultId(ref))
               ref,
         };
+        for (final ref in secretRefs) {
+          await _vault.store.deleteSecret(ref);
+        }
         for (final name in [_syncRecordsFileName, _serversFileName]) {
           final file = File(_path(name));
           if (await file.exists()) await file.delete();
@@ -553,9 +560,6 @@ final class EngineSync {
         _openCatalog();
         await _klabautermannRecords.clear();
         await _snippets.clear();
-        for (final ref in secretRefs) {
-          await _vault.store.deleteSecret(ref);
-        }
         await enrollment.clear();
         _account = null;
       });

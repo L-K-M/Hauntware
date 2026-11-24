@@ -3398,6 +3398,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get servicesEmpty => 'No units match these filters.';
 
   @override
+  String get servicesViewUnits => 'Units';
+
+  @override
+  String get servicesViewSockets => 'Sockets';
+
+  @override
+  String get servicesSocketsWaiting => 'Waiting for the first list of sockets…';
+
+  @override
+  String get servicesSocketsEmpty => 'This server has no listening sockets.';
+
+  @override
+  String get servicesSocketsColumnListen => 'Listen';
+
+  @override
+  String get servicesSocketsColumnUnit => 'Socket unit';
+
+  @override
+  String get servicesSocketsColumnActivates => 'Activates';
+
+  @override
+  String get servicesSocketsNoActivates => 'None';
+
+  @override
   String get servicesColumnUnit => 'Unit';
 
   @override
@@ -4539,8 +4563,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'noRunInHorizon': 'No run falls in the next $years years.',
       'notEvaluated':
           'Runs are worked out for the first $limit cron lines only.',
-      'anacron':
-          'anacron runs this directory; its timing is not shown in this version.',
+      'anacron': 'anacron runs this directory; its table lists no job for it.',
       'paused': 'Paused: cron skips this job until it is resumed.',
       'other': 'No cron line runs this directory.',
     });
@@ -4561,6 +4584,97 @@ class AppLocalizationsEn extends AppLocalizations {
       'other': 'Not run',
     });
     return '$_temp0';
+  }
+
+  @override
+  String get jobsAnacronTitle => 'anacron';
+
+  @override
+  String get jobsAnacronReading => 'Reading anacron\'s jobs…';
+
+  @override
+  String get jobsAnacronNotInstalled =>
+      'This server has no anacron, so there are no anacron jobs.';
+
+  @override
+  String get jobsAnacronEmpty =>
+      'anacron is installed, but its table lists no jobs.';
+
+  @override
+  String jobsAnacronFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'There is no connection to this server.',
+      'invalidTarget': 'The anacron read was refused.',
+      'failed': 'The anacron read failed.',
+      'other': 'The anacron read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get jobsAnacronRetry => 'Read again';
+
+  @override
+  String get jobsAnacronLabelPeriod => 'Period';
+
+  @override
+  String get jobsAnacronLabelDelay => 'Delay';
+
+  @override
+  String get jobsAnacronLabelLastRun => 'Last run';
+
+  @override
+  String jobsAnacronPeriodDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'every $days days',
+      one: 'every day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get jobsAnacronPeriodMonthly => 'once a calendar month';
+
+  @override
+  String jobsAnacronDelayMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'starting $minutes minutes late',
+      one: 'starting 1 minute late',
+      zero: 'starting right away',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String jobsAnacronLastRun(String day) {
+    return 'Last ran $day';
+  }
+
+  @override
+  String get jobsAnacronLastRunNever => 'Never ran';
+
+  @override
+  String jobsAnacronRunsDirectory(String period, String delay, String day) {
+    return 'anacron runs this directory $period, $delay; it last ran $day.';
+  }
+
+  @override
+  String jobsAnacronRunsDirectoryNever(String period, String delay) {
+    return 'anacron runs this directory $period, $delay; it has never run.';
+  }
+
+  @override
+  String jobsAnacronNext(String period, String day) {
+    return 'anacron: $period, last ran $day';
+  }
+
+  @override
+  String jobsAnacronNextNever(String period) {
+    return 'anacron: $period, never ran';
   }
 
   @override
@@ -5938,6 +6052,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get actionPreviewRemoveOrphans => 'Also remove these containers';
+
+  @override
+  String get actionPreviewBusy => 'Another action is being prepared.';
 
   @override
   String actionPreviewWarning(String warning) {
@@ -10497,6 +10614,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alertRuleMinutesInvalid => 'Enter 0 or more minutes.';
+
+  @override
+  String get alertRuleMinutesTooLong => 'Enter at most 10080 minutes (7 days).';
 
   @override
   String get alertRuleClearAboveRaise =>

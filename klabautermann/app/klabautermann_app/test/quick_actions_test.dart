@@ -333,6 +333,9 @@ void main() {
     await tester.pump();
     expect(shown, isFalse);
     expect(find.byType(QuickActionsCard), findsNothing);
+    // Let the finished wait's short hold expire rather than leave its
+    // timer pending.
+    await tester.pump(kPowerWaitBackHold);
   });
 
   testWidgets('a reboot not back in time leaves the card outside admin '

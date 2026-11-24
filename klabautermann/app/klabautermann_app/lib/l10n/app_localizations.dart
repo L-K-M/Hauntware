@@ -4523,6 +4523,54 @@ abstract class AppLocalizations {
   /// **'No units match these filters.'**
   String get servicesEmpty;
 
+  /// Services panel: the view switch's segment for the unit list.
+  ///
+  /// In en, this message translates to:
+  /// **'Units'**
+  String get servicesViewUnits;
+
+  /// Services panel: the view switch's segment for the listening sockets (SVC-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Sockets'**
+  String get servicesViewSockets;
+
+  /// Services panel: shown until the server's first list of listening sockets arrives (SVC-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first list of sockets…'**
+  String get servicesSocketsWaiting;
+
+  /// Services panel: the socket listing answered and holds no sockets (SVC-10).
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no listening sockets.'**
+  String get servicesSocketsEmpty;
+
+  /// Column header of the socket list: the address, path or netlink family the socket listens on (SVC-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Listen'**
+  String get servicesSocketsColumnListen;
+
+  /// Column header of the socket list: the systemd socket unit that owns the listener (SVC-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Socket unit'**
+  String get servicesSocketsColumnUnit;
+
+  /// Column header of the socket list: the units a connection to the socket starts (SVC-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Activates'**
+  String get servicesSocketsColumnActivates;
+
+  /// Services panel: a socket unit that starts no other unit (SVC-10).
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get servicesSocketsNoActivates;
+
   /// Column header of the unit list: the systemd unit's name.
   ///
   /// In en, this message translates to:
@@ -5792,7 +5840,7 @@ abstract class AppLocalizations {
   /// Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver. limit is how many cron lines a reading works out runs for, and years how far ahead it looks.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server\'s time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} paused{Paused: cron skips this job until it is resumed.} other{No cron line runs this directory.}}'**
+  /// **'{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server\'s time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its table lists no job for it.} paused{Paused: cron skips this job until it is resumed.} other{No cron line runs this directory.}}'**
   String jobsRunsUnknown(String reason, int limit, int years);
 
   /// A job's next-run cell in the jobs table when it lists no runs: jobsRunsUnknown cut short to fit the column, which stays at phone width. reason is the engine's JobRunsUnknown name, and other is noDriver; years is how far ahead the engine looks. The job's details give the full reason.
@@ -5800,6 +5848,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} paused{Paused} other{Not run}}'**
   String jobsNextRunUnknown(String reason, int years);
+
+  /// Jobs tab: the heading of the section that lists anacron's periodic jobs (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'anacron'**
+  String get jobsAnacronTitle;
+
+  /// Jobs tab: shown while anacron's job table is being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading anacron\'s jobs…'**
+  String get jobsAnacronReading;
+
+  /// Jobs tab: the answer when the server has no /etc/anacrontab, so anacron is not installed (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no anacron, so there are no anacron jobs.'**
+  String get jobsAnacronNotInstalled;
+
+  /// Jobs tab: anacron's table answered and holds no jobs.
+  ///
+  /// In en, this message translates to:
+  /// **'anacron is installed, but its table lists no jobs.'**
+  String get jobsAnacronEmpty;
+
+  /// Jobs tab: why anacron's job table could not be read; reason is the engine's JobHistoryFailure name, and the server's error text follows when it gives one.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{The anacron read was refused.} failed{The anacron read failed.} other{The anacron read failed.}}'**
+  String jobsAnacronFailed(String reason);
+
+  /// Jobs tab: rereads anacron's job table after a failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get jobsAnacronRetry;
+
+  /// Jobs tab: the label of an anacron job's period.
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get jobsAnacronLabelPeriod;
+
+  /// Jobs tab: the label of how long anacron waits before running a job.
+  ///
+  /// In en, this message translates to:
+  /// **'Delay'**
+  String get jobsAnacronLabelDelay;
+
+  /// Jobs tab: the label of the day an anacron job last ran.
+  ///
+  /// In en, this message translates to:
+  /// **'Last run'**
+  String get jobsAnacronLabelLastRun;
+
+  /// Jobs tab: an anacron job's period in days.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{every day} other{every {days} days}}'**
+  String jobsAnacronPeriodDays(int days);
+
+  /// Jobs tab: an anacron job's once-a-month period.
+  ///
+  /// In en, this message translates to:
+  /// **'once a calendar month'**
+  String get jobsAnacronPeriodMonthly;
+
+  /// Jobs tab: how long anacron waits after it starts before it runs a job.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =0{starting right away} =1{starting 1 minute late} other{starting {minutes} minutes late}}'**
+  String jobsAnacronDelayMinutes(int minutes);
+
+  /// Jobs tab: the day an anacron job last ran; day is a short date.
+  ///
+  /// In en, this message translates to:
+  /// **'Last ran {day}'**
+  String jobsAnacronLastRun(String day);
+
+  /// Jobs tab: an anacron job with no stamp, so it has never run.
+  ///
+  /// In en, this message translates to:
+  /// **'Never ran'**
+  String get jobsAnacronLastRunNever;
+
+  /// Jobs tab: a cron row whose directory anacron drives, naming the matching job's period, delay and last-run day (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'anacron runs this directory {period}, {delay}; it last ran {day}.'**
+  String jobsAnacronRunsDirectory(String period, String delay, String day);
+
+  /// Jobs tab: a cron row whose directory anacron drives, where the matching job has no stamp yet (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'anacron runs this directory {period}, {delay}; it has never run.'**
+  String jobsAnacronRunsDirectoryNever(String period, String delay);
+
+  /// Jobs tab: the next-run cell of a cron row anacron drives, cut short for the column (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'anacron: {period}, last ran {day}'**
+  String jobsAnacronNext(String period, String day);
+
+  /// Jobs tab: the next-run cell of a cron row anacron drives, where the job has no stamp yet (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'anacron: {period}, never ran'**
+  String jobsAnacronNextNever(String period);
 
   /// Beside a cron run that a DST change skips: time is the clock time the line was written for; the run time shown is the change.
   ///
@@ -7544,6 +7700,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Also remove these containers'**
   String get actionPreviewRemoveOrphans;
+
+  /// Toast when an action is tapped while another action's preview is still being planned.
+  ///
+  /// In en, this message translates to:
+  /// **'Another action is being prepared.'**
+  String get actionPreviewBusy;
 
   /// A warning in the action preview; warning is the engine's PlanWarning name.
   ///
@@ -13460,6 +13622,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter 0 or more minutes.'**
   String get alertRuleMinutesInvalid;
+
+  /// Rule editor error: a hold time is above the largest one the editor accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter at most 10080 minutes (7 days).'**
+  String get alertRuleMinutesTooLong;
 
   /// Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold.
   ///

@@ -244,6 +244,31 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('a hold time above the maximum is refused, not saved as a '
+      'negative duration', (tester) async {
+    final harness = await _openWeb1Rules(tester);
+
+    await tester.tap(find.text('Add rule'));
+    await tester.pumpAndSettle();
+    final heldFor = find.widgetWithText(TextFormField, 'Held for (minutes)');
+    await tester.enterText(heldFor.first, '10000000000000000');
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
+          .onPressed,
+      isNull,
+    );
+
+    // Return still validates, so the field says why it cannot save.
+    await tester.tap(heldFor.first);
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('Enter at most 10080 minutes (7 days).'), findsOneWidget);
+    expect(harness.engine.sentOfType<PutRule>(), isEmpty);
+  });
+
   testWidgets('Return in a field saves a valid form, and not an invalid '
       'one', (tester) async {
     final harness = await _openWeb1Rules(tester);

@@ -103,7 +103,11 @@ class _PowerWaitProgressState extends State<PowerWaitProgress> {
       PowerWaitPhase.running when widget.whileRunning =>
         const LinearProgressIndicator(),
       PowerWaitPhase.running => const SizedBox.shrink(),
-      PowerWaitPhase.off => Text(l10n.systemPowerOff),
+      PowerWaitPhase.off => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [Text(l10n.systemPowerOff), stop],
+      ),
       PowerWaitPhase.back => Text(
         l10n.systemPowerBack(_elapsed(l10n, wait.backAfter!)),
       ),

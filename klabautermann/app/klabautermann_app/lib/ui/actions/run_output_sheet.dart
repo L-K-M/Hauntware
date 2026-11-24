@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../logs/log_level.dart';
 import '../logs/log_query.dart';
 import '../logs/log_view.dart';
+import '../logs/logs_panel.dart' show LogStatusNotice;
 import '../logs/logs_panel_controller.dart';
 import '../workspace_dock.dart';
 
@@ -144,6 +145,20 @@ class _RunOutputLogState extends State<RunOutputLog> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      LogView(controller: _reading.logs, levelOf: LogLevel.ofJournalLine);
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _reading,
+    builder: (context, _) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Why the journal cannot be read: absent, denied or failed.
+        LogStatusNotice(panel: _reading),
+        Expanded(
+          child: LogView(
+            controller: _reading.logs,
+            levelOf: LogLevel.ofJournalLine,
+          ),
+        ),
+      ],
+    ),
+  );
 }

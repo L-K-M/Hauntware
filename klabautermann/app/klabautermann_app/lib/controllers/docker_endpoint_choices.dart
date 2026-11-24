@@ -35,7 +35,11 @@ final class DockerEndpointChoices extends ChangeNotifier {
     Map<String, DockerEndpointOverride> stored = const {},
     this._save,
     this._purge,
-  }) : _overrides = {...stored};
+    bool fleetComplete = true,
+  }) : // The parameter name stays public; the field is private.
+       // ignore: prefer_initializing_formals
+       _fleetComplete = fleetComplete,
+       _overrides = {...stored};
 
   final Map<String, DockerEndpointOverride> _overrides;
   final SaveDockerEndpointChoice? _save;
@@ -44,6 +48,16 @@ final class DockerEndpointChoices extends ChangeNotifier {
   /// again rather than changing nothing.
   final Set<String> _unsaved = {};
   final PurgeDockerEndpointChoices? _purge;
+
+  /// Whether the engine's startup fleet can be trusted to list every
+  /// server: false while another instance holds the support directory or
+  /// a store could not be read, when a fleet that omits an id has not
+  /// shown that the server is gone.
+  final bool _fleetComplete;
+
+  /// Servers some fleet listed during this run, so their later absence
+  /// is a real departure rather than a startup gap.
+  final Set<String> _listed = {};
 
   FleetController? _fleet;
 
@@ -117,6 +131,7 @@ final class DockerEndpointChoices extends ChangeNotifier {
     _fleet?.removeListener(_onFleet);
     _fleet = fleet;
     _servers = fleet.servers;
+    _listed.addAll(_servers.map((server) => server.id));
     fleet.addListener(_onFleet);
   }
 
@@ -129,20 +144,33 @@ final class DockerEndpointChoices extends ChangeNotifier {
   }
 
   /// Drops each choice whose server [servers] does not list, or lists
-  /// under another endpoint, and has the store drop the same.
+  /// under another endpoint, and has the store drop the same. An absent
+  /// server counts only once the startup fleet is known complete, or
+  /// after a fleet in this run listed it.
   void _purgeAgainst(List<FleetServer> servers) {
     _servers = servers;
     final endpoints = {for (final s in servers) s.id: s.endpoint};
     final before = _overrides.length;
-    _overrides.removeWhere(
-      (serverId, override) => endpoints[serverId] != override.endpoint,
-    );
+    _overrides.removeWhere((serverId, override) {
+      final endpoint = endpoints[serverId];
+      if (endpoint != null) return endpoint != override.endpoint;
+      return _fleetComplete || _listed.contains(serverId);
+    });
+    _listed.addAll(endpoints.keys);
     if (_overrides.length != before) notifyListeners();
 
     final purge = _purge;
     if (purge == null) return;
+    // The store drops what the choices dropped: the fleet's endpoints,
+    // plus each kept choice's own, so a choice held back from a startup
+    // gap is not removed from settings.json either.
     unawaited(
-      purge(endpoints).then<void>(
+      purge({
+        ...endpoints,
+        for (final MapEntry(key: serverId, value: override)
+            in _overrides.entries)
+          serverId: override.endpoint,
+      }).then<void>(
         (_) {},
         onError: (Object error) =>
             debugPrint('The Docker socket choices were not saved: $error'),

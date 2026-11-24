@@ -1,9 +1,11 @@
 // SYS-03's Power section: reboot and shut down in admin mode, each behind
 // the host name typed, and the wait for a rebooted server to answer again,
 // which a `core` reading of a later boot ends.
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
+import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/power_waits.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
@@ -66,7 +68,10 @@ void main() {
 
   // Built inside the test's fake-async zone, so the engine's events reach
   // the controllers there and the timers they arm follow the test clock.
-  void build() {
+  void build({
+    bool withFleet = false,
+    ValueListenable<Sample?> Function(String serverId)? sampleOf,
+  }) {
     if (built) return;
     built = true;
     engine = FakeEngineClient();
@@ -79,9 +84,12 @@ void main() {
       apply: (_) {},
     );
     core = ValueNotifier(_core(_bootBefore));
+    final fleet = withFleet ? FleetController(engine) : null;
+    if (fleet != null) addTearDown(fleet.dispose);
     waits = PowerWaits(
-      core: (_) => core,
+      core: sampleOf ?? (_) => core,
       operations: operations,
+      fleet: fleet,
       now: () => now,
     );
   }
@@ -212,6 +220,9 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Reboot'), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
+    // End the finished wait so its short hold leaves no timer behind.
+    waits.stop(_server);
+    await tester.pump();
   });
 
   testWidgets('a shutdown the host took says it stays off, and a failed one '
@@ -268,6 +279,64 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
+  testWidgets('a reboot wait whose server answered leaves after a short '
+      'hold', (tester) async {
+    await pump(tester);
+    engine.emit(const AdminModeState(_server, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await confirm(tester, 'Reboot', PowerVerb.reboot);
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+
+    now = now.add(const Duration(seconds: 20));
+    core.value = _core(now.subtract(const Duration(seconds: 20)), seq: 2);
+    await tester.pump();
+    expect(
+      find.text('The server answered again 20 seconds after the reboot.'),
+      findsOneWidget,
+    );
+
+    // The line stays only for a short hold, so it does not follow the
+    // user around the app for the rest of the run.
+    await tester.pump(const Duration(minutes: 5));
+    expect(find.textContaining('answered again'), findsNothing);
+    expect(waits.waitFor(_server), isNull);
+    expect(find.text('Reboot'), findsOneWidget);
+    expect(find.text('Shut down'), findsOneWidget);
+  });
+
+  testWidgets('a shutdown wait offers Stop waiting, which ends it', (
+    tester,
+  ) async {
+    await pump(tester);
+    engine.emit(const AdminModeState(_server, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await confirm(tester, 'Shut down', PowerVerb.poweroff);
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text(
+        'The server is shutting down. It stays off until someone starts it.',
+      ),
+      findsOneWidget,
+    );
+
+    // The host may not have taken the shutdown; the wait must not hold
+    // the power actions hostage with no way out.
+    expect(find.text('Stop waiting'), findsOneWidget);
+    await tester.tap(find.text('Stop waiting'));
+    await tester.pump();
+    expect(waits.waitFor(_server), isNull);
+    expect(find.textContaining('shutting down'), findsNothing);
+    expect(find.text('Reboot'), findsOneWidget);
+    expect(find.text('Shut down'), findsOneWidget);
+  });
+
   testWidgets('a reboot not back in time says so and offers the buttons '
       'again; a later boot still ends the wait', (tester) async {
     await pump(tester);
@@ -298,6 +367,9 @@ void main() {
       find.text('The server answered again 17 minutes after the reboot.'),
       findsOneWidget,
     );
+    // Let the short hold expire rather than leave its timer pending.
+    await tester.pump(kPowerWaitBackHold);
+    expect(waits.waitFor(_server), isNull);
   });
 
   testWidgets('the wait outlasts the section: shown again when it comes '
@@ -366,6 +438,32 @@ void main() {
       ),
     );
     await pumpEventQueue();
+    expect(waits.waitFor(_server), isNull);
+  });
+
+  test('a wait leaves with its server when the fleet drops it', () async {
+    final readings = ValueNotifier<Sample?>(_core(_bootBefore));
+    build(withFleet: true, sampleOf: (_) => readings);
+
+    const confirmation = ActionConfirmation(
+      tier: ConfirmationTier.typedPhrase,
+      phrase: 'web-01',
+    );
+    operations.run('plan-1', confirmation);
+    waits.start(_server, 'plan-1', PowerVerb.reboot);
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await pumpEventQueue();
+    expect(waits.waitFor(_server)!.phase, PowerWaitPhase.waiting);
+
+    // The server left and came back: monitoring disposed its readings,
+    // so a wait holding that notifier would never see the next boot and
+    // would end as "not answered" while the server is up.
+    readings.dispose();
+    engine.emit(CatalogReplaced(const []));
+    await pumpEventQueue();
+
     expect(waits.waitFor(_server), isNull);
   });
 
