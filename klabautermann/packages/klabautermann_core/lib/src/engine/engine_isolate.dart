@@ -1977,6 +1977,9 @@ void _runEngine(
           verifyFootprint(serverId);
         }
       case ReadEditable(:final serverId, :final requestId, :final target):
+        // The read runs with the profile the request found, even when a
+        // re-probe drops it while the read waits for the session.
+        final profile = profiles[serverId];
         linkRead<EditRead, EditReadFailure>(
           serverId,
           onFailure: (failure) => EditRead(
@@ -1986,7 +1989,7 @@ void _runEngine(
           ),
           noLink: EditReadFailure.noLink,
           // A file read needs the probe's facts as much as the link.
-          ready: () => profiles[serverId] != null,
+          ready: () => profile != null,
           onTransport: (Object error) => uiPort.send(
             EditRead(
               serverId: serverId,
@@ -2001,7 +2004,7 @@ void _runEngine(
               requestId: requestId,
               result: await readEditable(target, (
                 link: link,
-                profile: profiles[serverId]!,
+                profile: profile!,
                 admin: admin?.session(serverId),
               ), stacks: stackEditLookup(serverId)),
             ),
@@ -2308,6 +2311,9 @@ void _runEngine(
           ),
         );
       case UnitQuery(:final serverId, :final requestId, :final query):
+        // The read runs with the profile the request found, even when a
+        // re-probe drops it while the read waits for the session.
+        final profile = profiles[serverId];
         linkRead<UnitQueryResult, UnitQueryFailure>(
           serverId,
           onFailure: (failure) => UnitQueryResult(
@@ -2317,7 +2323,7 @@ void _runEngine(
           ),
           noLink: UnitQueryFailure.noLink,
           // A unit query runs with the profile's manager and units.
-          ready: () => profiles[serverId] != null,
+          ready: () => profile != null,
           onTransport: (Object error) => uiPort.send(
             UnitQueryResult(
               serverId: serverId,
@@ -2335,7 +2341,7 @@ void _runEngine(
               requestId,
               query,
               link: link,
-              profile: profiles[serverId]!,
+              profile: profile!,
             ),
           ),
         );
