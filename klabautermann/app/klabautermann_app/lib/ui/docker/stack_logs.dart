@@ -140,8 +140,12 @@ class StackLogsController extends ChangeNotifier {
   /// Containers whose lines are not shown.
   Set<String> get hidden => {for (final i in _hidden) _slots[i].container.id};
 
-  StackLogState stateOf(String containerId) =>
-      _slots[_indexOf(containerId)].state;
+  /// How [containerId]'s stream stands; ended for an id that names no
+  /// container read, as one a redeploy replaced.
+  StackLogState stateOf(String containerId) => switch (_indexOf(containerId)) {
+    < 0 => StackLogState.ended,
+    final index => _slots[index].state,
+  };
 
   void setVisible(bool visible) {
     if (visible == _visible) return;
@@ -204,14 +208,19 @@ class StackLogsController extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
-  /// Shows or hides [containerId]'s lines.
+  /// Shows or hides [containerId]'s lines. An id that names no container
+  /// read does nothing: a chip drawn before [setContainers] replaced its
+  /// container can still be tapped.
   void toggle(String containerId) {
     final index = _indexOf(containerId);
+    if (index < 0) return;
+
     if (!_hidden.remove(index)) _hidden.add(index);
     _rebuild();
     notifyListeners();
   }
 
+  /// [containerId]'s place in [_slots], or -1.
   int _indexOf(String containerId) =>
       _slots.indexWhere((slot) => slot.container.id == containerId);
 
@@ -261,8 +270,8 @@ class StackLogsController extends ChangeNotifier {
       for (final entry in added)
         if (!_hidden.contains(entry.index)) entry,
     ];
-    final late = shown.where((entry) => _isBefore(entry.at, _shownNewest));
-    if (late.isEmpty && !_keptBack) {
+    final overdue = shown.where((entry) => _isBefore(entry.at, _shownNewest));
+    if (overdue.isEmpty && !_keptBack) {
       _append(shown);
       return;
     }
@@ -271,7 +280,7 @@ class StackLogsController extends ChangeNotifier {
       return;
     }
     _keptBack = true;
-    _append(shown.sublist(late.length));
+    _append(shown.sublist(overdue.length));
   }
 
   /// Whether [a] is a time before [b]: no time is before any time, as

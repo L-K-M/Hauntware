@@ -271,6 +271,41 @@ void main() {
     );
   });
 
+  test('a hidden container\'s dropped lines mark nothing among the lines '
+      'released with them', () async {
+    final logs = StackLogsController(
+      streams: streams,
+      serverId: _serverId,
+      containers: [_web, _db],
+      hold: const Duration(milliseconds: 30),
+    )..setVisible(true);
+    addTearDown(logs.dispose);
+    logs.toggle('db1');
+
+    // One release: the hidden container's marker sorts first, and one
+    // of its lines falls between the visible container's.
+    engine
+      ..emit(
+        containerLogBatch(streamOf('db1'), [
+          containerLine('b', at: _at(1)),
+          containerLine('d', at: _at(3)),
+        ], dropped: 7),
+      )
+      ..emit(
+        containerLogBatch(streamOf('web1'), [
+          containerLine('c', at: _at(2)),
+          containerLine('e', at: _at(4)),
+        ]),
+      );
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(logs.logs.length, 2);
+    expect(texts(logs), ['web-1 c', 'web-1 e']);
+
+    logs.toggle('db1');
+    expect(logs.logs[0], isA<LogDroppedLines>());
+    expect(texts(logs), ['db-1 b', 'web-1 c', 'db-1 d', 'web-1 e']);
+  });
+
   test('a container that replaces one of the same name is read in its '
       'place; one that is gone keeps its lines (UIB-9)', () async {
     final logs = StackLogsController(
@@ -316,6 +351,15 @@ void main() {
     expect(colourOf(2), isNot(colourOf(0)));
 
     logs.toggle('db1');
+    expect(texts(logs), ['web-1 old', 'db-1 ready', 'web-1 new', 'cache-1 up']);
+    // Showing a gone container's lines reads nothing again.
+    expect(containerLogOpens(engine.sent, 'db1'), hasLength(1));
+
+    // An id that was replaced names no container any more: a tap that
+    // lands on a chip drawn before the redeploy does nothing.
+    logs.toggle('web1');
+    expect(logs.hidden, isEmpty);
+    expect(logs.stateOf('web1'), StackLogState.ended);
     expect(texts(logs), ['web-1 old', 'db-1 ready', 'web-1 new', 'cache-1 up']);
 
     // The same containers again change nothing.
@@ -373,7 +417,7 @@ void main() {
     );
     await tester.pump(kStackLogsHold);
     await tester.pumpAndSettle();
-    expect(position.pixels, offset);
+    expect(tester.state<ScrollableState>(view.first).position.pixels, offset);
   });
 
   testWidgets('the page reads a redeployed stack\'s new containers '
