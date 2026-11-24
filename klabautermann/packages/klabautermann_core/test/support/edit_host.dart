@@ -62,6 +62,9 @@ final class EditHost extends TestLinkBase {
   /// What every run throws while set, as a link lost mid-plan would.
   RemoteCommandException? lost;
 
+  /// The output cap each run asked for, beside [commands].
+  final outputCaps = <int>[];
+
   @override
   Future<RemoteCommandResult> run(
     String command, {
@@ -70,6 +73,7 @@ final class EditHost extends TestLinkBase {
     List<int>? stdin,
   }) async {
     commands.add(command);
+    outputCaps.add(maxOutputBytes);
     if (lost case final error?) throw error;
     for (final MapEntry(:key, :value) in answers.entries) {
       if (command.contains(key)) return value;

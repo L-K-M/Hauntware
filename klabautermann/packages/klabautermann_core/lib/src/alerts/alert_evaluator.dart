@@ -10,6 +10,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         RuleScope,
         ThresholdState,
         evaluateThreshold;
+import 'package:meta/meta.dart';
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../engine/protocol.dart';
@@ -185,11 +186,22 @@ final class AlertEvaluator {
       if (metric == null || !metric.streams.any(streams.contains)) continue;
       _states[key] = switch (state.phase) {
         RulePhase.pending => ThresholdState.idle,
-        RulePhase.resolving => ThresholdState(RulePhase.firing, state.since),
+        // Back to firing since the alert was raised, as a breach while
+        // resolving goes back: `since` is where the clear began.
+        RulePhase.resolving => ThresholdState(
+          RulePhase.firing,
+          state.firedSince ?? state.since,
+        ),
         RulePhase.ok || RulePhase.firing => state,
       };
     }
   }
+
+  /// The hysteresis state of [ruleId] on [serverId], null before the
+  /// rule saw a reading of it.
+  @visibleForTesting
+  ThresholdState? stateOf(String ruleId, String serverId) =>
+      _states[(ruleId, serverId)];
 
   /// Forgets the states [gone] names, reporting each raised one as
   /// cleared with the rule [ruleOf] finds for it.

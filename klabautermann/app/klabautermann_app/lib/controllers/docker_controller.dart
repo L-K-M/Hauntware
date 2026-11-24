@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'container_usage.dart';
 import 'docker_endpoint_choices.dart';
+import 'fleet_controller.dart';
 
 /// The app's Docker endpoints for one engine run (03 §5.9, §10.1): each
 /// server's [DockerEndpointState], which the server header names in
@@ -1054,6 +1055,12 @@ final class DockerController {
         _sendChoice(serverId, server, always: true);
         _sendProgram(serverId, server, always: true);
         _read(serverId, server);
+        // An endpoint change dropped the watches with the old session;
+        // the views still counted watch the new machine now.
+        if (server.watchesDropped) {
+          server.watchesDropped = false;
+          _resendWatches(serverId, server);
+        }
       case DockerEndpointState(:final serverId):
         if (!_listed(serverId)) return;
         final server = _server(serverId);
@@ -1178,6 +1185,10 @@ final class DockerController {
       case CatalogReplaced(:final entries):
         // SYN-08: a server leaving the fleet takes its endpoint with it.
         final ids = _fleetIds = {for (final entry in entries) entry.serverId};
+        final keys = {
+          for (final entry in entries)
+            entry.serverId: FleetServer.endpointKey(entry),
+        };
         _servers.removeWhere((serverId, server) {
           if (ids.contains(serverId)) return false;
           server.endFileReads(DockerQueryFailure.notInFleet);
@@ -1185,6 +1196,31 @@ final class DockerController {
           server.dispose();
           return true;
         });
+        // An id that stays under another endpoint, an import re-pointed
+        // or a synced server a sync moved, now names another machine, so
+        // what the old one told it goes in place, as an EndpointChanged
+        // does, and its views' watches go out again on the next link.
+        for (final MapEntry(key: serverId, value: server) in _servers.entries) {
+          final key = keys[serverId];
+          if (key != null &&
+              server.endpointKey != null &&
+              server.endpointKey != key) {
+            _resetForEndpointChange(server);
+          }
+          server.endpointKey = key;
+        }
+      case EndpointChanged(:final serverId):
+        // A synced server's endpoint changed (SYN-08): the engine ends
+        // its session and watches, so its state goes in place as its
+        // views stay counted.
+        final server = _servers[serverId];
+        if (server == null || !_listed(serverId)) return;
+        _resetForEndpointChange(server);
+        // The fleet that follows carries the new key. Forgetting the old
+        // one here keeps it from reading as a second move, which would
+        // drop what the new machine has already answered since the link
+        // rose.
+        server.endpointKey = null;
       case EngineEvent():
         break;
     }
@@ -1227,6 +1263,65 @@ final class DockerController {
 
   _DockerServer _server(String serverId) =>
       _servers.putIfAbsent(serverId, _DockerServer.new);
+
+  /// Drops what the old endpoint told [server], whose id now names
+  /// another machine (SYN-08), keeping its notifiers and view counts:
+  /// the lists, usage, disk use, engine and compose details, the pending
+  /// query ids and one-shot reads go, the details views say why they
+  /// cannot read, and the views' watches go out again once the link to
+  /// the new machine rises. The engine ended the session and its watches,
+  /// so nothing of them is unwatched here.
+  void _resetForEndpointChange(_DockerServer server) {
+    server
+      ..linked = false
+      ..engineQuery = null
+      ..composeQuery = null
+      ..diskUseQuery = null
+      ..watchId = null
+      ..summaryWatchId = null
+      ..imagesWatchId = null
+      ..volumesWatchId = null
+      ..networksWatchId = null
+      ..eventsWatchId = null
+      ..stacksWatchId = null
+      ..watchesDropped = true;
+    server.endpoint.value = null;
+    server.engine.value = null;
+    server.compose.value = null;
+    server.containers.value = const DockerContainerList();
+    server.images.value = const DockerImageList();
+    server.volumes.value = const DockerVolumeList();
+    server.networks.value = const DockerNetworkList();
+    server.events.value = const DockerEventList();
+    server.stacks.value = const DockerStackList();
+    server.diskUse.value = const DockerDiskUse();
+    for (final history in server.usage.values) {
+      history.dispose();
+    }
+    server.usage.clear();
+    server.endFileReads(DockerQueryFailure.cancelled);
+    for (final inspected in server.inspected.values) {
+      inspected
+        ..queryId = null
+        ..readAgain = false
+        ..details.value = inspected.details.value.copyWith(
+          failure: () => const DockerQueryFailed(DockerQueryFailure.cancelled),
+        );
+    }
+  }
+
+  /// Sends the watches an endpoint change dropped for the views still
+  /// counted; the summary waits for the endpoint, as [_syncSummary]
+  /// says, and the endpoint state asks for it and the details again.
+  void _resendWatches(String serverId, _DockerServer server) {
+    if (server.containerViews > 0) _watch(serverId, server);
+    if (server.summaryViews > 0) _syncSummary(serverId, server);
+    if (server.imageViews > 0) _watchImages(serverId, server);
+    if (server.volumeViews > 0) _watchVolumes(serverId, server);
+    if (server.networkViews > 0) _watchNetworks(serverId, server);
+    if (server.eventViews > 0) _watchEvents(serverId, server);
+    if (server.stackViews > 0) _watchStacks(serverId, server);
+  }
 
   /// Moves the details [server] still has shown into [_leftFleet], each
   /// saying the server left the fleet, before the server goes; every one
@@ -1685,6 +1780,14 @@ final class _DockerServer {
 
   /// Whether the server's last [LinkState] was a usable link.
   bool linked = false;
+
+  /// The machine the fleet's entry reached last time this controller saw
+  /// it, [FleetServer.endpointKey] of its [FleetEntry]; null until then.
+  String? endpointKey;
+
+  /// Its watches were dropped with the old endpoint's session and wait
+  /// for the link to the new one, which [_resendWatches] sends again.
+  bool watchesDropped = false;
 
   /// How many Containers views show the server.
   int containerViews = 0;

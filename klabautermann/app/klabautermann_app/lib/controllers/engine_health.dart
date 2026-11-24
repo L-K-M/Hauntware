@@ -25,6 +25,7 @@ final class EngineStopped {
   /// exited without one.
   final String? error;
 
+  /// How far the restart got; a stop reported without one gave up.
   final EngineRecovery recovery;
 }
 
