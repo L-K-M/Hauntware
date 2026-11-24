@@ -427,20 +427,36 @@ jobs:
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20   # first run downloads the Flutter toolchain
     defaults:
       run:
         working-directory: klabautermann
         shell: bash
+    env:
+      # test/integration/shell_matrix_test.dart fails on a shell or tool
+      # the real-shell suites would otherwise skip; local runs leave this
+      # unset and skip.
+      KLABAUTERMANN_REQUIRE_SHELL_MATRIX: '1'
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: dart-lang/setup-dart@v1
+      # The engine ships inside the app, so its packages run on the Dart
+      # the pinned Flutter carries. The sibling pure-Dart jobs float on
+      # `sdk: stable`.
+      - uses: subosito/flutter-action@v2
         with:
-          sdk: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: ${{ runner.environment == 'github-hosted' }}
+      # The shells and tools the real-shell suites (tag `shell`) build
+      # their matrix from; keep in step with shellMatrixPackages in
+      # test/integration/shell_matrix.dart.
+      - name: Install the real-shell matrix
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          mksh busybox-static acl attr cron openssl gzip xz-utils
       - name: Resolve workspace
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
       # Discover packages, but keep every analyze/test path explicit.
       - name: Analyze
         run: |
@@ -503,7 +519,7 @@ jobs:
         run: dart pub get
       - name: Resolve Klabautermann workspace
         working-directory: klabautermann
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
       - name: Resolve M0 benchmark harness
         working-directory: poltergeist/packages/poltergeist_bench
         run: dart pub get
@@ -939,7 +955,7 @@ jobs:
         with:
           sdk: stable
       - name: Resolve workspace
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
       # run.sh owns the keys generated at job start, readiness, the safety
       # check, serialized tests and teardown on every exit (03 §11.3, D53).
       - name: Run SSH integration fixture
@@ -997,7 +1013,7 @@ jobs:
           xvfb libegl1 libgles2 libgl1-mesa-dri
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Measure frame timing under Xvfb
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
@@ -1639,7 +1655,7 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Analyze
         working-directory: klabautermann/app/klabautermann_app
         run: flutter analyze
@@ -2332,7 +2348,7 @@ jobs:
             klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Build
         working-directory: klabautermann/app/klabautermann_app
         run: flutter build ${{ matrix.build }}
@@ -2459,7 +2475,7 @@ jobs:
           cache: true
       - name: Resolve app
         working-directory: klabautermann/app/klabautermann_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Flatpak bundle
         working-directory: klabautermann
         run: scripts/build-flatpak.sh

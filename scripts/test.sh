@@ -134,7 +134,7 @@ if [[ "$scope" != flutter ]]; then
   # workspace's package_config.json, so Klabautermann resolves here, ahead
   # of its own block below.
   (
-    (cd klabautermann && run dart pub get)
+    (cd klabautermann && run dart pub get --enforce-lockfile)
     run dart analyze tool/import_guard tool/protocol_guard tool/license_gate
     run dart test tool/import_guard/test
     run dart test tool/protocol_guard/test
@@ -158,7 +158,7 @@ if [[ "$scope" != flutter ]]; then
   # The sampler's shell test runs dash and bash where present.
   (
     cd klabautermann
-    run dart pub get
+    run dart pub get --enforce-lockfile
     dirs=()
     for package in packages/*; do
       [[ -d "$package" ]] || continue
@@ -230,7 +230,7 @@ if [[ "$scope" != dart ]]; then
   # ---- Klabautermann app.
   (
     cd klabautermann
-    (cd app/klabautermann_app && run flutter pub get && run flutter analyze && run flutter test \
+    (cd app/klabautermann_app && run flutter pub get --enforce-lockfile && run flutter analyze && run flutter test \
       && run dart format --set-exit-if-changed --output=none .)
   )
 fi
