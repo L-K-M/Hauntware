@@ -58,6 +58,9 @@ final class _Panel {
   DateTime now = jobsNow;
   int _seq = 0;
 
+  /// The controller the panel samples through, which a test caps.
+  late final MonitoringController monitoring;
+
   Future<void> emit(WidgetTester tester, EngineEvent event) async {
     engine.emit(event);
     await tester.pumpAndSettle();
@@ -153,6 +156,7 @@ Future<_Panel> _pump(
   final shown = ValueNotifier(visible);
   final panel = _Panel(engine, shown);
   final monitoring = MonitoringController(engine, now: () => panel.now);
+  panel.monitoring = monitoring;
   addTearDown(() async {
     shown.dispose();
     panel.server.dispose();
@@ -431,6 +435,22 @@ void main() {
       next(),
       Theme.of(tester.element(table)).colorScheme.onSurfaceVariant,
     );
+  });
+
+  testWidgets('under the cellular saver the list never reads as stale, '
+      'since both streams are read once', (tester) async {
+    final panel = await _pump(tester);
+    panel.monitoring.setCadenceCaps({_serverId: CadenceProfile.cellularSaver});
+    await panel.all(tester);
+    expect(find.text('Updated 0 s ago'), findsOneWidget);
+
+    // The saver reads cron and timers once per subscription, so no newer
+    // reading is ever due and the last one keeps its fresh words.
+    panel.now = jobsNow.add(const Duration(minutes: 5));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Updated 5 min ago'), findsOneWidget);
+    expect(find.textContaining('Stale'), findsNothing);
+    expect(find.byIcon(Icons.history), findsNothing);
   });
 
   testWidgets('the clock runs only while the tab shows', (tester) async {

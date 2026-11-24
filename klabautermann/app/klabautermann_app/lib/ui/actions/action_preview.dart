@@ -26,7 +26,19 @@ void startAction(
   void Function(ActionRefusalReason reason, String? detail)? onRefused,
 }) {
   final operations = OperationsScope.maybeOf(context);
-  if (operations == null || operations.planning) return;
+  if (operations == null) return;
+  if (operations.planning) {
+    // Planning reads the host and the preview is modal, so a second
+    // tap cannot start another one. Say why this one did nothing.
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay != null && overlay.mounted) {
+      showTopToast(
+        overlay,
+        message: AppLocalizations.of(context).actionPreviewBusy,
+      );
+    }
+    return;
+  }
   unawaited(
     previewAndRun(
       context,
@@ -59,7 +71,13 @@ Future<void> previewAndRun(
   for (ActionIntent? next = intent; next != null;) {
     final answer = await operations.plan(next);
     next = null;
-    if (!context.mounted) return;
+    // The opener may have left the tree while the host planned, as a
+    // phone row's button does after its page popped. The preview is
+    // already paid for, so the captured root overlay shows it anyway.
+    // An engine restart remounts the whole app, root overlay included;
+    // then nothing is left to show it.
+    if (!context.mounted && !overlay.mounted) return;
+    final host = context.mounted ? context : overlay.context;
 
     switch (answer) {
       case PlanRefused(:final reason, :final detail) when onRefused != null:
@@ -71,7 +89,7 @@ Future<void> previewAndRun(
       case PlanReady(:final planId, :final preview):
         ActionIntent? switched;
         final confirmation = await showActionPreview(
-          context,
+          host,
           preview,
           onSwitch: (intent) => switched = intent,
         );

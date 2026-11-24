@@ -437,9 +437,14 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
     return null;
   }
 
+  /// The largest hold the editor accepts, in minutes: a week. A larger
+  /// value overflows the microsecond count when [_minutes] converts it.
+  static const _maxMinutes = 7 * 24 * 60;
+
   String? _validateMinutes(AppLocalizations l10n, String? text) {
     final value = _parse(text ?? '');
     if (value == null || value < 0) return l10n.alertRuleMinutesInvalid;
+    if (value > _maxMinutes) return l10n.alertRuleMinutesTooLong;
     return null;
   }
 

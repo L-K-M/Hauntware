@@ -69,6 +69,9 @@ class SyncSignOutSection extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(l10n.settingsSyncSignOutTitle),
+        // A phone at large text with the keyboard up can outgrow the
+        // confirmation; scroll rather than clip (UIA-04).
+        scrollable: true,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

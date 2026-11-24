@@ -36,11 +36,19 @@ const double _cellPadding = 16;
 /// text never pushes the table out of sight.
 const double _headerShare = 0.4;
 
-/// When the list turns stale: twice the 60 s desktop and phone period of
-/// `timers` and `cron` (03 §6.4). Cellular saver reads them once per
-/// subscription, so this limit needs another look once the app sends
-/// `SetCadenceProfile`.
-const Duration _staleAfter = Duration(seconds: 120);
+/// The list's stale limit under [cadence], or null when the cellular
+/// saver reads `cron` and `timers` only once per subscription, so no
+/// newer reading is ever due: twice the shortest of their 03 §6.4
+/// periods (60 s on desktop and phone), since a reading of either
+/// stream refreshes the list.
+Duration? _staleAfterFor(CadenceProfile cadence) => switch ((
+  samplingPeriod(SampleStream.cron, cadence),
+  samplingPeriod(SampleStream.timers, cadence),
+)) {
+  (null, null) => null,
+  (final cron?, _) => cron * 2,
+  (_, final timers?) => timers * 2,
+};
 
 /// The probe's name for the `crontab` command (`kProbeTools`).
 const String _crontabTool = 'crontab';
@@ -529,9 +537,12 @@ class _JobsPanelState extends State<JobsPanel> {
     // The list is as fresh as its older stream.
     final oldest = _earliest(readings.map((s) => s.at));
     final ticking = widget.visible && oldest != null;
+    final staleAfter = _staleAfterFor(
+      widget.monitoring.cadenceFor(widget.serverId),
+    );
     Freshness freshnessAt(DateTime now) => freshnessOf(
       now: now,
-      staleAfter: _staleAfter,
+      staleAfter: staleAfter,
       lastSampleAt: oldest,
       // No monitor set watches a server yet (FL-21): this panel samples it
       // while it shows.
@@ -674,7 +685,8 @@ class _JobsPanelState extends State<JobsPanel> {
                     ticking: ticking,
                     // The times turn stale, or a run they show passes.
                     dueAfter: (now) => _earliest([
-                      if (!freshnessAt(now).stale) ?oldest?.add(_staleAfter),
+                      if (!freshnessAt(now).stale && staleAfter != null)
+                        ?oldest?.add(staleAfter),
                       for (final job in jobs) ?_nextAfter(job, now),
                     ]),
                     builder: (context, now) => SortableTable<JobEntry>(

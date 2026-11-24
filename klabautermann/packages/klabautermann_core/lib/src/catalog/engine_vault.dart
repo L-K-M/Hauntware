@@ -51,20 +51,28 @@ final class VaultUnavailableException implements Exception {
 /// vault to the account key through the journal, as Séance does.
 final class EngineVault {
   /// [enrolled] says whether a sync account is enrolled, whose key the
-  /// keystore's master key then is.
+  /// keystore's master key then is. [store], for tests, replaces the
+  /// `FileVaultStore` over [supportDirectory]'s vault file.
   factory EngineVault(
     Directory supportDirectory, {
     required SupportDirectoryAccess access,
     required SyncKeystore keystore,
     required bool Function() enrolled,
     Random? random,
-  }) => EngineVault._(
-    File('${supportDirectory.path}${Platform.pathSeparator}$vaultFileName'),
-    access,
-    keystore,
-    enrolled,
-    random ?? Random.secure(),
-  );
+    FileVaultStore? store,
+  }) {
+    final file = File(
+      '${supportDirectory.path}${Platform.pathSeparator}$vaultFileName',
+    );
+    return EngineVault._(
+      file,
+      access,
+      keystore,
+      enrolled,
+      random ?? Random.secure(),
+      store ?? FileVaultStore(file),
+    );
+  }
 
   EngineVault._(
     this._file,
@@ -72,7 +80,8 @@ final class EngineVault {
     this._keystore,
     this._enrolled,
     this._random,
-  ) : store = FileVaultStore(_file);
+    this.store,
+  );
 
   final SupportDirectoryAccess _access;
   final SyncKeystore _keystore;
