@@ -32,6 +32,20 @@ abstract interface class EngineClient {
   Future<void> shutdown();
 }
 
+/// How an engine run ended: on [Shutdown] or its own exit, with no
+/// [error], or on an unhandled error, which ends a spawned isolate.
+@immutable
+final class EngineExit {
+  const EngineExit({this.error, this.stack});
+
+  /// The unhandled error the isolate ended on, as text; null for an exit
+  /// without one.
+  final String? error;
+
+  /// That error's stack trace, where the VM sent one.
+  final String? stack;
+}
+
 /// [EngineClient] over a spawned engine isolate.
 final class IsolateEngineClient implements EngineClient {
   IsolateEngineClient._(
@@ -55,7 +69,7 @@ final class IsolateEngineClient implements EngineClient {
   final ReceivePort _fromEngine;
   final ReceivePort _exitPort;
   final ReceivePort _errorPort;
-  final Future<void> _exited;
+  final Future<EngineExit> _exited;
   final StreamController<EngineEvent> _events;
   Future<void>? _shutdown;
 
@@ -109,14 +123,16 @@ final class IsolateEngineClient implements EngineClient {
     final ready = Completer<EngineReady>();
     // A failed handshake leaves [ready] unawaited; mark its error handled.
     ready.future.ignore();
-    final exited = Completer<void>();
+    final exited = Completer<EngineExit>();
     // Set once the handshake succeeds, so an engine that exits by itself
     // afterwards makes [send] throw rather than drop requests unanswered.
     IsolateEngineClient? client;
     // The first unhandled error the engine reported, which ends it
     // (errors are fatal in a spawned isolate). The VM sends it before the
-    // exit message, so a startup that fails names its cause.
+    // exit message, so a startup that fails names its cause, and so does
+    // an engine that dies later ([exited]).
     String? fatalError;
+    String? fatalStack;
 
     // The engine sends its startup fleet right after EngineReady, before
     // spawn's caller can have listened; a broadcast stream would drop it.
@@ -165,7 +181,12 @@ final class IsolateEngineClient implements EngineClient {
         }
       }),
       errorPort.listen((message) {
-        if (message case [final String error, _]) fatalError ??= error;
+        if (message case [final String error, final stack]) {
+          if (fatalError == null) {
+            fatalError = error;
+            fatalStack = stack is String ? stack : null;
+          }
+        }
       }),
       exitPort.listen((_) {
         final reason = switch (fatalError) {
@@ -179,7 +200,7 @@ final class IsolateEngineClient implements EngineClient {
           ready.completeError(StateError(reason));
         }
         if (!exited.isCompleted) {
-          exited.complete();
+          exited.complete(EngineExit(error: fatalError, stack: fatalStack));
         }
         client?._toEngine = null;
         unawaited(events.close());
@@ -218,6 +239,12 @@ final class IsolateEngineClient implements EngineClient {
 
   @override
   Stream<EngineEvent> get events => _events.stream;
+
+  /// Completes when the engine isolate has exited, with the unhandled
+  /// error it ended on, if any. [events] closes at the same time and says
+  /// nothing of why; the app logs and shows this, and starts a new engine
+  /// when the exit was not its own [shutdown].
+  Future<EngineExit> get exited => _exited;
 
   @override
   void send(EngineRequest request) {

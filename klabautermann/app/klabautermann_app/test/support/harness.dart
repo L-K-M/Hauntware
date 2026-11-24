@@ -150,6 +150,7 @@ Future<AppHarness> pumpApp(
   bool alerts = false,
   SystemNotifications? notifications,
   bool operations = false,
+  Future<void> Function()? beforeExit,
   DockerNoticeController? dockerNotice,
   DockerEndpointChoices? dockerEndpointChoices,
   DeviceSettingsIssue? settingsIssue,
@@ -223,6 +224,7 @@ Future<AppHarness> pumpApp(
       contextOf: () => appNavigatorKey.currentContext,
       shells: () => harness.monitoring.terminals.shells,
       lock: appLock,
+      beforeExit: beforeExit,
     ),
     null => null,
   };

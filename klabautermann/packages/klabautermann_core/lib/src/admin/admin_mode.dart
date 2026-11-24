@@ -147,7 +147,19 @@ final class AdminModeController {
     }
     final server = _servers[serverId] = _Server();
     _send(serverId, AdminModePhase.detecting);
+    try {
+      await _enable(serverId, server);
+    } on Object {
+      // Nothing awaits this in the engine, and a server left turning on
+      // would refuse every later attempt: whatever was thrown, the
+      // attempt ends as failed.
+      if (_current(serverId, server)) {
+        _fail(serverId, server, AdminFailure.unavailable);
+      }
+    }
+  }
 
+  Future<void> _enable(String serverId, _Server server) async {
     final link = _linkFor(serverId);
     final profile = _profiles[serverId];
     final endpoint = _endpointOf(serverId);
@@ -239,6 +251,13 @@ final class AdminModeController {
     ElevationProbe probe,
     String? password,
   ) async {
+    // A password is sent as one line on stdin (03 §8.3), so one holding a
+    // line break or NUL cannot be the account's: pasted text often ends
+    // in CR LF. It is refused as wrong, without reaching the host, where
+    // the executor would throw an ArgumentError for it.
+    if (password != null && _unsendable.hasMatch(password)) {
+      return AdminFailure.wrongPassword;
+    }
     try {
       await _validate(link, probe, password);
       return null;
@@ -257,6 +276,8 @@ final class AdminModeController {
       return AdminFailure.noLink;
     }
   }
+
+  static final _unsendable = RegExp(r'[\r\n\x00]');
 
   void _turnOn(
     String serverId,

@@ -41,6 +41,7 @@ import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/editor_display.dart';
+import 'controllers/engine_health.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
@@ -57,6 +58,7 @@ import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
 import 'theme/app_theme.dart';
+import 'ui/engine_health_notice.dart';
 import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/app_undo.dart' show UndoHistoryScope;
@@ -144,6 +146,7 @@ class KlabautermannApp extends StatelessWidget {
     this.importStoreIssue,
     this.syncStoreIssues = const [],
     this.instanceLockIssue,
+    this.engineHealth,
     this.openSettingsWindow,
     this.toolbarBand,
     this.appVersion,
@@ -321,6 +324,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Why the instance lock could not be taken, told once at startup: this
   /// desktop instance runs without the guard against a second one.
   final InstanceLockUnavailable? instanceLockIssue;
+
+  /// What the engine reports about its own health, which the home route
+  /// tells the user; null where the app runs without it.
+  final EngineHealth? engineHealth;
 
   /// Opens Settings in its own window; null on phones, where Settings is
   /// [kSettingsRoute].
@@ -589,124 +596,127 @@ class KlabautermannApp extends StatelessWidget {
             instanceLockIssue: instanceLockIssue,
             // The home route stays mounted under every other route, so
             // its dialogs come up over Settings too.
-            child: PromptHost(
-              prompts: prompts,
-              labelOf: (serverId) =>
-                  fleet.servers
-                      .where((server) => server.id == serverId)
-                      .firstOrNull
-                      ?.displayName ??
-                  serverId,
-              child: _withResultToasts(
-                Builder(
-                  builder: (context) {
-                    void openSettings() => unawaited(_openSettings(context));
-                    // The update banner's View Release opens the release
-                    // page in the browser; null where there is no check.
-                    final openRelease = updates == null
-                        ? null
-                        : (Uri url) => launchUrl(
-                            url,
-                            mode: LaunchMode.externalApplication,
-                          );
-                    // The desktop menus and their shortcuts (03 §10.2),
-                    // from the one command registry.
-                    final platform = Theme.of(context).platform;
-                    final navigation = this.navigation;
-                    late final List<AppCommand> commands;
-                    commands = buildAppCommands(
-                      platform: platform,
-                      fleet: fleet,
-                      onOpenSettings: openSettings,
-                      appVersion: appVersion,
-                      panes: windowPanes,
-                      undoHistory: undoHistory,
-                      onOpenPalette: navigation == null
+            child: EngineHealthNotice(
+              health: engineHealth,
+              child: PromptHost(
+                prompts: prompts,
+                labelOf: (serverId) =>
+                    fleet.servers
+                        .where((server) => server.id == serverId)
+                        .firstOrNull
+                        ?.displayName ??
+                    serverId,
+                child: _withResultToasts(
+                  Builder(
+                    builder: (context) {
+                      void openSettings() => unawaited(_openSettings(context));
+                      // The update banner's View Release opens the release
+                      // page in the browser; null where there is no check.
+                      final openRelease = updates == null
                           ? null
-                          : (context) => _openOnce(_DialogKind.palette, () {
-                              final l10n = AppLocalizations.of(context);
-                              return showCommandPalette(
-                                context,
-                                paletteCommands(
-                                  l10n: l10n,
-                                  platform: platform,
-                                  context: context,
-                                  actions: commands,
-                                  fleet: fleet,
-                                  monitoring: monitoring,
-                                  navigation: navigation,
-                                ),
-                                strings: paletteStrings(l10n),
-                              );
-                            }),
-                      onOpenPanel: navigation == null
-                          ? null
-                          : (context, panel) {
-                              // A narrow window's phone shell has no
-                              // workspace tabs to switch.
-                              final selected = fleet.selectedServer;
-                              if (selected == null ||
-                                  !showsDesktopShell(context)) {
-                                return;
-                              }
-                              navigation.openPanel(selected.id, panel);
-                            },
-                      onShowKeyboardMap: (context) => _openOnce(
-                        _DialogKind.keyboardMap,
-                        () => showKeyboardMap(context),
-                      ),
-                      updates: updates,
-                      onOpenRelease: openRelease,
-                    );
-                    return AppMenuHost(
-                      // Pane checks and undo labels follow their
-                      // listenables beside the fleet's command state,
-                      // and the commands the lock holds back follow it.
-                      listenable: Listenable.merge([
-                        fleet,
-                        windowPanes,
-                        undoHistory,
-                        ?appLock,
-                      ]),
-                      locked: switch (appLock) {
-                        final appLock? => () => appLock.locked,
-                        null => null,
-                      },
-                      commands: commands,
-                      // The add verbs follow the enrollment (P16).
-                      child: KeyboardMapScope(
-                        commandKeys: (context) => commandKeyboardMap(
-                          AppLocalizations.of(context),
-                          platform,
-                          [
-                            for (final command in commands)
-                              if (command.enabled()) command,
-                          ],
+                          : (Uri url) => launchUrl(
+                              url,
+                              mode: LaunchMode.externalApplication,
+                            );
+                      // The desktop menus and their shortcuts (03 §10.2),
+                      // from the one command registry.
+                      final platform = Theme.of(context).platform;
+                      final navigation = this.navigation;
+                      late final List<AppCommand> commands;
+                      commands = buildAppCommands(
+                        platform: platform,
+                        fleet: fleet,
+                        onOpenSettings: openSettings,
+                        appVersion: appVersion,
+                        panes: windowPanes,
+                        undoHistory: undoHistory,
+                        onOpenPalette: navigation == null
+                            ? null
+                            : (context) => _openOnce(_DialogKind.palette, () {
+                                final l10n = AppLocalizations.of(context);
+                                return showCommandPalette(
+                                  context,
+                                  paletteCommands(
+                                    l10n: l10n,
+                                    platform: platform,
+                                    context: context,
+                                    actions: commands,
+                                    fleet: fleet,
+                                    monitoring: monitoring,
+                                    navigation: navigation,
+                                  ),
+                                  strings: paletteStrings(l10n),
+                                );
+                              }),
+                        onOpenPanel: navigation == null
+                            ? null
+                            : (context, panel) {
+                                // A narrow window's phone shell has no
+                                // workspace tabs to switch.
+                                final selected = fleet.selectedServer;
+                                if (selected == null ||
+                                    !showsDesktopShell(context)) {
+                                  return;
+                                }
+                                navigation.openPanel(selected.id, panel);
+                              },
+                        onShowKeyboardMap: (context) => _openOnce(
+                          _DialogKind.keyboardMap,
+                          () => showKeyboardMap(context),
                         ),
-                        child: ListenableBuilder(
-                          listenable: Listenable.merge([?sync]),
-                          builder: (context, _) => AdaptiveShell(
-                            fleet: fleet,
-                            monitoring: monitoring,
-                            navigation: navigation,
-                            coverage: coverage,
-                            onOpenSettings: openSettings,
-                            updates: updates,
-                            openRelease: openRelease,
-                            sync: sync,
-                            panes: windowPanes,
-                            onAddServer: switch (_serverEditing) {
-                              final editing? when editing.enabled =>
-                                () => unawaited(
-                                  openServerEditor(context, editing),
-                                ),
-                              _ => null,
-                            },
+                        updates: updates,
+                        onOpenRelease: openRelease,
+                      );
+                      return AppMenuHost(
+                        // Pane checks and undo labels follow their
+                        // listenables beside the fleet's command state,
+                        // and the commands the lock holds back follow it.
+                        listenable: Listenable.merge([
+                          fleet,
+                          windowPanes,
+                          undoHistory,
+                          ?appLock,
+                        ]),
+                        locked: switch (appLock) {
+                          final appLock? => () => appLock.locked,
+                          null => null,
+                        },
+                        commands: commands,
+                        // The add verbs follow the enrollment (P16).
+                        child: KeyboardMapScope(
+                          commandKeys: (context) => commandKeyboardMap(
+                            AppLocalizations.of(context),
+                            platform,
+                            [
+                              for (final command in commands)
+                                if (command.enabled()) command,
+                            ],
+                          ),
+                          child: ListenableBuilder(
+                            listenable: Listenable.merge([?sync]),
+                            builder: (context, _) => AdaptiveShell(
+                              fleet: fleet,
+                              monitoring: monitoring,
+                              navigation: navigation,
+                              coverage: coverage,
+                              onOpenSettings: openSettings,
+                              updates: updates,
+                              openRelease: openRelease,
+                              sync: sync,
+                              panes: windowPanes,
+                              onAddServer: switch (_serverEditing) {
+                                final editing? when editing.enabled =>
+                                  () => unawaited(
+                                    openServerEditor(context, editing),
+                                  ),
+                                _ => null,
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

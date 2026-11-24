@@ -22,7 +22,7 @@ import 'package:seance_core/seance_core.dart'
 
 import '../../engine/protocol.dart';
 import '../confirmation.dart';
-import '../edit_reader.dart' show EditContext;
+import '../edit_reader.dart' show EditContext, kIndexReadMaxBytes;
 import '../operation_plan.dart';
 import '../plan_types.dart';
 
@@ -47,6 +47,7 @@ Future<PlanAttempt> planBackupRemoval(
       : c.link.run(
           HostCommands.commandLine(argv, quote: quoteShellWord),
           stdin: const [],
+          maxOutputBytes: kIndexReadMaxBytes,
         );
 
   try {
@@ -54,6 +55,14 @@ Future<PlanAttempt> planBackupRemoval(
     if (dir == null) return _refused(ActionRefusalReason.noLink);
     final read = await run(EditCommands.backupIndexRead(dir));
     if (read.exitCode != 0) return _refused(ActionRefusalReason.noLink);
+    // An index cut at the output cap is not the index: its hash is not
+    // the file's, and the rewrite would lose the lines past the cut.
+    if (read.truncated) {
+      return _refused(
+        ActionRefusalReason.invalidTarget,
+        detail: 'backup index: too large to read whole',
+      );
+    }
     final index = parseBackupIndex(read.stdout);
     // Lines the parser skipped would vanish from the rewrite.
     if (index.warnings.isNotEmpty) {
@@ -144,5 +153,5 @@ Future<String?> _userBackupsDir(
 PlanAttempt _planned(OperationPlan plan) =>
     (plan: plan, refusal: null, detail: null);
 
-PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason, detail: null);
+PlanAttempt _refused(ActionRefusalReason reason, {String? detail}) =>
+    (plan: null, refusal: reason, detail: detail);

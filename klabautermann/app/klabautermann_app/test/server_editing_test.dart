@@ -240,10 +240,14 @@ void main() {
       await tester.ensureVisible(testButton);
       await tester.tap(testButton);
       await tester.pump();
+      final asked =
+          harness.engine.sentOfType<TestServerConnection>().single
+              as TestServerConnection;
       harness.engine.emit(
-        const RequestRejected(
+        RequestRejected(
           'TestServerConnection',
           'links are off in this engine',
+          requestId: asked.requestId,
         ),
       );
       await tester.pumpAndSettle();
@@ -568,8 +572,45 @@ void main() {
       engine.emit(tested);
       expect(await answered, same(tested));
 
-      engine.emit(const RequestRejected('TestServerConnection', 'links off'));
+      final second = engine.sent[1] as TestServerConnection;
+      engine.emit(
+        RequestRejected(
+          'TestServerConnection',
+          'links off',
+          requestId: second.requestId,
+        ),
+      );
       await expectLater(rejected, throwsA(isA<ServerEditRefused>()));
+    });
+
+    test('CTL-10: one rejected test fails that test alone', () async {
+      final engine = FakeEngineClient();
+      final editor = ServerEditorController(engine);
+      addTearDown(() async {
+        editor.dispose();
+        await engine.close();
+      });
+
+      final kept = editor.test(_stored, const ServerCredentialEntry());
+      final refused = editor.test(_stored, const ServerCredentialEntry());
+      final [first, second] = engine.sent.cast<TestServerConnection>();
+      engine.emit(
+        RequestRejected(
+          'TestServerConnection',
+          'invalid draft',
+          requestId: second.requestId,
+        ),
+      );
+      await expectLater(refused, throwsA(isA<ServerEditRefused>()));
+
+      final tested = ServerConnectionTested(
+        requestId: first.requestId,
+        ok: true,
+        summary: 'Connected.',
+        log: '',
+      );
+      engine.emit(tested);
+      expect(await kept, same(tested));
     });
 
     test('answers find their requests by id', () async {

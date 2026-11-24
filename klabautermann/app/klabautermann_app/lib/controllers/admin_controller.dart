@@ -205,7 +205,36 @@ final class AdminController extends ChangeNotifier {
         _firewallReads.remove(requestId)?.$2.complete(event);
       case SshdPostureReport(:final requestId):
         _sshdReads.remove(requestId)?.$2.complete(event);
+      case RequestRejected(:final requestName, :final requestId?):
+        _rejected(requestName, requestId);
       default:
+    }
+  }
+
+  /// The engine refused the read [requestName] with [requestId], so no
+  /// report follows: it answers as it does without a link. The five reads
+  /// share one id counter, and each is still matched by its own name.
+  void _rejected(String requestName, String requestId) {
+    if (requestName == '$ReadUserCrontabs') {
+      if (_crontabReads.remove(requestId) case (final serverId, final read)) {
+        read.complete(_noLink(serverId, requestId));
+      }
+    } else if (requestName == '$ReadSmart') {
+      if (_smartReads.remove(requestId) case (final serverId, final read)) {
+        read.complete(_noSmartLink(serverId, requestId));
+      }
+    } else if (requestName == '$ReadRestarts') {
+      if (_restartReads.remove(requestId) case (final serverId, final read)) {
+        read.complete(_noRestartsLink(serverId, requestId));
+      }
+    } else if (requestName == '$ReadFirewall') {
+      if (_firewallReads.remove(requestId) case (final serverId, final read)) {
+        read.complete(_noFirewallLink(serverId, requestId));
+      }
+    } else if (requestName == '$ReadSshdPosture') {
+      if (_sshdReads.remove(requestId) case (final serverId, final read)) {
+        read.complete(_noSshdLink(serverId, requestId));
+      }
     }
   }
 

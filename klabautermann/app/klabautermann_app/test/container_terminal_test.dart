@@ -191,7 +191,11 @@ void main() {
       engine
         ..emit(const RequestRejected('Connect', 'unrelated'))
         ..emit(
-          const RequestRejected('OpenTerminal', 'links are off in this engine'),
+          RequestRejected(
+            'OpenTerminal',
+            'links are off in this engine',
+            requestId: opening.id,
+          ),
         );
       await pumpEventQueue();
 
@@ -199,6 +203,30 @@ void main() {
       expect(ended.reason, TerminalCloseReason.failed);
       expect(ended.detail, 'links are off in this engine');
       expect(running.state.value, isA<ContainerShellRunning>());
+    });
+
+    test('CTL-10: one rejected open ends that shell alone; the other one '
+        'still opening hears its own answer', () async {
+      ContainerShell open() => terminals.open(
+        serverId: _serverId,
+        containerId: _id,
+        containerName: 'web-db',
+        columns: 80,
+        rows: 24,
+      );
+      final kept = open();
+      final refused = open();
+
+      engine.emit(
+        RequestRejected('OpenTerminal', 'no container', requestId: refused.id),
+      );
+      await pumpEventQueue();
+
+      expect(refused.state.value, isA<ContainerShellEnded>());
+      expect(kept.state.value, isA<ContainerShellOpening>());
+      engine.emit(TerminalOpened(kept.id, ['/bin/sh']));
+      await pumpEventQueue();
+      expect(kept.state.value, isA<ContainerShellRunning>());
     });
 
     test('a stopped engine ends every shell, and later opens end at '

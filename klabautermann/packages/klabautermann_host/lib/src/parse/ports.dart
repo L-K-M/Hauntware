@@ -220,13 +220,15 @@ ListeningSocket? _netstatLine(String line) {
   final process = start < 0
       ? null
       : _netstatProcess.firstMatch(words.sublist(start).join(' '));
+  // A digit run past 64 bits is no pid: the holder is left unknown.
+  final pid = process == null ? null : int.tryParse(process[1]!);
   return ListeningSocket(
     protocol: protocol,
     address: local.$1,
     port: local.$2,
     processes: [
-      if (process != null)
-        PortProcess(name: process[2]!, pid: int.parse(process[1]!)),
+      if (process != null && pid != null)
+        PortProcess(name: process[2]!, pid: pid),
     ],
   );
 }

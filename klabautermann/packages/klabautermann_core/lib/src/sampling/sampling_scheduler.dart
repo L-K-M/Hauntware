@@ -125,7 +125,8 @@ final class SamplingScheduler {
   /// [deadPeerHint] and [clearDeadPeerHint] reach the link supervisor.
   /// [probed] hears every probe answer, changed or not, for the
   /// capability cache (D59). [opsRead] hears each `ops` section (03
-  /// §7.17); without it the scheduler never reads `ops`.
+  /// §7.17); without it the scheduler never reads `ops`. [onFault] hears
+  /// an error a request's settling threw, after the scheduler recovered.
   /// [openSampler], [startTimer], [now] (the clock events carry) and
   /// [elapsed] (a monotonic clock, which due times follow so that a
   /// changed wall clock cannot stall sampling) are test seams.
@@ -137,6 +138,7 @@ final class SamplingScheduler {
     required this._clearDeadPeerHint,
     this._probed = _ignoreProbe,
     this._opsRead,
+    this._onFault,
     this._openSampler = _defaultSamplerOpener,
     this._startTimer = Timer.new,
     this._now = _utcNow,
@@ -150,6 +152,7 @@ final class SamplingScheduler {
   final void Function(String serverId, SshLink link) _clearDeadPeerHint;
   final void Function(String serverId, HostProfile profile) _probed;
   final void Function(String serverId, HwsSection section)? _opsRead;
+  final void Function(Object error, StackTrace stack)? _onFault;
   final SamplerOpener _openSampler;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final DateTime Function() _now;
@@ -525,8 +528,18 @@ final class SamplingScheduler {
   /// loses every time therefore cannot turn into a loop.
   void _probe(_Server server, _Run run) {
     run.probing = true;
-    unawaited(
-      run.slow.session.onDemand(Collector.probe, const []).then((outcome) {
+    _settle(
+      run.slow.session.onDemand(Collector.probe, const []),
+      recover: () {
+        if (!identical(server.run, run)) return;
+        // As for a probe that brought no reply: it goes out again.
+        run.probing = false;
+        run.holdFast = false;
+        run.probeAt ??= _elapsed() + run.probeRetry;
+        _schedule(server, run, run.slow);
+        _schedule(server, run, run.fast);
+      },
+      (outcome) {
         if (!identical(server.run, run)) return;
 
         run.probing = false;
@@ -559,9 +572,42 @@ final class SamplingScheduler {
         }
         _schedule(server, run, run.slow);
         _schedule(server, run, run.fast);
-      }),
+      },
     );
     _schedule(server, run, run.slow);
+  }
+
+  /// Hands [request]'s outcome to [settled]. A request the session
+  /// refuses with an error (`HwsRequestError`) is read as one it skipped:
+  /// nothing was written. Should [settled] throw, [recover] puts the
+  /// sampler back on its schedule and the error goes to the fault hook,
+  /// so one bad reply neither leaves a sampler busy for the run nor
+  /// reaches the zone as an unhandled error.
+  void _settle(
+    Future<SamplerOutcome> request,
+    void Function(SamplerOutcome outcome) settled, {
+    required void Function() recover,
+  }) {
+    unawaited(
+      request
+          .then(
+            settled,
+            onError: (Object error, StackTrace stack) {
+              _onFault?.call(error, stack);
+              settled(const SamplerSkipped(SamplerSkipReason.notReady));
+            },
+          )
+          .then<void>(
+            (_) {},
+            onError: (Object error, StackTrace stack) {
+              try {
+                recover();
+              } finally {
+                _onFault?.call(error, stack);
+              }
+            },
+          ),
+    );
   }
 
   /// Sends the `ops` read the server owes on [run]'s free slow sampler,
@@ -570,8 +616,15 @@ final class SamplingScheduler {
   void _readOps(_Server server, _Run run) {
     final sampler = run.slow;
     sampler.busy = true;
-    unawaited(
-      sampler.session.onDemand(Collector.ops, const []).then((outcome) {
+    void recover() {
+      sampler.busy = false;
+      if (identical(server.run, run)) _schedule(server, run, sampler);
+    }
+
+    _settle(
+      sampler.session.onDemand(Collector.ops, const []),
+      recover: recover,
+      (outcome) {
         sampler.busy = false;
         if (!identical(server.run, run)) return;
 
@@ -592,7 +645,7 @@ final class SamplingScheduler {
           _opsRead!(server.pipeline.serverId, section);
         }
         _schedule(server, run, sampler);
-      }),
+      },
     );
     _schedule(server, run, sampler);
   }
@@ -616,8 +669,13 @@ final class SamplingScheduler {
     final request = probe
         ? sampler.session.onDemand(Collector.probe, const [])
         : sampler.session.tick(collectors);
-    unawaited(
-      request.then((outcome) {
+    _settle(
+      request,
+      recover: () {
+        sampler.busy = false;
+        if (identical(server.run, run)) _schedule(server, run, sampler);
+      },
+      (outcome) {
         sampler.busy = false;
         if (!identical(server.run, run)) return;
 
@@ -653,7 +711,7 @@ final class SamplingScheduler {
           }
         }
         _schedule(server, run, sampler);
-      }),
+      },
     );
     // The pump returns after this call, so the other streams' timers are
     // armed here while the request is out.
@@ -916,11 +974,16 @@ final class SamplingScheduler {
     sampler.busy = true;
     final outcome = sampler.session.tick(_collectors(read));
     _schedule(server, run, sampler);
-    unawaited(
-      outcome.then((o) {
+    _settle(
+      outcome,
+      recover: () {
+        if (sent) sampler.busy = false;
+        if (identical(server.run, run)) _schedule(server, run, sampler);
+      },
+      (o) {
         if (sent) sampler.busy = false;
         _onTick(server, run, sampler, read, o);
-      }),
+      },
     );
   }
 
