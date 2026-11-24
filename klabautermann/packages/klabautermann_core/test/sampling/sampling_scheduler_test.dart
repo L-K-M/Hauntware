@@ -904,6 +904,79 @@ void main() {
       expect(sessions.last, same(restarted));
     });
 
+    test(
+      'a lent slow sampler reports its due streams as readings lost',
+      () async {
+        subscribe({SampleStream.fs});
+        await settle();
+        expect(samples(SampleStream.fs), ['fs@0']);
+
+        final giveBack = await scheduler.yieldSlowSampler(_s1);
+        expect(giveBack, isNotNull);
+
+        await clock.elapse(const Duration(seconds: 30));
+
+        // The gap opens while the step runs and closes when the sampler
+        // reads the stream again at its next period.
+        giveBack!();
+        await _until(() => sessions.last.state is SamplerReady);
+        await settle();
+        await clock.elapse(const Duration(seconds: 30));
+        final gap = events.whereType<Gap>().single;
+        expect(
+          (
+            gap.cause,
+            gap.streams.single,
+            gap.from.difference(FakeClock.start).inSeconds,
+            gap.until.difference(FakeClock.start).inSeconds,
+          ),
+          (GapCause.readingLost, SampleStream.fs, 0, 60),
+        );
+      },
+    );
+
+    test('a lending during the probe costs no extra retry delay', () async {
+      deadlines = const SamplerDeadlines(
+        slowMargin: Duration(milliseconds: 50),
+        perGuardedCommand: Duration.zero,
+      );
+      link.stalled.add(_slow);
+      subscribe({SampleStream.core});
+      await settle();
+      expect(link.linesOf(_slow), ['hw_o probe']);
+      final opened = sessions.length;
+
+      // The lending closes the session, ending the probe it holds. That
+      // closed is not a failed probe, so the next wait stays what it was.
+      final giveBack = await scheduler.yieldSlowSampler(_s1);
+      expect(giveBack, isNotNull);
+      giveBack!();
+      await _until(
+        () =>
+            sessions.length == opened + 1 &&
+            sessions.last.state is SamplerReady,
+      );
+      await settle();
+
+      // The retry still goes out after the usual 15 s.
+      await clock.elapse(const Duration(seconds: 14));
+      expect(link.linesOf(_slow), hasLength(1));
+      await clock.elapse(const Duration(seconds: 2));
+      expect(link.linesOf(_slow), hasLength(2));
+
+      // End the stalled retry; the wait after it is 15 s again, not 30.
+      await link.running.singleWhere((p) => p.kind == _slow).close();
+      final restarted = sessions.last;
+      await _until(
+        () => restarted.restarts == 1 && restarted.state is SamplerReady,
+      );
+      await settle();
+      await clock.elapse(const Duration(seconds: 14));
+      expect(link.linesOf(_slow), hasLength(2));
+      await clock.elapse(const Duration(seconds: 2));
+      expect(link.linesOf(_slow), hasLength(3));
+    });
+
     test('steps that overlap share one lending, and the sampler starts '
         'after the last', () async {
       subscribe({SampleStream.core});
