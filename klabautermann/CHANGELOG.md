@@ -532,3 +532,27 @@
   of its window instead of the daemon's default size.
 - A container log follow whose stream cannot be read ends with the
   reason after three tries instead of reading again without a word.
+- An unexpected error in the background engine no longer ends it with
+  every connection, shell and port forward. The engine catches it,
+  keeps running and the app says that something went wrong; if the
+  engine stops all the same, the app says so with the cause.
+- A confirmed action always ends with a result, whatever fails while
+  it runs. Before, a one-off container command started while the
+  server's Docker channels were all in use could end the engine.
+- An admin password pasted with a line break at its end is refused as
+  wrong and asked for again, instead of stopping the engine.
+- A command that prints "Access denied" is no longer reported as
+  needing admin mode, unless it is a systemd action that polkit
+  refused.
+- A reboot or shutdown that hangs until its time limit is reported as
+  timed out, not as done, and one whose connection closes without an
+  exit status is reported as done, not as failed.
+- Panels no longer wait forever when the engine refuses a read, such
+  as a log listing for a server that a sync round just removed. One
+  refused container shell or connection test no longer fails the
+  others still opening.
+- Recovery settings no longer hold up prompts, shells and quitting
+  while a sync round waits on a slow server.
+- Quitting stops the engine cleanly first, so the last minutes of
+  history are written and open container shells get their closing
+  audit records.
