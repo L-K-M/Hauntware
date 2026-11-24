@@ -335,6 +335,56 @@ void main() {
       expect(ten.buckets.single.values[AlertMetric.cpuBusy]!.count, 2);
     });
 
+    test('a ring file cut short reads as empty slots past its end, while '
+        'open and at the next start', () async {
+      final store = await open({_web});
+      store
+        ..observe(_web, _cpu(10), _at(0))
+        ..gap(_web, _at(0), _at(30), GapCause.readingLost)
+        ..observe(_web, _cpu(20), _at(60));
+      await store.flush();
+
+      final minute = File(
+        '${support.path}/history/$_web/${HistoryTier.minute.name}.ring',
+      );
+      final gaps = File('${support.path}/history/$_web/gaps.ring');
+      // Mid-slot, then shorter than the header.
+      for (final cut in [(await minute.length()) ~/ 2 + 5, 21, 7, 0]) {
+        for (final ring in [minute, gaps]) {
+          final file = await ring.open(mode: FileMode.append);
+          await file.truncate(cut);
+          await file.close();
+        }
+
+        final open_ = await store.read(_web, HistoryTier.minute, now: _at(90));
+        expect(open_.buckets, hasLength(lessThanOrEqualTo(2)), reason: '$cut');
+        final ten = await store.read(
+          _web,
+          HistoryTier.tenMinutes,
+          now: _at(90),
+        );
+        expect(ten.buckets.single.values[AlertMetric.cpuBusy]!.count, 2);
+
+        final reopened = await open({_web});
+        await reopened.read(_web, HistoryTier.minute, now: _at(90));
+        reopened
+          ..observe(_web, _cpu(30), _at(120))
+          ..gap(_web, _at(130), _at(140), GapCause.disconnected);
+        await reopened.flush();
+        final after = await reopened.read(
+          _web,
+          HistoryTier.minute,
+          now: _at(150),
+        );
+        expect(
+          after.buckets.map((b) => b.start),
+          contains(_at(120)),
+          reason: '$cut',
+        );
+        expect(after.gaps.map((g) => g.from), contains(_at(130)));
+      }
+    });
+
     test('an exit without a flush loses at most the filling minute', () async {
       final first = await open({_web});
       first
