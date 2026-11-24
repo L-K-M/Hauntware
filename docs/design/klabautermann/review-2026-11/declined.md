@@ -444,3 +444,9 @@ Every bullet has a test that came with its fix in #805/#806: http_pool_test (DKR
 - stack_logs_test "the inserted older line is never asserted": refuted as a request. A paused view keeps an older line back until it follows again (UIB-3's fix, covered by "a paused view keeps an older line back until it follows again"), so it must not appear here.
 - log_tokens_test 1 s wall-clock bound: declined. It matches the sibling UIB-2 test; the fixed path takes about 2 ms and the broken one 3.4 s.
 - Captured `ScrollPosition`: declined as minor; the Scrollable's state is reused across the batch and the test failed red as intended.
+
+## #822 GLM round 1 (cce34f9): 1 actionable, refuted
+- SHARED.md:124 (major) "the Wiring row's f9bd1e1 may be stale": refuted. Of the Séance commits since f9bd1e1 on those files, 35c2f20b6 (deep links) and 1c5afda76 (transparent Linux view) are already in the ledger, and 4c156bc48, 635d2be4d, ecb6dcaba, ac918878e and fb91e54e7 change menu, edit-history and version lines, none of the ledgered wiring lines (settingsWindow property, host creation, `close()`, `settings_window_install`, `window_title_apply`, `settings_window_`).
+- SHARED.md:123 "85b48f21c may not touch Windows": refuted. It changes seance's windows/runner/settings_window.{h,cpp}, and Klabautermann's copy has both quit methods.
+- SHARED.md:105 line wrap: declined as cosmetic.
+- CI at cce34f9: Android failed on a transient Maven fetch (kotlin-gradle-plugins-bom 2.2.20), iOS was cancelled; rerun through the main merge.
