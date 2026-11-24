@@ -12,7 +12,110 @@ import 'package:klabautermann_docker/klabautermann_docker.dart' show parseEnv;
 import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
+import '../sampling/argument_masking.dart'
+    show ArgumentMaskingBudget, maskCommandLine;
 import 'log_service.dart' show logEndDetail, logRefusal;
+
+/// [bundle] as it may cross (CN-18, 03 §8.9): the command lines of its
+/// `procs` sections and every line of its `cron` sections masked by the
+/// argument rules, as the Processes and Jobs tabs get them. The export's
+/// redactor knows secret-shaped values only, not `-p<secret>` or `curl -u
+/// user:pass`, so a bundle exported as read would carry them. The
+/// sections keep their shape, so a report still becomes a fixture; there
+/// is no reveal, and the bundle itself when nothing in it was masked.
+/// Never throws.
+DiagnosticBundle maskDiagnosticBundle(DiagnosticBundle bundle) {
+  var changed = false;
+  final sections = [
+    for (final section in bundle.sections)
+      switch (_maskedSectionText(section)) {
+        final text when text != section.text => () {
+          changed = true;
+          return DiagnosticSection(
+            collector: section.collector,
+            status: section.status,
+            text: text,
+          );
+        }(),
+        _ => section,
+      },
+  ];
+  return changed ? DiagnosticBundle(sections, missing: bundle.missing) : bundle;
+}
+
+String _maskedSectionText(DiagnosticSection section) {
+  if (section.collector == Collector.procs.wireName) {
+    return _maskedProcsText(section.text);
+  }
+  if (section.collector == Collector.cron.wireName) {
+    final budget = ArgumentMaskingBudget();
+    return section.text
+        .split('\n')
+        .map((line) => _maskedLine(line, budget))
+        .join('\n');
+  }
+  return section.text;
+}
+
+/// The line that opens the command lines of a `procs` payload, and the
+/// ones that say `ps` printed them (03 §7.2).
+const _cmdlineBlock = '== cmdline ==';
+const _psBlocks = {'== ps ==', '== ps_w =='};
+
+/// The header `head` prints before each `/proc/<pid>/cmdline`.
+final _cmdlineHeader = RegExp(r'^==> .* <==$');
+
+/// The separator the sampler turns a cmdline's NULs into.
+const _argumentSeparator = '\x1f';
+
+/// A `procs` payload with its command lines masked: each `/proc` cmdline
+/// record as its arguments, which may hold newlines, and each row of a
+/// `ps` fallback as one line. A payload without the block (an error's
+/// text) is masked line by line. One budget covers the section, as for a
+/// procs reading.
+String _maskedProcsText(String text) {
+  final budget = ArgumentMaskingBudget();
+  final lines = text.split('\n');
+  final block = lines.indexOf(_cmdlineBlock);
+  if (block == -1 ||
+      (block + 1 < lines.length && _psBlocks.contains(lines[block + 1]))) {
+    return [
+      for (final (index, line) in lines.indexed)
+        index <= block ? line : _maskedLine(line, budget),
+    ].join('\n');
+  }
+
+  final masked = lines.sublist(0, block + 1);
+  var record = <String>[];
+  void endRecord() {
+    if (record.isEmpty) return;
+    masked.add(_maskedLine(record.join('\n'), budget));
+    record = [];
+  }
+
+  for (final line in lines.skip(block + 1)) {
+    if (_cmdlineHeader.hasMatch(line)) {
+      endRecord();
+      masked.add(line);
+    } else {
+      record.add(line);
+    }
+  }
+  endRecord();
+  return masked.join('\n');
+}
+
+/// [text], a cmdline record or a line, masked as one command line: its
+/// arguments where the sampler's separator parts them, which may hold
+/// newlines, else its words, as a cron line is read. An empty program
+/// stands in front, since the masker never reads the program's slot as a
+/// value and a host may send text whose first word is one (a forged
+/// header splits a record, a crontab line starts with `NAME=secret`).
+String _maskedLine(String text, ArgumentMaskingBudget budget) =>
+    maskCommandLine([
+      '',
+      ...text.split(_argumentSeparator),
+    ], budget: budget).skip(1).map((m) => m.display).join(_argumentSeparator);
 
 /// How long one query's command may run once its channel is open.
 const kHostQueryTimeout = Duration(seconds: 30);
@@ -70,9 +173,11 @@ final class HostQueries {
         case DiagnosticBundleQuery():
           // Not sampled after all (the link just went, say), so nothing
           // could read it.
+          final bundle = await _readDiagnostics?.call(serverId);
           answer(
-            await _readDiagnostics?.call(serverId) ??
-                const HostQueryFailed(HostQueryFailure.noLink),
+            bundle == null
+                ? const HostQueryFailed(HostQueryFailure.noLink)
+                : maskDiagnosticBundle(bundle),
           );
         case VarLogQuery():
           switch (await _run(link, HostCommands.logFiles())) {

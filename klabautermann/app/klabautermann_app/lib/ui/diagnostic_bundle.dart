@@ -25,6 +25,9 @@ List<String> diagnosticBundleLines(DiagnosticBundle bundle, DateTime at) => [
 
 /// Reads [serverId]'s diagnostic bundle and offers it for export through
 /// LOG-10's sheet, redacted unless the user includes secrets (SAF-07).
+/// The engine has masked the bundle's command lines and cron lines by
+/// then (03 §8.9), which the sheet's redactor would not catch, so they
+/// stay masked either way; the hint says so.
 Future<void> showDiagnosticBundle(
   BuildContext context, {
   required MonitoringController monitoring,

@@ -11994,7 +11994,7 @@ abstract class AppLocalizations {
   /// Diagnostic bundle sheet: what the bundle holds (identity, process command lines, crontabs, units, mounts, paths) and why to check it before sharing, since redaction only catches secret-shaped values.
   ///
   /// In en, this message translates to:
-  /// **'The raw output of each collector, for a parser bug report. It carries this server\'s host name and machine ID, the command lines of its processes, crontab entries and cron jobs, and its units, mounts and paths. Redaction catches secret-shaped values, not host names or internal addresses, so read it before you share it.'**
+  /// **'The raw output of each collector, for a parser bug report. It carries this server\'s host name and machine ID, the command lines of its processes, crontab entries and cron jobs, and its units, mounts and paths. Secrets in those command lines and cron lines are masked as on the Processes and Jobs tabs, also when you include secrets. Redaction catches secret-shaped values, not host names or internal addresses, so read it before you share it.'**
   String get diagnosticsHint;
 
   /// Diagnostic bundle sheet: the collectors whose sampler did not answer in time, by their wire names, which are not translated.

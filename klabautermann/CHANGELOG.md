@@ -532,3 +532,16 @@
   of its window instead of the daemon's default size.
 - A container log follow whose stream cannot be read ends with the
   reason after three tries instead of reading again without a word.
+- The diagnostic bundle masks secrets in process command lines and cron
+  lines (`-p<secret>`, `curl -u user:pass`, `--password <value>`, URL
+  credentials) as the Processes and Jobs tabs do, also when you include
+  secrets.
+- A one-off container command shows in the preview, in Activity and in
+  its export with its secrets masked.
+- Process arguments, cron lines and Docker command lines now also mask
+  secrets in JSON bodies and `name:value` pairs (`{"password":"…"}`), a
+  token that is the whole user part of an http URL
+  (`https://<token>@host`), and `Authorization` and `Cookie` headers of
+  any tool.
+- A container's log driver options cross to the app with secret values
+  masked.
