@@ -569,6 +569,16 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- When the background engine stops by itself, the app starts a new one,
+  reloads its views and tells you what stopped it and what may not have
+  finished. After three restarts within ten minutes, an engine that stops
+  again is left stopped, and the app says to quit and open it again.
+- Synced read-only switches and protected marks apply from the moment
+  the app starts, not only after the first sync round.
+- An import or sync that moves a kept server to another endpoint
+  closes the old machine's link and log streams and clears what was
+  read there, including its Docker lists, details and disk use, then
+  connects and reads the new endpoint again.
 - Saving a file no longer changes its group without saying so. Where
   your login is not in the file's group, the save is refused before the
   file is touched; it needs admin mode to keep the group.
