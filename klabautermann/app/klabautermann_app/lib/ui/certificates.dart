@@ -7,7 +7,7 @@ import '../controllers/monitoring_controller.dart';
 import '../controllers/tls_endpoints.dart';
 import '../l10n/app_localizations.dart';
 import 'time_display.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection;
+import 'panel_kit.dart' show PanelNotice, PanelSection;
 
 /// How close an expiry is before its line warns [E]: Let's Encrypt
 /// renews 30 days ahead, so a certificate this close has missed renewals.

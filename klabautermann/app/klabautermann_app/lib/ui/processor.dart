@@ -6,7 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'read_section.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection;
+import 'panel_kit.dart' show PanelNotice, PanelSection;
 
 /// Draws a label over its value as the System tab's other facts do; a
 /// null value shows as unknown, with [note] saying why.

@@ -17,6 +17,7 @@ import 'fleet_rail.dart' show linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetRowAge, fleetStatusStrings;
 import 'fleet_tree.dart';
+import 'panel_kit.dart' show kSilentListenable;
 import 'server_header.dart' show LinkDot;
 import 'threshold_scope.dart';
 
@@ -166,8 +167,6 @@ class FleetTile extends StatelessWidget {
   final MonitoringController monitoring;
   final bool compact;
 
-  static final Listenable _silent = Listenable.merge(const []);
-
   @override
   Widget build(BuildContext context) {
     final id = server.id;
@@ -182,7 +181,9 @@ class FleetTile extends StatelessWidget {
         // ticking for its age, and only while it shows.
         final counting = overview.value != null || core.value != null;
         return ListenableBuilder(
-          listenable: counting && onstage ? monitoring.clock : _silent,
+          listenable: counting && onstage
+              ? monitoring.clock
+              : kSilentListenable,
           builder: (context, _) => _build(
             context,
             overview.value,

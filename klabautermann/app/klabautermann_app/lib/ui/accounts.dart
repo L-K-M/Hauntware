@@ -8,7 +8,7 @@ import '../controllers/account_reads.dart';
 import '../l10n/app_localizations.dart';
 import 'sortable_table.dart';
 import 'time_display.dart';
-import 'system_panel.dart' show PanelSection;
+import 'panel_kit.dart' show PanelSection;
 
 /// The accounts table's columns with the width each claims before text
 /// scaling. The account's is the least it is given before the table drops

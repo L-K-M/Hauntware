@@ -21,19 +21,14 @@ import '../actions/docker_actions.dart'
         containerActionEntries,
         containerIntent,
         containerOffers;
+import '../panel_kit.dart';
 import '../sortable_table.dart';
-import '../state_notice.dart';
 import '../workspace_dock.dart' show DockedShell, WorkspaceDockScope;
 import 'container_details.dart';
 import 'container_logs.dart';
 import 'container_terminal.dart' show openContainerShellPage;
 import 'containers_view.dart';
 import 'docker_cells.dart' show dockerAgeText;
-
-/// The panel width from which the containers show as the sortable table;
-/// narrower, as on a phone, they show as two-line rows. It grows with the
-/// text scale, as the table's columns do (the Processes tab's rule).
-const double _wideWidth = 600;
 
 /// The share of its height the header takes before it scrolls, so large
 /// text never pushes the list out of sight.
@@ -302,8 +297,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         final header = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 12,
@@ -1770,7 +1764,7 @@ class DockerNotice extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      StateNotice(icon: icon, text: text, detail: detail),
+      PanelNotice.state(icon: icon, text: text, detail: detail),
       ?action,
     ],
   );

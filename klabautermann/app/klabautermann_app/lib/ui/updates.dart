@@ -15,7 +15,7 @@ import 'admin_mode_chip.dart' show AdminScope;
 import 'fleet_updates.dart';
 import 'sortable_table.dart';
 import 'time_display.dart';
-import 'system_panel.dart' show PanelSection;
+import 'panel_kit.dart' show PanelSection;
 
 /// The table's columns with the width each claims before text scaling.
 /// The package's is the least it is given before the table drops the

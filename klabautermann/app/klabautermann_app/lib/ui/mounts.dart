@@ -7,7 +7,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'read_section.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection, SystemSection;
+import 'panel_kit.dart' show PanelNotice, PanelSection;
+import 'system_panel.dart' show SystemSection;
 
 /// DSK-05's part of a mount's details: the source it is mounted from and
 /// its options, which the `fs` stream does not carry, read once the

@@ -9,7 +9,7 @@ import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart';
 import 'actions/action_preview.dart' show startAction;
 import 'admin_mode_chip.dart' show AdminScope;
-import 'system_panel.dart' show PanelSection;
+import 'panel_kit.dart' show PanelSection;
 
 /// The app's power waits for the widgets under it; the composition root
 /// puts it above every route, and a test may leave it out, which starts

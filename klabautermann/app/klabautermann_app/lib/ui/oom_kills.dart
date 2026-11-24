@@ -12,7 +12,7 @@ import 'logs/log_view.dart';
 import 'logs/logs_panel_controller.dart';
 import 'read_section.dart';
 import 'time_display.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection;
+import 'panel_kit.dart' show PanelNotice, PanelSection;
 import 'system_view.dart' show uptimeText;
 
 /// The kernel log lines of an OOM kill's report, from the `invoked

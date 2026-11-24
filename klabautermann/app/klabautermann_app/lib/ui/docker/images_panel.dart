@@ -12,6 +12,7 @@ import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show ImageActionsButton, PruneButton, imageActionEntries;
 import '../charts/charts.dart' show ChartPalette;
+import '../panel_kit.dart' show panelIsWide;
 import '../sortable_table.dart';
 import '../time_display.dart';
 import 'image_history.dart';
@@ -20,11 +21,6 @@ import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
 import 'docker_cells.dart';
 import 'images_view.dart';
-
-/// The panel width from which the images show as the sortable table;
-/// narrower, as on a phone, they show as two-line rows. It grows with the
-/// text scale, as the Containers sub-tab's does.
-const double _wideWidth = 600;
 
 /// The share of its height the header takes before it scrolls, so large
 /// text never pushes the list out of sight.
@@ -207,8 +203,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         final header = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 12,
