@@ -532,3 +532,7 @@
   of its window instead of the daemon's default size.
 - A container log follow whose stream cannot be read ends with the
   reason after three tries instead of reading again without a word.
+- History keeps recording for every server when one stored bucket or
+  gap is damaged; the damaged slot reads as empty.
+- A 10-minute history bucket no longer counts a minute's readings twice
+  after the app restarts within that minute.
