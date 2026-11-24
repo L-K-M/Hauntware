@@ -60,6 +60,7 @@ SettingsWindowHost? settingsWindowHostFor(
   TimeDisplaySettings? timeDisplay,
   RecoverySettings? recovery,
   UpdateCheckSettings? updateChecks,
+  SettingsWindowHost? replacing,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -85,6 +86,7 @@ SettingsWindowHost? settingsWindowHostFor(
     timeDisplay: timeDisplay,
     recovery: recovery,
     updateChecks: updateChecks,
+    replacing: replacing,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -127,6 +129,7 @@ final class SettingsWindowHost {
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
+    SettingsWindowHost? replacing,
   }) : _appearance = appearance,
        _announcements = announcements,
        _deviceName = deviceName,
@@ -147,36 +150,43 @@ final class SettingsWindowHost {
        _timeDisplay = timeDisplay,
        _recovery = recovery,
        _updateChecks = updateChecks {
+    final sections = GhostSettingsSections(
+      snapshot: _snapshot,
+      handleCall: _handleCall,
+      changes: [
+        appearance,
+        announcements,
+        deviceName,
+        monitorSet,
+        safety,
+        syncSecrets,
+        ?thresholds,
+        ?pinPublication,
+        ?pinConflicts,
+        ?accountSize,
+        ?signOut,
+        ?appLock,
+        ?cadence,
+        ?cadenceCaps,
+        ?adminMemory,
+        ?logDisplay,
+        ?editorDisplay,
+        ?timeDisplay,
+        ?recovery,
+        ?updateChecks,
+      ],
+    );
+    // An engine restart builds new settings over the new controllers;
+    // the window, which outlives them, is served from those from now on.
+    if (replacing != null) {
+      _engine = replacing._engine..attach(sections);
+      return;
+    }
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
       initialTab: SettingsTab.general,
-      sections: GhostSettingsSections(
-        snapshot: _snapshot,
-        handleCall: _handleCall,
-        changes: [
-          appearance,
-          announcements,
-          deviceName,
-          monitorSet,
-          safety,
-          syncSecrets,
-          ?thresholds,
-          ?pinPublication,
-          ?pinConflicts,
-          ?accountSize,
-          ?signOut,
-          ?appLock,
-          ?cadence,
-          ?cadenceCaps,
-          ?adminMemory,
-          ?logDisplay,
-          ?editorDisplay,
-          ?timeDisplay,
-          ?recovery,
-          ?updateChecks,
-        ],
-      ),
+      sections: sections,
       encodeError: encodeLinkError,
       requestAppExit: requestAppExit,
     );

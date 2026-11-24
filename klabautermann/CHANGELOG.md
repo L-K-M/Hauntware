@@ -556,3 +556,9 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- When the background engine stops by itself, the app starts a new one,
+  reloads its views and tells you what stopped it and what may not have
+  finished. An engine that stops three times within ten minutes is left
+  stopped, and the app says to quit and open it again.
+- Synced read-only switches and protected marks apply from the moment
+  the app starts, not only after the first sync round.

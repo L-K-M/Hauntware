@@ -86,13 +86,20 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The menu_checks method channel's name, matched by the macOS runner's
     // MenuChecks.swift peer; never rendered.
     "'klabautermann/menu_checks'",
+    // A run's controller that failed to end, for a debug log only.
+    r"'Ending an engine run: $error\n$stack'",
   },
   // Engine health debugPrint diagnostics; EngineHealthNotice tells the
   // user in ARB text.
   'lib/controllers/engine_health.dart': {
+    r"'The engine caught an error: ${fault.error}\n${fault.stack}'",
+  },
+  // The restarter's debug log; EngineHealthNotice tells the user in ARB
+  // text.
+  'lib/controllers/engine_restarter.dart': {
     r"'The engine stopped: ${exit.error}\n${exit.stack ?? ''}'",
     "''",
-    r"'The engine caught an error: ${fault.error}\n${fault.stack}'",
+    r"'The engine did not restart: $error'",
   },
   // The not-saved diagnostic; the Appearance tab prints it and shows its
   // own ARB text (themeNotSaved).
