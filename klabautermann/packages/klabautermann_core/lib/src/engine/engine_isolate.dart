@@ -1543,7 +1543,9 @@ void _runEngine(
       case ConfirmEndpoints(:final serverIds, :final shown):
         // A server whose endpoint a sync changed since the user looked
         // is left unconfirmed, so nothing pins what nobody saw; the fleet
-        // that answers lists it as waiting again.
+        // that answers lists it as waiting again. The same shown map
+        // gates the route's hops: one the confirmation did not show stays
+        // unconfirmed until its own row is confirmed.
         final seen = shown == null
             ? serverIds
             : [
@@ -1557,7 +1559,7 @@ void _runEngine(
         // fleet, so the fleet's answer ends the request either way; the
         // others still count.
         Object? failure;
-        for (final pin in synced.pinsFor(seen, DateTime.now())) {
+        for (final pin in synced.pinsFor(seen, DateTime.now(), shown: shown)) {
           try {
             await endpointPins.confirm(pin);
           } on Object catch (error) {

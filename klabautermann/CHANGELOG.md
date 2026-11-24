@@ -620,6 +620,40 @@
   every line is read, and a new search stops the one before it. A
   pattern that does not finish is stopped after five seconds with a note
   under the field.
+- A server's confirmation no longer covers its jump hosts on its own:
+  selecting a server also selects its unconfirmed hop rows, so one press
+  confirms the whole route, while deselecting a hop leaves it unconfirmed.
+  An address another device rewrote while the list was open stays
+  unconfirmed.
+- Importing ~/.ssh/config finishes quickly even when a Host pattern
+  makes a backtracking matcher try every placement of its wildcards.
+- Removing an alert rule finds it by the id it was written with, and a
+  removal whose synced record is refused says so instead of reporting
+  success.
+- While a long step borrows the slow sampler, panels show its missed
+  readings as gaps instead of stale values, and a probe the borrowing
+  interrupts costs no extra retry wait.
+- Signing out deletes the account's saved credentials before its server
+  list, so a sign-out that fails partway and is retried cannot leave them
+  behind in the vault.
+- Signing out also drops the removed servers' safety entries from this
+  device, instead of keeping their read-only switches and marks under
+  raw server ids and pushing them again at the next sign-in.
+- A finished reboot or shutdown wait now leaves on its own: the
+  "answered again" line stays only briefly, and a shutdown offers Stop
+  waiting so the power buttons come back instead of staying hidden.
+- Raised-alert notifications are withdrawn when their engine run ends
+  and at the start of the next one, so none is left in the system's
+  notification list with no alert behind it.
+- A reboot wait whose server leaves the fleet ends with it instead of
+  reporting the server as not answered after it has come back.
+- A recovery code, export or restore that takes longer than the bounded
+  status read still reports what the engine did, rather than failing
+  while the vault keeps the change.
+- Docker socket choices survive a launch that cannot read the whole
+  catalog, such as another instance holding the support directory or an
+  unreadable store; they go once a later fleet shows the server really
+  left or moved.
 - The admin-mode password, threshold and sync sign-out dialogs scroll on
   a small phone with the keyboard up, instead of clipping their fields.
 - The alert rule editor refuses a hold time above 7 days instead of
