@@ -248,6 +248,24 @@ void main() {
       expect(shown, endsWith('\n'));
     });
 
+    test('a first line that is not ASCII is a failed read, not an error '
+        '(DKR-1)', () async {
+      admin = _session(elevation);
+      final reading = stacks.readFile(client, 'shop', compose);
+      (await elevation.process(0))
+        ..emit([0xC3, 0xA9, 0x31, 0x0A, 0x61])
+        ..end();
+
+      expect(
+        await reading,
+        isA<DockerStackFileFailed>().having(
+          (f) => f.failure,
+          'failure',
+          StackFileFailure.readFailed,
+        ),
+      );
+    });
+
     test('a missing path and a link answer as SFTP would', () async {
       admin = _session(elevation);
       for (final (exit, failure) in [

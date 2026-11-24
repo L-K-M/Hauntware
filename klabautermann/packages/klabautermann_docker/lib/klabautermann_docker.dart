@@ -19,6 +19,7 @@ export 'src/api_version.dart'
         PingInfo,
         SystemDfShape,
         apiVersionAttestations,
+        apiVersionExecConsoleSize,
         apiVersionVolumePruneAll,
         apiVersionEventV2,
         apiVersionImageContainers,

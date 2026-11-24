@@ -521,3 +521,14 @@
 - A file editor no longer claims unsaved changes after a save whose
   follow-up read fails. The written text is kept as the base, so the
   editor, the close prompt and quitting agree that nothing is unsaved.
+- An answer from a host or a registry that a Docker query cannot read
+  no longer stops the engine for every server: the query fails and says
+  so. After a rate limit, a registry is left alone for the time it
+  names, one day at most.
+- The image update check reads an image again once a pull or redeploy
+  changed what its tag names, instead of showing the old "update
+  available" for up to six hours.
+- A new container shell on Docker 20.10 (API 1.41) starts at the size
+  of its window instead of the daemon's default size.
+- A container log follow whose stream cannot be read ends with the
+  reason after three tries instead of reading again without a word.
