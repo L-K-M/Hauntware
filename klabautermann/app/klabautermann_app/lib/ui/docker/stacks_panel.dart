@@ -285,8 +285,8 @@ class _StacksPanelState extends State<StacksPanel> {
         const VerticalDivider(width: 32),
         Expanded(
           child: StackOverview(
-            // Another stack starts at its top.
-            key: ValueKey(selected),
+            // Another stack or server starts at its top.
+            key: ValueKey((widget.serverId, selected)),
             monitoring: widget.monitoring,
             serverId: widget.serverId,
             project: selected,

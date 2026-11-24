@@ -654,3 +654,18 @@
   catalog, such as another instance holding the support directory or an
   unreadable store; they go once a later fleet shows the server really
   left or moved.
+- The admin-mode password, threshold and sync sign-out dialogs scroll on
+  a small phone with the keyboard up, instead of clipping their fields.
+- The alert rule editor refuses a hold time above 7 days instead of
+  saving one that overflows into a negative duration.
+- In the Processes tree, the headers name the column that orders the
+  siblings and flip its direction when tapped.
+- The Jobs tab no longer calls its list stale under the cellular saver,
+  which reads cron and timers only once per subscription.
+- A detached operation's output and a timer's run output say when
+  their read is opening, refused or failed, with a Retry, instead of
+  showing an empty box.
+- A stack's compose profiles are read again when you switch to another
+  server, so a stack of the same name shows that server's profiles.
+- An action tapped while another action's preview is being prepared
+  says so instead of doing nothing.

@@ -710,6 +710,101 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets("switching servers reads the new server's profiles", (
+    tester,
+  ) async {
+    tester.view.physicalSize = _wide;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final engine = FakeEngineClient();
+    final monitoring = MonitoringController(engine, now: () => _now);
+    addTearDown(() async {
+      monitoring.dispose();
+      await engine.close();
+    });
+
+    Future<void> show(String serverId) => tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: StacksPanel(
+            monitoring: monitoring,
+            serverId: serverId,
+            visible: true,
+          ),
+        ),
+      ),
+    );
+
+    Future<void> listStacks(
+      String serverId,
+      List<ComposeProject> stacks,
+    ) async {
+      engine.emit(
+        dockerStackList(
+          serverId,
+          stacks,
+          at: _now,
+          verdicts: {for (final stack in stacks) stack.name: StackVerified()},
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    DockerQuery profilesQuery(String serverId) =>
+        engine.sentOfType<DockerQuery>().cast<DockerQuery>().lastWhere(
+          (query) =>
+              query.serverId == serverId &&
+              query.query is DockerStackProfilesQuery,
+        );
+
+    final web = [
+      dockerStack('web', [
+        dockerService('app', [
+          dockerContainer('a1', name: 'web-app-1', image: 'nginx:1.27'),
+        ]),
+      ]),
+    ];
+    await show('srv-1');
+    await tester.pumpAndSettle();
+    await listStacks('srv-1', web);
+
+    engine.emit(
+      dockerAnswer(
+        profilesQuery('srv-1'),
+        DockerStackProfilesPayload(project: 'web', profiles: ['debug']),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('debug'), findsOneWidget);
+
+    // Server B was visited before, so its list is already cached when
+    // the panel switches to it.
+    monitoring.docker.stacksFor('srv-2');
+    await listStacks('srv-2', [
+      dockerStack('web', [
+        dockerService('app', [
+          dockerContainer('b1', name: 'web-app-1', image: 'nginx:1.28'),
+        ]),
+      ]),
+    ]);
+    await show('srv-2');
+    await tester.pumpAndSettle();
+
+    final second = profilesQuery('srv-2');
+    engine.emit(
+      dockerAnswer(
+        second,
+        DockerStackProfilesPayload(project: 'web', profiles: ['tools']),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('tools'), findsOneWidget);
+  });
+
   group('golden', () {
     // 03 §11.1: a verdict of each kind, managed-by badges, the CLI line
     // and a verified stack's overview, on desktop.

@@ -244,5 +244,23 @@ void main() {
       );
       expect(button.onPressed, isNull);
     });
+
+    testWidgets('the confirmation scrolls when a phone keyboard covers it', (
+      tester,
+    ) async {
+      // A small phone with the keyboard up: the warning must scroll
+      // rather than overflow (UIA-04).
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+      addTearDown(tester.view.reset);
+      await pump(tester, model: _SignOut()..open = 2);
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Sign out of sync?'), findsOneWidget);
+    });
   });
 }

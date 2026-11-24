@@ -205,6 +205,36 @@ void main() {
     ]);
   });
 
+  testWidgets("an operation's output says what its read is doing, and "
+      'why it stopped', (tester) async {
+    await pump(tester);
+    await list(tester, [_op()]);
+    await openSheet(tester);
+
+    await tester.tap(find.text('Show output'));
+    await tester.pumpAndSettle();
+    expect(find.text('Opening the log…'), findsOneWidget);
+
+    engine.emit(const RequestRejected('OpenLogStream', 'no such operation'));
+    await tester.pumpAndSettle();
+    expect(find.text('The engine did not open this log.'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
+
+    // Retry opens again, and a failed end says why.
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    final second = engine.sent.whereType<OpenLogStream>().last;
+    engine.emit(
+      LogStreamState(
+        second.streamId,
+        const LogStreamEnded(LogStreamEndReason.failed, detail: 'tail: boom'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Reading the log failed.'), findsOneWidget);
+    expect(find.text('tail: boom'), findsOneWidget);
+  });
+
   testWidgets('a list after a reconnect replaces the one before', (
     tester,
   ) async {

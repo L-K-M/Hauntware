@@ -423,6 +423,125 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
+  testWidgets('an action tapped while a preview is planned says so', (
+    tester,
+  ) async {
+    final engine = FakeEngineClient();
+    final operations = OperationsController(engine);
+    addTearDown(() async {
+      operations.dispose();
+      await engine.close();
+    });
+    await tester.pumpWidget(
+      _app(
+        OperationsScope(
+          operations: operations,
+          child: Builder(
+            builder: (context) => Column(
+              children: [
+                TextButton(
+                  onPressed: () => startAction(context, _intent),
+                  child: const Text('first'),
+                ),
+                TextButton(
+                  onPressed: () => startAction(context, _intent),
+                  child: const Text('second'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        operations: operations,
+      ),
+    );
+
+    await tester.tap(find.text('first'));
+    await tester.pump();
+    expect(operations.planning, isTrue);
+
+    await tester.tap(find.text('second'));
+    await tester.pump();
+    expect(find.text('Another action is being prepared.'), findsOneWidget);
+  });
+
+  testWidgets('a plan whose opener left the tree still shows its preview', (
+    tester,
+  ) async {
+    final engine = FakeEngineClient();
+    final operations = OperationsController(engine);
+    addTearDown(() async {
+      operations.dispose();
+      await engine.close();
+    });
+    final showButton = ValueNotifier(true);
+    addTearDown(showButton.dispose);
+    await tester.pumpWidget(
+      _app(
+        ListenableBuilder(
+          listenable: showButton,
+          builder: (context, _) => showButton.value
+              ? Builder(
+                  builder: (context) => TextButton(
+                    onPressed: () =>
+                        previewAndRun(context, operations, _intent),
+                    child: const Text('restart'),
+                  ),
+                )
+              : const Scaffold(body: SizedBox.expand()),
+        ),
+        operations: operations,
+      ),
+    );
+
+    await tester.tap(find.text('restart'));
+    await tester.pump();
+    expect(operations.planning, isTrue);
+
+    // The opener leaves the tree before the engine answers.
+    showButton.value = false;
+    await tester.pumpAndSettle();
+
+    engine.emit(
+      ActionPlanned('plan-1', _preview(tier: ConfirmationTier.acknowledge)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('This acts on sshd.service.'), findsOneWidget);
+  });
+
+  testWidgets('a plan answered after the whole app left the tree shows '
+      'nothing and does not throw', (tester) async {
+    final engine = FakeEngineClient();
+    final operations = OperationsController(engine);
+    addTearDown(() async {
+      operations.dispose();
+      await engine.close();
+    });
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () => previewAndRun(context, operations, _intent),
+            child: const Text('restart'),
+          ),
+        ),
+        operations: operations,
+      ),
+    );
+
+    await tester.tap(find.text('restart'));
+    await tester.pump();
+    expect(operations.planning, isTrue);
+
+    // An engine restart remounts the app, root overlay included.
+    await tester.pumpWidget(const SizedBox());
+    engine.emit(
+      ActionPlanned('plan-1', _preview(tier: ConfirmationTier.acknowledge)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+  });
+
   test('planCommandsText writes a pasteable script: sudo for an '
       'elevated step, a note before stdin content, API requests as '
       'comments', () {

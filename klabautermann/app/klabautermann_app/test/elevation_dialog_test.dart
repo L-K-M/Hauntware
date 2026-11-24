@@ -40,4 +40,40 @@ void main() {
     expect(secret.enableSuggestions, isFalse);
     expect(secret.enableIMEPersonalizedLearning, isFalse);
   });
+
+  testWidgets('the dialog scrolls when a phone keyboard covers it', (
+    tester,
+  ) async {
+    // A small phone with the password field's keyboard up: the content
+    // must scroll rather than overflow and clip the field (UIA-02).
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showElevationPasswordDialog(
+                context,
+                user: 'deploy',
+                host: 'box.example.com',
+                retry: true,
+                dialogKey: GlobalKey(),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.widgetWithText(TextField, 'Password'), findsOneWidget);
+  });
 }

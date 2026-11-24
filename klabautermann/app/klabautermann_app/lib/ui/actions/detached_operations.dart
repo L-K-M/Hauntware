@@ -5,6 +5,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../logs/log_view.dart';
+import '../logs/logs_panel.dart' show LogStatusNotice;
 import '../logs/logs_panel_controller.dart';
 import 'action_entry.dart' show OperationsScope;
 
@@ -340,7 +341,20 @@ class _OperationOutputState extends State<_OperationOutput> {
               ),
             ],
           ),
-          Expanded(child: LogView(controller: _reading.logs)),
+          Expanded(
+            child: ListenableBuilder(
+              listenable: _reading,
+              builder: (context, _) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Why the read is empty or refused: an operation's
+                  // output may be gone, or the host may deny it.
+                  LogStatusNotice(panel: _reading),
+                  Expanded(child: LogView(controller: _reading.logs)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

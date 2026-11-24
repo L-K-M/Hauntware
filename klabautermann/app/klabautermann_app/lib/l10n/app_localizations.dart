@@ -7545,6 +7545,12 @@ abstract class AppLocalizations {
   /// **'Also remove these containers'**
   String get actionPreviewRemoveOrphans;
 
+  /// Toast when an action is tapped while another action's preview is still being planned.
+  ///
+  /// In en, this message translates to:
+  /// **'Another action is being prepared.'**
+  String get actionPreviewBusy;
+
   /// A warning in the action preview; warning is the engine's PlanWarning name.
   ///
   /// In en, this message translates to:
@@ -13460,6 +13466,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter 0 or more minutes.'**
   String get alertRuleMinutesInvalid;
+
+  /// Rule editor error: a hold time is above the largest one the editor accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter at most 10080 minutes (7 days).'**
+  String get alertRuleMinutesTooLong;
 
   /// Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold.
   ///

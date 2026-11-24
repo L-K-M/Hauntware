@@ -5940,6 +5940,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionPreviewRemoveOrphans => 'Also remove these containers';
 
   @override
+  String get actionPreviewBusy => 'Another action is being prepared.';
+
+  @override
   String actionPreviewWarning(String warning) {
     String _temp0 = intl.Intl.selectLogic(warning, {
       'profileGatedServices':
@@ -10497,6 +10500,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alertRuleMinutesInvalid => 'Enter 0 or more minutes.';
+
+  @override
+  String get alertRuleMinutesTooLong => 'Enter at most 10080 minutes (7 days).';
 
   @override
   String get alertRuleClearAboveRaise =>

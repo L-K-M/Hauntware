@@ -103,4 +103,24 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
   });
+
+  testWidgets('the dialog scrolls when a phone keyboard covers it', (
+    tester,
+  ) async {
+    // A small phone at 200 % text with a field's keyboard up: the three
+    // fields must scroll rather than overflow (UIA-04).
+    await pumpTab(tester);
+    await tester.tap(find.text('CPU'));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.widgetWithText(TextField, 'Warning from'), findsOneWidget);
+  });
 }
