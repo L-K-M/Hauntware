@@ -429,8 +429,16 @@ final class _CmdlineResult {
 ///   header, and the withdrawn pids' real headers are read when they
 ///   come, so their content does not spill into the entry before them.
 ///
-/// A forger therefore costs at most three command lines for each header
-/// it writes, its own among them, never every row after it.
+/// Skipped text is searched for headers like any other: the next real
+/// header must end it, and nothing tells a real one from a forged one
+/// there. A forged header inside it is judged by the two rules above and
+/// costs what it would cost anywhere else, with the forger's own entry
+/// as the one it interrupts.
+///
+/// A forger therefore costs at most three command lines for each row
+/// header it writes (its own, the pid it names and, for a jump ahead, the
+/// header that exposes it), never every row after it; a header for a pid
+/// outside the rows costs none.
 _CmdlineResult _parseCmdline(
   List<String> lines,
   Set<int> rowPids,

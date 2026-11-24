@@ -408,6 +408,73 @@ void main() {
     expect(r.warnings, contains(contains('forged')));
   });
 
+  test('a forger in the middle of the list costs the same three, and the '
+      'rows before it are kept', () {
+    final r = parseProcs(
+      forgedPayload(
+        [100, 101, 102, 103, 104, 105],
+        103,
+        ['==> 105/cmdline <=='],
+      ),
+      _ctx,
+    );
+
+    expect(argvByPid(r.value), {
+      100: ['/bin/p100'],
+      101: ['/bin/p101'],
+      102: ['/bin/p102'],
+      103: null,
+      104: null,
+      105: null,
+    });
+    expect(r.value.forgedHeaders, 1);
+    expect(r.warnings, contains(contains('forged')));
+  });
+
+  test('a forged row header in the text skipped after a header for a pid '
+      'outside the rows costs what it costs anywhere else', () {
+    // A jump ahead: the forger, the pid it names and the header that
+    // exposes it, and no row beyond those.
+    final ahead = parseProcs(
+      forgedPayload(
+        [100, 101, 102, 103, 104, 105],
+        100,
+        ['==> 99999999/cmdline <==', 'x\x1f', '==> 104/cmdline <=='],
+      ),
+      _ctx,
+    );
+    expect(argvByPid(ahead.value), {
+      100: null,
+      101: null,
+      102: ['/bin/p102'],
+      103: ['/bin/p103'],
+      104: null,
+      105: ['/bin/p105'],
+    });
+    expect(ahead.value.forgedHeaders, 1);
+    expect(ahead.value.skippedPids, 1);
+
+    // A repeated pid: that pid and the forger.
+    final repeated = parseProcs(
+      forgedPayload(
+        [100, 101, 102, 103, 104, 105],
+        103,
+        ['==> 99999999/cmdline <==', '==> 101/cmdline <=='],
+      ),
+      _ctx,
+    );
+    expect(argvByPid(repeated.value), {
+      100: ['/bin/p100'],
+      101: null,
+      102: ['/bin/p102'],
+      103: null,
+      104: ['/bin/p104'],
+      105: ['/bin/p105'],
+    });
+    expect(repeated.value.forgedHeaders, 1);
+    expect(repeated.value.skippedPids, 1);
+  });
+
   test('a chain of forged headers for later rows is withdrawn whole', () {
     final r = parseProcs(
       forgedPayload(

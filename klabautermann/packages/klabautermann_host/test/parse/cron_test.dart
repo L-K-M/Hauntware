@@ -117,6 +117,8 @@ void main() {
         '/etc/crontab',
         '/etc/cron.d/secret',
         '/etc/cron.daily',
+        // Not cron sources: only those may be named, and any other line
+        // is ignored.
         '/etc/shadow',
         'not a path',
       ].join('\n'),
