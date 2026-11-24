@@ -17,6 +17,13 @@ final RegExp secretKeyPattern = RegExp(
 /// safe direction.
 final RegExp _urlCredentialPattern = RegExp(r'([^/@\s:]*):[^/\s]+@');
 
+/// A userinfo without a colon (`https://<token>@host`), read after the
+/// `://` of an `http` or `https` URL: there it is a token (a forge's
+/// access token, a DSN's key) more often than a login name. Other schemes
+/// keep theirs (`ssh://git@host`, `postgres://app@db`). `?` and `#` end
+/// it, so an `@` in a query or fragment masks nothing.
+final RegExp _urlTokenPattern = RegExp(r'[^/@\s:?#]+@');
+
 /// Whether the code unit [unit] is an ASCII letter, which a URL scheme
 /// starts with. Code units, not a regular expression per character,
 /// keep the scan of a 128 KiB argument cheap.
@@ -102,9 +109,10 @@ Map<String, MaskedValue> maskedLabels(Map<String, String> labels) => {
     e.key: maskedValueWithUrlCheck(e.key, e.value),
 };
 
-/// Replaces `scheme://user:pass@` credentials in [text] with the mask
-/// token (03 §8.9: URL credentials are a secret even in a value whose key
-/// does not look secret).
+/// Replaces `scheme://user:pass@` credentials in [text], and an http
+/// URL's userinfo that is one token, with the mask token (03 §8.9: URL
+/// credentials are a secret even in a value whose key does not look
+/// secret).
 String maskUrlCredentials(String text) {
   final spans = urlCredentialSpans(text);
   if (spans.isEmpty) return text;
@@ -120,8 +128,8 @@ String maskUrlCredentials(String text) {
   return (masked..write(text.substring(copied))).toString();
 }
 
-/// The `pass` of each `scheme://user:pass@` in [text], as start and end
-/// offsets in order (03 §8.9).
+/// The `pass` of each `scheme://user:pass@` in [text], and the token of
+/// each `http(s)://token@`, as start and end offsets in order (03 §8.9).
 ///
 /// The text may come from a host, a process argument of up to 128 KiB for
 /// one, so the scan is linear: it looks for each `://` and checks the
@@ -141,13 +149,20 @@ List<(int, int)> urlCredentialSpans(String text) {
       text,
       separator + 3,
     );
-    if (credentials == null) continue;
+    if (credentials != null) {
+      spans.add((
+        separator + 3 + credentials[1]!.length + 1,
+        credentials.end - 1,
+      ));
+      copied = credentials.end;
+      continue;
+    }
 
-    spans.add((
-      separator + 3 + credentials[1]!.length + 1,
-      credentials.end - 1,
-    ));
-    copied = credentials.end;
+    if (!_endsHttpScheme(text, separator)) continue;
+    final token = _urlTokenPattern.matchAsPrefix(text, separator + 3);
+    if (token == null) continue;
+    spans.add((separator + 3, token.end - 1));
+    copied = token.end;
   }
   return spans;
 }
@@ -165,6 +180,23 @@ bool _endsScheme(String text, int start, int end) {
   return letter;
 }
 
+/// Whether the scheme that ends at [end] is `http` or `https`, alone or
+/// after a `+` (`git+https`), in any case.
+bool _endsHttpScheme(String text, int end) {
+  var start = end;
+  while (start > 0 &&
+      end - start < 6 &&
+      _isLetter(text.codeUnitAt(start - 1))) {
+    start--;
+  }
+  if (start > 0) {
+    final before = text.codeUnitAt(start - 1);
+    if (before != 0x2B && _isSchemeCharacter(before)) return false;
+  }
+  final scheme = text.substring(start, end).toLowerCase();
+  return scheme == 'http' || scheme == 'https';
+}
+
 /// A value whose key is not secret but which contains URL credentials is
 /// still masked (03 §8.9).
 MaskedValue maskedValueWithUrlCheck(String key, String value) {
@@ -173,4 +205,38 @@ MaskedValue maskedValueWithUrlCheck(String key, String value) {
   return masked == value
       ? MaskedValue.plain(value)
       : MaskedValue.redacted(masked, value);
+}
+
+/// [options], a driver's (a volume's `Options`, a log driver's `Config`),
+/// as they may be shown (03 §8.9): the value of a secret key is the mask
+/// token (`splunk-token`), and so is, to the value's end, what follows a
+/// secret sub-key of a comma-separated list (a CIFS volume's
+/// `o=username=u,password=p`) and each URL's credentials (`loki-url`).
+/// Keys stay, so a reader can still ask for one. There is no reveal: the
+/// options are shown as facts, never edited.
+Map<String, String> maskedDriverOptions(Map<String, String> options) => {
+  for (final MapEntry(:key, :value) in options.entries)
+    key: isSecretKey(key)
+        ? MaskedValue.maskToken
+        : maskUrlCredentials(_maskedSubOptions(value)),
+};
+
+/// [value] with everything after the `=` of its first secret sub-key
+/// masked. To the end, not to the next comma: a password may hold one.
+String _maskedSubOptions(String value) {
+  var start = 0;
+  while (start < value.length) {
+    final comma = value.indexOf(',', start);
+    final end = comma == -1 ? value.length : comma;
+    final equals = value.indexOf('=', start);
+    if (equals != -1 &&
+        equals < end &&
+        isSecretKey(value.substring(start, equals))) {
+      return equals == value.length - 1
+          ? value
+          : '${value.substring(0, equals + 1)}${MaskedValue.maskToken}';
+    }
+    start = end + 1;
+  }
+  return value;
 }

@@ -135,6 +135,57 @@ void main() {
       }
     });
 
+    test('a token that is all of an http URL\'s userinfo is masked '
+        '(SMP-02)', () {
+      const mask = MaskedValue.maskToken;
+      expect(
+        maskUrlCredentials('https://ghp_abcdefgh@github.com/org/repo'),
+        'https://$mask@github.com/org/repo',
+      );
+      expect(
+        maskUrlCredentials('git+HTTP://tok@h a https://k@o0.ingest.io/1'),
+        'git+HTTP://$mask@h a https://$mask@o0.ingest.io/1',
+      );
+      expect(urlCredentialSpans('https://tok@h'), [(8, 11)]);
+      // A login name of another scheme, and an `@` past the host.
+      for (final plain in [
+        'ssh://git@example.com/repo',
+        'postgres://app@db/x',
+        'https://example.com/a@b',
+        'https://example.com?to=a@b',
+        'https://example.com#a@b',
+        'https://@h',
+        'xhttp+x://tok@h',
+      ]) {
+        expect(maskUrlCredentials(plain), plain);
+      }
+    });
+
+    test('driver options mask a secret key, a secret sub-key to the '
+        "value's end and URL credentials (DKR-9)", () {
+      const mask = MaskedValue.maskToken;
+      expect(
+        maskedDriverOptions({
+          'splunk-token': 'abc',
+          'o': 'username=u,password=p,q',
+          'o2': 'rw,password=',
+          'o3': 'rw,nosuid',
+          'loki-url': 'https://u:p@loki',
+          'empty': '',
+          'commas': ',,=,',
+        }),
+        {
+          'splunk-token': mask,
+          'o': 'username=u,password=$mask',
+          'o2': 'rw,password=',
+          'o3': 'rw,nosuid',
+          'loki-url': 'https://u:$mask@loki',
+          'empty': '',
+          'commas': ',,=,',
+        },
+      );
+    });
+
     test('maskUrlCredentials masks what the rule as one regular '
         'expression masks', () {
       // The rule as it reads in 03 §8.9, which backtracks over each start
