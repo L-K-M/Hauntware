@@ -4097,6 +4097,38 @@
   "@servicesEmpty": {
     "description": "Services panel: the unit list is empty under the chosen type and state filters."
   },
+  "servicesViewUnits": "Units",
+  "@servicesViewUnits": {
+    "description": "Services panel: the view switch's segment for the unit list."
+  },
+  "servicesViewSockets": "Sockets",
+  "@servicesViewSockets": {
+    "description": "Services panel: the view switch's segment for the listening sockets (SVC-10)."
+  },
+  "servicesSocketsWaiting": "Waiting for the first list of sockets…",
+  "@servicesSocketsWaiting": {
+    "description": "Services panel: shown until the server's first list of listening sockets arrives (SVC-10)."
+  },
+  "servicesSocketsEmpty": "This server has no listening sockets.",
+  "@servicesSocketsEmpty": {
+    "description": "Services panel: the socket listing answered and holds no sockets (SVC-10)."
+  },
+  "servicesSocketsColumnListen": "Listen",
+  "@servicesSocketsColumnListen": {
+    "description": "Column header of the socket list: the address, path or netlink family the socket listens on (SVC-10)."
+  },
+  "servicesSocketsColumnUnit": "Socket unit",
+  "@servicesSocketsColumnUnit": {
+    "description": "Column header of the socket list: the systemd socket unit that owns the listener (SVC-10)."
+  },
+  "servicesSocketsColumnActivates": "Activates",
+  "@servicesSocketsColumnActivates": {
+    "description": "Column header of the socket list: the units a connection to the socket starts (SVC-10)."
+  },
+  "servicesSocketsNoActivates": "None",
+  "@servicesSocketsNoActivates": {
+    "description": "Services panel: a socket unit that starts no other unit (SVC-10)."
+  },
   "servicesColumnUnit": "Unit",
   "@servicesColumnUnit": {
     "description": "Column header of the unit list: the systemd unit's name."
@@ -5509,7 +5541,7 @@
       }
     }
   },
-  "jobsRunsUnknown": "{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server's time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} paused{Paused: cron skips this job until it is resumed.} other{No cron line runs this directory.}}",
+  "jobsRunsUnknown": "{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server's time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its table lists no job for it.} paused{Paused: cron skips this job until it is resumed.} other{No cron line runs this directory.}}",
   "@jobsRunsUnknown": {
     "description": "Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver. limit is how many cron lines a reading works out runs for, and years how far ahead it looks.",
     "placeholders": {
@@ -5533,6 +5565,130 @@
       },
       "years": {
         "type": "int"
+      }
+    }
+  },
+  "jobsAnacronTitle": "anacron",
+  "@jobsAnacronTitle": {
+    "description": "Jobs tab: the heading of the section that lists anacron's periodic jobs (JOB-04)."
+  },
+  "jobsAnacronReading": "Reading anacron's jobs…",
+  "@jobsAnacronReading": {
+    "description": "Jobs tab: shown while anacron's job table is being read."
+  },
+  "jobsAnacronNotInstalled": "This server has no anacron, so there are no anacron jobs.",
+  "@jobsAnacronNotInstalled": {
+    "description": "Jobs tab: the answer when the server has no /etc/anacrontab, so anacron is not installed (JOB-04)."
+  },
+  "jobsAnacronEmpty": "anacron is installed, but its table lists no jobs.",
+  "@jobsAnacronEmpty": {
+    "description": "Jobs tab: anacron's table answered and holds no jobs."
+  },
+  "jobsAnacronFailed": "{reason, select, noLink{There is no connection to this server.} invalidTarget{The anacron read was refused.} failed{The anacron read failed.} other{The anacron read failed.}}",
+  "@jobsAnacronFailed": {
+    "description": "Jobs tab: why anacron's job table could not be read; reason is the engine's JobHistoryFailure name, and the server's error text follows when it gives one.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsAnacronRetry": "Read again",
+  "@jobsAnacronRetry": {
+    "description": "Jobs tab: rereads anacron's job table after a failure."
+  },
+  "jobsAnacronLabelPeriod": "Period",
+  "@jobsAnacronLabelPeriod": {
+    "description": "Jobs tab: the label of an anacron job's period."
+  },
+  "jobsAnacronLabelDelay": "Delay",
+  "@jobsAnacronLabelDelay": {
+    "description": "Jobs tab: the label of how long anacron waits before running a job."
+  },
+  "jobsAnacronLabelLastRun": "Last run",
+  "@jobsAnacronLabelLastRun": {
+    "description": "Jobs tab: the label of the day an anacron job last ran."
+  },
+  "jobsAnacronPeriodDays": "{days, plural, =1{every day} other{every {days} days}}",
+  "@jobsAnacronPeriodDays": {
+    "description": "Jobs tab: an anacron job's period in days.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsAnacronPeriodMonthly": "once a calendar month",
+  "@jobsAnacronPeriodMonthly": {
+    "description": "Jobs tab: an anacron job's once-a-month period."
+  },
+  "jobsAnacronDelayMinutes": "{minutes, plural, =1{starting 1 minute late} other{starting {minutes} minutes late}}",
+  "@jobsAnacronDelayMinutes": {
+    "description": "Jobs tab: how long anacron waits after it starts before it runs a job.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsAnacronLastRun": "Last ran {day}",
+  "@jobsAnacronLastRun": {
+    "description": "Jobs tab: the day an anacron job last ran; day is a short date.",
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsAnacronLastRunNever": "Never ran",
+  "@jobsAnacronLastRunNever": {
+    "description": "Jobs tab: an anacron job with no stamp, so it has never run."
+  },
+  "jobsAnacronRunsDirectory": "anacron runs this directory {period}, {delay}; it last ran {day}.",
+  "@jobsAnacronRunsDirectory": {
+    "description": "Jobs tab: a cron row whose directory anacron drives, naming the matching job's period, delay and last-run day (JOB-04).",
+    "placeholders": {
+      "period": {
+        "type": "String"
+      },
+      "delay": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsAnacronRunsDirectoryNever": "anacron runs this directory {period}, {delay}; it has never run.",
+  "@jobsAnacronRunsDirectoryNever": {
+    "description": "Jobs tab: a cron row whose directory anacron drives, where the matching job has no stamp yet (JOB-04).",
+    "placeholders": {
+      "period": {
+        "type": "String"
+      },
+      "delay": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsAnacronNext": "anacron: {period}, last ran {day}",
+  "@jobsAnacronNext": {
+    "description": "Jobs tab: the next-run cell of a cron row anacron drives, cut short for the column (JOB-04).",
+    "placeholders": {
+      "period": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsAnacronNextNever": "anacron: {period}, never ran",
+  "@jobsAnacronNextNever": {
+    "description": "Jobs tab: the next-run cell of a cron row anacron drives, where the job has no stamp yet (JOB-04).",
+    "placeholders": {
+      "period": {
+        "type": "String"
       }
     }
   },

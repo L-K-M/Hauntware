@@ -515,10 +515,10 @@ void main() {
     final panel = await _pump(tester);
     await panel.sample(tester);
 
-    // Reading order: the failed units, the filters, the sortable headers,
-    // then the table's body.
+    // Reading order: the view switch, the scope switch, the failed units,
+    // the filters, the sortable headers, then the table's body.
     final stops = <String?>[];
-    while (stops.length < 12 && stops.lastOrNull != 'SortableTable') {
+    while (stops.length < 16 && stops.lastOrNull != 'SortableTable') {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
       stops.add(FocusManager.instance.primaryFocus?.debugLabel);
@@ -1126,6 +1126,170 @@ void main() {
         find.textContaining('Failed to connect to bus', findRichText: true),
         findsOneWidget,
       );
+    });
+  });
+
+  group('sockets (SVC-10)', () {
+    final sockets = [
+      UnitSocket(
+        listen: '0.0.0.0:22',
+        unit: 'ssh.socket',
+        activates: ['ssh.service'],
+      ),
+      UnitSocket(
+        listen: '/run/systemd/private',
+        unit: 'systemd-journald.socket',
+      ),
+    ];
+
+    Future<void> openSockets(WidgetTester tester) async {
+      await tester.tap(find.text('Sockets'));
+      await tester.pumpAndSettle();
+    }
+
+    SocketsQuery queryOf(_Panel panel) =>
+        panel.engine.sentOfType<UnitQuery>().cast<UnitQuery>().last.query
+            as SocketsQuery;
+
+    testWidgets('reads the system manager and lists each socket', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await openSockets(tester);
+
+      final query = queryOf(panel);
+      expect(query.scope, UnitScope.system);
+      expect(
+        find.text('Waiting for the first list of sockets…'),
+        findsOneWidget,
+      );
+
+      await panel.answerUnit(tester, UnitSocketsPayload(sockets));
+      for (final text in [
+        '0.0.0.0:22',
+        '/run/systemd/private',
+        'ssh.socket',
+        'systemd-journald.socket',
+        'ssh.service',
+      ]) {
+        expect(find.text(text), findsOneWidget, reason: text);
+      }
+      // The units switch belongs to the unit list, not to sockets.
+      expect(find.text('System'), findsNothing);
+      expect(find.text('Yours'), findsNothing);
+    });
+
+    testWidgets('tapping a socket opens its unit\'s page', (tester) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await openSockets(tester);
+      await panel.answerUnit(tester, UnitSocketsPayload(sockets));
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('services.sockets.row.ssh.socket|0.0.0.0:22'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Recent log lines'), findsOneWidget);
+      final spec = panel.opens.single.spec;
+      expect((spec.source as JournalLogSource).unit, 'ssh.socket');
+
+      await tester.tap(find.byTooltip('Close unit details'));
+      await tester.pumpAndSettle();
+      expect(find.text('Recent log lines'), findsNothing);
+    });
+
+    testWidgets('an empty answer says so', (tester) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await openSockets(tester);
+      await panel.answerUnit(tester, UnitSocketsPayload(const []));
+
+      expect(
+        find.text('This server has no listening sockets.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a failed read says why, with the server\'s error', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await openSockets(tester);
+      await panel.answerUnit(
+        tester,
+        const UnitQueryFailed(
+          UnitQueryFailure.failed,
+          detail: 'systemctl: boom',
+        ),
+      );
+
+      expect(find.text('The read failed.'), findsOneWidget);
+      expect(find.text('systemctl: boom'), findsOneWidget);
+    });
+
+    testWidgets('a refused request reads as no connection', (tester) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await openSockets(tester);
+      final query = panel.engine.sentOfType<UnitQuery>().cast<UnitQuery>().last;
+      await panel.emit(
+        tester,
+        RequestRejected(
+          'UnitQuery',
+          'no fleet server',
+          requestId: query.requestId,
+        ),
+      );
+
+      expect(
+        find.text('There is no connection to this server.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('leaving Yours for sockets ends the user subscription', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await tester.tap(find.text('Yours'));
+      await tester.pumpAndSettle();
+      final subscribe = panel.engine
+          .sentOfType<Subscribe>()
+          .cast<Subscribe>()
+          .last;
+
+      await openSockets(tester);
+      expect(
+        panel.engine
+            .sentOfType<Unsubscribe>()
+            .cast<Unsubscribe>()
+            .last
+            .subscriptionId,
+        subscribe.subscriptionId,
+      );
+
+      // Back to the units, the login user's manager is read again.
+      await tester.tap(find.text('Units'));
+      await tester.pumpAndSettle();
+      expect(_row('cron.service'), findsNothing);
+      expect(find.text('Waiting for the first list of units…'), findsOneWidget);
+    });
+
+    testWidgets('lays out at 200% text with the sockets listed', (
+      tester,
+    ) async {
+      // The wide panel: a phone at 200% already overflows the unit
+      // filters on main.
+      final panel = await _pump(tester, textScale: 2);
+      await panel.sample(tester);
+      await openSockets(tester);
+      await panel.answerUnit(tester, UnitSocketsPayload(sockets));
+      expect(tester.takeException(), isNull);
     });
   });
 }

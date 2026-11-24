@@ -269,7 +269,7 @@ void main() {
       'Runs every 15 minutes',
       'Runs at 2:30 AM',
       'Runs at 9:00 AM, on Monday to Friday (America/New_York time)',
-      'anacron runs this directory; its timing is not shown in this version.',
+      'anacron runs this directory; its table lists no job for it.',
       'In its details',
       // Cron's run on Berlin's clock, a timer's at the probed offset,
       // which it names: after the DST change, Berlin's clock reads 1:12.
@@ -1188,7 +1188,13 @@ void main() {
         _inSheet('Paused: cron skips this line until it is resumed.'),
         findsOneWidget,
       );
-      expect(panel.engine.sentOfType<JobHistoryQuery>(), isEmpty);
+      expect(
+        panel.engine
+            .sentOfType<JobHistoryQuery>()
+            .cast<JobHistoryQuery>()
+            .where((query) => query.query is! AnacronQuery),
+        isEmpty,
+      );
       await tester.tapAt(Offset.zero);
       await tester.pumpAndSettle();
 
@@ -1325,8 +1331,10 @@ void main() {
       await tester.tap(_row('cron|crontab|0'));
       await tester.pumpAndSettle();
       expect(_inSheet('Reading…'), findsOneWidget);
-      final query =
-          panel.engine.sentOfType<JobHistoryQuery>().single as JobHistoryQuery;
+      final query = panel.engine
+          .sentOfType<JobHistoryQuery>()
+          .cast<JobHistoryQuery>()
+          .lastWhere((query) => query.query is CronRunsQuery);
       expect(query.query, isA<CronRunsQuery>());
 
       await panel.emit(
@@ -1366,8 +1374,10 @@ void main() {
 
       await tester.tap(_row('timer|apt-daily.timer'));
       await tester.pumpAndSettle();
-      final query =
-          panel.engine.sentOfType<JobHistoryQuery>().single as JobHistoryQuery;
+      final query = panel.engine
+          .sentOfType<JobHistoryQuery>()
+          .cast<JobHistoryQuery>()
+          .lastWhere((query) => query.query is TimerLastRunQuery);
       final spec = query.query as TimerLastRunQuery;
       expect(
         (spec.timer, spec.service),
@@ -1603,6 +1613,249 @@ void main() {
         find.text('Even admin mode may not list the crontab spool.'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('anacron (JOB-04)', () {
+    final day = DateTime.utc(2026, 10, 24);
+
+    AnacronJob anacronJob({
+      AnacronPeriod? period,
+      int delayMinutes = 5,
+      String identifier = 'cron.daily',
+      String command = 'run-parts --report /etc/cron.daily',
+      DateTime? lastRun,
+    }) => AnacronJob(
+      period: period ?? AnacronPeriod.days(1),
+      delayMinutes: delayMinutes,
+      identifier: identifier,
+      command: command,
+      lastRun: lastRun,
+    );
+
+    /// Answers the panel's anacron read with [payload].
+    Future<void> answerAnacron(
+      WidgetTester tester,
+      _Panel panel,
+      JobHistoryPayload payload,
+    ) async {
+      final query = panel.engine
+          .sentOfType<JobHistoryQuery>()
+          .cast<JobHistoryQuery>()
+          .lastWhere((query) => query.query is AnacronQuery);
+      await panel.emit(
+        tester,
+        JobHistoryResult(
+          serverId: _serverId,
+          requestId: query.requestId,
+          payload: payload,
+        ),
+      );
+    }
+
+    testWidgets('lists each job\'s period, delay, command and last run', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+      // Nothing shows until the read answers, so the tab keeps its shape.
+      expect(find.text('anacron'), findsNothing);
+
+      await answerAnacron(
+        tester,
+        panel,
+        AnacronPayload([
+          anacronJob(lastRun: day),
+          anacronJob(
+            period: AnacronPeriod.days(7),
+            delayMinutes: 10,
+            identifier: 'cron.weekly',
+            command: 'run-parts /etc/cron.weekly',
+          ),
+        ]),
+      );
+
+      expect(find.text('anacron'), findsOneWidget);
+      for (final text in [
+        'cron.daily',
+        'cron.weekly',
+        'run-parts --report /etc/cron.daily',
+        'run-parts /etc/cron.weekly',
+        'every day',
+        'every 7 days',
+        'starting 5 minutes late',
+        'starting 10 minutes late',
+        'Last ran Oct 24, 2026',
+        'Never ran',
+      ]) {
+        expect(find.text(text), findsOneWidget, reason: text);
+      }
+      // Each job's facts read as one node beside its identifier.
+      expect(find.text('Period'), findsNWidgets(2));
+      expect(find.text('Delay'), findsNWidgets(2));
+      expect(find.text('Last run'), findsNWidgets(2));
+    });
+
+    testWidgets('a cron row driven by anacron shows the job\'s timing', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+      await answerAnacron(
+        tester,
+        panel,
+        AnacronPayload([anacronJob(lastRun: day)]),
+      );
+
+      final row = _row('periodic|daily|logrotate');
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text(
+            'anacron runs this directory every day, starting 5 minutes '
+            'late; it last ran Oct 24, 2026.',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('anacron: every day, last ran Oct 24, 2026'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('keeps the unknown wording when the table names no job for '
+        'the directory', (tester) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+      await answerAnacron(
+        tester,
+        panel,
+        AnacronPayload([
+          anacronJob(
+            period: AnacronPeriod.monthly(),
+            identifier: 'cron.monthly',
+            command: 'run-parts /etc/cron.monthly',
+          ),
+        ]),
+      );
+
+      final row = _row('periodic|daily|logrotate');
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text(
+            'anacron runs this directory; its table lists no job for it.',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: row, matching: find.text('Timed by anacron')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('an installed anacron with an empty table says so', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+      await answerAnacron(tester, panel, AnacronPayload(const []));
+
+      expect(
+        find.text('anacron is installed, but its table lists no jobs.'),
+        findsOneWidget,
+      );
+      // With nothing to list, the jobs table keeps its full height.
+      expect(find.text('anacron'), findsNothing);
+    });
+
+    testWidgets('a host without /etc/anacrontab says anacron is not '
+        'installed', (tester) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+      await answerAnacron(
+        tester,
+        panel,
+        const JobHistoryFailed(JobHistoryFailure.notInstalled),
+      );
+
+      expect(
+        find.text('This server has no anacron, so there are no anacron jobs.'),
+        findsOneWidget,
+      );
+      // A directory anacron would drive keeps its plain wording.
+      expect(
+        find.text(
+          'anacron runs this directory; its table lists no job for it.',
+        ),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('a failed read says why, and Read again retries it', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+      final first = panel.engine
+          .sentOfType<JobHistoryQuery>()
+          .cast<JobHistoryQuery>()
+          .lastWhere((query) => query.query is AnacronQuery);
+      await panel.emit(
+        tester,
+        JobHistoryResult(
+          serverId: _serverId,
+          requestId: first.requestId,
+          payload: const JobHistoryFailed(
+            JobHistoryFailure.failed,
+            detail: 'cat: /etc/anacrontab: Permission denied',
+          ),
+        ),
+      );
+
+      expect(find.text('The anacron read failed.'), findsOneWidget);
+      expect(
+        find.text('cat: /etc/anacrontab: Permission denied'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Read again'));
+      await tester.pump();
+      expect(panel.engine.sentOfType<JobHistoryQuery>(), hasLength(2));
+      expect(find.text("Reading anacron's jobs…"), findsOneWidget);
+
+      await answerAnacron(
+        tester,
+        panel,
+        AnacronPayload([anacronJob(lastRun: day)]),
+      );
+      expect(find.text("Reading anacron's jobs…"), findsNothing);
+      expect(find.text('cron.daily'), findsOneWidget);
+    });
+
+    testWidgets('lays out with the section at 200% text on a phone', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, size: _phone, textScale: 2);
+      await panel.all(tester);
+      await answerAnacron(
+        tester,
+        panel,
+        AnacronPayload([
+          anacronJob(lastRun: day),
+          anacronJob(
+            period: AnacronPeriod.days(7),
+            identifier: 'cron.weekly',
+            command: 'run-parts /etc/cron.weekly',
+          ),
+        ]),
+      );
+      expect(tester.takeException(), isNull);
     });
   });
 }

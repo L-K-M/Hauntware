@@ -323,6 +323,104 @@ String runsUnknownText(AppLocalizations l10n, JobRunsUnknown reason) =>
       kCronHorizonDays ~/ 365,
     );
 
+/// The anacron job whose command runs [directory] (`/etc/cron.daily`
+/// and its kin), or null when anacron's table names none (JOB-04).
+AnacronJob? anacronJobFor(Iterable<AnacronJob> jobs, String directory) {
+  for (final job in jobs) {
+    final words = job.command.split(RegExp(r'\s+'));
+    if (words.any((word) => word == directory || word == '$directory/')) {
+      return job;
+    }
+  }
+  return null;
+}
+
+/// [period] in words: every day, every N days, or once a calendar
+/// month.
+String anacronPeriodText(AppLocalizations l10n, AnacronPeriod period) =>
+    period.monthly
+    ? l10n.jobsAnacronPeriodMonthly
+    : l10n.jobsAnacronPeriodDays(period.days ?? 1);
+
+/// How long anacron waits after starting before it runs a job.
+String anacronDelayText(AppLocalizations l10n, int minutes) =>
+    l10n.jobsAnacronDelayMinutes(minutes);
+
+/// [day] as a short date, which the catalog's `yMMMd` formats in the
+/// UI locale.
+String anacronDayText(AppLocalizations l10n, DateTime day) =>
+    DateFormat.yMMMd(l10n.localeName).format(day);
+
+/// When a job last ran, in words: its stamp's day, or that it never ran.
+String anacronLastRunText(AppLocalizations l10n, DateTime? day) => day == null
+    ? l10n.jobsAnacronLastRunNever
+    : l10n.jobsAnacronLastRun(anacronDayText(l10n, day));
+
+/// The full sentence a cron row driven by [job] shows: the job's period,
+/// delay and last-run day (JOB-04).
+String anacronScheduleText(AppLocalizations l10n, AnacronJob job) {
+  final period = anacronPeriodText(l10n, job.period);
+  final delay = anacronDelayText(l10n, job.delayMinutes);
+  return switch (job.lastRun) {
+    final day? => l10n.jobsAnacronRunsDirectory(
+      period,
+      delay,
+      anacronDayText(l10n, day),
+    ),
+    null => l10n.jobsAnacronRunsDirectoryNever(period, delay),
+  };
+}
+
+/// The next-run cell of a cron row driven by [job], cut short for the
+/// column (JOB-04).
+String anacronNextText(AppLocalizations l10n, AnacronJob job) {
+  final period = anacronPeriodText(l10n, job.period);
+  return switch (job.lastRun) {
+    final day? => l10n.jobsAnacronNext(period, anacronDayText(l10n, day)),
+    null => l10n.jobsAnacronNextNever(period),
+  };
+}
+
+/// [job]'s directory when it is a `cron.<period>` script, whose timing
+/// anacron may own (JOB-04).
+String? periodicDirectoryOf(JobEntry job) => switch (job) {
+  PeriodicJobEntry(:final directory) => directory,
+  _ => null,
+};
+
+/// Why [job] lists no runs, naming the matching anacron job's period and
+/// last run when its table has one for the directory (JOB-04); the plain
+/// reason otherwise.
+String runsUnknownFor(
+  AppLocalizations l10n,
+  JobEntry job,
+  List<AnacronJob> anacron,
+) {
+  final (_, unknown) = cronRuns(job);
+  if (unknown == null) return l10n.chartUnknownValue;
+  if (unknown != JobRunsUnknown.anacron) {
+    return runsUnknownText(l10n, unknown);
+  }
+  final directory = periodicDirectoryOf(job);
+  final match = directory == null ? null : anacronJobFor(anacron, directory);
+  return match == null
+      ? runsUnknownText(l10n, unknown)
+      : anacronScheduleText(l10n, match);
+}
+
+/// [job]'s next-run cell when anacron drives it and its table names the
+/// matching job (JOB-04); null when the row keeps its unknown wording.
+String? anacronNextFor(
+  AppLocalizations l10n,
+  JobEntry job,
+  List<AnacronJob> anacron,
+) {
+  if (cronRuns(job).$2 != JobRunsUnknown.anacron) return null;
+  final directory = periodicDirectoryOf(job);
+  final match = directory == null ? null : anacronJobFor(anacron, directory);
+  return match == null ? null : anacronNextText(l10n, match);
+}
+
 /// The row's name: a cron line's command, a periodic script's name or a
 /// timer's unit, all server data.
 String jobTitle(JobEntry job) => switch (job) {

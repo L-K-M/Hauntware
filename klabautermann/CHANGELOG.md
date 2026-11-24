@@ -569,3 +569,9 @@
 - Quitting stops the engine cleanly first, so the last minutes of
   history are written and open container shells get their closing
   audit records.
+- The Jobs tab shows anacron's periodic jobs with their period, delay,
+  command and last-run day, and a cron directory they drive names the
+  matching job's timing instead of reading as unknown.
+- The Services tab has a Sockets view beside the units, listing what each
+  socket listens on, its unit and the units it activates. Tapping one
+  opens its unit's page.

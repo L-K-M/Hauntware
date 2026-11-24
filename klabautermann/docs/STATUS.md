@@ -2772,6 +2772,17 @@ is on main:
   installed). Nothing in the engine uses the SELF PIDs or `ops` yet:
   E10 takes the PIDs into the protected targets, E17 runs `ops` on
   connect, and `ops` has no platform fixture.
+- anacron jobs and sockets (ARC-02, JOB-04, SVC-10): the Jobs tab reads
+  `AnacronQuery` once per server and lists each job's period, delay,
+  command and last-run day under the jobs table, with loading, refused,
+  failed and not-installed states; a cron directory whose timing anacron
+  owns names the matching job's period and last run in its schedule and
+  next-run cells. The Services tab gains a Units/Sockets switch that
+  reads `SocketsQuery` as the login user for the system manager and
+  lists each socket's listen address, unit and activated units; a row
+  opens that unit's page. Tested in `jobs_view_test.dart`,
+  `jobs_panel_test.dart`, `services_view_test.dart` and
+  `services_panel_test.dart`.
 
 The macOS runner now keeps its window hidden until Dart has placed it,
 so the CI launch check's wait for a visible window also proves that

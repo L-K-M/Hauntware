@@ -102,6 +102,15 @@ class _JobsPanelState extends State<JobsPanel> {
   UserCrontabs? _others;
   bool _readingOthers = false;
 
+  /// anacron's jobs (JOB-04), and why they could not be read; null
+  /// before the read answers, which keeps the tab's shape until then.
+  AnacronPayload? _anacron;
+  JobHistoryFailed? _anacronFailure;
+  bool _readingAnacron = false;
+
+  /// The loaded anacron jobs, empty until the read answers.
+  List<AnacronJob> get _anacronJobs => _anacron?.jobs ?? const [];
+
   /// Whether admin mode is on for the server, which JOB-03 needs.
   bool _adminOn(BuildContext context) =>
       AdminScope.maybeOf(context)?.stateFor(widget.serverId)?.phase ==
@@ -111,15 +120,107 @@ class _JobsPanelState extends State<JobsPanel> {
   /// the last one's crontabs, and a read still out for it, are not this
   /// one's.
   @override
+  void initState() {
+    super.initState();
+    // Only a shown tab reads, as the panel's sampled streams do.
+    if (widget.visible) unawaited(_readAnacron());
+  }
+
+  @override
   void didUpdateWidget(JobsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverId != widget.serverId) _forgetOthers();
+    if (oldWidget.serverId != widget.serverId) {
+      _forgetOthers();
+      _forgetAnacron();
+      if (widget.visible) unawaited(_readAnacron());
+    } else if (widget.visible &&
+        !oldWidget.visible &&
+        _anacron == null &&
+        _anacronFailure == null) {
+      unawaited(_readAnacron());
+    }
   }
 
   void _forgetOthers() {
     _source = _Source.mine;
     _others = null;
     _readingOthers = false;
+  }
+
+  /// A desktop selection moves to another server in place: its anacron
+  /// table is not this one's, and a read still out for it is dropped.
+  void _forgetAnacron() {
+    _anacron = null;
+    _anacronFailure = null;
+    _readingAnacron = false;
+  }
+
+  /// Reads `/etc/anacrontab` for this server (JOB-04), as the login
+  /// user. The first read shows nothing until it answers; [notify] tells
+  /// a user-triggered retry to say that it runs.
+  Future<void> _readAnacron({bool notify = false}) async {
+    if (_readingAnacron) return;
+    final serverId = widget.serverId;
+    _readingAnacron = true;
+    if (notify && mounted) setState(() {});
+    final payload = await widget.monitoring.jobHistory.read(
+      serverId,
+      const AnacronQuery(),
+    );
+    if (!mounted || serverId != widget.serverId) return;
+    setState(() {
+      _readingAnacron = false;
+      if (payload is AnacronPayload) {
+        _anacron = payload;
+        _anacronFailure = null;
+      } else if (payload is JobHistoryFailed) {
+        _anacron = null;
+        _anacronFailure = payload;
+      }
+    });
+  }
+
+  /// JOB-04's states that need no list of their own: why the table
+  /// could not be read, or that it holds nothing. Empty while the first
+  /// read runs, so a tab with no answer yet keeps its shape.
+  List<Widget> _anacronNotices(AppLocalizations l10n) {
+    final jobs = _anacron?.jobs;
+    if (jobs != null && jobs.isNotEmpty) return const [];
+    if (_readingAnacron) {
+      return [
+        PanelNotice(icon: Icons.hourglass_empty, text: l10n.jobsAnacronReading),
+      ];
+    }
+    if (jobs != null) {
+      return [
+        PanelNotice(icon: Icons.info_outline, text: l10n.jobsAnacronEmpty),
+      ];
+    }
+    final failed = _anacronFailure;
+    if (failed == null) return const [];
+    if (failed.failure == JobHistoryFailure.notInstalled) {
+      return [
+        PanelNotice(
+          icon: Icons.info_outline,
+          text: l10n.jobsAnacronNotInstalled,
+        ),
+      ];
+    }
+    return [
+      PanelNotice(
+        icon: Icons.error_outline,
+        text: l10n.jobsAnacronFailed(failed.failure.name),
+        detail: failed.detail,
+      ),
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: TextButton.icon(
+          onPressed: () => unawaited(_readAnacron(notify: true)),
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.jobsAnacronRetry),
+        ),
+      ),
+    ];
   }
 
   Future<void> _readOthers(BuildContext context) async {
@@ -538,6 +639,9 @@ class _JobsPanelState extends State<JobsPanel> {
               ? l10n.jobsTimerZoneUtc
               : l10n.jobsTimerZone(utcOffsetText(l10n, serverOffset)),
         ),
+      // JOB-04's states that take no list of their own: why the table
+      // could not be read, or that it holds nothing.
+      ..._anacronNotices(l10n),
     ];
 
     return LayoutBuilder(
@@ -564,6 +668,7 @@ class _JobsPanelState extends State<JobsPanel> {
               const SizedBox(height: 12),
               if (readings.isNotEmpty)
                 Expanded(
+                  flex: 3,
                   child: _ClockGate(
                     clock: clock,
                     ticking: ticking,
@@ -581,6 +686,7 @@ class _JobsPanelState extends State<JobsPanel> {
                         stale: freshnessAt(now).stale,
                         serverOffset: serverOffset,
                         now: now,
+                        anacron: _anacronJobs,
                       ),
                       rows: jobs,
                       rowKey: (job) => job.id,
@@ -593,6 +699,7 @@ class _JobsPanelState extends State<JobsPanel> {
                         job,
                         profile,
                         clock.value,
+                        anacron: _anacronJobs,
                         run: _runNow,
                         lastRun: _lastRun,
                         readTimer: (unit) => widget.monitoring.timerDetails
@@ -642,12 +749,164 @@ class _JobsPanelState extends State<JobsPanel> {
                     ),
                   ),
                 ),
+              // JOB-04: anacron's own table, under the jobs list. A
+              // host without jobs keeps the list's full height and says
+              // so in a notice instead.
+              if (_anacron?.jobs.isNotEmpty ?? false) ...[
+                const Divider(height: 16),
+                Expanded(
+                  flex: 2,
+                  child: _AnacronSection(
+                    jobs: _anacron!.jobs,
+                    pending: _readingAnacron,
+                  ),
+                ),
+              ],
             ],
           ),
         );
       },
     );
   }
+}
+
+/// anacron's periodic jobs (JOB-04): each job's period, delay, command
+/// and last-run day. The section is built only when the table holds
+/// jobs; its other states are notices above the table.
+class _AnacronSection extends StatelessWidget {
+  const _AnacronSection({required this.jobs, required this.pending});
+
+  final List<AnacronJob> jobs;
+  final bool pending;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(l10n.jobsAnacronTitle, style: theme.textTheme.titleSmall),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: pending
+              ? Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: _notice(
+                    theme,
+                    Icons.hourglass_empty,
+                    l10n.jobsAnacronReading,
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: jobs.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) =>
+                      _job(context, l10n, theme, jobs[index]),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _job(
+    BuildContext context,
+    AppLocalizations l10n,
+    ThemeData theme,
+    AnacronJob job,
+  ) {
+    Widget fact(String label, String value) => MergeSemantics(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 8,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          // Large text wraps the value within the row instead of
+          // overflowing it.
+          Flexible(
+            child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      // One node per job: a screen reader hears its name, command and
+      // facts together.
+      child: MergeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(job.identifier, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 2),
+            Text(
+              job.command,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              children: [
+                fact(
+                  l10n.jobsAnacronLabelPeriod,
+                  anacronPeriodText(l10n, job.period),
+                ),
+                fact(
+                  l10n.jobsAnacronLabelDelay,
+                  anacronDelayText(l10n, job.delayMinutes),
+                ),
+                fact(
+                  l10n.jobsAnacronLabelLastRun,
+                  anacronLastRunText(l10n, job.lastRun),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _notice(
+    ThemeData theme,
+    IconData icon,
+    String text, [
+    String? detail,
+  ]) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    spacing: 8,
+    children: [
+      Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 4,
+          children: [
+            Text(text),
+            if (detail != null && detail.isNotEmpty)
+              Text(
+                detail,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 /// Builds its child as of the clock's time, and again only once the clock
@@ -777,10 +1036,11 @@ List<SortableTableColumn<JobEntry>> _columns(
   required bool stale,
   required Duration? serverOffset,
   required DateTime now,
+  List<AnacronJob> anacron = const [],
 }) {
   final l10n = AppLocalizations.of(context);
   ({String time, bool dst}) next(JobEntry job) =>
-      _next(l10n, job, serverOffset, now);
+      _next(l10n, job, serverOffset, now, anacron);
   return [
     SortableTableColumn(
       id: _Column.job.name,
@@ -810,7 +1070,7 @@ List<SortableTableColumn<JobEntry>> _columns(
       SortableTableColumn(
         id: _Column.schedule.name,
         label: l10n.jobsColumnSchedule,
-        text: (job) => _scheduleCell(l10n, job),
+        text: (job) => _scheduleCell(l10n, job, anacron),
         extent: const FlexColumnExtent(3),
       ),
     SortableTableColumn(
@@ -870,19 +1130,21 @@ double _nextWidth(
   return math.max(base, fit);
 }
 
-/// A row's first schedule in words, why a cron row has none, or that a
-/// timer's triggers are not read.
-String _scheduleCell(AppLocalizations l10n, JobEntry job) {
+/// A row's first schedule in words, why a cron row has none (naming the
+/// anacron job that drives it where its table has one, JOB-04), or that
+/// a timer's triggers are not read.
+String _scheduleCell(
+  AppLocalizations l10n,
+  JobEntry job,
+  List<AnacronJob> anacron,
+) {
   if (job case TimerJobEntry(triggers: null)) {
     return l10n.jobsTimerTriggersUnread;
   }
   if (job.schedules.firstOrNull case final schedule?) {
     return scheduleText(l10n, schedule);
   }
-  final (_, unknown) = cronRuns(job);
-  return unknown == null
-      ? l10n.chartUnknownValue
-      : runsUnknownText(l10n, unknown);
+  return runsUnknownFor(l10n, job, anacron);
 }
 
 /// A row's next run after [now] on its zone's clock, and whether a DST
@@ -896,6 +1158,7 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
   JobEntry job,
   Duration? serverOffset,
   DateTime now,
+  List<AnacronJob> anacron,
 ) {
   if (job is TimerJobEntry) {
     final offset = serverOffset ?? Duration.zero;
@@ -912,6 +1175,11 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
     };
     return (time: time, dst: false);
   }
+
+  // A directory anacron drives names its timing when its table has the
+  // matching job (JOB-04).
+  final anacronTiming = anacronNextFor(l10n, job, anacron);
+  if (anacronTiming != null) return (time: anacronTiming, dst: false);
 
   final run = _cronRunAfter(job, now);
   if (run == null) {
@@ -1140,6 +1408,7 @@ void _showDetails(
   JobEntry job,
   HostProfile? profile,
   DateTime now, {
+  List<AnacronJob> anacron = const [],
   required Widget? Function(BuildContext context, JobEntry job) run,
   Widget? Function(BuildContext context, JobEntry job)? lastRun,
   Future<TimerDetailReport> Function(String unit)? readTimer,
@@ -1162,9 +1431,15 @@ void _showDetails(
                     job: job as TimerJobEntry,
                     profile: profile,
                     now: now,
+                    anacron: anacron,
                     read: read,
                   ),
-                _ => JobDetails(job: job, profile: profile, now: now),
+                _ => JobDetails(
+                  job: job,
+                  profile: profile,
+                  now: now,
+                  anacron: anacron,
+                ),
               },
               ?lastRun?.call(context, job),
               ?run(context, job),
@@ -1186,11 +1461,13 @@ class _TimerDetailsLoader extends StatefulWidget {
     required this.profile,
     required this.now,
     required this.read,
+    this.anacron = const [],
   });
 
   final TimerJobEntry job;
   final HostProfile? profile;
   final DateTime now;
+  final List<AnacronJob> anacron;
   final Future<TimerDetailReport> Function(String unit) read;
 
   @override
@@ -1225,6 +1502,7 @@ class _TimerDetailsLoaderState extends State<_TimerDetailsLoader> {
       job: job,
       profile: widget.profile,
       now: widget.now,
+      anacron: widget.anacron,
       triggersNote: switch (report) {
         null => l10n.jobsTimerTriggersReading,
         TimerDetailReport(:final failure?) => timerDetailFailureText(
@@ -1261,6 +1539,7 @@ class JobDetails extends StatelessWidget {
     this.profile,
     required this.now,
     this.triggersNote,
+    this.anacron = const [],
   });
 
   final JobEntry job;
@@ -1275,6 +1554,10 @@ class JobDetails extends StatelessWidget {
   /// The probe's latest answer: the server's offset now and its systemd
   /// version.
   final HostProfile? profile;
+
+  /// anacron's jobs (JOB-04), which word a directory's row when they
+  /// drive it.
+  final List<AnacronJob> anacron;
 
   @override
   Widget build(BuildContext context) {
@@ -1332,13 +1615,7 @@ class JobDetails extends StatelessWidget {
     final (listed, unknown) = cronRuns(job);
     final runs = listed.where((run) => run.atUtc.isAfter(now)).toList();
     if (runs.isEmpty) {
-      return [
-        _Run(
-          unknown == null
-              ? l10n.chartUnknownValue
-              : runsUnknownText(l10n, unknown),
-        ),
-      ];
+      return [_Run(runsUnknownFor(l10n, job, anacron))];
     }
     return [
       for (final run in runs)
