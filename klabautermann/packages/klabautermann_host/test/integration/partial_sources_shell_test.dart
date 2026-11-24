@@ -1,10 +1,12 @@
 // The `fs` and `cron` fragments through real shells, on a host where one
 // source fails: a `df` that cannot read one mount, and cron sources the
 // login user may not read (HST-1, HST-4). Each installed shell (dash,
-// bash, mksh, BusyBox ash) runs the slow program. A stand-in `df` first
-// on PATH plays the failing mount; the cron run reads a scratch copy of
-// `/etc`, as an account that is not its owner where the test runs as
-// root. Tagged `shell`; a shell that is not installed gets no tests.
+// bash, mksh, BusyBox ash) runs the slow program. A stand-in `df` plays
+// the failing mount, named by its path in the program text because a
+// BusyBox built to run its applets before PATH would run its own; the
+// cron run reads a scratch copy of `/etc`, as an account that is not its
+// owner where the test runs as root. Tagged `shell`; a shell that is not
+// installed gets no tests.
 @Tags(['shell'])
 library;
 
@@ -114,6 +116,13 @@ void main() {
         Process.runSync('chmod', ['0755', file.path]);
       }
 
+      /// The program with the stand-in in place of both `df` runs.
+      String standIn(String program) {
+        const run = 'hw_run df ';
+        expect(run.allMatches(program), hasLength(2));
+        return program.replaceAll(run, 'hw_run ${dir.path}/bin/df ');
+      }
+
       FsSnapshot parsed(HwsSection s) =>
           parseFs(utf8.decode(s.payload), ParseContext.standard).value;
 
@@ -121,7 +130,7 @@ void main() {
         const said = 'df: /mnt/dead: Transport endpoint is not connected';
         df(stderr: said, stdout: _table);
 
-        final s = await tick(Collector.fs);
+        final s = await tick(Collector.fs, rewrite: standIn);
         expect(s.status, SectionStatus.ok);
         final fs = parsed(s);
         expect(fs.mounts.map((m) => (m.device, m.type, m.mountPoint)), [
@@ -135,7 +144,7 @@ void main() {
       test("fs: BusyBox df's refused mount does not hide the others", () async {
         df(stderr: 'df: /mnt/private: Permission denied', stdout: _table);
 
-        final s = await tick(Collector.fs);
+        final s = await tick(Collector.fs, rewrite: standIn);
         expect(s.status, SectionStatus.ok);
         expect(parsed(s).mounts, hasLength(2));
         expect(parsed(s).errors, ['/mnt/private: Permission denied']);
@@ -143,16 +152,22 @@ void main() {
 
       test('fs: a df that prints no row keeps its failure', () async {
         df(stderr: 'df: cannot read table of mounted file systems', stdout: '');
-        expect((await tick(Collector.fs)).status, SectionStatus.error);
+        expect(
+          (await tick(Collector.fs, rewrite: standIn)).status,
+          SectionStatus.error,
+        );
 
         df(stderr: 'df: /: Permission denied', stdout: '');
-        expect((await tick(Collector.fs)).status, SectionStatus.denied);
+        expect(
+          (await tick(Collector.fs, rewrite: standIn)).status,
+          SectionStatus.denied,
+        );
       });
 
       test('fs: a clean df is unchanged', () async {
         df(stderr: '', stdout: _table, status: 0);
 
-        final s = await tick(Collector.fs);
+        final s = await tick(Collector.fs, rewrite: standIn);
         expect(s.status, SectionStatus.ok);
         expect(parsed(s).errors, isEmpty);
         expect(parsed(s).mounts, hasLength(2));
