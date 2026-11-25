@@ -516,3 +516,6 @@ ENG-11 names `engine_state.dart`, `engine_fleet.dart`, `engine_sync_chain.dart`,
 ## #836 GLM round 1 (1b489bd): 0 actionable, no push
 - engine_isolate.dart "`late final reads` is read before startup assigns it; make it nullable and answer failures": refuted. `queue` starts as the startup chain (`SshConfigImportStore.open(...).then(...)`) and every request is chained after it; the chain's last step assigns `reads`, and a startup that throws sets `startupFailure`, which rejects every non-Shutdown request before `handle` (`commands.listen`), and Shutdown reads no `reads`.
 - engine_reads_test `supervisor.connect` not wrapped in `unawaited`: declined as minor; the package does not enable `unawaited_futures` and `dart analyze --fatal-infos` is clean.
+
+## #835 GLM round 1 (19d077f): 0 in scope, no push
+Every comment targets code the PR moved byte-identically (verified by a sorted line comparison of the old file against the new ones): new asserts on `ContainerBulkAction`, `StackComposeAction`, `ContainerAction` and `LogStreamSpec`, defensive copies in `VarLogFiles`, `JournalBoots`, `DiagnosticBundle`, UTC normalization in `LinkBackoff`. All pre-existing behaviour, declined for this move. None was verified as a reachable defect: the app builds these values itself, the engine validates requests at entry, and a `DateTime` keeps `isUtc` across a `SendPort`.
