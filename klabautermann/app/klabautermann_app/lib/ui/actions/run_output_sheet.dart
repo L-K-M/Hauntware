@@ -8,6 +8,7 @@ import '../logs/log_view.dart';
 import '../logs/log_notices.dart' show LogStatusNotice;
 import '../logs/logs_panel_controller.dart';
 import '../workspace_dock.dart';
+import 'output_sheet.dart';
 
 /// JOB-08's output (03 §7.7): [unit]'s journal on [serverId], followed
 /// live from shortly before the run, through the Logs panel's reading.
@@ -36,75 +37,15 @@ Future<void> _showRunOutputSheet(
   required MonitoringController monitoring,
   required String serverId,
   required String unit,
-}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
-  builder: (context) => DraggableScrollableSheet(
-    expand: false,
-    initialChildSize: 0.6,
-    minChildSize: 0.3,
-    maxChildSize: 1,
-    builder: (context, _) =>
-        _RunOutput(monitoring: monitoring, serverId: serverId, unit: unit),
-  ),
-);
-
-class _RunOutput extends StatefulWidget {
-  const _RunOutput({
-    required this.monitoring,
-    required this.serverId,
-    required this.unit,
-  });
-
-  final MonitoringController monitoring;
-  final String serverId;
-  final String unit;
-
-  @override
-  State<_RunOutput> createState() => _RunOutputState();
-}
-
-class _RunOutputState extends State<_RunOutput> {
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 8,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Semantics(
-                  header: true,
-                  child: Text(
-                    l10n.jobsRunOutputTitle(widget.unit),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: l10n.jobsRunOutputClose,
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-          Expanded(
-            child: RunOutputLog(
-              monitoring: widget.monitoring,
-              serverId: widget.serverId,
-              unit: widget.unit,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+}) {
+  final l10n = AppLocalizations.of(context);
+  return showOutputSheet(
+    context,
+    title: l10n.jobsRunOutputTitle(unit),
+    closeTooltip: l10n.jobsRunOutputClose,
+    builder: (context, scroll) =>
+        RunOutputLog(monitoring: monitoring, serverId: serverId, unit: unit),
+  );
 }
 
 /// [unit]'s journal on [serverId], followed from shortly before a run

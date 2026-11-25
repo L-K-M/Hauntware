@@ -5,6 +5,7 @@ import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../workspace_dock.dart';
+import 'output_sheet.dart';
 
 /// JOB-19's output (03 §7.7): how the cron line's run [planId] on
 /// [serverId] ended and what it printed, redacted and capped by the
@@ -42,23 +43,16 @@ Future<void> _showCronRunOutputSheet(
   required OperationsController operations,
   required String planId,
   required String title,
-}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
-  builder: (context) => DraggableScrollableSheet(
-    expand: false,
-    initialChildSize: 0.6,
-    minChildSize: 0.3,
-    maxChildSize: 1,
-    builder: (context, scroll) => ListenableBuilder(
-      listenable: operations,
-      builder: (context, _) => CronRunOutput(
-        state: operations.runOf(planId),
-        title: title,
-        scroll: scroll,
-      ),
+}) => showOutputSheet(
+  context,
+  // No header row: this sheet's content carries its own scrolling
+  // title and closes by its drag handle.
+  builder: (context, scroll) => ListenableBuilder(
+    listenable: operations,
+    builder: (context, _) => CronRunOutput(
+      state: operations.runOf(planId),
+      title: title,
+      scroll: scroll,
     ),
   ),
 );
