@@ -45,7 +45,6 @@
 library;
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
@@ -70,6 +69,7 @@ import 'docker_watch.dart';
 import 'dropbear.dart';
 import 'image_updates.dart';
 import 'inspect_masking.dart';
+import 'retry.dart';
 import 'stack_sources.dart';
 
 /// The most queries one server holds while its endpoint resolves [E]: a
@@ -109,10 +109,12 @@ final class DockerEndpointUnavailable implements Exception {
 /// hold both slots could leave every such read waiting on another.
 const _relayPoolConnections = 1;
 
-/// The first wait before a failed endpoint is looked for again while a
-/// watch holds, doubling up to the cap [E].
-const _retryBase = Duration(seconds: 5);
-const _retryCap = Duration(minutes: 2);
+/// How a failed endpoint is looked for again while a watch holds: it
+/// waits 5 s, 10 s, ... 2 min [E].
+const _endpointRetryBackoff = Backoff(
+  base: Duration(seconds: 5),
+  cap: Duration(minutes: 2),
+);
 
 /// Owned by the engine isolate, which hands it the Docker queries,
 /// watches, container log streams and endpoint choices ([setEndpoint])
@@ -741,9 +743,9 @@ final class DockerRouter {
       return;
     }
 
-    final delay = _retryBase * math.pow(2, math.min(session.retries, 5));
+    final delay = _endpointRetryBackoff.delay(session.retries);
     session.retries++;
-    session.retry = _startTimer(delay < _retryCap ? delay : _retryCap, () {
+    session.retry = _startTimer(delay, () {
       session.retry = null;
       if (!identical(_sessions[session.serverId], session) ||
           !session.failed ||
