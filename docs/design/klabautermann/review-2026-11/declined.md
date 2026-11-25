@@ -564,5 +564,5 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
 - `Backoff.delay` clamp of negative retries: declined. Every caller
   (`docker_watch`, `container_logs`, the router's endpoint ladder) passes
   a counter that starts at 0 and only increments; no negative input exists.
-- Extra test for a custom `exponentLimit`: nit; the router's private
-  backoff already exercises a non-default ladder through its tests.
+- Extra test for a custom `exponentLimit`: nit, deferred; no caller
+  sets a non-default limit today, so the case has no production user.
