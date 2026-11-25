@@ -1,7 +1,6 @@
 part of 'commands.dart';
 
-/// The longest each part of [HostCommands.auditLine] may be, in
-/// characters.
+/// The longest each part of [HostCommands.auditLine] may be [E].
 const int kAuditLinePartMax = 200;
 
 /// C0 and C1 controls, DEL and the Unicode line and paragraph
