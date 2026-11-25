@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart' show kSecondaryButton;
@@ -637,17 +639,19 @@ void main() {
 
     testWidgets('Esc the table does not use reaches its host', (tester) async {
       await _pump(tester);
-      showDialog<void>(
-        context: tester.element(find.byType(_Host)),
-        builder: (context) => Dialog(
-          child: SizedBox(
-            width: 300,
-            height: 120,
-            child: SortableTable<_Proc>(
-              tableId: 'dialog',
-              columns: _columns,
-              rows: _procs,
-              rowKey: (proc) => proc.pid,
+      unawaited(
+        showDialog<void>(
+          context: tester.element(find.byType(_Host)),
+          builder: (context) => Dialog(
+            child: SizedBox(
+              width: 300,
+              height: 120,
+              child: SortableTable<_Proc>(
+                tableId: 'dialog',
+                columns: _columns,
+                rows: _procs,
+                rowKey: (proc) => proc.pid,
+              ),
             ),
           ),
         ),
