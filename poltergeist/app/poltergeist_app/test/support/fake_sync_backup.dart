@@ -9,7 +9,6 @@
 import 'dart:async';
 
 import 'package:poltergeist_app/services/sync_credentials.dart';
-import 'package:poltergeist_app/services/sync_transport.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'fake_bookmark_store.dart';
