@@ -72,6 +72,136 @@ const String _overrideProgramField = 'program';
 const String _overrideDetected = 'detected';
 const String _overrideCustom = 'custom';
 
+/// A typed description of one settings key. [decode] owns the fallback,
+/// including partial collection filtering.
+final class _Setting<R, W> {
+  const _Setting(this.key, this.decode, this.encode);
+
+  final String key;
+  final R Function(Object? value) decode;
+  final Object? Function(W value) encode;
+}
+
+typedef _JsonObject = Map<String, Object?>;
+
+Object? _identity<T>(T value) => value;
+
+_Setting<bool, bool> _trueOnlySetting(String key) =>
+    _Setting(key, (Object? value) => value == true, _identity);
+
+_Setting<bool, bool> _notFalseSetting(String key) =>
+    _Setting(key, (Object? value) => value != false, _identity);
+
+_Setting<String?, String> _stringSetting(String key) =>
+    _Setting(key, (Object? value) => value is String ? value : null, _identity);
+
+String? _nonBlankStringOrNull(Object? value) => switch (value) {
+  final String text when text.trim().isNotEmpty => text,
+  _ => null,
+};
+
+_Setting<String?, String> _nonBlankStringSetting(String key) =>
+    _Setting(key, _nonBlankStringOrNull, _identity);
+
+_Setting<int?, int> _intSetting(String key) =>
+    _Setting(key, (Object? value) => value is int ? value : null, _identity);
+
+_JsonObject? _jsonObjectOrNull(Object? value) => switch (value) {
+  final _JsonObject json => Map.unmodifiable(json),
+  _ => null,
+};
+
+_JsonObject _jsonObjectCopy(_JsonObject value) =>
+    jsonDecode(jsonEncode(value)) as _JsonObject;
+
+_Setting<_JsonObject?, _JsonObject> _jsonObjectSetting(String key) =>
+    _Setting(key, _jsonObjectOrNull, _jsonObjectCopy);
+
+/// Throws an [ArgumentError] for a [value] JSON cannot hold (NaN or an
+/// infinity), before a setter stores it.
+void _checkFinite(double value, String name) {
+  if (!value.isFinite) {
+    throw ArgumentError.value(value, name, 'must be finite');
+  }
+}
+
+/// A stored pane width: only a finite positive number is usable, so a
+/// width the document holds as something else reads as none.
+double? _paneWidth(Object? value) {
+  if (value is! num) return null;
+  final width = value.toDouble();
+  return width.isFinite && width > 0 ? width : null;
+}
+
+double _finiteWidth(double width) {
+  _checkFinite(width, 'width');
+  return width;
+}
+
+_Setting<double?, double> _paneWidthSetting(String key) =>
+    _Setting(key, _paneWidth, _finiteWidth);
+
+Set<String> _stringSetOrEmpty(Object? value) => switch (value) {
+  final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
+  _ => const {},
+};
+
+Set<String>? _stringSetOrNull(Object? value) => switch (value) {
+  final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
+  _ => null,
+};
+
+List<String> _sortedStrings(Set<String> ids) => ids.toList()..sort();
+
+_Setting<Set<String>, Set<String>> _stringSetSetting(String key) =>
+    _Setting(key, _stringSetOrEmpty, _sortedStrings);
+
+_Setting<Set<String>?, Set<String>> _nullableStringSetSetting(String key) =>
+    _Setting(key, _stringSetOrNull, _sortedStrings);
+
+List<String>? _stringListOrNull(Object? value) => switch (value) {
+  final List<Object?> names => List.unmodifiable(names.whereType<String>()),
+  _ => null,
+};
+
+List<String> _copyStringList(List<String> names) => [...names];
+
+Object? _stringListEntry(List<String> values) =>
+    values.isEmpty ? null : [...values];
+
+_Setting<List<String>?, List<String>> _stringListSetting(String key) =>
+    _Setting(key, _stringListOrNull, _copyStringList);
+
+/// The typed key table. Non-uniform settings stay hand-written below.
+abstract final class _Settings {
+  static final appearance = _jsonObjectSetting(_appearanceKey);
+  static final firstRunCard = _trueOnlySetting(_firstRunCardKey);
+  static final announceBands = _notFalseSetting(_announceBandsKey);
+  static final alertNotifications = _trueOnlySetting(_alertNotificationsKey);
+  static final syncSecrets = _trueOnlySetting(_syncSecretsKey);
+  static final updateCheck = _notFalseSetting(_updateCheckKey);
+  static final cadence = _stringSetting(_cadenceKey);
+  static final fleetDensity = _stringSetting(_fleetDensityKey);
+  static final shellSidebar = _notFalseSetting(_shellSidebarKey);
+  static final shellInspector = _notFalseSetting(_shellInspectorKey);
+  static final shellSidebarWidth = _paneWidthSetting(_shellSidebarWidthKey);
+  static final shellInspectorWidth = _paneWidthSetting(_shellInspectorWidthKey);
+  static final logTextSize = _intSetting(_logTextSizeKey);
+  static final logWrap = _trueOnlySetting(_logWrapKey);
+  static final serverTimes = _trueOnlySetting(_serverTimesKey);
+  static final editorFontFamily = _nonBlankStringSetting(_editorFontFamilyKey);
+  static final editorLigatures = _notFalseSetting(_editorLigaturesKey);
+  static final editorTextSize = _intSetting(_editorTextSizeKey);
+  static final deviceName = _nonBlankStringSetting(_deviceNameKey);
+  static final rootNotice = _trueOnlySetting(_rootEquivalenceNoticeKey);
+  static final pinnedServers = _stringSetSetting(_pinnedServersKey);
+  static final adminMemory = _stringSetSetting(_adminMemoryKey);
+  static final monitorSet = _nullableStringSetSetting(_monitorSetKey);
+  static final containerColumns = _stringListSetting(_containerColumnsKey);
+  static final safety = _jsonObjectSetting(_safetyKey);
+  static final attention = _jsonObjectSetting(_attentionKey);
+}
+
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
 typedef DeviceSettingsWriter =
@@ -296,6 +426,38 @@ final class DeviceSettingsStore {
   /// The problem met while opening, or null when the file was fine.
   DeviceSettingsIssue? get issue => _issue;
 
+  R _read<R, W>(_Setting<R, W> setting) => setting.decode(_values[setting.key]);
+
+  /// Stores [value], or removes the key when null, and queues the write.
+  /// Being `async` keeps encoder failures asynchronous, as setters' were.
+  Future<void> _write<R, W>(_Setting<R, W> setting, W? value) async {
+    if (value == null) {
+      _values.remove(setting.key);
+    } else {
+      _values[setting.key] = setting.encode(value);
+    }
+    await _save();
+  }
+
+  /// A copy of the entries under a server-id keyed object, each as read;
+  /// none when the value is not an object.
+  Map<String, Object?> _rawEntries(String key) => switch (_values[key]) {
+    final Map<String, Object?> entries => {...entries},
+    _ => {},
+  };
+
+  /// Stores one server's encoded entry, or removes it when null.
+  Future<void> _writeServer(String key, String serverId, Object? entry) async {
+    final entries = _rawEntries(key);
+    if (entry == null) {
+      entries.remove(serverId);
+    } else {
+      entries[serverId] = entry;
+    }
+    _values[key] = entries;
+    await _save();
+  }
+
   /// This install's sync authorship id, `klabautermann.sync.deviceId`: a
   /// UUID v4 minted once and never regenerated while the file can be read
   /// (03 §4.10; the catalog library's `SyncEnrollmentState.deviceId`
@@ -307,103 +469,80 @@ final class DeviceSettingsStore {
   /// The appearance as the app stored it: an opaque JSON object the app
   /// encodes and decodes, or null when there is none (or the stored value
   /// is not an object, which reads as none rather than failing the file).
-  Map<String, Object?>? get appearance => switch (_values[_appearanceKey]) {
-    final Map<String, Object?> json => Map.unmodifiable(json),
-    _ => null,
-  };
+  Map<String, Object?>? get appearance => _read(_Settings.appearance);
 
   /// Stores a copy of [appearance] and writes the document. Throws when the
   /// write fails or this session is read-only; the value stays in memory
   /// either way. The copy is deep, through JSON, because the write runs
   /// later from the queue: a caller changing its map afterwards cannot
   /// change what is saved, and a value JSON cannot hold fails here.
-  Future<void> setAppearance(Map<String, Object?> appearance) async {
-    _values[_appearanceKey] =
-        jsonDecode(jsonEncode(appearance)) as Map<String, Object?>;
-    await _save();
-  }
+  Future<void> setAppearance(Map<String, Object?> appearance) =>
+      _write(_Settings.appearance, appearance);
 
   /// Whether the user dismissed the first-run coverage card (03 §9.5 item
   /// 1). Anything but `true` reads as not dismissed, so a damaged value
   /// shows the card again rather than failing the file.
-  bool get firstRunCardDismissed => _values[_firstRunCardKey] == true;
+  bool get firstRunCardDismissed => _read(_Settings.firstRunCard);
 
   /// Records the card's dismissal and writes the document. Throws when the
   /// write fails or this session is read-only; the dismissal stays in
   /// memory either way.
-  Future<void> dismissFirstRunCard() async {
-    _values[_firstRunCardKey] = true;
-    await _save();
-  }
+  Future<void> dismissFirstRunCard() => _write(_Settings.firstRunCard, true);
 
   /// Whether screen readers hear a value cross into or out of a warning or
   /// critical band (A11Y-15, D60): on unless the user turned it off, so
   /// anything but `false` reads as on rather than failing the file.
-  bool get announceThresholdBands => _values[_announceBandsKey] != false;
+  bool get announceThresholdBands => _read(_Settings.announceBands);
 
   /// Stores [announce] and writes the document. Throws when the write
   /// fails or this session is read-only; the value stays in memory either
   /// way.
-  Future<void> setAnnounceThresholdBands(bool announce) async {
-    _values[_announceBandsKey] = announce;
-    await _save();
-  }
+  Future<void> setAnnounceThresholdBands(bool announce) =>
+      _write(_Settings.announceBands, announce);
 
   /// Whether raised alerts post a system notification (ALR-01): off until
   /// the user turns it on and the system allows it, so anything but
   /// `true` reads as off and a damaged file posts nothing unasked.
-  bool get alertNotifications => _values[_alertNotificationsKey] == true;
+  bool get alertNotifications => _read(_Settings.alertNotifications);
 
   /// Stores [enabled] and writes the document. Throws when the write
   /// fails or this session is read-only; the value stays in memory either
   /// way.
-  Future<void> setAlertNotifications(bool enabled) async {
-    _values[_alertNotificationsKey] = enabled;
-    await _save();
-  }
+  Future<void> setAlertNotifications(bool enabled) =>
+      _write(_Settings.alertNotifications, enabled);
 
   /// The device's "sync passwords" switch (03 §4.5, SYN-02),
   /// `klabautermann.sync.secrets`: off unless the user turned it on, so
   /// anything but `true` reads as off and a damaged file syncs no
   /// passwords.
-  bool get syncSecrets => _values[_syncSecretsKey] == true;
+  bool get syncSecrets => _read(_Settings.syncSecrets);
 
   /// Stores [enabled] and writes the document. Throws when the write
   /// fails or this session is read-only; the value stays in memory either
   /// way.
-  Future<void> setSyncSecrets(bool enabled) async {
-    _values[_syncSecretsKey] = enabled;
-    await _save();
-  }
+  Future<void> setSyncSecrets(bool enabled) =>
+      _write(_Settings.syncSecrets, enabled);
 
   /// The device's update check (c3 §shells), `klabautermann.updateCheck`:
   /// on unless the user turned it off, so anything but `false` reads as
   /// on and a missing or damaged file still checks.
-  bool get checkForUpdates => _values[_updateCheckKey] != false;
+  bool get checkForUpdates => _read(_Settings.updateCheck);
 
   /// Stores [enabled] and writes the document. Throws when the write
   /// fails or this session is read-only; the value stays in memory either
   /// way.
-  Future<void> setCheckForUpdates(bool enabled) async {
-    _values[_updateCheckKey] = enabled;
-    await _save();
-  }
+  Future<void> setCheckForUpdates(bool enabled) =>
+      _write(_Settings.updateCheck, enabled);
 
   /// The device's polling budget preset (SAF-19),
   /// `klabautermann.sampling.cadence`, as the name the app stored, or null
   /// when there is none or it is not a string; the app reads a name it
   /// does not know as its default.
-  String? get cadence => switch (_values[_cadenceKey]) {
-    final String name => name,
-    _ => null,
-  };
+  String? get cadence => _read(_Settings.cadence);
 
   /// Stores [name] and writes the document. Throws when the write fails
   /// or this session is read-only; the value stays in memory either way.
-  Future<void> setCadence(String name) async {
-    _values[_cadenceKey] = name;
-    await _save();
-  }
+  Future<void> setCadence(String name) => _write(_Settings.cadence, name);
 
   /// Each server's services pinned to its Overview's quick actions
   /// (OV-08), `klabautermann.overview.pinnedServices`: the app's own
@@ -411,23 +550,17 @@ final class DeviceSettingsStore {
   /// not a list of strings is left out, and so is each item that is not a
   /// string.
   Map<String, List<String>> get pinnedServices => {
-    for (final MapEntry(:key, :value) in _rawPinnedServices.entries)
+    for (final MapEntry(:key, :value) in _rawEntries(
+      _pinnedServicesKey,
+    ).entries)
       if (value case final List<Object?> pins)
         key: pins.whereType<String>().toList(),
   };
 
   /// Stores [serverId]'s [pins], none to drop its entry, and writes the
   /// document; throws as [setCadence] does.
-  Future<void> setPinnedServices(String serverId, List<String> pins) async {
-    final entries = _rawPinnedServices;
-    if (pins.isEmpty) {
-      entries.remove(serverId);
-    } else {
-      entries[serverId] = [...pins];
-    }
-    _values[_pinnedServicesKey] = entries;
-    await _save();
-  }
+  Future<void> setPinnedServices(String serverId, List<String> pins) async =>
+      _writeServer(_pinnedServicesKey, serverId, _stringListEntry(pins));
 
   /// The Overview's cards as this device arranged them (OV-06),
   /// `klabautermann.overview.cards`: the app's names for them in order,
@@ -456,47 +589,32 @@ final class DeviceSettingsStore {
     await _save();
   }
 
-  Map<String, Object?> get _rawPinnedServices =>
-      switch (_values[_pinnedServicesKey]) {
-        final Map<String, Object?> entries => {...entries},
-        _ => {},
-      };
-
   /// The device's fleet board layout (FL-08), `klabautermann.fleet.density`,
   /// as the name the app stored, or null when there is none or it is not a
   /// string; the app reads a name it does not know as its default.
-  String? get fleetDensity => switch (_values[_fleetDensityKey]) {
-    final String name => name,
-    _ => null,
-  };
+  String? get fleetDensity => _read(_Settings.fleetDensity);
 
   /// Stores [name] and writes the document; throws as [setCadence] does.
-  Future<void> setFleetDensity(String name) async {
-    _values[_fleetDensityKey] = name;
-    await _save();
-  }
+  Future<void> setFleetDensity(String name) =>
+      _write(_Settings.fleetDensity, name);
 
   /// Whether the desktop shell shows its fleet rail
   /// (`klabautermann.shell.sidebar`), defaulting to shown; anything but a
   /// `false` reads as shown rather than failing the file.
-  bool get shellSidebarShown => _values[_shellSidebarKey] != false;
+  bool get shellSidebarShown => _read(_Settings.shellSidebar);
 
   /// Stores [shown] and writes the document; throws as [setCadence] does.
-  Future<void> setShellSidebarShown(bool shown) async {
-    _values[_shellSidebarKey] = shown;
-    await _save();
-  }
+  Future<void> setShellSidebarShown(bool shown) =>
+      _write(_Settings.shellSidebar, shown);
 
   /// Whether the desktop shell shows its inspector
   /// (`klabautermann.shell.inspector`), defaulting to shown, as
   /// [shellSidebarShown] does.
-  bool get shellInspectorShown => _values[_shellInspectorKey] != false;
+  bool get shellInspectorShown => _read(_Settings.shellInspector);
 
   /// Stores [shown] and writes the document; throws as [setCadence] does.
-  Future<void> setShellInspectorShown(bool shown) async {
-    _values[_shellInspectorKey] = shown;
-    await _save();
-  }
+  Future<void> setShellInspectorShown(bool shown) =>
+      _write(_Settings.shellInspector, shown);
 
   /// The fleet rail's width in the desktop shell
   /// (`klabautermann.shell.sidebarWidth`), in logical pixels, or null
@@ -504,76 +622,39 @@ final class DeviceSettingsStore {
   /// else reads as never resized, so a damaged or out-of-range value
   /// falls back to the layout's default rather than feeding its width
   /// math. The app clamps whatever it reads to the window.
-  double? get shellSidebarWidth => _paneWidth(_values[_shellSidebarWidthKey]);
+  double? get shellSidebarWidth => _read(_Settings.shellSidebarWidth);
 
   /// Stores [width] and writes the document; throws as [setCadence] does,
   /// and an [ArgumentError] for a width that is not finite, which is not
   /// stored: the document could not be encoded with it, now or for any
   /// later setting.
-  Future<void> setShellSidebarWidth(double width) async {
-    _checkFinite(width, 'width');
-    _values[_shellSidebarWidthKey] = width;
-    await _save();
-  }
+  Future<void> setShellSidebarWidth(double width) =>
+      _write(_Settings.shellSidebarWidth, width);
 
   /// The inspector's width in the desktop shell
   /// (`klabautermann.shell.inspectorWidth`), read as [shellSidebarWidth]
   /// is.
-  double? get shellInspectorWidth =>
-      _paneWidth(_values[_shellInspectorWidthKey]);
+  double? get shellInspectorWidth => _read(_Settings.shellInspectorWidth);
 
   /// Stores [width] and writes the document; throws as
   /// [setShellSidebarWidth] does.
-  Future<void> setShellInspectorWidth(double width) async {
-    _checkFinite(width, 'width');
-    _values[_shellInspectorWidthKey] = width;
-    await _save();
-  }
-
-  /// Throws an [ArgumentError] for a [value] JSON cannot hold (NaN or an
-  /// infinity), before a setter stores it.
-  static void _checkFinite(double value, String name) {
-    if (!value.isFinite) {
-      throw ArgumentError.value(value, name, 'must be finite');
-    }
-  }
-
-  /// A stored pane width: only a finite positive number is usable, so a
-  /// width the document holds as something else reads as none.
-  static double? _paneWidth(Object? value) {
-    if (value is! num) return null;
-    final width = value.toDouble();
-    return width.isFinite && width > 0 ? width : null;
-  }
+  Future<void> setShellInspectorWidth(double width) =>
+      _write(_Settings.shellInspectorWidth, width);
 
   /// Each server's polling cap (SAF-19), `klabautermann.sampling.caps`:
   /// the name the app stored for the slowest column it may sample at, by
   /// server id. An entry that is not a string is left out, so it caps
   /// nothing; the app reads a name it does not know as no cap.
   Map<String, String> get cadenceCaps => {
-    for (final MapEntry(:key, :value) in _rawCadenceCaps.entries)
+    for (final MapEntry(:key, :value) in _rawEntries(_cadenceCapsKey).entries)
       if (value case final String name) key: name,
   };
 
   /// Stores [serverId]'s cap [name], null to lift it, and writes the
   /// document; throws as [setCadence] does. A cap outlives the fleet, as
   /// the engine keeps it: a server that leaves and returns keeps its own.
-  Future<void> setCadenceCap(String serverId, String? name) async {
-    final entries = _rawCadenceCaps;
-    if (name == null) {
-      entries.remove(serverId);
-    } else {
-      entries[serverId] = name;
-    }
-    _values[_cadenceCapsKey] = entries;
-    await _save();
-  }
-
-  Map<String, Object?> get _rawCadenceCaps =>
-      switch (_values[_cadenceCapsKey]) {
-        final Map<String, Object?> entries => {...entries},
-        _ => {},
-      };
+  Future<void> setCadenceCap(String serverId, String? name) async =>
+      _writeServer(_cadenceCapsKey, serverId, name);
 
   /// The device's app lock (SAF-20), `klabautermann.appLock`: off until
   /// the user turns it on. Any other value than `false` that is there
@@ -595,14 +676,11 @@ final class DeviceSettingsStore {
   /// The log views' text size (A11Y-12), `klabautermann.logs.textSize`,
   /// in logical pixels, or null when there is none or it is not a whole
   /// number; the app clamps it to the sizes it offers.
-  int? get logTextSize => switch (_values[_logTextSizeKey]) {
-    final int size => size,
-    _ => null,
-  };
+  int? get logTextSize => _read(_Settings.logTextSize);
 
   /// Whether the log views wrap long lines (A11Y-12),
   /// `klabautermann.logs.wrap`; anything but `true` reads as off.
-  bool get logWrap => _values[_logWrapKey] == true;
+  bool get logWrap => _read(_Settings.logWrap);
 
   /// Stores the log views' [textSize] and [wrap] and writes the document;
   /// throws as [setCadence] does.
@@ -615,35 +693,27 @@ final class DeviceSettingsStore {
   /// Whether server times show in the server's zone rather than this
   /// device's (A11Y-07), `klabautermann.display.serverTimes`; anything but
   /// `true` reads as the device's zone.
-  bool get serverTimes => _values[_serverTimesKey] == true;
+  bool get serverTimes => _read(_Settings.serverTimes);
 
   /// Stores [serverTimes] and writes the document; throws as
   /// [setCadence] does.
-  Future<void> setServerTimes(bool serverTimes) async {
-    _values[_serverTimesKey] = serverTimes;
-    await _save();
-  }
+  Future<void> setServerTimes(bool serverTimes) =>
+      _write(_Settings.serverTimes, serverTimes);
 
   /// The file editors' font family (03 §8.5),
   /// `klabautermann.editor.fontFamily`: the family's display name, or null
   /// when there is none or it is not a non-blank string; the app reads an
   /// empty one as the editor's default.
-  String? get editorFontFamily => switch (_values[_editorFontFamilyKey]) {
-    final String family when family.trim().isNotEmpty => family,
-    _ => null,
-  };
+  String? get editorFontFamily => _read(_Settings.editorFontFamily);
 
   /// Whether the editors' font draws ligatures (03 §8.5),
   /// `klabautermann.editor.ligatures`; anything but `false` reads as on.
-  bool get editorLigatures => _values[_editorLigaturesKey] != false;
+  bool get editorLigatures => _read(_Settings.editorLigatures);
 
   /// The editors' text size (03 §8.5), `klabautermann.editor.textSize`, in
   /// logical pixels, or null when there is none or it is not a whole
   /// number; the app clamps it to the sizes it offers.
-  int? get editorTextSize => switch (_values[_editorTextSizeKey]) {
-    final int size => size,
-    _ => null,
-  };
+  int? get editorTextSize => _read(_Settings.editorTextSize);
 
   /// Stores the editors' [family], [ligatures] and [textSize] and writes
   /// the document; throws as [setCadence] does. A null [family] removes it,
@@ -666,53 +736,36 @@ final class DeviceSettingsStore {
   /// The name the host syslog line gives this device (SAF-13, M5 plan
   /// Q6), `klabautermann.audit.deviceName`; null for the app's default,
   /// as is anything but a non-blank string.
-  String? get deviceName => switch (_values[_deviceNameKey]) {
-    final String name when name.trim().isNotEmpty => name,
-    _ => null,
-  };
+  String? get deviceName => _read(_Settings.deviceName);
 
   /// Stores [name], null removing it, and writes the document. Throws
   /// when the write fails or this session is read-only; the value stays
   /// in memory either way.
-  Future<void> setDeviceName(String? name) async {
-    if (name == null) {
-      _values.remove(_deviceNameKey);
-    } else {
-      _values[_deviceNameKey] = name;
-    }
-    await _save();
-  }
+  Future<void> setDeviceName(String? name) =>
+      _write(_Settings.deviceName, name);
 
   /// Whether the user dismissed the Docker tab's root-equivalence notice
   /// (SAF-08, 03 §8.4). As for the coverage card, anything but `true`
   /// reads as not dismissed, so a damaged value shows the notice again.
-  bool get rootEquivalenceNoticeDismissed =>
-      _values[_rootEquivalenceNoticeKey] == true;
+  bool get rootEquivalenceNoticeDismissed => _read(_Settings.rootNotice);
 
   /// Records the notice's dismissal and writes the document. Throws when
   /// the write fails or this session is read-only; the dismissal stays in
   /// memory either way.
-  Future<void> dismissRootEquivalenceNotice() async {
-    _values[_rootEquivalenceNoticeKey] = true;
-    await _save();
-  }
+  Future<void> dismissRootEquivalenceNotice() =>
+      _write(_Settings.rootNotice, true);
 
   /// The ids of the servers pinned to the top of this device's fleet list
   /// (03 §10.3). Device-local, as Séance keeps its pins: they are never
   /// synced. A value that is not a list reads as none and items that are
   /// not strings are skipped, rather than failing the file.
-  Set<String> get pinnedServerIds => switch (_values[_pinnedServersKey]) {
-    final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
-    _ => const {},
-  };
+  Set<String> get pinnedServerIds => _read(_Settings.pinnedServers);
 
   /// Stores [ids], sorted so the document does not churn with pin order,
   /// and writes the document. Throws when the write fails or this session
   /// is read-only; the value stays in memory either way.
-  Future<void> setPinnedServerIds(Set<String> ids) async {
-    _values[_pinnedServersKey] = ids.toList()..sort();
-    await _save();
-  }
+  Future<void> setPinnedServerIds(Set<String> ids) =>
+      _write(_Settings.pinnedServers, ids);
 
   /// The servers whose admin mode this device turns back on after a
   /// launch (FL-16, 03 §8.2), `klabautermann.admin.remembered`; none by
@@ -720,17 +773,12 @@ final class DeviceSettingsStore {
   /// it, so another device cannot turn admin mode on here. A value that
   /// is not a list reads as none and items that are not strings are
   /// skipped, so a damaged file can only leave admin mode off.
-  Set<String> get adminMemory => switch (_values[_adminMemoryKey]) {
-    final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
-    _ => const {},
-  };
+  Set<String> get adminMemory => _read(_Settings.adminMemory);
 
   /// Stores [serverIds], sorted as [setPinnedServerIds] stores its ids,
   /// and writes the document; throws as [setPinnedServerIds] does.
-  Future<void> setAdminMemory(Set<String> serverIds) async {
-    _values[_adminMemoryKey] = serverIds.toList()..sort();
-    await _save();
-  }
+  Future<void> setAdminMemory(Set<String> serverIds) =>
+      _write(_Settings.adminMemory, serverIds);
 
   /// The ids of FL-21's monitor set as the user chose it on this device
   /// (03 §4.3 step 4), or null when the user never chose one and the
@@ -738,37 +786,27 @@ final class DeviceSettingsStore {
   /// value that is not a list reads as never chosen and items that are
   /// not strings are skipped, rather than failing the file; the app drops
   /// ids that are no longer eligible when it next saves.
-  Set<String>? get monitorSet => switch (_values[_monitorSetKey]) {
-    final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
-    _ => null,
-  };
+  Set<String>? get monitorSet => _read(_Settings.monitorSet);
 
   /// Stores [ids] as the user's monitor set, sorted so the document does
   /// not churn with toggle order, and writes the document. Throws when
   /// the write fails or this session is read-only; the value stays in
   /// memory either way.
-  Future<void> setMonitorSet(Set<String> ids) async {
-    _values[_monitorSetKey] = ids.toList()..sort();
-    await _save();
-  }
+  Future<void> setMonitorSet(Set<String> ids) =>
+      _write(_Settings.monitorSet, ids);
 
   /// The Containers tab's columns as the user chose them (CTR-08),
   /// `klabautermann.docker.containerColumns`: the shown ones by name, in
   /// order, which the app reads against its own column set. Null when
   /// there is no list, or the value is not one, which the app reads as
   /// its default columns rather than failing the file.
-  List<String>? get containerColumns => switch (_values[_containerColumnsKey]) {
-    final List<Object?> names => List.unmodifiable(names.whereType<String>()),
-    _ => null,
-  };
+  List<String>? get containerColumns => _read(_Settings.containerColumns);
 
   /// Stores [names] as the shown columns, in order, and writes the
   /// document. Throws when the write fails or this session is read-only;
   /// the value stays in memory either way.
-  Future<void> setContainerColumns(List<String> names) async {
-    _values[_containerColumnsKey] = [...names];
-    await _save();
-  }
+  Future<void> setContainerColumns(List<String> names) =>
+      _write(_Settings.containerColumns, names);
 
   /// OV-11's threshold levels by metric name,
   /// `klabautermann.overview.thresholds`: each its careful, warning and
@@ -819,7 +857,9 @@ final class DeviceSettingsStore {
   /// is skipped, as is a value that is not an object, rather than failing
   /// the file.
   Map<String, DockerEndpointOverride> get dockerEndpointOverrides => {
-    for (final MapEntry(:key, :value) in _rawEndpointOverrides.entries)
+    for (final MapEntry(:key, :value) in _rawEntries(
+      _endpointOverridesKey,
+    ).entries)
       key: ?_readOverride(value),
   };
 
@@ -833,25 +873,24 @@ final class DeviceSettingsStore {
     String serverId,
     DockerEndpointOverride? override,
   ) async {
-    final entries = _rawEndpointOverrides;
-    if (override == null) {
-      entries.remove(serverId);
-    } else {
-      final choice = override.choice;
-      entries[serverId] = {
-        if (choice != null) ...{
-          _overrideChoiceField: switch (choice) {
-            DockerEndpointDetected() => _overrideDetected,
-            DockerEndpointCustom() => _overrideCustom,
-          },
-          _overrideSocketField: choice.socketPath,
-        },
-        _overrideProgramField: ?override.program,
-        _overrideEndpointField: override.endpoint,
-      };
-    }
-    _values[_endpointOverridesKey] = entries;
-    await _save();
+    final choice = override?.choice;
+    return _writeServer(
+      _endpointOverridesKey,
+      serverId,
+      override == null
+          ? null
+          : {
+              if (choice != null) ...{
+                _overrideChoiceField: switch (choice) {
+                  DockerEndpointDetected() => _overrideDetected,
+                  DockerEndpointCustom() => _overrideCustom,
+                },
+                _overrideSocketField: choice.socketPath,
+              },
+              _overrideProgramField: ?override.program,
+              _overrideEndpointField: override.endpoint,
+            },
+    );
   }
 
   /// Drops the choice of every server [endpoints] does not list, or whose
@@ -863,7 +902,7 @@ final class DeviceSettingsStore {
   Future<Set<String>> purgeDockerEndpointOverrides(
     Map<String, String> endpoints,
   ) async {
-    final entries = _rawEndpointOverrides;
+    final entries = _rawEntries(_endpointOverridesKey);
     final dropped = {
       for (final MapEntry(:key, :value) in entries.entries)
         if (endpoints[key] == null ||
@@ -881,14 +920,6 @@ final class DeviceSettingsStore {
     await _save();
     return dropped;
   }
-
-  /// A copy of the stored entries, each as read; none when the value is
-  /// not an object.
-  Map<String, Object?> get _rawEndpointOverrides =>
-      switch (_values[_endpointOverridesKey]) {
-        final Map<String, Object?> entries => {...entries},
-        _ => {},
-      };
 
   static DockerEndpointOverride? _readOverride(Object? value) {
     if (value is! Map<String, Object?>) return null;
@@ -930,7 +961,7 @@ final class DeviceSettingsStore {
   /// not an object, an entry that is not a list and items that are not
   /// absolute paths are skipped, rather than failing the file.
   Map<String, List<String>> get stackFolders => {
-    for (final MapEntry(:key, :value) in _rawStackFolders.entries)
+    for (final MapEntry(:key, :value) in _rawEntries(_stackFoldersKey).entries)
       if (value case final List<Object?> folders)
         if ([
               for (final folder in folders)
@@ -945,22 +976,8 @@ final class DeviceSettingsStore {
   /// and writes the document. The other servers' entries stay as they
   /// were read. Throws when the write fails or this session is
   /// read-only; the value stays in memory either way.
-  Future<void> setStackFolders(String serverId, List<String> folders) async {
-    final entries = _rawStackFolders;
-    if (folders.isEmpty) {
-      entries.remove(serverId);
-    } else {
-      entries[serverId] = [...folders];
-    }
-    _values[_stackFoldersKey] = entries;
-    await _save();
-  }
-
-  Map<String, Object?> get _rawStackFolders =>
-      switch (_values[_stackFoldersKey]) {
-        final Map<String, Object?> entries => {...entries},
-        _ => {},
-      };
+  Future<void> setStackFolders(String serverId, List<String> folders) async =>
+      _writeServer(_stackFoldersKey, serverId, _stringListEntry(folders));
 
   /// The endpoints CRT-01 checks for each server, by server id, as
   /// `host:port` labels: `klabautermann.certificates.endpoints`.
@@ -968,7 +985,7 @@ final class DeviceSettingsStore {
   /// as [stackFolders]: an entry that is not a list and items that are
   /// not endpoints are skipped, rather than failing the file.
   Map<String, List<TlsEndpoint>> get tlsEndpoints => {
-    for (final MapEntry(:key, :value) in _rawTlsEndpoints.entries)
+    for (final MapEntry(:key, :value) in _rawEntries(_tlsEndpointsKey).entries)
       if (value case final List<Object?> labels)
         if ([
               for (final label in labels)
@@ -983,58 +1000,37 @@ final class DeviceSettingsStore {
   Future<void> setTlsEndpoints(
     String serverId,
     List<TlsEndpoint> endpoints,
-  ) async {
-    final entries = _rawTlsEndpoints;
-    if (endpoints.isEmpty) {
-      entries.remove(serverId);
-    } else {
-      entries[serverId] = [for (final endpoint in endpoints) endpoint.label];
-    }
-    _values[_tlsEndpointsKey] = entries;
-    await _save();
-  }
-
-  Map<String, Object?> get _rawTlsEndpoints =>
-      switch (_values[_tlsEndpointsKey]) {
-        final Map<String, Object?> entries => {...entries},
-        _ => {},
-      };
+  ) async => _writeServer(
+    _tlsEndpointsKey,
+    serverId,
+    endpoints.isEmpty
+        ? null
+        : [for (final endpoint in endpoints) endpoint.label],
+  );
 
   /// The safety preferences as the app stored them (M4 plan M4): an
   /// opaque JSON object the app encodes and decodes, or null when there
   /// is none (or the stored value is not an object, which reads as none,
   /// every server observe-only, rather than failing the file).
-  Map<String, Object?>? get safety => switch (_values[_safetyKey]) {
-    final Map<String, Object?> json => Map.unmodifiable(json),
-    _ => null,
-  };
+  Map<String, Object?>? get safety => _read(_Settings.safety);
 
   /// Stores a deep copy of [safety] and writes the document, as
   /// [setAppearance] does. Throws when the write fails or this session is
   /// read-only; the value stays in memory either way.
-  Future<void> setSafety(Map<String, Object?> safety) async {
-    _values[_safetyKey] =
-        jsonDecode(jsonEncode(safety)) as Map<String, Object?>;
-    await _save();
-  }
+  Future<void> setSafety(Map<String, Object?> safety) =>
+      _write(_Settings.safety, safety);
 
   /// TRI-03's acknowledged problems as the app stored them: an opaque
   /// JSON object the app encodes and decodes, or null when there is none
   /// (or the stored value is not an object, which reads as none, every
   /// problem unacknowledged, rather than failing the file). Device-local
   /// (02 TRI-03).
-  Map<String, Object?>? get attention => switch (_values[_attentionKey]) {
-    final Map<String, Object?> json => Map.unmodifiable(json),
-    _ => null,
-  };
+  Map<String, Object?>? get attention => _read(_Settings.attention);
 
   /// Stores a deep copy of [attention] and writes the document, as
   /// [setSafety] does.
-  Future<void> setAttention(Map<String, Object?> attention) async {
-    _values[_attentionKey] =
-        jsonDecode(jsonEncode(attention)) as Map<String, Object?>;
-    await _save();
-  }
+  Future<void> setAttention(Map<String, Object?> attention) =>
+      _write(_Settings.attention, attention);
 
   /// Mints the device id when there is none and writes the document when
   /// it changed or [rewrite] asks for it. Returns the write's failure, or

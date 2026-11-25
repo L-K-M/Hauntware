@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert' show jsonEncode;
 import 'dart:io';
 import 'dart:isolate';
 
@@ -33,8 +32,6 @@ import '../capabilities/capability_cache.dart';
 import '../catalog/engine_recovery.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
-import '../catalog/klabautermann_records.dart'
-    show diffServerPrefs, encodeSyncedRule;
 import '../catalog/server_drafts.dart'
     show serverConfigOfDraft, serverDraftProblem;
 import '../catalog/keystore_channel.dart';
@@ -83,9 +80,9 @@ import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import '../runtime/engine_reads.dart';
+import '../runtime/engine_sync_chain.dart';
 import 'protocol.dart';
 import 'request_ids.dart';
-import 'serial_chain.dart';
 
 /// Redacts the lines an export carries (LOG-10, 03 §8.9), as the audit
 /// log and operation output are.
@@ -855,42 +852,6 @@ void _runEngine(
   // keeps answers only for servers its fleet lists.
   var fleetSent = false;
 
-  // The synced preferences the app last heard, so a round sends only
-  // what changed.
-  var prefsSent = <String, String>{};
-  // The alert rules the app last heard, encoded; none to start with.
-  var rulesSent = '[]';
-  // The snippets the app last heard, encoded likewise.
-  var snippetsSent = '[]';
-  Future<void> sendServerPrefs() async {
-    final (changes, sent) = diffServerPrefs(
-      prefsSent,
-      await sync.serverPrefs(),
-    );
-    changes.forEach(uiPort.send);
-    prefsSent = sent;
-    // By id, so a reload that lists the same rules in another order
-    // sends nothing.
-    final rules = [...await sync.rules()]..sort((a, b) => a.id.compareTo(b.id));
-    final encoded = jsonEncode([
-      for (final rule in rules) encodeSyncedRule(rule),
-    ]);
-    if (encoded != rulesSent) {
-      uiPort.send(AlertRulesChanged(List.unmodifiable(rules)));
-      rulesSent = encoded;
-    }
-    alerts.setRules(rules, DateTime.now().toUtc()).forEach(uiPort.send);
-
-    final snippets = sync.snippets();
-    final snippetsEncoded = jsonEncode([
-      for (final snippet in snippets) snippet.toJson(),
-    ]);
-    if (snippetsEncoded != snippetsSent) {
-      uiPort.send(SnippetsChanged(List.unmodifiable(snippets)));
-      snippetsSent = snippetsEncoded;
-    }
-  }
-
   void probeFleet() {
     if (!fleetSent) return;
     reachability?.update(probeTargets(fleetEntries(), configOf));
@@ -1089,144 +1050,36 @@ void _runEngine(
     }
   }
 
+  // Lists the synced servers again after a round or write took, so a
+  // chained operation never reads a fleet a later one replaced.
+  Future<void> refreshSynced() async {
+    syncedServers = await sync.servers();
+    await relistSynced();
+  }
+
   // Sync, one operation at a time in request order, beside the
   // request queue rather than in it: an enrollment waits on the network,
   // a key derivation and the app's keystore answers, which arrive as
   // requests, and links, sampling and imports go on meanwhile.
-  var syncTail = Future<void>.value();
-  // Each link completes normally whatever its body throws: [onError]
-  // answers the request that asked, and without one the error is
-  // reported as a fault.
-  void chain(
-    Future<void> Function() body, {
-    void Function(Object error)? onError,
-  }) {
-    syncTail = chainAfter(syncTail, body, onError: onError, onFault: fault);
-  }
+  final syncChain = EngineSyncChain(
+    sync: () => sync,
+    send: uiPort.send,
+    alerts: alerts,
+    fleetEntries: fleetEntries,
+    syncedFleet: () => synced,
+    refreshSynced: refreshSynced,
+    relistSynced: relistSynced,
+    endpointPins: endpointPins,
+    pinPublicationRelease: start.pinPublicationRelease,
+    fault: fault,
+  );
 
   pinConfirmed = (pin) {
     if (!syncOpened) return;
-    chain(() => sync.publishPin(pin, release: start.pinPublicationRelease));
-  };
-  // Null while no release is offered: the app's default state says so.
-  PinPublicationState? pinPublicationState() {
-    final release = start.pinPublicationRelease;
-    if (release == null) return null;
-    return PinPublicationState(
-      release: release,
-      asserted: sync.pinPublicationAsserted(release),
+    syncChain.chain(
+      () => sync.publishPin(pin, release: start.pinPublicationRelease),
     );
-  }
-
-  // [requestId] is the request's own, echoed on each status; null for a
-  // round the engine starts itself.
-  void runSync(
-    SyncOperation operation,
-    Future<SyncStatus> Function() body, {
-    String? requestId,
-  }) {
-    chain(() async {
-      uiPort.send(
-        SyncStatus(
-          SyncPhase.running,
-          operation: operation,
-          requestId: requestId,
-          account: sync.account,
-        ),
-      );
-      final SyncStatus status;
-      try {
-        status = await body();
-        // The fleet first, so it shows the servers when the answer arrives.
-        if (status.phase == SyncPhase.succeeded) {
-          syncedServers = await sync.servers();
-          await relistSynced();
-        }
-      } on Object catch (error) {
-        // EngineSync answers every failure itself; this keeps the chain
-        // alive should that, or the fleet refresh, ever slip: a chained
-        // operation runs only after the one before it completes normally.
-        uiPort.send(
-          SyncStatus(
-            SyncPhase.failed,
-            operation: operation,
-            requestId: requestId,
-            account: sync.account,
-            failure: SyncFailure.other,
-            detail: '$error',
-          ),
-        );
-        return;
-      }
-      if (status.phase == SyncPhase.succeeded) {
-        uiPort.send(CatalogReplaced(fleetEntries()));
-        // The round took, so it is answered as it ended even when the
-        // preferences it pulled cannot be sent on: records from other
-        // devices are encoded there, and the next round sends them again.
-        try {
-          await sendServerPrefs();
-        } on Object catch (error, stack) {
-          fault(error, stack);
-        }
-      }
-      uiPort.send(status.answering(requestId));
-    });
-  }
-
-  // A catalog write runs on the sync chain too, so it never overlaps a
-  // round. One that took shows in the fleet and the preferences before
-  // its answer, and a round queued behind it pushes it. A saved server's
-  // endpoint counts as confirmed on this device: the user typed it (M5
-  // plan P16).
-  void runWrite(
-    String requestId,
-    Future<EngineEvent> Function() body, {
-    String? confirm,
-    bool confirmWritten = false,
-  }) {
-    chain(() async {
-      final EngineEvent answer;
-      try {
-        answer = await body();
-      } on Object catch (error) {
-        // EngineSync answers every refusal itself; this keeps the chain
-        // alive should a write slip past that.
-        uiPort.send(
-          CatalogWriteRefused(
-            requestId: requestId,
-            failure: CatalogWriteFailure.other,
-            detail: '$error',
-          ),
-        );
-        return;
-      }
-      if (answer is CatalogWritten) {
-        // The write is sealed, so it is answered as written and pushed
-        // even when its fleet refresh, a pin's save or the preferences
-        // throw; the next round's refresh shows what this one missed. A
-        // throw here would also end the chain: a chained operation runs
-        // only after the one before it completes normally.
-        try {
-          syncedServers = await sync.servers();
-          await relistSynced();
-          final confirmed =
-              confirm ?? (confirmWritten ? answer.serverId : null);
-          if (confirmed != null) {
-            for (final pin in synced.pinsFor([confirmed], DateTime.now())) {
-              await endpointPins.confirm(pin);
-            }
-            await relistSynced();
-          }
-          uiPort.send(CatalogReplaced(fleetEntries()));
-          await sendServerPrefs();
-        } on Object {
-          // Recovered as above.
-        }
-      }
-      uiPort.send(answer);
-      if (answer is CatalogWritten) runSync(SyncOperation.round, sync.runRound);
-    });
-  }
+  };
 
   Future<void> replyToRecovery(
     String requestId,
@@ -1274,7 +1127,7 @@ void _runEngine(
             syncAccount: sync.account,
             syncStoreIssues: sync.issues,
             auditInMemory: audit.storage == AuditStorage.memory,
-            pinPublication: pinPublicationState(),
+            pinPublication: syncChain.pinPublicationState(),
           ),
         );
         // The fleet as the engine starts: the servers the last sync left
@@ -1285,7 +1138,7 @@ void _runEngine(
         fleetSent = true;
         // The probes start whatever the stored preferences do.
         try {
-          await sendServerPrefs();
+          await syncChain.sendServerPrefs();
         } on Object catch (error, stack) {
           fault(error, stack);
         }
@@ -1582,21 +1435,29 @@ void _runEngine(
           reject(message, 'not eligible fleet servers: ${skipped.join(', ')}');
         }
       case EnrollSync(:final requestId):
-        runSync(
+        syncChain.runSync(
           SyncOperation.enroll,
           () => sync.enroll(message),
           requestId: requestId,
         );
       case RunSyncRound(:final requestId):
-        runSync(SyncOperation.round, sync.runRound, requestId: requestId);
+        syncChain.runSync(
+          SyncOperation.round,
+          sync.runRound,
+          requestId: requestId,
+        );
       case SignOutSync(:final requestId):
         // The fleet refresh after it drops the account's servers, which
         // closes their links and forgets their profiles and history.
-        runSync(SyncOperation.signOut, sync.signOut, requestId: requestId);
+        syncChain.runSync(
+          SyncOperation.signOut,
+          sync.signOut,
+          requestId: requestId,
+        );
       case ReadPinConflicts():
         // Behind any round already queued, so a read never races the diff
         // that round is about to change.
-        chain(
+        syncChain.chain(
           () async =>
               uiPort.send(PinConflictsChanged(await sync.pinConflicts())),
           onError: (error) => reject(message, '$error'),
@@ -1607,7 +1468,7 @@ void _runEngine(
         :final localFingerprintSha256,
         :final pulledFingerprintSha256,
       ):
-        chain(() async {
+        syncChain.chain(() async {
           try {
             final conflicts = await sync.resolvePinConflict(
               locator,
@@ -1628,17 +1489,21 @@ void _runEngine(
           ),
         );
       case SaveServer(:final requestId, :final draft):
-        runWrite(requestId, () => sync.saveServer(message), confirm: draft.id);
+        syncChain.runWrite(
+          requestId,
+          () => sync.saveServer(message),
+          confirm: draft.id,
+        );
       case DuplicateServer(:final requestId, :final serverId):
         // A copy of an endpoint this device confirmed is confirmed too: it
         // is the same endpoint, copied by the user.
-        runWrite(
+        syncChain.runWrite(
           requestId,
           () => sync.duplicateServer(message),
           confirmWritten: synced.confirmedIds.contains(serverId),
         );
       case DeleteServer(:final requestId):
-        runWrite(requestId, () => sync.deleteServer(message));
+        syncChain.runWrite(requestId, () => sync.deleteServer(message));
       case TestServerConnection(
         :final requestId,
         :final draft,
@@ -1689,11 +1554,11 @@ void _runEngine(
           onError: (error, _) => reject(message, 'connection test: $error'),
         );
       case SetServerPrefs(:final requestId):
-        runWrite(requestId, () => sync.setServerPrefs(message));
+        syncChain.runWrite(requestId, () => sync.setServerPrefs(message));
       case PutRule(:final requestId):
-        runWrite(requestId, () => sync.putRule(message));
+        syncChain.runWrite(requestId, () => sync.putRule(message));
       case RemoveRule(:final requestId):
-        runWrite(requestId, () => sync.removeRule(message));
+        syncChain.runWrite(requestId, () => sync.removeRule(message));
       case PlanAction(:final intent):
         void refuse(ActionRefusalReason reason, {String? detail}) =>
             uiPort.send(
@@ -1969,7 +1834,7 @@ void _runEngine(
           reject(message, 'no release is offered for pin publication');
           return;
         }
-        chain(() async {
+        syncChain.chain(() async {
           try {
             await sync.setPinPublication(asserted ? release : null);
           } on Object {
@@ -1977,12 +1842,14 @@ void _runEngine(
             // with the next change (sync_state_file.dart), so the event
             // reports what this session goes by.
           }
-          if (pinPublicationState() case final state?) uiPort.send(state);
+          if (syncChain.pinPublicationState() case final state?) {
+            uiPort.send(state);
+          }
         });
       case SetSyncSecrets(:final enabled):
         // Behind any sync operation already queued, which runs under the
         // switch as it was when it was asked for.
-        chain(() => sync.setSyncSecrets(enabled: enabled));
+        syncChain.chain(() => sync.setSyncSecrets(enabled: enabled));
       case NewRecoveryCode(:final requestId):
         await replyToRecovery(
           requestId,
