@@ -17,9 +17,10 @@ final class _ProbeRead implements _OwedRead {
 
   @override
   void send(_Server server, _Run run, _Sampler sampler) {
+    assert(identical(sampler, run.slow), 'the probe runs on the slow sampler');
     run.probing = true;
     _scheduler._settle(
-      run.slow.session.onDemand(Collector.probe, const []),
+      sampler.session.onDemand(Collector.probe, const []),
       recover: () {
         if (!identical(server.run, run)) return;
         // As for a probe that brought no reply: it goes out again.
