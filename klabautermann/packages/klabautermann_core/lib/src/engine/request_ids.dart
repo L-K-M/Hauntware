@@ -3,7 +3,8 @@ import 'protocol.dart';
 /// The id [request] carries for its own answer, or null when it names
 /// none: what [RequestRejected.requestId] echoes, so the app settles the
 /// one read, open or run the engine refused instead of waiting on an
-/// answer that will not come.
+/// answer that will not come. Every request type is classified, so a new
+/// one must say whether it carries an id.
 String? requestIdOf(EngineRequest request) => switch (request) {
   EnrollSync(:final requestId) ||
   RunSyncRound(:final requestId) ||
@@ -49,5 +50,33 @@ String? requestIdOf(EngineRequest request) => switch (request) {
   RunAction(:final planId) || CancelAction(:final planId) => planId,
   AcknowledgeOperation(:final id) => id,
   AnswerPrompt(:final promptId) => promptId,
-  _ => null,
+  // The requests that carry no answer correlation: each is answered by a
+  // fixed event, or its outcome reaches the app another way.
+  Hello() ||
+  Shutdown() ||
+  ReadPinConflicts() ||
+  ResolvePinConflict() ||
+  ImportSshConfig() ||
+  ConfirmEndpoints() ||
+  SetMonitorSet() ||
+  Connect() ||
+  Disconnect() ||
+  SetAppActivity() ||
+  Subscribe() ||
+  Unsubscribe() ||
+  RefreshSubscription() ||
+  SetCadenceProfile() ||
+  SetServerCadenceCap() ||
+  FootprintQuery() ||
+  SetDockerEndpoint() ||
+  SetDockerProgram() ||
+  PlanAction() ||
+  SetSafetyPolicy() ||
+  SetSyncSecrets() ||
+  SetDeviceName() ||
+  SetPinPublication() ||
+  SetAdminMode() ||
+  AuditQuery() ||
+  AnswerKeystore() ||
+  HandleAlert() => null,
 };
