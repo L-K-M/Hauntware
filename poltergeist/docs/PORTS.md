@@ -1,5 +1,24 @@
 # Séance ports and pin audits
 
+## Shared ssh_config reader, ARC-15 (2026-11-25)
+
+The ssh_config resolver moves out of Klabautermann into `seance_core`
+(stage 1, #832), and Séance's importer and Poltergeist's preview consume
+it. `SshConfigSettings` reads a config as ssh does (`Host *` and
+top-level defaults, later matching blocks, known `Match` criteria, ssh
+quoting); `SshConfigImporter.parse` imports the resolver's values for
+every alias it settles and keeps its block-local reading for the rest,
+which joins `SshConfigImport.approximate`. Poltergeist badges only
+approximate rows with `wildcardDefaults`/`matchBlock`; Klabautermann
+keeps its strict resolver behaviour.
+
+- A repeated alias on opposite sides of a top-level `Include` still
+  yields two rows: Poltergeist parses one chunk per include region, so
+  each chunk resolves its own copy. Endpoint dedupe starts the later row
+  skipped when host, port and username coincide.
+- Pin audit: the record below still matches; no Séance source moved
+  into Poltergeist and no new contributor joined the `seance/` lineage.
+
 ## Shared link queue (2026-11-16)
 
 Poltergeist's deep-link queue moves into `seance_core`, and Séance's
