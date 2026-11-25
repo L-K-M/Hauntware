@@ -39,6 +39,73 @@ const double _gap = 16;
 /// fleet rows' `fs` limit, twice the slowest, judges both.
 final Duration _slowStaleAfter = kFleetRowStaleAfter[SampleStream.fs]!;
 
+/// A stream's freshness line. It rebuilds on the clock's ticks alone, so
+/// the card around it is built only when its readings change, not to
+/// count the age up each second; a pause or a lost link is still said
+/// once, by the panel's first line, though it greys these values too.
+class _AgeLine extends StatelessWidget {
+  const _AgeLine({
+    required this.clock,
+    required this.ticking,
+    required this.freshness,
+  });
+
+  final ValueListenable<DateTime> clock;
+
+  /// Whether the clock may tick for it: the tab shows an age.
+  final bool ticking;
+
+  final Freshness Function(DateTime now) freshness;
+
+  @override
+  Widget build(BuildContext context) => ClockGate(
+    clock: clock,
+    ticking: ticking,
+    // The words count the age in whole seconds; a coarser step would
+    // freeze them between two.
+    dueAfter: (now) => now.add(kFreshnessTick),
+    builder: (context, now) {
+      final updated = freshness(now);
+      return switch (updated) {
+        FreshnessUpdated(:final stale) => PanelNotice(
+          icon: stale ? Icons.history : Icons.schedule,
+          text: freshnessText(AppLocalizations.of(context), updated),
+        ),
+        _ => const SizedBox.shrink(),
+      };
+    },
+  );
+}
+
+/// The panel's head freshness line, rebuilt on the clock's ticks alone so
+/// no card is rebuilt to count the age up.
+class _HeadLine extends StatelessWidget {
+  const _HeadLine({
+    required this.clock,
+    required this.ticking,
+    required this.headAt,
+  });
+
+  final ValueListenable<DateTime> clock;
+  final bool ticking;
+  final Freshness? Function(DateTime now) headAt;
+
+  @override
+  Widget build(BuildContext context) => ClockGate(
+    clock: clock,
+    ticking: ticking,
+    dueAfter: (now) => now.add(kFreshnessTick),
+    builder: (context, now) {
+      final head = headAt(now);
+      if (head == null) return const SizedBox.shrink();
+      return PanelNotice(
+        icon: head.stale ? Icons.history : Icons.schedule,
+        text: freshnessText(AppLocalizations.of(context), head),
+      );
+    },
+  );
+}
+
 /// The Overview tab (03 §10.4; OV-01 to OV-04): the health card from
 /// failed units and full disks (OV-02), CPU in total and per core (CPU-01,
 /// CPU-02), load with core context (CPU-03), memory with the ZFS ARC note
@@ -112,19 +179,14 @@ class OverviewPanel extends StatelessWidget {
             ...slow.all,
             ...docker.all,
           ]),
-          builder: (context, _) => ListenableBuilder(
-            listenable: visible && (reading.value != null || slow.aging)
-                ? monitoring.clock
-                : kSilentListenable,
-            builder: (context, _) => _build(
-              context,
-              latest.value,
-              reading.value,
-              sampling.value,
-              slow,
-              docker,
-              scope,
-            ),
+          builder: (context, _) => _build(
+            context,
+            latest.value,
+            reading.value,
+            sampling.value,
+            slow,
+            docker,
+            scope,
           ),
         ),
       ),
@@ -141,51 +203,117 @@ class OverviewPanel extends StatelessWidget {
     AnnouncementScope? scope,
   ) {
     final l10n = AppLocalizations.of(context);
-    Freshness freshness(Duration staleAfter, DateTime? lastSampleAt) =>
+    // The clock may tick only while this tab shows and an age can be
+    // read; the freshness words have narrow listeners of their own, and
+    // the gate below rebuilds the cards only once a reading turns stale.
+    final clock = monitoring.clock;
+    final aging = visible && (reading != null || slow.aging);
+    Freshness freshness(DateTime now, Duration staleAfter, DateTime? at) =>
         freshnessOf(
-          now: monitoring.clock.value,
+          now: now,
           staleAfter: staleAfter,
-          lastSampleAt: lastSampleAt,
+          lastSampleAt: at,
           // No monitor set watches a server yet (FL-21): this panel
           // samples it while it shows.
           watched: false,
           sampling: sampling,
         );
-    final coreFreshness = freshness(
-      kFleetRowStaleAfter[SampleStream.core]!,
-      reading?.at,
-    );
+    Freshness coreFreshness(DateTime now) =>
+        freshness(now, kFleetRowStaleAfter[SampleStream.core]!, reading?.at);
+    Freshness diskFreshness(DateTime now) =>
+        freshness(now, _slowStaleAfter, slow.listed.value?.at);
+    Freshness healthFreshness(DateTime now) =>
+        freshness(now, _slowStaleAfter, slow.healthAt);
+    Freshness? headAt(DateTime now) {
+      final core = coreFreshness(now);
+      // Without a `core` reading this run, `core` has no age to lose, so a
+      // link lost after slow readings is said from theirs.
+      if (reading != null || core is FreshnessPaused) return core;
+      return [
+        diskFreshness(now),
+        healthFreshness(now),
+      ].whereType<FreshnessDisconnected>().firstOrNull;
+    }
+
+    /// The next instant one of the shown readings turns stale, or null
+    /// once none can: a reading that already reads stale turns fresh only
+    /// with a new reading, which the data listenables bring.
+    DateTime? nextStale(DateTime now) {
+      DateTime? earliest;
+      for (final (at, staleAfter) in [
+        (reading?.at, kFleetRowStaleAfter[SampleStream.core]!),
+        (slow.listed.value?.at, _slowStaleAfter),
+        (slow.failedReading.value?.at, _slowStaleAfter),
+      ]) {
+        if (at == null) continue;
+        final updated = freshness(now, staleAfter, at);
+        if (updated is! FreshnessUpdated || updated.stale) continue;
+        final due = at.add(staleAfter);
+        if (earliest == null || due.isBefore(earliest)) earliest = due;
+      }
+      return earliest;
+    }
+
     final unavailable = switch (latest?.result) {
       final CollectorUnavailable unavailable => unavailable,
       _ => null,
     };
-    final cards = switch (reading?.result) {
-      final CoreResult core => _Cards(
-        monitoring: monitoring,
-        serverId: serverId,
-        core: core,
-        stale: coreFreshness.stale,
-      ),
-      _ => null,
-    };
-    final partTwo = _PartTwo(
-      serverId: serverId,
-      slow: slow,
-      docker: docker,
-      core: cards?.core,
-      coreStale: coreFreshness.stale,
-      diskFreshness: freshness(_slowStaleAfter, slow.listed.value?.at),
-      healthFreshness: freshness(_slowStaleAfter, slow.healthAt),
+    return ClockGate(
+      clock: clock,
+      ticking: aging,
+      dueAfter: nextStale,
+      builder: (context, now) {
+        final coreStale = coreFreshness(now).stale;
+        final cards = switch (reading?.result) {
+          final CoreResult core => _Cards(
+            monitoring: monitoring,
+            serverId: serverId,
+            core: core,
+            stale: coreStale,
+          ),
+          _ => null,
+        };
+        final partTwo = _PartTwo(
+          serverId: serverId,
+          slow: slow,
+          docker: docker,
+          core: cards?.core,
+          coreStale: coreStale,
+          clock: clock,
+          ticking: aging,
+          diskFreshness: diskFreshness,
+          healthFreshness: healthFreshness,
+        );
+        return _body(
+          context,
+          l10n,
+          clock,
+          aging,
+          headAt,
+          now,
+          unavailable,
+          cards,
+          partTwo,
+          docker,
+          scope,
+        );
+      },
     );
-    // Without a `core` reading this run, `core` has no age to lose, so a
-    // link lost after slow readings is said from theirs.
-    final head = reading != null || coreFreshness is FreshnessPaused
-        ? coreFreshness
-        : [
-            partTwo.diskFreshness,
-            partTwo.healthFreshness,
-          ].whereType<FreshnessDisconnected>().firstOrNull;
+  }
 
+  Widget _body(
+    BuildContext context,
+    AppLocalizations l10n,
+    ValueListenable<DateTime> clock,
+    bool aging,
+    Freshness? Function(DateTime now) headAt,
+    DateTime now,
+    CollectorUnavailable? unavailable,
+    _Cards? cards,
+    _PartTwo partTwo,
+    _Docker docker,
+    AnnouncementScope? scope,
+  ) {
     return LayoutBuilder(
       builder: (context, box) {
         final wide = panelIsWide(context, box);
@@ -200,11 +328,8 @@ class OverviewPanel extends StatelessWidget {
             children: [
               // The live stream's line heads the panel: a pause or a lost
               // link holds every card, and the slow cards add their age.
-              if (head != null)
-                PanelNotice(
-                  icon: head.stale ? Icons.history : Icons.schedule,
-                  text: freshnessText(l10n, head),
-                ),
+              if (headAt(now) != null)
+                _HeadLine(clock: clock, ticking: aging, headAt: headAt),
               partTwo.health(
                 context,
                 scope,

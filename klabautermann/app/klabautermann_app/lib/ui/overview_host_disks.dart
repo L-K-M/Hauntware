@@ -22,7 +22,7 @@ extension _PartTwoHostDisks on _PartTwo {
     return PanelSection(
       title: l10n.systemDisksTitle,
       children: [
-        if (shown != null) ?_PartTwo._ageLine(l10n, diskFreshness),
+        if (shown != null) ?_PartTwo._ageLine(clock, ticking, diskFreshness),
         if (timedOut) ...[
           PanelNotice(
             icon: Icons.timer_off_outlined,
@@ -65,7 +65,7 @@ extension _PartTwoHostDisks on _PartTwo {
     final mounts = shownMounts(fs, showPseudo: false);
     if (mounts.isEmpty) return [Text(l10n.systemDisksEmpty)];
 
-    final stale = diskFreshness.stale;
+    final stale = diskFreshness(clock.value).stale;
     String? percent(int? value) =>
         value == null || timedOut ? null : l10n.chartPercent(value / 100);
     return [

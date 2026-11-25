@@ -129,6 +129,8 @@ final class _PartTwo {
     required this.docker,
     required this.core,
     required this.coreStale,
+    required this.clock,
+    required this.ticking,
     required this.diskFreshness,
     required this.healthFreshness,
   });
@@ -138,16 +140,22 @@ final class _PartTwo {
   final _Docker docker;
   final CoreResult? core;
   final bool coreStale;
-  final Freshness diskFreshness, healthFreshness;
+  final ValueListenable<DateTime> clock;
+
+  /// Whether the clock may tick for the cards' age lines.
+  final bool ticking;
+
+  final Freshness Function(DateTime now) diskFreshness, healthFreshness;
 
   /// A slow card's age, or null: a pause or a lost link is said once, by
-  /// the panel's first line, though it greys these values too.
-  static Widget? _ageLine(AppLocalizations l10n, Freshness freshness) =>
-      freshness is FreshnessUpdated
-      ? PanelNotice(
-          icon: freshness.stale ? Icons.history : Icons.schedule,
-          text: freshnessText(l10n, freshness),
-        )
+  /// the panel's first line, though it greys these values too. The line
+  /// rebuilds on the clock alone, so only its words follow the seconds.
+  static Widget? _ageLine(
+    ValueListenable<DateTime> clock,
+    bool ticking,
+    Freshness Function(DateTime now) freshness,
+  ) => freshness(clock.value) is FreshnessUpdated
+      ? _AgeLine(clock: clock, ticking: ticking, freshness: freshness)
       : null;
 
   static IconData _reasonIcon(CollectorUnavailable unavailable) =>
@@ -165,7 +173,7 @@ final class _PartTwo {
     required VoidCallback onDoctor,
   }) {
     final l10n = AppLocalizations.of(context);
-    final stale = healthFreshness.stale;
+    final stale = healthFreshness(clock.value).stale;
     final unitsFailed = switch (slow.failed.value?.result) {
       final CollectorUnavailable unavailable => unavailable,
       _ => null,
@@ -174,7 +182,7 @@ final class _PartTwo {
     return PanelSection(
       title: l10n.overviewHealthTitle,
       children: [
-        ?_ageLine(l10n, healthFreshness),
+        ?_ageLine(clock, ticking, healthFreshness),
         if (unitsFailed != null)
           PanelNotice(
             icon: _reasonIcon(unitsFailed),
