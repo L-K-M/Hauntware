@@ -553,3 +553,8 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
 ## #843 GLM round 1 (f421282): 0 in scope, no push
 - `runWrite` "report swallowed post-write errors through fault": declined for this move; the `on Object { // Recovered as above. }` is main's behaviour moved unchanged (a sealed write is answered as written; the next round's refresh shows what it missed). Reporting it would be a behaviour change for its own PR if wanted.
 - A local for `pinsFor`, a separate faults list and an assertion in the sync chain test: declined as nits.
+
+## #840 GLM round 1 (6053ba7): 0 in scope, no push
+- protocol.dart doc references "to the deleted `EditRead` / `TerminalClosed`": refuted; both moved into `protocol/events.dart`, a part of the same library, so the `[EditRead]`/`[TerminalClosed]` references still resolve (analyzer clean, `comment_references` would flag them otherwise).
+- Unmodifiable copies in `Gap`, `AlertRulesChanged`, `SnippetsChanged`, `AlertsArrived`, and `rootUnchecked` defaulting to true: declined for this move; main's code, moved byte-identically (verified by sorted line comparison).
+- #843's Android client job failed on a Gradle plugin download (`kotlin-stdlib:2.4.21` not found on plugins.gradle.org); rerun.
