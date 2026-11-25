@@ -519,3 +519,6 @@ ENG-11 names `engine_state.dart`, `engine_fleet.dart`, `engine_sync_chain.dart`,
 
 ## #835 GLM round 1 (19d077f): 0 in scope, no push
 Every comment targets code the PR moved byte-identically (verified by a sorted line comparison of the old file against the new ones): new asserts on `ContainerBulkAction`, `StackComposeAction`, `ContainerAction` and `LogStreamSpec`, defensive copies in `VarLogFiles`, `JournalBoots`, `DiagnosticBundle`, UTC normalization in `LinkBackoff`. All pre-existing behaviour, declined for this move. None was verified as a reachable defect: the app builds these values itself, the engine validates requests at entry, and a `DateTime` keeps `isUtc` across a `SendPort`.
+
+## #837 GLM round 1 (ef2ad4d): 1 minor, no push
+- `SshConfigImport.skipped` doc "say that a resolved alias drops its skip": declined as minor; `SshConfigImporter.parse` and the class doc already say resolved aliases import with ssh's values and only unresolved aliases keep the block-local outcome.
