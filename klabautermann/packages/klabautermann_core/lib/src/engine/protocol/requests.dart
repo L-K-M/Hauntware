@@ -630,14 +630,6 @@ final class TerminalResize extends EngineRequest {
   final int rows;
 }
 
-/// Ends [terminalId]'s input: stdin EOF as a half-close (03 §5.7), while
-/// its output keeps coming until the shell exits.
-final class TerminalEndInput extends EngineRequest {
-  const TerminalEndInput(this.terminalId);
-
-  final String terminalId;
-}
-
 /// Closes [terminalId]'s shell; [TerminalClosed] follows with
 /// [TerminalCloseReason.closed]. An id with no open shell does nothing.
 final class CloseTerminal extends EngineRequest {

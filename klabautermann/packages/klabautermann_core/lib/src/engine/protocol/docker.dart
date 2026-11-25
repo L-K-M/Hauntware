@@ -40,12 +40,6 @@ final class DockerEngineQuery extends DockerQuerySpec {
   const DockerEngineQuery();
 }
 
-/// Every container, stopped ones too (CTR-01). Answered by
-/// [DockerContainersPayload].
-final class DockerContainersQuery extends DockerQuerySpec {
-  const DockerContainersQuery();
-}
-
 /// One container's inspect (CTR-03, CTR-04). Answered by
 /// [DockerContainerPayload].
 final class DockerContainerQuery extends DockerQuerySpec {
@@ -64,11 +58,6 @@ final class DockerContainerTopQuery extends DockerQuerySpec {
 
   /// The container's id or name.
   final String containerId;
-}
-
-/// The image list (IMG-01). Answered by [DockerImagesPayload].
-final class DockerImagesQuery extends DockerQuerySpec {
-  const DockerImagesQuery();
 }
 
 /// One image's layers (IMG-04). Answered by [DockerImageHistoryPayload].

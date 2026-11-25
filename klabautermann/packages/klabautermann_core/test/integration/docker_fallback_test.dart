@@ -224,11 +224,29 @@ void main() {
       final tickerId = await runContainer(ticker, _tickerScript);
 
       final clock = Stopwatch()..start();
-      final listed = await query(engine, const DockerContainersQuery());
+      engine.send(
+        const DockerWatch(
+          serverId: variantServer,
+          watchId: 'list',
+          lists: {DockerWatchList.containers},
+        ),
+      );
+      await waitFor(
+        engine,
+        () => lists(engine, DockerWatchList.containers).isNotEmpty,
+      );
       final resolvedMs = clock.elapsedMilliseconds;
       expect(
-        (listed as DockerContainersPayload).containers.map((c) => c.name),
+        (lists(engine, DockerWatchList.containers).first.payload
+                as DockerContainersPayload)
+            .containers
+            .map((c) => c.name),
         containsAll([ticker, 'demo-web-1', 'coolify-app']),
+      );
+      // The measured watch goes away before the timed section, whose
+      // container-list history starts at its own first list.
+      engine.send(
+        const DockerUnwatch(serverId: variantServer, watchId: 'list'),
       );
 
       final states = endpointStates(engine);

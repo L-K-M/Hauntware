@@ -6636,7 +6636,7 @@ shows there.
   full app. Not Séance's monolithic `AppState` (3,027 lines [R: c3 §0]).
 - Per-server and per-series `ValueListenable`s keep sample updates local;
   `MaterialApp` rebuilds only on appearance changes.
-- Engine protocol (plain data, D18), version 3 (`kEngineProtocolVersion`):
+- Engine protocol (plain data, D18), version 4 (`kEngineProtocolVersion`):
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
@@ -7485,6 +7485,11 @@ the engine in `engine_isolate.dart` beside it):
   this connection only, or that the last one did not open the key. A
   key the vault holds has no file to show, so the same form asks
   without one.
+- **Version 4 (dead requests).** Version 4 drops the requests no client
+  sends: `DockerContainersQuery` and `DockerImagesQuery`, whose lists
+  the app reads through a watch instead, and `TerminalEndInput`, which
+  nothing sends now that a shell closes with `CloseTerminal`. The list
+  payloads stay, as a watch's `DockerListChanged` carries them.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

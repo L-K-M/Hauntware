@@ -45,7 +45,6 @@ String? requestIdOf(EngineRequest request) => switch (request) {
   OpenTerminal(:final terminalId) ||
   TerminalInput(:final terminalId) ||
   TerminalResize(:final terminalId) ||
-  TerminalEndInput(:final terminalId) ||
   CloseTerminal(:final terminalId) => terminalId,
   RunAction(:final planId) || CancelAction(:final planId) => planId,
   AcknowledgeOperation(:final id) => id,

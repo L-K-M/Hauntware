@@ -192,9 +192,9 @@ part 'protocol/events.dart';
 /// `save`, which keeps a login password in the vault.
 ///
 /// Container shells then joined v3 the same way (03 §7.13 CTX-07):
-/// [OpenTerminal], [TerminalInput], [TerminalResize], [TerminalEndInput]
-/// and [CloseTerminal] run one, answered by [TerminalOpened],
-/// [TerminalBytes] and [TerminalClosed]. One-off commands joined next
+/// [OpenTerminal], [TerminalInput], [TerminalResize] and [CloseTerminal]
+/// run one, answered by [TerminalOpened], [TerminalBytes] and
+/// [TerminalClosed]. One-off commands joined next
 /// (CTX-08): [ContainerExec] is planned as an action, and
 /// [ActionFinished] gained the [ExecOutput] it captured.
 ///
@@ -327,7 +327,13 @@ part 'protocol/events.dart';
 /// request's own id where it carries one, so the app settles the one
 /// read or open that was refused, and [EngineFault] reports an error the
 /// engine caught at its last-resort boundary.
-const int kEngineProtocolVersion = 3;
+///
+/// Version 4 drops the requests no client sends: `DockerContainersQuery`
+/// and `DockerImagesQuery`, whose lists the app reads through a watch
+/// instead, and `TerminalEndInput`, which nothing sends now that a shell
+/// closes with `CloseTerminal` (03 §10.1). The list payloads a watch
+/// delivers stay.
+const int kEngineProtocolVersion = 4;
 
 /// The most container shells one server holds open at once [E]: each on a
 /// relay holds a session channel (03 §5.2).

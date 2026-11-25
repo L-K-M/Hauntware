@@ -957,8 +957,6 @@ final class EngineState {
         terminals?.input(message);
       case TerminalResize():
         terminals?.resize(message);
-      case TerminalEndInput(:final terminalId):
-        terminals?.endInput(terminalId);
       case CloseTerminal(:final terminalId):
         terminals?.close(terminalId);
       case OpenPortForward():

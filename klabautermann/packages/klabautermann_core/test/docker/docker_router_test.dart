@@ -161,7 +161,7 @@ void main() {
       final h = _Harness();
       h.forwarding.daemons[_rootful] = EngineDaemon(apiVersion: '1.40');
       h.router.probed(_srv, _profile([_rootful]));
-      final id = h.query(const DockerContainersQuery());
+      final id = h.query(const DockerSystemDfQuery());
 
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       // The state that explains the failure goes out before the answers.
@@ -306,7 +306,7 @@ void main() {
       // The same probe answer resolves nothing new.
       h.router.probed(_srv, _profile(const []));
       h.forwarding.daemons[_rootful] = EngineDaemon();
-      final id = h.query(const DockerImagesQuery());
+      final id = h.query(const DockerSystemDfQuery());
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       // The ladder reads the profile, which still lists no socket.
       expect((await h.state()).failure, DockerEndpointFailure.noRoute);
@@ -541,50 +541,6 @@ void main() {
       expect(await h.result(empty), _failed(DockerQueryFailure.invalidQuery));
     });
 
-    test('the container list drops each command line; images keep their '
-        'masked labels', () async {
-      final (h, daemon) = await ready();
-      daemon
-        ..routes['/v1.52/containers/json'] = jsonEncode([
-          {
-            'Id': 'abc',
-            'Names': ['/db'],
-            'Command': 'mysqld --password=hunter2',
-            'State': 'running',
-            'Status': 'Up 2 hours (healthy)',
-            'Labels': {'secret_token': 't'},
-          },
-        ])
-        ..routes['/v1.52/images/json'] = jsonEncode([
-          {
-            'Id': 'sha256:1',
-            'RepoTags': ['mysql:8'],
-            'Labels': {'password': 'p'},
-          },
-        ]);
-
-      final list = h.query(const DockerContainersQuery());
-      final containers =
-          (await h.result(list) as DockerContainersPayload).containers;
-      expect(containers.single.name, 'db');
-      expect(containers.single.command, isNull);
-      expect(containers.single.health, HealthStatus.healthy);
-      expect(
-        containers.single.labels['secret_token']!.display,
-        MaskedValue.maskToken,
-      );
-      expect(
-        daemon.requests,
-        contains('GET /v1.52/containers/json?all=1 HTTP/1.1'),
-      );
-
-      final images = h.query(const DockerImagesQuery());
-      final image =
-          (await h.result(images) as DockerImagesPayload).images.single;
-      expect(image.repoTags, ['mysql:8']);
-      expect(image.labels['password']!.display, MaskedValue.maskToken);
-    });
-
     test('disk use reads /system/df in the negotiated shape (OV-05)', () async {
       final (h, daemon) = await ready();
       daemon.routes['/v1.52/system/df'] = jsonEncode({
@@ -749,15 +705,15 @@ void main() {
     test('queries waiting on a resolution run once it is ready', () async {
       final h = _Harness();
       h.forwarding.daemons[_rootful] = EngineDaemon()
-        ..routes['/v1.52/images/json'] = '[]';
+        ..routes['/v1.52/images/alpine/history'] = '[]';
       h.router.probed(_srv, _profile([_rootful]));
-      final first = h.query(const DockerImagesQuery());
-      final second = h.query(const DockerImagesQuery());
+      final first = h.query(const DockerImageHistoryQuery('alpine'));
+      final second = h.query(const DockerImageHistoryQuery('alpine'));
 
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       expect((await h.state()).phase, DockerEndpointPhase.ready);
-      expect(await h.result(first), isA<DockerImagesPayload>());
-      expect(await h.result(second), isA<DockerImagesPayload>());
+      expect(await h.result(first), isA<DockerImageHistoryPayload>());
+      expect(await h.result(second), isA<DockerImageHistoryPayload>());
     });
   });
 
@@ -822,7 +778,7 @@ void main() {
         'again without negotiating', () async {
       final h = _Harness();
       final daemon = h.forwarding.relayDaemon = EngineDaemon()
-        ..routes['/v1.52/images/json'] = '[]';
+        ..routes['/v1.52/images/alpine/history'] = '[]';
       h.forwarding.probeAnswers[_rootful] = _disabled;
       await h.open();
       expect(
@@ -836,8 +792,8 @@ void main() {
       await h.clock.elapse(const Duration(seconds: 1));
       expect(h.forwarding.relays.single.closeCalls, 1);
 
-      final id = h.query(const DockerImagesQuery());
-      expect(await h.result(id), isA<DockerImagesPayload>());
+      final id = h.query(const DockerImageHistoryQuery('alpine'));
+      expect(await h.result(id), isA<DockerImageHistoryPayload>());
       expect(h.forwarding.relays, hasLength(2));
       expect(daemon.requests.where((r) => r.contains('_ping')), hasLength(1));
     });
@@ -853,7 +809,7 @@ void main() {
       await h.clock.elapse(const Duration(seconds: 30));
 
       h.forwarding.failingRelays.add('docker');
-      final id = h.query(const DockerImagesQuery());
+      final id = h.query(const DockerImageHistoryQuery('alpine'));
       expect(await h.result(id), _failed(DockerQueryFailure.connectionFailed));
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       expect((await h.state()).failure, DockerEndpointFailure.unreachable);
@@ -870,7 +826,8 @@ void main() {
               'Id': 'sha256:i1',
               'RepoTags': ['alpine:3.22'],
             },
-          ]))
+          ])
+          ..routes['/v1.52/images/alpine/history'] = '[]')
         ..probeAnswers[_rootful] = _disabled
         ..answer = (command) => command.contains('hws-registry')
             ? Future.error(StateError('not a Docker error'))
@@ -887,8 +844,8 @@ void main() {
       );
 
       // The endpoint stands and answers the next query on the same relay.
-      final id = h.query(const DockerImagesQuery());
-      expect(await h.result(id), isA<DockerImagesPayload>());
+      final id = h.query(const DockerImageHistoryQuery('alpine'));
+      expect(await h.result(id), isA<DockerImageHistoryPayload>());
       expect(h.forwarding.relays, hasLength(1));
 
       // The failed read gave its count back, so the idle close runs.
