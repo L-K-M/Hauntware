@@ -14,13 +14,11 @@ import 'package:seance_core/seance_core.dart'
     show
         CredentialDraft,
         HostKey,
-        httpSyncTransport,
         ImportedHost,
         Prober,
         SecretRedactor,
         ServerConfig,
         SshLink,
-        SyncTransportFactory,
         TcpBannerProber;
 
 import '../admin/admin_mode.dart';

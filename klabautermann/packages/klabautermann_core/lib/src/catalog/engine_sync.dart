@@ -63,6 +63,12 @@ import 'sync_enrollment_file.dart';
 import 'sync_state_file.dart';
 import 'sync_verdict_files.dart';
 
+// The engine's entry point names the factory and its default binding; it
+// imports them from this library, so they are re-exported from seance_core
+// rather than defined per product.
+export 'package:seance_core/seance_core.dart'
+    show SyncTransportFactory, httpSyncTransport;
+
 /// The push policy every coordinator the engine builds runs under: local
 /// edits seal through the catalog writer and every round pushes them (03
 /// §4.4). The MVP ran pull-only (D14); v1 opened it (M5 plan M05, P9),
