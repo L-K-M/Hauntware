@@ -670,3 +670,26 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
 - "The reviewer-failure policy now permits merging without review":
   the subtree blocks copy root AGENTS.md's current rule verbatim (QA-12);
   changing the policy itself is the owner's call and out of scope.
+
+### PR #849 GLM review (EngineFleet): 0 in scope, no push
+
+- "`links:` passed by value captures null forever": refuted. `links` is
+  a `final` assigned at `engine_isolate.dart:451`, before `EngineFleet`
+  is built (:840); only the consumers the links block assigns later are
+  getters.
+- "Empty monitor set guard": verified preserved,
+  `engine_fleet.dart:243` keeps `if (_monitored.isNotEmpty)` as main had.
+- `fleet.fleet` naming, sequential pin reads in `listSynced`: main's
+  names and behaviour, moved unchanged; out of scope for a pure move.
+
+### PR #852 GLM review (app lints): 0 in scope, no push
+
+- `[...?x]` in the palette instead of typed const fallbacks: style; the
+  palette builds its list once per open, so the copy costs nothing
+  measurable, and it avoids spelling three element types. No change.
+- "`.cast<DockerQuery>()` may be redundant": refuted; `sentOfType`
+  returns `List<EngineRequest>`, so the cast is the typed conversion.
+- Garbled test name in `sortable_table_test.dart`: pre-existing, only
+  re-indented here; nit.
+- `discarded_futures` and other strict modes: beyond QA-10, which names
+  the three lints the engine packages use.
