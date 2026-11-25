@@ -84,7 +84,6 @@ final class MonitoringController extends ChangeNotifier {
        tlsEndpoints = tlsEndpoints ?? TlsEndpoints(),
        attentionAcks = attentionAcks ?? AttentionAcks(),
        containerColumns = containerColumns ?? ContainerColumnChoice() {
-    _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     hostReads = HostReads(_engine, _onEngineDone);
     _backgroundPause = BackgroundPauseNotifier(
       () => _clock.value,
@@ -97,6 +96,9 @@ final class MonitoringController extends ChangeNotifier {
       },
       (serverId) => _openViews.containsKey(serverId),
     );
+    // Subscribed once hostReads and _backgroundPause exist: the event and
+    // done handlers read both.
+    _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
     jobHistory = JobHistoryReads(_engine);
