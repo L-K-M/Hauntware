@@ -1,6 +1,7 @@
+import 'package:ghost_ui/ghost_ui.dart' show PersistedSetting;
+
 import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
-import 'persisted_value_controller.dart';
 import 'settings_models.dart';
 
 /// This device's theme in the app's isolate: what the MaterialApp is drawn
@@ -13,15 +14,21 @@ import 'settings_models.dart';
 ///
 /// Applies a change before persisting it, as Séance's settings backend
 /// does, rather than persist-first like the General switch
-/// ([PersistedValueController]).
-final class AppearanceController extends PersistedValueController<AppAppearance>
+/// ([PersistedSetting]).
+final class AppearanceController extends PersistedSetting<AppAppearance>
     implements AppearanceSettingsModel {
   AppearanceController({
     AppAppearance? initial,
     Future<void> Function(AppAppearance appearance)? save,
-  }) : super(initial ?? poltergeistInitialAppearance, save);
+  }) : _persist = save,
+       super(initial ?? poltergeistInitialAppearance);
+
+  final Future<void> Function(AppAppearance appearance)? _persist;
+
+  @override
+  Future<void>? save(AppAppearance value) => _persist?.call(value);
 
   @override
   Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode) =>
-      write(AppAppearance(palette: palette, mode: mode));
+      change(AppAppearance(palette: palette, mode: mode));
 }

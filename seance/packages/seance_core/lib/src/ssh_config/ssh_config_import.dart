@@ -1,5 +1,7 @@
 import 'package:seance_protocol/seance_protocol.dart';
 
+import 'ssh_config_settings.dart';
+
 /// One host name from a `Host` line of an OpenSSH `config` file, with the
 /// settings of its block.
 class ImportedHost {
@@ -79,30 +81,49 @@ class SshConfigImport {
   /// Hosts left out because their block is invalid, in file order.
   final List<SkippedHost> skipped;
 
-  const SshConfigImport({required this.hosts, required this.skipped});
+  /// Aliases imported with [hosts] whose values are best-effort: ssh's own
+  /// result depends on something this importer cannot evaluate, so their
+  /// entry is the block-local reading rather than ssh's. Empty when every
+  /// imported alias resolved.
+  final Set<String> approximate;
+
+  const SshConfigImport({
+    required this.hosts,
+    required this.skipped,
+    this.approximate = const <String>{},
+  });
 }
 
-/// A read-only importer for `~/.ssh/config`. Parses the common directives
-/// (`Host`, `HostName`, `Port`, `User`, `IdentityFile`, `ProxyJump`) and skips
-/// everything else, including `Match` blocks; `Include` is not followed, so
-/// hosts defined only in an included file are not imported. Lines are split
-/// as ssh splits them ([SshConfigLine]): `Key value`, `Key=value` and
-/// `Key = value` are equivalent, and quoted arguments are unquoted.
+/// A read-only importer for `~/.ssh/config`.
 ///
-/// Every name a `Host` line gives ([hostAliases]) becomes its own host with
-/// the block's settings, since `Host a b` applies to both `ssh a` and
-/// `ssh b`. Wildcard and negated patterns are not names, so a block with
+/// The shared resolver ([SshConfigSettings]) reads the file as ssh does:
+/// `Host *` and top-level defaults apply, later matching blocks add what is
+/// still unset, known `Match` criteria are evaluated, arguments are split
+/// and unquoted as ssh splits them, and `%h`/`%%` expand. Every alias the
+/// resolver resolves is imported with those values.
+///
+/// An alias the resolver leaves unresolved keeps the block-local reading
+/// below: no host that reading imports disappears, a repeated alias keeps
+/// its entries, and the alias joins [SshConfigImport.approximate]. Such a
+/// host may connect differently than ssh would, because an `Include`, a
+/// `Match` criterion such as `exec`, a tokenized value or another
+/// unreadable construct decides what ssh would do.
+///
+/// The block-local reading parses `Host`, `HostName`, `Port`, `User`,
+/// `IdentityFile` and `ProxyJump`, ignores `Match` and `Include` (an
+/// `Include` line is stored as an unused directive), and takes each name a
+/// `Host` line gives ([hostAliases]) as its own host with only its block's
+/// directives. Wildcard and negated patterns are not names, so a block with
 /// only those (e.g. `Host *`) describes defaults rather than a connectable
-/// server and is dropped.
+/// server and contributes no host.
 ///
-/// `Port` is read as ssh's `a2port()` reads it: a decimal 1 to 65535, or a
-/// service name. ssh resolves names with `getservbyname(3)`, which Dart
-/// cannot call portably, so only `ssh`, `http` and `https` are known here.
-/// ssh rejects the whole config over a `Port` that is neither. The importer
-/// refuses those and any other service name, leaves out only the hosts of
-/// that block and reports them in [SshConfigImport.skipped]. A `Port`
-/// outside the imported blocks (before the first `Host`, in a wildcard-only
-/// block or in a `Match` block) is not read, so it is not checked either.
+/// In that reading, `Port` is read as ssh's `a2port()` reads it: a decimal
+/// 1 to 65535, or a service name. ssh resolves names with
+/// `getservbyname(3)`, which Dart cannot call portably, so only `ssh`,
+/// `http` and `https` are known here. Any other value refuses the block's
+/// aliases into [SshConfigImport.skipped], with the value and line. A
+/// `Port` outside the imported blocks (before the first `Host`, in a
+/// wildcard-only block or in a `Match` block) is not read there.
 class SshConfigImporter {
   static const int _minimumPort = 1;
   static const int _maximumPort = 65535;
@@ -119,8 +140,72 @@ class SshConfigImporter {
   static final RegExp _decimal = RegExp(r'^[+-]?[0-9]+$');
 
   /// Parse the text of an ssh config file into importable hosts, and the
-  /// hosts left out because their block is invalid.
+  /// hosts left out because their block is invalid. Aliases the shared
+  /// resolver settles import with ssh's own values; every other alias keeps
+  /// the block-local outcome, marked in [SshConfigImport.approximate] when
+  /// it imports.
   static SshConfigImport parse(String text) {
+    final legacy = _parseBlocks(text);
+    final settings = SshConfigSettings.parse(text);
+
+    final resolved = <String, ImportedHost>{};
+    for (final alias in settings.aliases) {
+      if (settings.resolve(alias) case ResolvedSshSettings(host: final host)) {
+        resolved[alias] = host;
+      }
+    }
+
+    final hosts = <ImportedHost>[];
+    final approximate = <String>{};
+    final imported = <String>{};
+    for (final host in legacy.hosts) {
+      final exact = resolved[host.alias];
+      if (exact == null) {
+        hosts.add(host);
+        approximate.add(host.alias);
+        continue;
+      }
+      // One entry per alias, at its first appearance.
+      if (imported.add(host.alias)) hosts.add(exact);
+    }
+
+    // An alias ssh resolves where the block-local reader had nothing to
+    // import joins at its first appearance in the file.
+    final order = <String, int>{
+      for (final (index, alias) in settings.aliases.indexed) alias: index,
+    };
+    for (final alias in settings.aliases) {
+      final host = resolved[alias];
+      if (host == null || imported.contains(alias)) continue;
+      var at = hosts.length;
+      for (var index = 0; index < hosts.length; index++) {
+        final position = order[hosts[index].alias];
+        if (position != null && position > order[alias]!) {
+          at = index;
+          break;
+        }
+      }
+      hosts.insert(at, host);
+      imported.add(alias);
+    }
+
+    final skipped = <SkippedHost>[
+      for (final skip in legacy.skipped)
+        if (!resolved.containsKey(skip.host.alias)) skip,
+    ];
+    return SshConfigImport(
+      hosts: List.unmodifiable(hosts),
+      skipped: List.unmodifiable(skipped),
+      approximate: Set.unmodifiable(approximate),
+    );
+  }
+
+  /// The block-local reading this importer keeps: one [ImportedHost] per
+  /// name a `Host` line gives, carrying only its block's directives, and
+  /// the [SkippedHost]s of the blocks whose `Port` it refuses.
+  static ({List<ImportedHost> hosts, List<SkippedHost> skipped}) _parseBlocks(
+    String text,
+  ) {
     final blocks = <_Block>[];
     _Block? current;
 
@@ -189,7 +274,7 @@ class SshConfigImporter {
         }
       }
     }
-    return SshConfigImport(
+    return (
       hosts: List.unmodifiable(hosts),
       skipped: List.unmodifiable(skipped),
     );

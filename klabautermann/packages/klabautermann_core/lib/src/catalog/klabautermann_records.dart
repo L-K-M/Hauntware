@@ -28,7 +28,6 @@ import 'package:seance_core/catalog.dart'
         ApplyOutcome,
         ApplyPhase,
         CatalogWriter,
-        RecordCoordinator,
         RecordHandler,
         SyncTrackingServerStore,
         SyncTuple,
@@ -632,23 +631,4 @@ SyncPrefixBudget prefixBudgetOf(Iterable<EncryptedRecord> records) {
     ],
     encoded,
   );
-}
-
-/// Local `klabautermann:` writes, sealed through the coordinator's
-/// [CatalogWriter.sealLocal] funnel and refused under `PushPolicy.none`.
-extension KlabautermannRecordWrites on RecordCoordinator {
-  /// Retracts [serverId]'s `pref` record with a sealed removal dated now,
-  /// as when the server becomes excluded from sync (03 §4.8).
-  Future<WriteOutcome> retractServerPrefs(String serverId) {
-    final id = KlabautermannRecordType.pref.idOf(serverId);
-    return writer.sealLocal(
-      DecryptedRecord(
-        id: id,
-        kind: RecordKind.klabautermann,
-        updatedAt: writer.now().toUtc().millisecondsSinceEpoch,
-        deviceId: writer.deviceId,
-        data: removedPayload(id),
-      ),
-    );
-  }
 }

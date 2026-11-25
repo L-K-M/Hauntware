@@ -1,6 +1,6 @@
 /// The start-ticks reader the guarded kill and the operation wrapper share
-/// (03 §7.2, §7.17). Internal to the command builders: the barrel does not
-/// export it.
+/// (03 §7.2, §7.17). [kStartTicksGone] is exported for the engine's
+/// runner and tracker; the rest stays internal to the command builders.
 library;
 
 /// The status [kStartTicksFunction] returns when `/proc/<pid>` does not

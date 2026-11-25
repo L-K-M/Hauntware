@@ -32,13 +32,14 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/operations/detached_runner.dart'
+    show newOpId;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         DetachedRunner,
         HostCommands,
         OpRecordField,
         OperationCommands,
-        generateOpId,
         kRootOpsDir,
         opUnitName;
 import 'package:seance_core/seance_core.dart'
@@ -154,7 +155,7 @@ void main() {
       final run = over(link);
       final executor = ElevatedExecutor(link, await probe(run));
       final password = await vm.sudoPassword();
-      final id = generateOpId(Random.secure());
+      final id = newOpId(Random.secure());
       final unit = opUnitName(id);
 
       final launch = await executor.run(
@@ -236,7 +237,7 @@ void main() {
     final run = over(link);
     final dir = (await run(userOpsDirLine)).stdout.trim();
     final uid = await uidOf(run);
-    final id = generateOpId(Random.secure());
+    final id = newOpId(Random.secure());
     final argv = OperationCommands.detachedLaunch(
       runner,
       dir: dir,
