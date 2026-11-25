@@ -10,6 +10,7 @@ import 'package:seance_core/catalog.dart' show FileVaultStore;
 import 'package:seance_core/seance_core.dart' show Secret, SecretVault;
 
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import '../util/serial_queue.dart';
 import 'sync_credentials.dart' show SyncKeystore;
 
 /// The vault file's name in the support directory (03 §4.10).
@@ -97,19 +98,15 @@ final class EngineVault {
   /// [save] does.
   bool get exclusiveAccess => _access == SupportDirectoryAccess.exclusive;
 
-  // The tail of [exclusive]'s queue.
-  Future<void> _tail = Future.value();
+  /// The queue behind [exclusive].
+  final SerialQueue _writes = SerialQueue();
 
   /// Runs [body] once every earlier [save] and [exclusive] body has ended.
   /// Two first saves at once would each mint a master key, the second
   /// replacing the key the first sealed under; and a save between an
   /// enrollment's look for a vault and its install of the account key
   /// would seal under a key that install replaces.
-  Future<T> exclusive<T>(Future<T> Function() body) {
-    final run = _tail.then((_) => body());
-    _tail = run.then((_) {}, onError: (Object _) {});
-    return run;
-  }
+  Future<T> exclusive<T>(Future<T> Function() body) => _writes.run(body);
 
   /// The keystore's master key, after settling against it a re-key an
   /// earlier process left (the store's `VaultRekeyJournal`): a crash
