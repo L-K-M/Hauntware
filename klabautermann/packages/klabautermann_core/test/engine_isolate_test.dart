@@ -87,16 +87,15 @@ void main() {
       expect((events.last as RequestRejected).requestName, 'Connect');
     });
 
-    test('unimplemented requests get RequestRejected', () async {
+    test('an alert action is rejected until alerts land (v1.x)', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
       client.send(const HandleAlert('a-1', AlertAction.acknowledge));
 
-      expect(
-        ((await next(events)) as RequestRejected).requestName,
-        'HandleAlert',
-      );
+      final rejected = (await next(events)) as RequestRejected;
+      expect(rejected.requestName, 'HandleAlert');
+      expect(rejected.reason, 'alerts are not implemented yet (v1.x)');
     });
 
     test('without a link a host plan is refused, and no plan runs '

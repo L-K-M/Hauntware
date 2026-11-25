@@ -1372,16 +1372,19 @@ final class EngineState {
         forwards?.dispose();
         commands.close();
         Isolate.exit();
-      // The request kinds with no handler above. [AnswerKeystore] is
-      // normally taken ahead of the queue, so this is its fallback too.
+      // Alerts arrive with v1.x; until then their actions have nothing
+      // to act on.
       case HandleAlert():
-      case AnswerKeystore():
         uiPort.send(
-          RequestRejected(
-            message.runtimeType.toString(),
-            'not implemented yet (M1a scaffold)',
+          const RequestRejected(
+            'HandleAlert',
+            'alerts are not implemented yet (v1.x)',
           ),
         );
+      // Taken ahead of the queue by the command listener, so it does not
+      // reach here; answered the same way if it ever does.
+      case AnswerKeystore():
+        keystore.answer(message);
       default:
         uiPort.send(
           const RequestRejected(
