@@ -110,7 +110,13 @@ export 'src/sync/pulled_pin_resolver.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/sync_coordinator.dart';
 export 'src/sync/sync_enrollment_validation.dart';
-export 'src/sync/http_sync_client.dart';
+export 'src/sync/http_sync_client.dart' show HttpSyncClient;
+export 'src/sync/sync_transport.dart'
+    show
+        HttpSyncTransport,
+        SyncTransport,
+        SyncTransportFactory,
+        httpSyncTransport;
 
 export 'src/update/version.dart';
 export 'src/update/update_checker.dart';

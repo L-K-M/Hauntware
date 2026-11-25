@@ -3,7 +3,8 @@
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/admin/admin_mode.dart';
 import 'package:klabautermann_core/src/admin/sshd_posture.dart';
-import 'package:klabautermann_host/klabautermann_host.dart' show kSshdMarker;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show SshdForwardingBlock, kSshdMarker;
 import 'package:seance_core/seance_core.dart'
     show
         ElevatedExecutor,

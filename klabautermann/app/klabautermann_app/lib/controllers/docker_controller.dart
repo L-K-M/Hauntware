@@ -4,8 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'container_usage.dart';
+import 'docker/docker_lists.dart';
 import 'docker_endpoint_choices.dart';
 import 'fleet_controller.dart';
+
+export 'docker/docker_lists.dart';
+
+part 'docker/container_inspects.dart';
+part 'docker/view_watch.dart';
 
 /// The app's Docker endpoints for one engine run (03 §5.9, §10.1): each
 /// server's [DockerEndpointState], which the server header names in
@@ -132,10 +138,10 @@ final class DockerController {
 
   final Map<String, _DockerServer> _servers = {};
 
-  /// Details still shown for servers that left the fleet (SYN-08), by
-  /// server and container id. Each says so and keeps what was read until
-  /// its last view closes, since a view holds its listenable that long.
-  final Map<(String, String), _InspectedContainer> _leftFleet = {};
+  late final _ContainerInspects _inspected = _ContainerInspects(
+    this,
+    mintQueryId: () => 'container-${_count++}',
+  );
 
   /// The fleet's ids from the last [CatalogReplaced] seen, as in
   /// `MonitoringController`: null until then, when every server counts
@@ -284,53 +290,21 @@ final class DockerController {
   void watchSummary(String serverId) {
     if (!_listed(serverId)) return;
     final server = _server(serverId);
-    server.summaryViews++;
-    _syncSummary(serverId, server);
+    server.summaryWatch.add(this, serverId, server);
   }
 
   void unwatchSummary(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.summaryViews == 0) return;
-    server.summaryViews--;
-    _syncSummary(serverId, server);
+    if (server == null) return;
+    server.summaryWatch.remove(this, serverId, server);
   }
 
   /// Watches the summary's lists anew after a failure, under a new id, as
   /// [retryContainers] does.
   void retrySummary(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.summaryWatchId == null) return;
-
-    _unwatchSummary(serverId, server);
-    _syncSummary(serverId, server);
-  }
-
-  /// Sends the summary watch while an Overview shows the server and its
-  /// endpoint is ready, and ends it once none shows. The engine keeps it
-  /// across a dropped endpoint.
-  void _syncSummary(String serverId, _DockerServer server) {
-    if (server.summaryViews == 0) {
-      _unwatchSummary(serverId, server);
-      return;
-    }
-    if (server.summaryWatchId != null || _stopped) return;
-    if (server.endpoint.value?.phase != DockerEndpointPhase.ready) return;
-
-    final watchId = server.summaryWatchId = 'summary-${_count++}';
-    _send(
-      DockerWatch(
-        serverId: serverId,
-        watchId: watchId,
-        lists: const {DockerWatchList.containers, DockerWatchList.images},
-      ),
-    );
-  }
-
-  void _unwatchSummary(String serverId, _DockerServer server) {
-    final watchId = server.summaryWatchId;
-    server.summaryWatchId = null;
-    if (watchId == null || _stopped) return;
-    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+    if (server == null) return;
+    server.summaryWatch.retry(this, serverId, server);
   }
 
   /// What [serverId]'s stack watch last delivered: the compose projects
@@ -345,50 +319,22 @@ final class DockerController {
   void watchStacks(String serverId) {
     if (!_listed(serverId)) return;
     final server = _server(serverId);
-    server.stackViews++;
-    if (server.stackViews > 1) return;
-
-    _watchStacks(serverId, server);
+    server.stackWatch.add(this, serverId, server);
   }
 
   /// The last view to hide ends the server's stack watch.
   void unwatchStacks(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.stackViews == 0) return;
-    server.stackViews--;
-    if (server.stackViews > 0) return;
-
-    _unwatchStacks(serverId, server);
+    if (server == null) return;
+    server.stackWatch.remove(this, serverId, server);
   }
 
   /// Watches [serverId]'s stacks anew after a failure, under a new id, as
   /// [retryContainers] does; the engine checks the sources again.
   void retryStacks(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.stacksWatchId == null) return;
-
-    _unwatchStacks(serverId, server);
-    _watchStacks(serverId, server);
-  }
-
-  void _watchStacks(String serverId, _DockerServer server) {
-    if (_stopped) return;
-
-    final watchId = server.stacksWatchId ??= 'stacks-${_count++}';
-    _send(
-      DockerWatch(
-        serverId: serverId,
-        watchId: watchId,
-        lists: const {DockerWatchList.stacks},
-      ),
-    );
-  }
-
-  void _unwatchStacks(String serverId, _DockerServer server) {
-    final watchId = server.stacksWatchId;
-    server.stacksWatchId = null;
-    if (watchId == null || _stopped) return;
-    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+    if (server == null) return;
+    server.stackWatch.retry(this, serverId, server);
   }
 
   /// Reads [path], one of the compose project [project]'s files, on
@@ -461,7 +407,7 @@ final class DockerController {
       );
     }
 
-    final queryId = 'stack-file-${_count++}';
+    final queryId = 'one-shot-${_count++}';
     _send(DockerQuery(serverId: serverId, queryId: queryId, query: spec));
     if (_stopped) {
       return Future.value(
@@ -469,7 +415,7 @@ final class DockerController {
       );
     }
     final read = Completer<DockerPayload>();
-    _server(serverId).fileReads[queryId] = read;
+    _server(serverId).oneShots[queryId] = read;
     return read.future;
   }
 
@@ -478,50 +424,22 @@ final class DockerController {
   void watchImages(String serverId) {
     if (!_listed(serverId)) return;
     final server = _server(serverId);
-    server.imageViews++;
-    if (server.imageViews > 1) return;
-
-    _watchImages(serverId, server);
+    server.imageWatch.add(this, serverId, server);
   }
 
   /// The last view to hide ends the server's image watch.
   void unwatchImages(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.imageViews == 0) return;
-    server.imageViews--;
-    if (server.imageViews > 0) return;
-
-    _unwatchImages(serverId, server);
+    if (server == null) return;
+    server.imageWatch.remove(this, serverId, server);
   }
 
   /// Watches [serverId]'s images anew after a failure, under a new id, as
   /// [retryContainers] does.
   void retryImages(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.imagesWatchId == null) return;
-
-    _unwatchImages(serverId, server);
-    _watchImages(serverId, server);
-  }
-
-  void _watchImages(String serverId, _DockerServer server) {
-    if (_stopped) return;
-
-    final watchId = server.imagesWatchId ??= 'images-${_count++}';
-    _send(
-      DockerWatch(
-        serverId: serverId,
-        watchId: watchId,
-        lists: const {DockerWatchList.images, DockerWatchList.containers},
-      ),
-    );
-  }
-
-  void _unwatchImages(String serverId, _DockerServer server) {
-    final watchId = server.imagesWatchId;
-    server.imagesWatchId = null;
-    if (watchId == null || _stopped) return;
-    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+    if (server == null) return;
+    server.imageWatch.retry(this, serverId, server);
   }
 
   /// A Volumes view shows [serverId]; [unwatchVolumes] says it no longer
@@ -529,50 +447,22 @@ final class DockerController {
   void watchVolumes(String serverId) {
     if (!_listed(serverId)) return;
     final server = _server(serverId);
-    server.volumeViews++;
-    if (server.volumeViews > 1) return;
-
-    _watchVolumes(serverId, server);
+    server.volumeWatch.add(this, serverId, server);
   }
 
   /// The last view to hide ends the server's volume watch.
   void unwatchVolumes(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.volumeViews == 0) return;
-    server.volumeViews--;
-    if (server.volumeViews > 0) return;
-
-    _unwatchVolumes(serverId, server);
+    if (server == null) return;
+    server.volumeWatch.remove(this, serverId, server);
   }
 
   /// Watches [serverId]'s volumes anew after a failure, under a new id, as
   /// [retryContainers] does.
   void retryVolumes(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.volumesWatchId == null) return;
-
-    _unwatchVolumes(serverId, server);
-    _watchVolumes(serverId, server);
-  }
-
-  void _watchVolumes(String serverId, _DockerServer server) {
-    if (_stopped) return;
-
-    final watchId = server.volumesWatchId ??= 'volumes-${_count++}';
-    _send(
-      DockerWatch(
-        serverId: serverId,
-        watchId: watchId,
-        lists: const {DockerWatchList.volumes, DockerWatchList.containers},
-      ),
-    );
-  }
-
-  void _unwatchVolumes(String serverId, _DockerServer server) {
-    final watchId = server.volumesWatchId;
-    server.volumesWatchId = null;
-    if (watchId == null || _stopped) return;
-    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+    if (server == null) return;
+    server.volumeWatch.retry(this, serverId, server);
   }
 
   /// A Networks view shows [serverId]; [unwatchNetworks] says it no
@@ -580,50 +470,22 @@ final class DockerController {
   void watchNetworks(String serverId) {
     if (!_listed(serverId)) return;
     final server = _server(serverId);
-    server.networkViews++;
-    if (server.networkViews > 1) return;
-
-    _watchNetworks(serverId, server);
+    server.networkWatch.add(this, serverId, server);
   }
 
   /// The last view to hide ends the server's network watch.
   void unwatchNetworks(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.networkViews == 0) return;
-    server.networkViews--;
-    if (server.networkViews > 0) return;
-
-    _unwatchNetworks(serverId, server);
+    if (server == null) return;
+    server.networkWatch.remove(this, serverId, server);
   }
 
   /// Watches [serverId]'s networks anew after a failure, under a new id,
   /// as [retryContainers] does.
   void retryNetworks(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.networksWatchId == null) return;
-
-    _unwatchNetworks(serverId, server);
-    _watchNetworks(serverId, server);
-  }
-
-  void _watchNetworks(String serverId, _DockerServer server) {
-    if (_stopped) return;
-
-    final watchId = server.networksWatchId ??= 'networks-${_count++}';
-    _send(
-      DockerWatch(
-        serverId: serverId,
-        watchId: watchId,
-        lists: const {DockerWatchList.networks, DockerWatchList.containers},
-      ),
-    );
-  }
-
-  void _unwatchNetworks(String serverId, _DockerServer server) {
-    final watchId = server.networksWatchId;
-    server.networksWatchId = null;
-    if (watchId == null || _stopped) return;
-    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+    if (server == null) return;
+    server.networkWatch.retry(this, serverId, server);
   }
 
   /// An Events view shows [serverId]; [unwatchEvents] says it no longer
@@ -631,50 +493,22 @@ final class DockerController {
   void watchEvents(String serverId) {
     if (!_listed(serverId)) return;
     final server = _server(serverId);
-    server.eventViews++;
-    if (server.eventViews > 1) return;
-
-    _watchEvents(serverId, server);
+    server.eventWatch.add(this, serverId, server);
   }
 
   /// The last view to hide ends the server's events watch.
   void unwatchEvents(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.eventViews == 0) return;
-    server.eventViews--;
-    if (server.eventViews > 0) return;
-
-    _unwatchEvents(serverId, server);
+    if (server == null) return;
+    server.eventWatch.remove(this, serverId, server);
   }
 
   /// Watches [serverId]'s events anew after a failure, under a new id,
   /// as [retryContainers] does.
   void retryEvents(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.eventsWatchId == null) return;
-
-    _unwatchEvents(serverId, server);
-    _watchEvents(serverId, server);
-  }
-
-  void _watchEvents(String serverId, _DockerServer server) {
-    if (_stopped) return;
-
-    final watchId = server.eventsWatchId ??= 'events-${_count++}';
-    _send(
-      DockerWatch(
-        serverId: serverId,
-        watchId: watchId,
-        lists: const {DockerWatchList.events},
-      ),
-    );
-  }
-
-  void _unwatchEvents(String serverId, _DockerServer server) {
-    final watchId = server.eventsWatchId;
-    server.eventsWatchId = null;
-    if (watchId == null || _stopped) return;
-    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+    if (server == null) return;
+    server.eventWatch.retry(this, serverId, server);
   }
 
   /// Reads [serverId]'s disk use (`/system/df`) unless a read is in
@@ -710,22 +544,20 @@ final class DockerController {
   }) {
     if (!_listed(serverId)) return;
     final server = _server(serverId);
-    server.containerViews++;
-    if (server.containerViews > 1) return;
+    if (!server.containerWatch.gainView()) return;
 
     server.statsFor = statsFor.take(kDockerStatsForMax).toSet();
-    _watch(serverId, server);
+    server.containerWatch.send(this, serverId, server);
   }
 
   /// The last view to hide ends the server's container watch.
   void unwatchContainers(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.containerViews == 0) return;
-    server.containerViews--;
-    if (server.containerViews > 0) return;
+    if (server == null) return;
+    if (!server.containerWatch.loseView()) return;
 
     server.statsFor = const {};
-    _unwatch(serverId, server);
+    server.containerWatch.end(this, serverId);
   }
 
   /// The containers, by id, whose rows [serverId]'s Containers view shows,
@@ -734,12 +566,12 @@ final class DockerController {
   /// its id, which replaces it, when they changed.
   void showStatsFor(String serverId, Iterable<String> containerIds) {
     final server = _servers[serverId];
-    if (server == null || server.watchId == null) return;
+    if (server == null || server.containerWatch.watchId == null) return;
 
     final ids = containerIds.take(kDockerStatsForMax).toSet();
     if (setEquals(ids, server.statsFor)) return;
     server.statsFor = ids;
-    _watch(serverId, server);
+    server.containerWatch.send(this, serverId, server);
   }
 
   /// [containerId]'s list stats on [serverId] since this device began
@@ -758,9 +590,9 @@ final class DockerController {
     server.pinnedStats[containerId] = pins + 1;
     // A container the list already reads changes nothing to watch.
     if (pins == 0 &&
-        server.watchId != null &&
+        server.containerWatch.watchId != null &&
         !server.statsFor.contains(containerId)) {
-      _watch(serverId, server);
+      server.containerWatch.send(this, serverId, server);
     }
   }
 
@@ -774,8 +606,9 @@ final class DockerController {
       return;
     }
     server.pinnedStats.remove(containerId);
-    if (server.watchId != null && !server.statsFor.contains(containerId)) {
-      _watch(serverId, server);
+    if (server.containerWatch.watchId != null &&
+        !server.statsFor.contains(containerId)) {
+      server.containerWatch.send(this, serverId, server);
     }
   }
 
@@ -786,167 +619,17 @@ final class DockerController {
   ValueListenable<DockerContainerDetails> openContainer(
     String serverId,
     String containerId,
-  ) {
-    final server = _server(serverId);
-    // Details a view still shows from before the server left the fleet
-    // are taken back, so every view of the container shares one and each
-    // close pairs with an open; they are read again.
-    final kept = server.inspected.containsKey(containerId)
-        ? null
-        : _leftFleet.remove((serverId, containerId));
-    final inspected = server.inspected.putIfAbsent(
-      containerId,
-      () => kept ?? _InspectedContainer(_summaryIn(server, containerId)),
-    );
-    inspected.views++;
-    if (inspected.views > 1 && kept == null) return inspected.details;
-
-    if (!_listed(serverId)) {
-      inspected.details.value = inspected.details.value.copyWith(
-        failure: () => const DockerQueryFailed(DockerQueryFailure.notInFleet),
-      );
-    } else {
-      _inspect(serverId, containerId, inspected);
-    }
-    return inspected.details;
-  }
+  ) => _inspected.open(serverId, _server(serverId), containerId);
 
   /// The last view to close lets the container's details go.
-  void closeContainer(String serverId, String containerId) {
-    final key = (serverId, containerId);
-    if (_leftFleet[key] case final inspected?) {
-      inspected.views--;
-      if (inspected.views > 0) return;
-
-      _leftFleet.remove(key);
-      inspected.dispose();
-      return;
-    }
-
-    final server = _servers[serverId];
-    final inspected = server?.inspected[containerId];
-    if (server == null || inspected == null) return;
-    inspected.views--;
-    if (inspected.views > 0) return;
-
-    server.inspected.remove(containerId);
-    inspected.dispose();
-  }
+  void closeContainer(String serverId, String containerId) =>
+      _inspected.close(serverId, _servers[serverId], containerId);
 
   /// Inspects [containerId] on [serverId] again after a failure.
   void retryContainer(String serverId, String containerId) {
-    final inspected = _servers[serverId]?.inspected[containerId];
-    if (inspected == null || !_listed(serverId)) return;
-    _inspect(serverId, containerId, inspected);
-  }
-
-  /// Sends one [DockerContainerQuery] for [containerId], or, while one is
-  /// in flight, sends another once it is answered: a change it may have
-  /// read too early.
-  void _inspect(
-    String serverId,
-    String containerId,
-    _InspectedContainer inspected,
-  ) {
-    if (inspected.queryId != null) {
-      inspected.readAgain = true;
-      return;
-    }
-    if (!_stopped) {
-      final queryId = 'container-${_count++}';
-      _send(
-        DockerQuery(
-          serverId: serverId,
-          queryId: queryId,
-          query: DockerContainerQuery(containerId),
-        ),
-      );
-      if (!_stopped) {
-        inspected.queryId = queryId;
-        return;
-      }
-    }
-    // A stopped engine answers nothing.
-    inspected.details.value = inspected.details.value.copyWith(
-      failure: () => const DockerQueryFailed(DockerQueryFailure.cancelled),
-    );
-  }
-
-  /// Takes [payload] into the details whose inspect [queryId] is; false
-  /// when no open details view asked for it.
-  bool _takeInspect(
-    String serverId,
-    _DockerServer server,
-    String queryId,
-    DockerPayload payload,
-  ) {
-    for (final MapEntry(key: containerId, value: inspected)
-        in server.inspected.entries) {
-      if (inspected.queryId != queryId) continue;
-
-      inspected.queryId = null;
-      final before = inspected.details.value;
-      inspected.details.value = switch (payload) {
-        DockerContainerPayload(:final container) => DockerContainerDetails(
-          container: container,
-        ),
-        DockerQueryFailed(failure: DockerQueryFailure.notFound) =>
-          before.copyWith(removed: true, failure: () => null),
-        final DockerQueryFailed failure => before.copyWith(
-          failure: () => failure,
-        ),
-        // No other payload answers an inspect.
-        _ => before,
-      };
-      if (inspected.readAgain) {
-        inspected.readAgain = false;
-        _inspect(serverId, containerId, inspected);
-      }
-      return true;
-    }
-    return false;
-  }
-
-  /// Follows each inspected container through a delivered list: one
-  /// missing from it was removed, and one whose row changed is inspected
-  /// again.
-  void _followInspected(
-    String serverId,
-    _DockerServer server,
-    List<ContainerSummary> containers,
-  ) {
-    if (server.inspected.isEmpty) return;
-
-    final byId = {for (final container in containers) container.id: container};
-    for (final MapEntry(key: containerId, value: inspected)
-        in server.inspected.entries) {
-      final summary = byId[containerId];
-      final before = inspected.summary;
-      inspected.summary = summary;
-      if (summary == null) {
-        final details = inspected.details.value;
-        if (!details.removed) {
-          inspected.details.value = details.copyWith(removed: true);
-        }
-        continue;
-      }
-      if (inspected.details.value.removed ||
-          (before != null && _rowChanged(before, summary))) {
-        _inspect(serverId, containerId, inspected);
-      }
-    }
-  }
-
-  /// Inspects again each container whose last inspect failed, once
-  /// [serverId]'s endpoint is ready on a new route: the reads that waited
-  /// on it, or failed over the route before.
-  void _inspectAfterFailure(String serverId, _DockerServer server) {
-    for (final MapEntry(key: containerId, value: inspected)
-        in server.inspected.entries) {
-      final details = inspected.details.value;
-      if (details.failure == null || details.removed) continue;
-      _inspect(serverId, containerId, inspected);
-    }
+    final server = _servers[serverId];
+    if (server == null) return;
+    _inspected.retry(serverId, server, containerId);
   }
 
   /// Watches [serverId]'s containers anew after a failure: a watch under
@@ -954,32 +637,8 @@ final class DockerController {
   /// again would change nothing it reads.
   void retryContainers(String serverId) {
     final server = _servers[serverId];
-    if (server == null || server.watchId == null) return;
-
-    _unwatch(serverId, server);
-    _watch(serverId, server);
-  }
-
-  /// Sends [serverId]'s container watch, minting its id if it has none.
-  void _watch(String serverId, _DockerServer server) {
-    if (_stopped) return;
-
-    final watchId = server.watchId ??= 'containers-${_count++}';
-    _send(
-      DockerWatch(
-        serverId: serverId,
-        watchId: watchId,
-        lists: const {DockerWatchList.containers, DockerWatchList.stats},
-        statsFor: server.watchedStats,
-      ),
-    );
-  }
-
-  void _unwatch(String serverId, _DockerServer server) {
-    final watchId = server.watchId;
-    server.watchId = null;
-    if (watchId == null || _stopped) return;
-    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+    if (server == null) return;
+    server.containerWatch.retry(this, serverId, server);
   }
 
   void _send(EngineRequest request) {
@@ -1080,7 +739,7 @@ final class DockerController {
           server.compose.value = null;
           server.composeQuery = null;
           if (event.phase == DockerEndpointPhase.ready) {
-            _inspectAfterFailure(serverId, server);
+            _inspected.afterFailure(serverId, server);
           }
         }
         // Disk use describes the engine on the socket it was read from,
@@ -1093,7 +752,7 @@ final class DockerController {
         }
         _readIfShown(serverId, server);
         _readComposeIfShown(serverId, server);
-        _syncSummary(serverId, server);
+        server.summaryWatch.start(this, serverId, server);
       case DockerResult(:final serverId, :final queryId, :final payload):
         final server = _servers[serverId];
         if (server == null) return;
@@ -1107,12 +766,12 @@ final class DockerController {
           server.diskUse.value = server.diskUse.value.took(payload, _now());
           return;
         }
-        if (server.fileReads.remove(queryId) case final read?) {
+        if (server.oneShots.remove(queryId) case final read?) {
           read.complete(payload);
           return;
         }
         if (server.engineQuery != queryId) {
-          _takeInspect(serverId, server, queryId, payload);
+          _inspected.take(serverId, server, queryId, payload);
           return;
         }
         server.engineQuery = null;
@@ -1128,8 +787,7 @@ final class DockerController {
         // Lists arrive for the server, whichever watch asked for them.
         final server = _servers[serverId];
         if (server == null) return;
-        server.containers.value = _takeList(
-          server.containers.value,
+        server.containers.value = server.containers.value.took(
           list,
           payload,
           at,
@@ -1142,7 +800,7 @@ final class DockerController {
           DockerWatchList.containers,
           DockerContainersPayload(:final containers),
         )) {
-          _followInspected(serverId, server, containers);
+          _inspected.follow(serverId, server, containers);
           final listed = {for (final c in containers) c.id};
           server.usage.removeWhere((id, history) {
             // A pinned one stays: a details view charts it.
@@ -1176,7 +834,7 @@ final class DockerController {
           server.stacks.value = server.stacks.value.took(payload, at);
           // The grouping holds every container the list read.
           if (payload case DockerStacksPayload(:final grouping)) {
-            _followInspected(serverId, server, [
+            _inspected.follow(serverId, server, [
               for (final project in grouping.projects) ...project.containers,
               ...grouping.unmanaged,
             ]);
@@ -1191,8 +849,8 @@ final class DockerController {
         };
         _servers.removeWhere((serverId, server) {
           if (ids.contains(serverId)) return false;
-          server.endFileReads(DockerQueryFailure.notInFleet);
-          _keepShownDetails(serverId, server);
+          server.endOneShots(DockerQueryFailure.notInFleet);
+          _inspected.keepShown(serverId, server);
           server.dispose();
           return true;
         });
@@ -1239,30 +897,48 @@ final class DockerController {
           _now(),
         );
       }
-      server.endFileReads(DockerQueryFailure.cancelled);
-      for (final inspected in server.inspected.values) {
-        if (inspected.queryId == null) continue;
-        inspected.queryId = null;
-        inspected.readAgain = false;
-        inspected.details.value = inspected.details.value.copyWith(
-          failure: () => const DockerQueryFailed(DockerQueryFailure.cancelled),
-        );
-      }
+      server.endOneShots(DockerQueryFailure.cancelled);
+      _inspected.onEngineDone(server);
     }
   }
 
   bool _listed(String serverId) => _fleetIds?.contains(serverId) ?? true;
 
-  /// [containerId]'s row in [server]'s latest list, if listed.
-  ContainerSummary? _summaryIn(_DockerServer server, String containerId) {
-    for (final container in server.containers.value.containers ?? const []) {
-      if (container.id == containerId) return container;
-    }
-    return null;
-  }
-
-  _DockerServer _server(String serverId) =>
-      _servers.putIfAbsent(serverId, _DockerServer.new);
+  _DockerServer _server(String serverId) => _servers.putIfAbsent(
+    serverId,
+    () => _DockerServer(
+      containerWatch: _ViewWatch(
+        mintId: () => 'containers-${_count++}',
+        lists: const {DockerWatchList.containers, DockerWatchList.stats},
+        readsStats: true,
+      ),
+      summaryWatch: _ViewWatch(
+        mintId: () => 'summary-${_count++}',
+        lists: const {DockerWatchList.containers, DockerWatchList.images},
+        waitsForEndpoint: true,
+      ),
+      imageWatch: _ViewWatch(
+        mintId: () => 'images-${_count++}',
+        lists: const {DockerWatchList.images, DockerWatchList.containers},
+      ),
+      volumeWatch: _ViewWatch(
+        mintId: () => 'volumes-${_count++}',
+        lists: const {DockerWatchList.volumes, DockerWatchList.containers},
+      ),
+      networkWatch: _ViewWatch(
+        mintId: () => 'networks-${_count++}',
+        lists: const {DockerWatchList.networks, DockerWatchList.containers},
+      ),
+      eventWatch: _ViewWatch(
+        mintId: () => 'events-${_count++}',
+        lists: const {DockerWatchList.events},
+      ),
+      stackWatch: _ViewWatch(
+        mintId: () => 'stacks-${_count++}',
+        lists: const {DockerWatchList.stacks},
+      ),
+    ),
+  );
 
   /// Drops what the old endpoint told [server], whose id now names
   /// another machine (SYN-08), keeping its notifiers and view counts:
@@ -1277,14 +953,14 @@ final class DockerController {
       ..engineQuery = null
       ..composeQuery = null
       ..diskUseQuery = null
-      ..watchId = null
-      ..summaryWatchId = null
-      ..imagesWatchId = null
-      ..volumesWatchId = null
-      ..networksWatchId = null
-      ..eventsWatchId = null
-      ..stacksWatchId = null
       ..watchesDropped = true;
+    server.containerWatch.reset();
+    server.summaryWatch.reset();
+    server.imageWatch.reset();
+    server.volumeWatch.reset();
+    server.networkWatch.reset();
+    server.eventWatch.reset();
+    server.stackWatch.reset();
     server.endpoint.value = null;
     server.engine.value = null;
     server.compose.value = null;
@@ -1299,45 +975,30 @@ final class DockerController {
       history.dispose();
     }
     server.usage.clear();
-    server.endFileReads(DockerQueryFailure.cancelled);
-    for (final inspected in server.inspected.values) {
-      inspected
-        ..queryId = null
-        ..readAgain = false
-        ..details.value = inspected.details.value.copyWith(
-          failure: () => const DockerQueryFailed(DockerQueryFailure.cancelled),
-        );
-    }
+    server.endOneShots(DockerQueryFailure.cancelled);
+    _inspected.reset(server);
   }
 
   /// Sends the watches an endpoint change dropped for the views still
-  /// counted; the summary waits for the endpoint, as [_syncSummary]
+  /// counted; the endpoint-gated one waits for the endpoint, as its sync
   /// says, and the endpoint state asks for it and the details again.
   void _resendWatches(String serverId, _DockerServer server) {
-    if (server.containerViews > 0) _watch(serverId, server);
-    if (server.summaryViews > 0) _syncSummary(serverId, server);
-    if (server.imageViews > 0) _watchImages(serverId, server);
-    if (server.volumeViews > 0) _watchVolumes(serverId, server);
-    if (server.networkViews > 0) _watchNetworks(serverId, server);
-    if (server.eventViews > 0) _watchEvents(serverId, server);
-    if (server.stackViews > 0) _watchStacks(serverId, server);
-  }
-
-  /// Moves the details [server] still has shown into [_leftFleet], each
-  /// saying the server left the fleet, before the server goes; every one
-  /// it has is shown, as the last view to close removes it.
-  void _keepShownDetails(String serverId, _DockerServer server) {
-    for (final MapEntry(key: containerId, value: inspected)
-        in server.inspected.entries) {
-      inspected
-        ..queryId = null
-        ..readAgain = false
-        ..details.value = inspected.details.value.copyWith(
-          failure: () => const DockerQueryFailed(DockerQueryFailure.notInFleet),
-        );
-      _leftFleet[(serverId, containerId)] = inspected;
+    for (final watch in [
+      server.containerWatch,
+      server.summaryWatch,
+      server.imageWatch,
+      server.volumeWatch,
+      server.networkWatch,
+      server.eventWatch,
+      server.stackWatch,
+    ]) {
+      if (watch.views == 0) continue;
+      if (watch.waitsForEndpoint) {
+        watch.start(this, serverId, server);
+      } else {
+        watch.send(this, serverId, server);
+      }
     }
-    server.inspected.clear();
   }
 
   void dispose() {
@@ -1349,10 +1010,10 @@ final class DockerController {
       server.dispose();
     }
     _servers.clear();
-    for (final inspected in _leftFleet.values) {
+    for (final inspected in _inspected.leftFleet.values) {
       inspected.dispose();
     }
-    _leftFleet.clear();
+    _inspected.leftFleet.clear();
   }
 }
 
@@ -1368,352 +1029,6 @@ bool _waitedOnEndpoint(DockerPayload payload) => switch (payload) {
     true,
   _ => false,
 };
-
-/// [before] with [payload], a read of [list] at [at], taken in: a new
-/// list or stats round, or a failed one, which keeps what was read
-/// before. Lists other than the containers and their stats leave it as
-/// it was.
-DockerContainerList _takeList(
-  DockerContainerList before,
-  DockerWatchList list,
-  DockerPayload payload,
-  DateTime at,
-) {
-  switch ((list, payload)) {
-    case (
-      DockerWatchList.containers,
-      DockerContainersPayload(:final containers),
-    ):
-      final ids = {for (final container in containers) container.id};
-      return DockerContainerList(
-        containers: containers,
-        at: at,
-        // Stats of a container that went go with it.
-        stats: {
-          for (final MapEntry(:key, :value) in before.stats.entries)
-            if (ids.contains(key)) key: value,
-        },
-        statsFailure: before.statsFailure,
-      );
-    case (DockerWatchList.containers, final DockerQueryFailed failure):
-      return before.copyWith(failure: () => failure);
-    case (DockerWatchList.stats, DockerStatsPayload(:final stats)):
-      return before.copyWith(
-        stats: {...before.stats, for (final row in stats) row.containerId: row},
-        statsFailure: () => null,
-      );
-    case (DockerWatchList.stats, final DockerQueryFailed failure):
-      return before.copyWith(statsFailure: () => failure);
-    case _:
-      return before;
-  }
-}
-
-/// What a server's container watch delivered (03 §7.12 CTR-01, CST-01).
-@immutable
-final class DockerContainerList {
-  const DockerContainerList({
-    this.containers,
-    this.at,
-    this.failure,
-    this.stats = const {},
-    this.statsFailure,
-  });
-
-  /// The latest list read, stopped containers too; null until one was.
-  final List<ContainerSummary>? containers;
-
-  /// When the engine read [containers], by this device's clock.
-  final DateTime? at;
-
-  /// Why the latest list read failed, or the engine refused the watch,
-  /// while [containers] keeps the list before; null once one is read.
-  final DockerQueryFailed? failure;
-
-  /// Each listed container's latest list stats, by id. A container whose
-  /// row left the screen keeps its last ones, which age by their
-  /// [ContainerListStats.at].
-  final Map<String, ContainerListStats> stats;
-
-  /// Why the latest stats round failed; null once one succeeds.
-  final DockerQueryFailed? statsFailure;
-
-  DockerContainerList copyWith({
-    DockerQueryFailed? Function()? failure,
-    Map<String, ContainerListStats>? stats,
-    DockerQueryFailed? Function()? statsFailure,
-  }) => DockerContainerList(
-    containers: containers,
-    at: at,
-    failure: failure == null ? this.failure : failure(),
-    stats: stats ?? this.stats,
-    statsFailure: statsFailure == null ? this.statsFailure : statsFailure(),
-  );
-}
-
-/// What a server's watches delivered of its images (03 §7.14 IMG-01).
-@immutable
-final class DockerImageList {
-  const DockerImageList({this.images, this.at, this.failure});
-
-  /// The latest list read; null until one was.
-  final List<ImageSummary>? images;
-
-  /// When the engine read [images], by this device's clock.
-  final DateTime? at;
-
-  /// Why the latest read failed while [images] keeps the list before;
-  /// null once one is read.
-  final DockerQueryFailed? failure;
-
-  /// This list with [payload], read at [at], taken in.
-  DockerImageList took(DockerPayload payload, DateTime at) => switch (payload) {
-    DockerImagesPayload(:final images) => DockerImageList(
-      images: images,
-      at: at,
-    ),
-    final DockerQueryFailed failure => DockerImageList(
-      images: images,
-      at: this.at,
-      failure: failure,
-    ),
-    _ => this,
-  };
-}
-
-/// What a server's watches delivered of its volumes (03 §7.15 VOL-01).
-@immutable
-final class DockerVolumeList {
-  const DockerVolumeList({this.volumes, this.at, this.failure});
-
-  /// The latest list read; null until one was.
-  final List<VolumeSummary>? volumes;
-
-  /// When the engine read [volumes], by this device's clock.
-  final DateTime? at;
-
-  /// Why the latest read failed while [volumes] keeps the list before;
-  /// null once one is read.
-  final DockerQueryFailed? failure;
-
-  /// This list with [payload], read at [at], taken in.
-  DockerVolumeList took(DockerPayload payload, DateTime at) =>
-      switch (payload) {
-        DockerVolumesPayload(:final volumes) => DockerVolumeList(
-          volumes: volumes,
-          at: at,
-        ),
-        final DockerQueryFailed failure => DockerVolumeList(
-          volumes: volumes,
-          at: this.at,
-          failure: failure,
-        ),
-        _ => this,
-      };
-}
-
-/// What a server's watches delivered of its networks (03 §7.15 DNW-01).
-@immutable
-final class DockerNetworkList {
-  const DockerNetworkList({this.networks, this.at, this.failure});
-
-  /// The latest list read; null until one was.
-  final List<NetworkSummary>? networks;
-
-  /// When the engine read [networks], by this device's clock.
-  final DateTime? at;
-
-  /// Why the latest read failed while [networks] keeps the list before;
-  /// null once one is read.
-  final DockerQueryFailed? failure;
-
-  /// This list with [payload], read at [at], taken in.
-  DockerNetworkList took(DockerPayload payload, DateTime at) =>
-      switch (payload) {
-        DockerNetworksPayload(:final networks) => DockerNetworkList(
-          networks: networks,
-          at: at,
-        ),
-        final DockerQueryFailed failure => DockerNetworkList(
-          networks: networks,
-          at: this.at,
-          failure: failure,
-        ),
-        _ => this,
-      };
-}
-
-/// What a server's events watch delivered of the events timeline
-/// (03 §7.12 DKE-03).
-@immutable
-final class DockerEventList {
-  const DockerEventList({this.entries, this.failure});
-
-  /// The timeline, oldest first; null until the watch delivered one.
-  final List<DockerTimelineEntry>? entries;
-
-  /// Why the watch failed while [entries] keeps the timeline before; null
-  /// once one is delivered.
-  final DockerQueryFailed? failure;
-
-  /// This timeline with [payload] taken in.
-  DockerEventList took(DockerPayload payload) => switch (payload) {
-    DockerEventsPayload(:final entries) => DockerEventList(entries: entries),
-    final DockerQueryFailed failure => DockerEventList(
-      entries: entries,
-      failure: failure,
-    ),
-    _ => this,
-  };
-}
-
-/// A server's disk use measurement (02 OV-05): the last `/system/df`
-/// read, and whether one is under way or why the last one failed.
-@immutable
-final class DockerDiskUse {
-  const DockerDiskUse({
-    this.df,
-    this.at,
-    this.inFlight = false,
-    this.failure,
-    this.socketPath,
-  });
-
-  /// The last measurement; null until one succeeded.
-  final SystemDf? df;
-
-  /// When [df] arrived, by this device's clock.
-  final DateTime? at;
-
-  /// Whether a measurement is under way.
-  final bool inFlight;
-
-  /// Why the latest measurement failed, while [df] keeps the one before;
-  /// null once one succeeds.
-  final DockerQueryFailed? failure;
-
-  /// The engine socket [df] was read from: another engine's reading is
-  /// dropped.
-  final String? socketPath;
-
-  /// This measurement with another under way over [socketPath]; the
-  /// last failure is moot.
-  DockerDiskUse measuring(String? socketPath) => DockerDiskUse(
-    df: df,
-    at: at,
-    inFlight: true,
-    socketPath: socketPath ?? this.socketPath,
-  );
-
-  /// This measurement with [payload], the answer that arrived at [now],
-  /// taken in.
-  DockerDiskUse took(DockerPayload payload, DateTime now) => switch (payload) {
-    DockerSystemDfPayload(:final df) => DockerDiskUse(
-      df: df,
-      at: now,
-      socketPath: socketPath,
-    ),
-    final DockerQueryFailed failure => DockerDiskUse(
-      df: df,
-      at: at,
-      failure: failure,
-      socketPath: socketPath,
-    ),
-    _ => DockerDiskUse(df: df, at: at, socketPath: socketPath),
-  };
-}
-
-/// What a server's stack watch delivered (03 §7.16 STK-01, STK-05).
-@immutable
-final class DockerStackList {
-  const DockerStackList({this.stacks, this.at, this.failure});
-
-  /// The latest stacks read: the compose projects, each one's verdict
-  /// and the compose CLI found; null until one was.
-  final DockerStacksPayload? stacks;
-
-  /// When the engine read [stacks], by this device's clock.
-  final DateTime? at;
-
-  /// Why the latest read failed, or the engine refused the watch, while
-  /// [stacks] keeps the list before; null once one is read.
-  final DockerQueryFailed? failure;
-
-  /// This list with [payload], read at [at], taken in.
-  DockerStackList took(DockerPayload payload, DateTime at) => switch (payload) {
-    final DockerStacksPayload stacks => DockerStackList(stacks: stacks, at: at),
-    final DockerQueryFailed failure => DockerStackList(
-      stacks: stacks,
-      at: this.at,
-      failure: failure,
-    ),
-    _ => this,
-  };
-}
-
-/// Whether a container's row changed in a way its inspect may show: its
-/// state, the engine's status text (a restart resets its uptime), its
-/// health or its image.
-bool _rowChanged(ContainerSummary before, ContainerSummary after) =>
-    before.state != after.state ||
-    before.status != after.status ||
-    before.health != after.health ||
-    before.imageId != after.imageId;
-
-/// What a container's details view shows (03 §7.12 CTR-03, CTR-04).
-@immutable
-final class DockerContainerDetails {
-  const DockerContainerDetails({
-    this.container,
-    this.failure,
-    this.removed = false,
-  });
-
-  /// The latest inspect read, masked by the engine (03 §8.9); null until
-  /// one was.
-  final ContainerDetails? container;
-
-  /// Why the latest inspect failed, while [container] keeps the one
-  /// before; null once one is read.
-  final DockerQueryFailed? failure;
-
-  /// Whether the container is gone: a list no longer had it, or its
-  /// inspect found nothing. [container] keeps what was read before.
-  final bool removed;
-
-  DockerContainerDetails copyWith({
-    DockerQueryFailed? Function()? failure,
-    bool? removed,
-  }) => DockerContainerDetails(
-    container: container,
-    failure: failure == null ? this.failure : failure(),
-    removed: removed ?? this.removed,
-  );
-}
-
-/// One container a details view shows.
-final class _InspectedContainer {
-  _InspectedContainer(this.summary);
-
-  final ValueNotifier<DockerContainerDetails> details = ValueNotifier(
-    const DockerContainerDetails(),
-  );
-
-  /// The container's row in the latest list, which a change in the next
-  /// one is measured against; null while unlisted.
-  ContainerSummary? summary;
-
-  /// How many details views show the container.
-  int views = 0;
-
-  /// The inspect in flight, whose answer [details] takes.
-  String? queryId;
-
-  /// Whether to inspect again once [queryId] is answered.
-  bool readAgain = false;
-
-  void dispose() => details.dispose();
-}
 
 /// Whether [after] is the ready endpoint [before] was: the same route
 /// and API version.
@@ -1735,6 +1050,16 @@ bool _sameEndpoint(DockerEndpointState? before, DockerEndpointState after) {
 
 /// One server's Docker state.
 final class _DockerServer {
+  _DockerServer({
+    required this.containerWatch,
+    required this.summaryWatch,
+    required this.imageWatch,
+    required this.volumeWatch,
+    required this.networkWatch,
+    required this.eventWatch,
+    required this.stackWatch,
+  });
+
   final ValueNotifier<DockerEndpointState?> endpoint = ValueNotifier(null);
   final ValueNotifier<DockerPayload?> engine = ValueNotifier(null);
   final ValueNotifier<DockerPayload?> compose = ValueNotifier(null);
@@ -1759,6 +1084,28 @@ final class _DockerServer {
   final ValueNotifier<DockerStackList> stacks = ValueNotifier(
     const DockerStackList(),
   );
+
+  /// The Containers view's watch, the one that reads list stats too
+  /// (CST-01).
+  final _ViewWatch containerWatch;
+
+  /// The Overview's watch, sent only once its endpoint is ready (OV-05).
+  final _ViewWatch summaryWatch;
+
+  /// The Images view's watch.
+  final _ViewWatch imageWatch;
+
+  /// The Volumes view's watch.
+  final _ViewWatch volumeWatch;
+
+  /// The Networks view's watch.
+  final _ViewWatch networkWatch;
+
+  /// The Events view's watch.
+  final _ViewWatch eventWatch;
+
+  /// The Stacks view's watch.
+  final _ViewWatch stackWatch;
 
   /// The engine query in flight, whose answer [engine] takes.
   String? engineQuery;
@@ -1789,12 +1136,6 @@ final class _DockerServer {
   /// for the link to the new one, which [_resendWatches] sends again.
   bool watchesDropped = false;
 
-  /// How many Containers views show the server.
-  int containerViews = 0;
-
-  /// The container watch the engine holds, while any view shows.
-  String? watchId;
-
   /// The containers whose stats the watch reads: the rows on screen.
   Set<String> statsFor = const {};
 
@@ -1812,63 +1153,29 @@ final class _DockerServer {
   Set<String> get watchedStats =>
       {...pinnedStats.keys, ...statsFor}.take(kDockerStatsForMax).toSet();
 
-  /// How many Overviews show the server.
-  int summaryViews = 0;
-
-  /// The summary watch the engine holds, while any Overview shows.
-  String? summaryWatchId;
-
   /// The disk use query in flight, whose answer [diskUse] takes.
   String? diskUseQuery;
-
-  /// How many Images views show the server.
-  int imageViews = 0;
-
-  /// The image watch the engine holds, while any Images view shows.
-  String? imagesWatchId;
-
-  /// How many Volumes views show the server.
-  int volumeViews = 0;
-
-  /// The volume watch the engine holds, while any Volumes view shows.
-  String? volumesWatchId;
-
-  /// How many Networks views show the server.
-  int networkViews = 0;
-
-  /// The network watch the engine holds, while any Networks view shows.
-  String? networksWatchId;
-
-  /// How many Events views show the server.
-  int eventViews = 0;
-
-  /// The events watch the engine holds, while any Events view shows.
-  String? eventsWatchId;
-
-  /// How many Stacks views show the server.
-  int stackViews = 0;
-
-  /// The stack watch the engine holds, while any Stacks view shows.
-  String? stacksWatchId;
 
   /// The containers details views show, by full id.
   final Map<String, _InspectedContainer> inspected = {};
 
-  /// The one-shot stack reads in flight (files, profiles), by query id,
-  /// each completed with the engine's answer.
-  final Map<String, Completer<DockerPayload>> fileReads = {};
+  /// The one-shot reads in flight ([DockerController._ask]'s: stack
+  /// files, profiles and scans, image history and updates, container
+  /// processes, the review), by query id, each completed with the
+  /// engine's answer.
+  final Map<String, Completer<DockerPayload>> oneShots = {};
 
-  /// Answers every one-shot stack read in flight with [failure]: the engine
+  /// Answers every one-shot read in flight with [failure]: the engine
   /// will not.
-  void endFileReads(DockerQueryFailure failure) {
-    for (final read in fileReads.values) {
+  void endOneShots(DockerQueryFailure failure) {
+    for (final read in oneShots.values) {
       read.complete(DockerQueryFailed(failure));
     }
-    fileReads.clear();
+    oneShots.clear();
   }
 
   void dispose() {
-    endFileReads(DockerQueryFailure.cancelled);
+    endOneShots(DockerQueryFailure.cancelled);
     for (final history in usage.values) {
       history.dispose();
     }

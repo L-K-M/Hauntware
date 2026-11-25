@@ -16,8 +16,6 @@
 /// ```
 library;
 
-import 'dart:math';
-
 import '../hws/collector.dart' show ArgValidators;
 import 'commands.dart' show HostCommandError, HostCommands;
 import 'proc_stat.dart';
@@ -154,16 +152,6 @@ String? validateOpId(String id) {
   if (id.length != kOpIdLength) return 'operation id length';
   if (!_opIdPattern.hasMatch(id)) return 'operation id not lowercase hex';
   return null;
-}
-
-/// A fresh operation id from [random], which the engine makes
-/// `Random.secure()` (M11).
-String generateOpId(Random random) {
-  final b = StringBuffer();
-  for (var i = 0; i < kOpIdLength ~/ 2; i++) {
-    b.write(random.nextInt(256).toRadixString(16).padLeft(2, '0'));
-  }
-  return b.toString();
 }
 
 /// The transient unit of operation [id] (03 §7.17).

@@ -366,6 +366,12 @@
   JSON a copied theme carries are unchanged. A chosen accent with low
   contrast now explains that links and indicators use an adjusted
   colour, with a button to take the suggested accessible colour.
+- The SSH config preview reads the file as ssh does (`Host *` and
+  top-level defaults, later matching blocks, known `Match` criteria, ssh
+  quoting) for every host ssh's result is certain for. Hosts that depend
+  on something the importer cannot evaluate (`Include`, `Match exec`,
+  tokens) keep their previous preview values, and the "won't behave as
+  in ssh" badges now mark only those hosts.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

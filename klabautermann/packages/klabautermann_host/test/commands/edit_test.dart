@@ -110,23 +110,6 @@ void main() {
     );
   });
 
-  test('crontab writes take stdin, for the login user or a named one', () {
-    expect(EditCommands.crontabWrite(), ['crontab', '-']);
-    expect(EditCommands.crontabWrite(user: 'www-data'), [
-      'crontab',
-      '-u',
-      'www-data',
-      '-',
-    ]);
-    for (final bad in ['-r', 'a b', 'Root']) {
-      expect(
-        () => EditCommands.crontabWrite(user: bad),
-        _refused('not a user name'),
-        reason: bad,
-      );
-    }
-  });
-
   test('crontab swaps carry the hash first, then crontab\'s own words', () {
     expect(EditCommands.crontabWriteIfHash(_hash).sublist(3), [
       'klabautermann-crontab',

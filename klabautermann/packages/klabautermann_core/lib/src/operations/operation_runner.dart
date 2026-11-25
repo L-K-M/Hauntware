@@ -6,7 +6,8 @@
 // launches (03 §7.17, M4 E18).
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show DockerApiException, DockerCancelledException, DockerException;
-import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HostCommands, kStartTicksGone;
 import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
@@ -472,7 +473,7 @@ final class OperationRunner {
         return switch (result.exitCode) {
           0 when result.stdout.trim() == '$startTicks' => null,
           0 => RevalidationFailure.processReused,
-          _kTicksGone => RevalidationFailure.processGone,
+          kStartTicksGone => RevalidationFailure.processGone,
           _ => RevalidationFailure.unreadable,
         };
       case DockerTargetUnchanged() || StackConfigUnchanged():
@@ -507,9 +508,6 @@ bool _polkitRefusal(ShellStep step, String stderr) =>
     !step.elevated &&
     step.argv.contains(_noAskPassword) &&
     _polkitRefused.hasMatch(stderr);
-
-/// `klab_ticks`'s status for a process that is gone (proc_stat.dart).
-const _kTicksGone = 3;
 
 final _redactor = SecretRedactor();
 

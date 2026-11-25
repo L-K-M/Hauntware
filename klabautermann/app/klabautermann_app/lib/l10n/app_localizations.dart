@@ -11109,12 +11109,6 @@ abstract class AppLocalizations {
   /// **'Open a shell'**
   String get dockerShellOpen;
 
-  /// Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07).
-  ///
-  /// In en, this message translates to:
-  /// **'Show details'**
-  String get dockerShellHide;
-
   /// Tooltip of the desktop workspace's button that opens the bottom dock, with the server's logs when it holds nothing of the server yet (OV-10).
   ///
   /// In en, this message translates to:

@@ -78,38 +78,6 @@ void main() {
     });
   });
 
-  group('RegistryChallenge', () {
-    test('a Bearer challenge names the anonymous token request', () {
-      final c = RegistryChallenge.tryParse(
-        'Bearer realm="https://ghcr.io/token",service="ghcr.io",'
-        'scope="repository:home-assistant/home-assistant:pull"',
-      )!;
-      expect(c.scheme, RegistryAuthScheme.bearer);
-      expect(c.service, 'ghcr.io');
-      expect(
-        c.anonymousTokenUri('home-assistant/home-assistant').toString(),
-        'https://ghcr.io/token?service=ghcr.io'
-        '&scope=repository%3Ahome-assistant%2Fhome-assistant%3Apull',
-      );
-    });
-
-    test('a Basic challenge means credentials, with no token to fetch', () {
-      final c = RegistryChallenge.tryParse('Basic realm="s8"')!;
-      expect(c.scheme, RegistryAuthScheme.basic);
-      expect(c.realm, 's8');
-      expect(c.anonymousTokenUri('alpine'), isNull);
-    });
-
-    test('a realm that is not https is not followed', () {
-      final c = RegistryChallenge.tryParse(
-        'Bearer realm="http://registry.example/token",service="x"',
-      )!;
-      expect(c.anonymousTokenUri('alpine'), isNull);
-      expect(RegistryChallenge.tryParse(''), isNull);
-      expect(RegistryChallenge.tryParse(null), isNull);
-    });
-  });
-
   group('RegistryRateLimit', () {
     test('reads Docker Hub\'s count and window', () {
       final limit = RegistryRateLimit.fromHeaders(

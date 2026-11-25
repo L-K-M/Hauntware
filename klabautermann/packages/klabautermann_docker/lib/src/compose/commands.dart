@@ -113,35 +113,6 @@ String _validateProfile(String profile) {
   return profile;
 }
 
-/// `docker --host unix://<socket> compose ... ps --format json`
-/// (03 §7.16 STK-01).
-ComposeInvocation composePs({
-  String binary = 'docker',
-  required String socketPath,
-  required String project,
-  String? projectDirectory,
-  List<String> configFiles = const [],
-  String? envFile,
-  bool all = false,
-  bool json = true,
-}) {
-  final argv = _sharedPrefix(
-    binary: binary,
-    socketPath: socketPath,
-    project: project,
-    projectDirectory: projectDirectory,
-    configFiles: configFiles,
-    envFile: envFile,
-  )..add('ps');
-  if (all) argv.add('--all');
-  if (json) {
-    argv
-      ..add('--format')
-      ..add('json');
-  }
-  return ComposeInvocation(argv);
-}
-
 /// `... compose ... config` for source verification and viewing
 /// (03 §7.16 STK-01, STK-04, STK-06, STK-09). Exactly one of [quiet],
 /// [hash], [services], [listProfiles] or [formatJson] is expected; the
@@ -295,28 +266,6 @@ ComposeInvocation composePull({
   );
   _composeOutputFlags(argv, plainProgress: plainProgress, noAnsi: noAnsi);
   argv.add('pull');
-  argv.addAll(services.map(validateComposeServiceName));
-  return ComposeInvocation(argv);
-}
-
-/// `... compose ... restart` (03 §7.16 STK-23).
-ComposeInvocation composeRestart({
-  String binary = 'docker',
-  required String socketPath,
-  required String project,
-  String? projectDirectory,
-  List<String> configFiles = const [],
-  String? envFile,
-  List<String> services = const [],
-}) {
-  final argv = _sharedPrefix(
-    binary: binary,
-    socketPath: socketPath,
-    project: project,
-    projectDirectory: projectDirectory,
-    configFiles: configFiles,
-    envFile: envFile,
-  )..add('restart');
   argv.addAll(services.map(validateComposeServiceName));
   return ComposeInvocation(argv);
 }

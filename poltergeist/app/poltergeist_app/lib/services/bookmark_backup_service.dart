@@ -16,7 +16,6 @@ import 'server_duplication.dart';
 import 'settings_models.dart';
 import 'settings_store.dart';
 import 'sync_credentials.dart' show RetainedSyncTokenStore;
-import 'sync_transport.dart';
 import 'uuid.dart';
 
 /// The separate account's facts kept for §4.4's optional post-switch

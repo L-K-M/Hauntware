@@ -44,10 +44,6 @@ DockerParseResult<TimestampedLogLine> parseTimestampedLogLine(LogLine line) {
   );
 }
 
-/// Maps a line stream through [parseTimestampedLogLine].
-Stream<TimestampedLogLine> parseTimestampedLogLines(Stream<LogLine> lines) =>
-    lines.map((l) => parseTimestampedLogLine(l).value);
-
 /// 03 §5.6: `since` is inclusive, so a resumed stream re-sends the line at
 /// the last delivered timestamp. Drops the leading run of lines whose
 /// timestamp is less than or equal to [since]. A line without a timestamp
@@ -67,18 +63,6 @@ Stream<TimestampedLogLine> dropInclusiveSince(
   }
 }
 
-/// The newest timestamp in [lines], for the next `since=` resume value
-/// (03 §5.6).
-LogTimestamp? lastDeliveredTimestamp(Iterable<TimestampedLogLine> lines) {
-  LogTimestamp? last;
-  for (final line in lines) {
-    final ts = line.timestamp;
-    if (ts == null) continue;
-    if (last == null || ts > last) last = ts;
-  }
-  return last;
-}
-
 /// Joins the demultiplexed frames of a `timestamps=1` logs response into
 /// timestamped lines (03 §5.6), each cut to [maxLineBytes] (the rest of
 /// an overlong line is discarded), without its `\n` or `\r\n`.
@@ -91,6 +75,10 @@ LogTimestamp? lastDeliveredTimestamp(Iterable<TimestampedLogLine> lines) {
 /// and Docker a message over 16 KiB. The joined line keeps the first
 /// timestamp. A raw (TTY) stream is one byte stream, cut wherever the
 /// transport cut it, so only `\n` ends its lines and nothing is dropped.
+///
+/// Cancelling the returned stream takes effect at the next frame, so
+/// while the input is quiet the read stays open; close the client to
+/// stop it, as the engine's container log reader does.
 Stream<TimestampedLogLine> joinTimestampedLogLines(
   Stream<StdcopyFrame> frames, {
   required LogFraming framing,

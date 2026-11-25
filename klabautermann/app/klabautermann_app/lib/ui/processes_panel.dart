@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import 'actions/host_actions.dart';
 import 'freshness.dart';
+import 'latest_read.dart';
 import 'process_detail_view.dart';
 import 'panel_kit.dart';
 import 'processes_view.dart';
@@ -741,11 +742,10 @@ class _ProcessSheetState extends State<_ProcessSheet> {
   late final TimedReveals<_Revealed> _revealed;
 
   /// The process read's answer, null while it reads.
-  HostPayload? _detail;
-  bool _reading = false;
-
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
+  late final LatestRead<HostPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   @override
   void initState() {
@@ -758,18 +758,16 @@ class _ProcessSheetState extends State<_ProcessSheet> {
     final ticks = widget.row.startTicks;
     if (ticks == null) return;
 
-    final ticket = ++_ticket;
-    setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      ProcessDetailQuery(pid: widget.row.pid, startTicks: ticks),
-    );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _detail = result.payload;
-      _reading = false;
+    await _latest.run(() async {
+      final result = await widget.monitoring.queryHost(
+        widget.serverId,
+        ProcessDetailQuery(pid: widget.row.pid, startTicks: ticks),
+      );
       // A new read can list other variables at the same places.
-      _revealed.discard(where: (key) => key.$1 == _MaskedKind.variable);
+      if (mounted) {
+        _revealed.discard(where: (key) => key.$1 == _MaskedKind.variable);
+      }
+      return result.payload;
     });
   }
 
@@ -843,7 +841,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
       if (arguments.isNotEmpty && row.argumentsTruncated)
         Text(l10n.processesCommandTruncated, style: theme.textTheme.bodySmall),
     ];
-    final details = _detail;
+    final details = _latest.value;
     final variables = details is ProcessDetails
         ? details.environment ?? const <EnvVar>[]
         : const <EnvVar>[];
@@ -905,7 +903,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
   List<Widget> _detailLines(AppLocalizations l10n) {
     final theme = Theme.of(context);
     final canRead = widget.row.startTicks != null;
-    final status = switch (_detail) {
+    final status = switch (_latest.value) {
       _ when !canRead => PanelNotice.state(
         icon: Icons.info_outline,
         text: l10n.processesDetailNoStart,
@@ -948,7 +946,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton(
-            onPressed: _reading ? null : () => unawaited(_read()),
+            onPressed: _latest.reading ? null : () => unawaited(_read()),
             child: Text(l10n.processesDetailReadAgain),
           ),
         ),
