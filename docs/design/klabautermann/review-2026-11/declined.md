@@ -536,3 +536,6 @@ Unreachable: `AdminController`'s report reads (after #838) and `DiskUsageReads` 
 - `DockerDiskUse.took` default branch "drops inFlight and failure": refuted as a regression; main's code is the same, moved unchanged.
 - `took` cast simplification and using `loseView()` in `_ViewWatch.remove`: declined as nits.
 - CI: the one failure (integration `edit_pipeline_test` SAF-14 timeout) passed on rerun; the PR changes only the app.
+
+## #839 GLM round 1 (e0b2d92): 2 applied in 9efff68
+- `LatestRead.run` set `reading` without asking whether the owner was still mounted, and certificates reset its read state outside `setState`; the hand-written copies guarded both. Neither is reachable from today's callers (every `run` caller is a mounted State, and the one path that empties the endpoint list rebuilds right after), but restoring the old guards is free. Regression test "a run on an unmounted owner notifies nothing" failed (1 notification) before and passes after; the certificates guard has no reachable failing case.
