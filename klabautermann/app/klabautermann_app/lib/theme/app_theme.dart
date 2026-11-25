@@ -123,12 +123,17 @@ final GhostThemePresets klabautermannThemePresets = GhostThemePresets(
   klabautermannThemeStyle,
 );
 
-/// The app's monospace face: its stack, `ghost_fonts`' bundled family
-/// first, which every platform draws; the generic family alone resolves on
-/// Linux and Android only.
-final TextStyle klabautermannMonoStyle = TextStyle(
-  fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-  fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-      .skip(1)
-      .toList(growable: false),
-);
+/// The app's monospace face over [base], when one is given: the
+/// `ghost_fonts` bundled family first, which every platform draws, then
+/// the rest of the stack as its fallback; the generic family alone
+/// resolves on Linux and Android only.
+TextStyle monoTextStyle([TextStyle? base]) =>
+    (base ?? const TextStyle()).copyWith(
+      fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
+      fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
+          .skip(1)
+          .toList(growable: false),
+    );
+
+/// The app's monospace face, with no base style to merge onto.
+final TextStyle klabautermannMonoStyle = monoTextStyle();

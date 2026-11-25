@@ -11,8 +11,7 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../controllers/log_reads.dart';
-import '../../theme/app_theme.dart'
-    show klabautermannMonoStyle, klabautermannThemeStyle;
+import '../../theme/app_theme.dart' show klabautermannMonoStyle, monoTextStyle;
 import '../actions/action_entry.dart';
 import '../logs/log_export.dart' show showExportSheet;
 import '../actions/docker_actions.dart'
@@ -607,14 +606,9 @@ enum _Field { env, label, entrypoint, cmd, health }
 /// when it has none).
 typedef _Shown = (_Field, Object);
 
-/// The app's monospace stack, `ghost_fonts`' bundled family first, for a
-/// command line, a check's output and the raw JSON.
-final TextStyle _monoStyle = TextStyle(
-  fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-  fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-      .skip(1)
-      .toList(growable: false),
-);
+/// The app's monospace stack for a command line, a check's output and
+/// the raw JSON.
+final TextStyle _monoStyle = monoTextStyle();
 
 /// [state] in words, a stopped container's with its exit code.
 String _stateText(AppLocalizations l10n, ContainerDetailsState? state) {

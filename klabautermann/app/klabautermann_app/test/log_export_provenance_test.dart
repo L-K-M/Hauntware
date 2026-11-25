@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:klabautermann_app/ui/logs/log_export.dart';
+import 'package:klabautermann_app/services/log_export_host.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 void main() {

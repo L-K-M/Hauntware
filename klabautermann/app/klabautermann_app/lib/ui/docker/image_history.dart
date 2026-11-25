@@ -9,6 +9,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import 'docker_notice.dart';
+import '../latest_read.dart';
 import '../time_display.dart';
 import '../timed_reveal.dart';
 import 'images_view.dart';
@@ -75,11 +76,11 @@ class ImageHistorySheet extends StatefulWidget {
 }
 
 class _ImageHistorySheetState extends State<ImageHistorySheet> {
-  /// The engine's answer; null while it is read.
-  DockerPayload? _answer;
-
-  /// Counts reads, so only the latest answer shows.
-  int _reads = 0;
+  /// The newest history read's answer; null while one is out.
+  late final LatestRead<DockerPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   /// Whether the masked values show, and for how long.
   late final TimedReveals<RevealScope> _reveal;
@@ -98,17 +99,12 @@ class _ImageHistorySheetState extends State<ImageHistorySheet> {
   }
 
   Future<void> _read() async {
-    final read = ++_reads;
-    setState(() => _answer = null);
+    _latest.reset();
 
     // By id, which names this image whatever its tags became since.
-    final answer = await widget.docker.readImageHistory(
-      widget.serverId,
-      widget.image.id,
+    await _latest.run(
+      () => widget.docker.readImageHistory(widget.serverId, widget.image.id),
     );
-    if (!mounted || read != _reads) return;
-
-    setState(() => _answer = answer);
   }
 
   @override
@@ -138,7 +134,7 @@ class _ImageHistorySheetState extends State<ImageHistorySheet> {
 
   List<Widget> _body(BuildContext context, AppLocalizations l10n) {
     final retry = TextButton(onPressed: _read, child: Text(l10n.dockerRetry));
-    switch (_answer) {
+    switch (_latest.value) {
       case null:
         return [
           DockerNotice(
@@ -239,6 +235,7 @@ class ImageLayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final bodyMedium = theme.textTheme.bodyMedium;
     final createdBy = layer.createdBy;
     final instruction = revealed
         ? createdBy.reveal() ?? createdBy.display
@@ -274,12 +271,7 @@ class ImageLayerRow extends StatelessWidget {
           else
             SelectableText(
               instruction,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-                fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-                    .skip(1)
-                    .toList(growable: false),
-              ),
+              style: bodyMedium == null ? null : monoTextStyle(bodyMedium),
             ),
           Wrap(
             spacing: 16,

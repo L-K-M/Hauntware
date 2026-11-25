@@ -940,20 +940,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   'lib/ui/logs/log_export.dart': {
     // LOG-10's export: the lines joined as a text file, ending in a
-    // newline, and the file's media type for the save dialog and the
-    // share sheet.
+    // newline.
     r"'\n'",
     r"'$text\n'",
+  },
+  'lib/services/log_export_host.dart': {
+    // LOG-10's plugin host: the file's media type for the save dialog and
+    // the share sheet, a failed owner-only chmod diagnostic, the staged
+    // copy's temporary directory prefix, its path under that directory,
+    // the quarantine agent field's product name, and the URI scheme of a
+    // save that has a local path to mark.
     "'text/plain'",
-    // A failed owner-only chmod diagnostic; the export itself saved.
     r"'Could not restrict a saved export to the owner: $error'",
-    // The share sheet's staged copy: its temporary directory prefix, its
-    // path under that directory, and the quarantine agent field's product
-    // name.
     "'klabautermann-export-'",
     r"'${directory.path}${Platform.pathSeparator}$fileName'",
     "'Klabautermann'",
-    // The URI scheme of a save that has a local path to mark.
     "'file'",
   },
   'lib/ui/logs/log_text.dart': {

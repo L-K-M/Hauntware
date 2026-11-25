@@ -6,7 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
-import '../../theme/app_theme.dart' show klabautermannThemeStyle;
+import '../../theme/app_theme.dart' show monoTextStyle;
 import '../actions/action_entry.dart';
 import '../actions/action_preview.dart';
 
@@ -213,10 +213,10 @@ class _ImagePullSheetState extends State<ImagePullSheet> {
   }
 }
 
-TextStyle? _mono(ThemeData theme) => theme.textTheme.bodySmall?.copyWith(
-  fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-  fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies,
-);
+TextStyle? _mono(ThemeData theme) {
+  final base = theme.textTheme.bodySmall;
+  return base == null ? null : monoTextStyle(base);
+}
 
 /// One layer of a pull: its id, the daemon's status, and a bar with the
 /// bytes done of the total while the daemon reports them.

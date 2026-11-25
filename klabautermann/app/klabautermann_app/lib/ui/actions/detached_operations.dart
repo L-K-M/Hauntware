@@ -8,6 +8,7 @@ import '../logs/log_view.dart';
 import '../logs/log_notices.dart' show LogStatusNotice;
 import '../logs/logs_panel_controller.dart';
 import 'action_entry.dart' show OperationsScope;
+import 'output_sheet.dart';
 
 /// The server header's chip for [serverId]'s detached operations (03
 /// §7.17, SAF-23): how many run, or how many results wait to be seen.
@@ -262,36 +263,29 @@ Future<void> showOperationOutput(
   required String serverId,
   required String title,
   required String operationId,
-}) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
-  builder: (context) => DraggableScrollableSheet(
-    expand: false,
-    initialChildSize: 0.6,
-    minChildSize: 0.3,
-    maxChildSize: 1,
-    builder: (context, _) => _OperationOutput(
+}) {
+  final l10n = AppLocalizations.of(context);
+  return showOutputSheet(
+    context,
+    title: l10n.detachedOutputTitle(title),
+    closeTooltip: l10n.detachedOutputClose,
+    builder: (context, scroll) => _OperationOutput(
       monitoring: monitoring,
       serverId: serverId,
-      title: title,
       operationId: operationId,
     ),
-  ),
-);
+  );
+}
 
 class _OperationOutput extends StatefulWidget {
   const _OperationOutput({
     required this.monitoring,
     required this.serverId,
-    required this.title,
     required this.operationId,
   });
 
   final MonitoringController monitoring;
   final String serverId;
-  final String title;
   final String operationId;
 
   @override
@@ -315,48 +309,16 @@ class _OperationOutputState extends State<_OperationOutput> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 8,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Semantics(
-                  header: true,
-                  child: Text(
-                    l10n.detachedOutputTitle(widget.title),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: l10n.detachedOutputClose,
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: _reading,
-              builder: (context, _) => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Why the read is empty or refused: an operation's
-                  // output may be gone, or the host may deny it.
-                  LogStatusNotice(panel: _reading),
-                  Expanded(child: LogView(controller: _reading.logs)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _reading,
+    builder: (context, _) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Why the read is empty or refused: an operation's output may be
+        // gone, or the host may deny it.
+        LogStatusNotice(panel: _reading),
+        Expanded(child: LogView(controller: _reading.logs)),
+      ],
+    ),
+  );
 }

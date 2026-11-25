@@ -289,10 +289,7 @@ class _Note extends StatelessWidget {
 String _titleOf(AppLocalizations l10n, Snippet snippet) =>
     snippet.title.trim().isEmpty ? l10n.snippetsUntitled : snippet.title;
 
-TextStyle? _mono(BuildContext context) =>
-    Theme.of(context).textTheme.bodySmall?.copyWith(
-      fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-      fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-          .skip(1)
-          .toList(growable: false),
-    );
+TextStyle? _mono(BuildContext context) {
+  final base = Theme.of(context).textTheme.bodySmall;
+  return base == null ? null : monoTextStyle(base);
+}
