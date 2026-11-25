@@ -8,6 +8,8 @@ import 'package:klabautermann_app/ui/docker/volumes_panel.dart';
 import 'package:klabautermann_app/ui/docker/volumes_view.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'support/charts.dart'
+    show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
 import 'support/docker.dart';
 import 'support/fake_engine.dart';
 
@@ -68,7 +70,13 @@ final class _Panel {
   }
 }
 
-Future<_Panel> _pump(WidgetTester tester, {Size size = _wide}) async {
+/// [golden] draws in that brightness with the goldens' font and no debug
+/// banner; without it the panel uses the light theme as before.
+Future<_Panel> _pump(
+  WidgetTester tester, {
+  Size size = _wide,
+  Brightness? golden,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -84,7 +92,11 @@ Future<_Panel> _pump(WidgetTester tester, {Size size = _wide}) async {
 
   await tester.pumpWidget(
     MaterialApp(
-      theme: GhostTheme.light(klabautermannThemeStyle),
+      debugShowCheckedModeBanner: golden == null,
+      theme: switch (golden) {
+        null => GhostTheme.light(klabautermannThemeStyle),
+        final brightness => _goldenTheme(brightness),
+      },
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -109,9 +121,8 @@ const _prefix = 'volumes.row.';
 List<String> _order(WidgetTester tester) {
   final rows = [
     for (final element in find.byType(Semantics).evaluate())
-      if (element.widget.key case ValueKey<String>(
-        :final value,
-      ) when value.startsWith(_prefix))
+      if (element.widget.key case ValueKey<String>(:final value)
+          when value.startsWith(_prefix))
         (
           name: value.substring(_prefix.length),
           top: tester.getTopLeft(find.byWidget(element.widget)).dy,
@@ -124,7 +135,20 @@ String _label(WidgetTester tester, String name) =>
     tester.getSemantics(find.byKey(ValueKey('$_prefix$name'))).label;
 
 /// 03 §10.4's Volumes sub-tab (VOL-01) over the volume watch.
+ThemeData _goldenTheme(Brightness brightness) {
+  final base = brightness == Brightness.light
+      ? GhostTheme.light(klabautermannThemeStyle)
+      : GhostTheme.dark(klabautermannThemeStyle);
+  return base.copyWith(
+    textTheme: base.textTheme.apply(fontFamily: goldenFontFamily),
+  );
+}
+
 void main() {
+  setUpAll(() async {
+    if (goldensCompareHere) await loadGoldenFonts();
+  });
+
   test('counts each container mounting a volume once, and named volumes '
       'only', () {
     final counts = containersByVolume([
@@ -267,5 +291,24 @@ void main() {
     expect(find.byType(DropdownButton<VolumeColumn>), findsOneWidget);
     expect(_order(tester), ['cache', 'orphan', 'pgdata']);
     expect(_label(tester, 'orphan'), contains('Driver: nfs'));
+  });
+
+  group('golden', () {
+    // The list on desktop and as a phone's two-line rows, in both
+    // brightnesses (03 §11.1).
+    for (final (layout, size) in [('desktop', _wide), ('phone', _phone)]) {
+      for (final brightness in Brightness.values) {
+        testWidgets('$layout, ${brightness.name}', (tester) async {
+          final panel = await _pump(tester, size: size, golden: brightness);
+          await panel.list(tester, containers: _containers);
+          await expectLater(
+            find.byType(VolumesPanel),
+            matchesGoldenFile(
+              'goldens/volumes_panel_${layout}_${brightness.name}.png',
+            ),
+          );
+        }, skip: !goldensCompareHere);
+      }
+    }
   });
 }
