@@ -539,3 +539,9 @@ Unreachable: `AdminController`'s report reads (after #838) and `DiskUsageReads` 
 
 ## #839 GLM round 1 (e0b2d92): 2 applied in 9efff68
 - `LatestRead.run` set `reading` without asking whether the owner was still mounted, and certificates reset its read state outside `setState`; the hand-written copies guarded both. Neither is reachable from today's callers (every `run` caller is a mounted State, and the one path that empties the endpoint list rebuilds right after), but restoring the old guards is free. Regression test "a run on an unmounted owner notifies nothing" failed (1 notification) before and passes after; the certificates guard has no reachable failing case.
+
+## CTL-08 "service locator" paragraph: declined
+The finding marks moving the ten sub-controllers' construction from `MonitoringController` to `main` as optional and size L. Items 1 to 5 (readings, freshness clock, pending refresh, host reads, background pause) are done; the locator change touches every UI file that reaches `monitoring.<x>` for a coupling cost the review does not tie to a defect.
+
+## SMP-14 device settings table (#844): small size win, kept
+The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200 lines (non-uniform settings and format docs dominate), but 21 setter pairs now share one decoder per value kind, and 34 new format-contract tests written before the change pin every key and fallback.
