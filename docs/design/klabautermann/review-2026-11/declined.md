@@ -718,3 +718,37 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
 - Test nits (`detachErrors`, unused `fleetIds` parameter, `List<dynamic>`,
   wildcard `_` needing Dart 3.7 while the SDK floor is 3.12): minor; not
   worth a CI cycle on a pure move.
+
+### PR #853 GLM review (UIB-7 Docker, logs and chart splits): 0 real, no push
+
+Checked the whole PR as a word multiset (removed against added, with
+leading underscores stripped): the only differences are the container
+selection and column helpers, which became top-level functions taking
+the panel's state as arguments. Nothing from the tail-scroll code is
+missing.
+
+- Scroll machinery deleted, tail-following no longer corrected during
+  layout, idle-offset clamping gone, animations no longer tracking
+  evicted lines, invariants not ported: refuted; `log_view.dart`'s
+  deletions reappear unchanged in `log_tail_scroll.dart` and
+  `log_rows_sliver.dart`. The reviewer saw one side of the move.
+- "`ReorderableListView` has no `onReorderItem`": refuted; the app
+  analyzes clean and the build and tests are green.
+- `statusWord`/`BootWord` public with unchanged behaviour, moved chart
+  symbols resolving: confirmed as they are.
+- Pre-existing behaviour inside moved code, out of scope for a pure
+  split: forced unwrap of persisted column choices, the unlabelled
+  group-row Semantics node, `onReportEmpty` during build, the column
+  dialog height, the status flag tooltip, `BuiltRows` notifying without
+  a change, `_shownContainers` computed twice, picker `FutureBuilder`
+  errors showing as loading, unreadable files selectable, `_liveWord`
+  order, `announce` without a label change, `next()` before matches,
+  `indexAtRow` scanning dead slots, the redundant `correctPixels`, the
+  activity-delegate cast, the layout cache key without font variants.
+  The chart's zone-offset closure is real but pre-existing and minor:
+  with a fixed `zoneOffset` each build makes a new closure, so
+  `shouldRepaint` repaints on every rebuild. Follow-up, not UIB-7.
+- Nits: "counts as at it" wording; dropped `show` clause; compaction test
+  threshold; empty-buffer `indexAtRow`. `test/log_row_counts_test.dart`
+  belongs in `test/logs/`: moved in the `container_details.dart` split
+  PR.
