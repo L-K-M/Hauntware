@@ -549,3 +549,7 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
 ## #842 GLM round 1 (45e99b7): 1 applied, 1 deferred
 - compose_test: removing `composeRestart`'s test dropped the only case where `validateComposeServiceName` refuses a name; a direct expect restores it.
 - `planEventRefresh`'s now-unused `now` parameter: deferred to the DKR-6 watcher follow-up, since `docker_watch.dart` (being edited by #841) passes it.
+
+## #843 GLM round 1 (f421282): 0 in scope, no push
+- `runWrite` "report swallowed post-write errors through fault": declined for this move; the `on Object { // Recovered as above. }` is main's behaviour moved unchanged (a sealed write is answered as written; the next round's refresh shows what it missed). Reporting it would be a behaviour change for its own PR if wanted.
+- A local for `pinsFor`, a separate faults list and an assertion in the sync chain test: declined as nits.
