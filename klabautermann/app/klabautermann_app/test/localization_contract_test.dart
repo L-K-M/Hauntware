@@ -587,8 +587,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'index'",
     "'a column spans time'",
   },
-  'lib/ui/charts/time_series_chart.dart': {
-    "'one label per lane'",
+  'lib/ui/charts/time_series_chart.dart': {"'one label per lane'"},
+  'lib/ui/charts/time_series_painter.dart': {
+    // Painter assert messages; programmer diagnostics, never rendered.
     "'the window spans time'",
     "'the scale needs a positive top'",
   },
