@@ -7,7 +7,7 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/fleet_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
-import '../../theme/app_theme.dart' show klabautermannThemeStyle;
+import '../../theme/app_theme.dart' show monoTextStyle;
 import '../admin_mode_chip.dart';
 
 /// The widest the Access tab's column grows at the default text size; it
@@ -472,7 +472,7 @@ class _AccessRowTile extends StatelessWidget {
         ? copy?.outcome
         : null;
     final onCopy = this.onCopy;
-    final mono = klabautermannThemeStyle.monoFontFamilies;
+    final bodyMedium = theme.textTheme.bodyMedium;
     return [
       // The SAF-08 notice beside docker-group advice (03 §8.4).
       if (item == AccessItem.dockerSocket)
@@ -490,11 +490,9 @@ class _AccessRowTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: SelectableText(
             command,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontFamily: mono.first,
-              fontFamilyFallback: mono.skip(1).toList(growable: false),
-              color: scheme.onSurface,
-            ),
+            style: bodyMedium == null
+                ? null
+                : monoTextStyle(bodyMedium.copyWith(color: scheme.onSurface)),
           ),
         ),
       ),

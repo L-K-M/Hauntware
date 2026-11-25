@@ -81,12 +81,8 @@ class CronRunOutput extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final mono = theme.textTheme.bodySmall?.copyWith(
-      fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-      fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-          .skip(1)
-          .toList(growable: false),
-    );
+    final bodySmall = theme.textTheme.bodySmall;
+    final mono = bodySmall == null ? null : monoTextStyle(bodySmall);
     final (status, output) = switch (state) {
       RunFinished(:final finished) => (
         switch ((finished.outcome, finished.failure, finished.exitCode)) {

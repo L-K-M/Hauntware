@@ -49,12 +49,8 @@ final class TextLayout {
       return previous;
     }
 
-    final families = klabautermannThemeStyle.monoFontFamilies;
-    final base = TextStyle(
-      fontFamily: families.first,
-      fontFamilyFallback: families.skip(1).toList(growable: false),
-      fontSize: fontSize,
-      height: _lineHeightFactor,
+    final base = monoTextStyle(
+      TextStyle(fontSize: fontSize, height: _lineHeightFactor),
     );
     // Every row is a whole number of these lines, whatever glyphs or
     // fallback fonts it holds, so extents can be computed.

@@ -239,6 +239,7 @@ class ImageLayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final bodyMedium = theme.textTheme.bodyMedium;
     final createdBy = layer.createdBy;
     final instruction = revealed
         ? createdBy.reveal() ?? createdBy.display
@@ -274,12 +275,7 @@ class ImageLayerRow extends StatelessWidget {
           else
             SelectableText(
               instruction,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-                fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-                    .skip(1)
-                    .toList(growable: false),
-              ),
+              style: bodyMedium == null ? null : monoTextStyle(bodyMedium),
             ),
           Wrap(
             spacing: 16,

@@ -5,7 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
-import '../../theme/app_theme.dart' show klabautermannThemeStyle;
+import '../../theme/app_theme.dart' show monoTextStyle;
 import '../actions/action_entry.dart';
 import '../actions/action_preview.dart';
 import 'containers_view.dart' show containerNameOf;
@@ -121,10 +121,7 @@ class _ContainerCommandSheetState extends State<ContainerCommandSheet> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final running = _planId != null && _end == null;
-    final mono = TextStyle(
-      fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-      fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies,
-    );
+    final mono = monoTextStyle();
 
     return ListView(
       controller: widget.scrollController,

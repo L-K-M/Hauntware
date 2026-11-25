@@ -182,12 +182,8 @@ class ActionPreviewView extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final mono = textTheme.bodyMedium?.copyWith(
-      fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-      fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-          .skip(1)
-          .toList(growable: false),
-    );
+    final bodyMedium = textTheme.bodyMedium;
+    final mono = bodyMedium == null ? null : monoTextStyle(bodyMedium);
     final runner = preview.runner;
     final notes = [
       if (preview.protected case final reason?)
