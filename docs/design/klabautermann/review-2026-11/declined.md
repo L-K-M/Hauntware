@@ -596,3 +596,24 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
   wire format and behavior, out of scope for a pure move.
 - "Gate the merge on the analyzer": CI's `dart analyze --fatal-infos`
   covers dropped or duplicated declarations; nothing to change.
+
+### PR #847 GLM review (copy ledger check): 0 actionable, no push
+
+- Unknown source product folded with Séance's renames: latent; every
+  ledgered source today is under `seance/` or `poltergeist/`. Deferred:
+  make `fold_source_text` refuse other prefixes when a third product is
+  ledgered.
+- A diff without a final newline runs into the next message: cosmetic
+  CI output only; deferred with the item above.
+- `sys.dont_write_bytecode` set in the test module, unit tests before the
+  check in one step: nits, no change.
+- `build.sh --check` now exits non-zero on ledger drift: intended (ARC-17
+  asks for it there); the header comment already says it runs the check.
+
+### ARC-02 v1.x alert types
+
+- `HandleAlert`, `AlertsArrived`, `AlertStatusChanged`, `AlertDescriptor`,
+  `AlertStatus`, `AlertAction`: declined for removal. They are the
+  planned v1.x alert protocol (03), and `engine_isolate_test`
+  "unimplemented requests get RequestRejected" pins the engine's answer;
+  ENG-11 slice 5 names `HandleAlert` explicitly in the dispatch.
