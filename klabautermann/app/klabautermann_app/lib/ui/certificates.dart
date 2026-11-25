@@ -68,7 +68,7 @@ class _CertificatesSectionState extends State<CertificatesSection> {
     if (endpoints.isEmpty) {
       // No endpoint to check: leave no reading state behind, and an
       // edit that emptied the list drops the answers it supersedes.
-      if (mounted && _latest.reading) _latest.reset();
+      if (mounted && _latest.reading) setState(_latest.reset);
       return;
     }
     await _latest.run(

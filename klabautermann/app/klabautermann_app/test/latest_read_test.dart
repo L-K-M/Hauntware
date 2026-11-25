@@ -54,6 +54,13 @@ void main() {
     expect(latest.reading, isFalse);
   });
 
+  test('a run on an unmounted owner notifies nothing', () async {
+    owner.isMounted = false;
+    await latest.run(() async => 'late');
+    expect(owner.notifications, 0);
+    expect(latest.value, isNull);
+  });
+
   test('an unmounted owner ignores the result', () async {
     final pending = Completer<String>();
     unawaited(latest.run(() => pending.future));

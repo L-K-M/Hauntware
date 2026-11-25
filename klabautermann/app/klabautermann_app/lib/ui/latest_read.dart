@@ -41,7 +41,7 @@ class LatestRead<T> {
   /// error still reaches the caller, as it did before this existed.
   Future<void> run(Future<T> Function() read) async {
     final ticket = ++_ticket;
-    if (!_reading) _setState(() => _reading = true);
+    if (!_reading && _mounted()) _setState(() => _reading = true);
     var applied = false;
     try {
       final value = await read();
