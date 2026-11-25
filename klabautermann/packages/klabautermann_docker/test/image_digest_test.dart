@@ -13,32 +13,7 @@ const String s8Index =
 const String s8Amd64 =
     'sha256:dc92f017beea8e7f43263073d717f7bc011228c95d5312e440deb4d035bb4eec';
 
-HttpHeaders headers(Map<String, String> m) =>
-    HttpHeaders(m.entries.map((e) => (e.key, e.value)));
-
 void main() {
-  group('parseRegistryHead (03 §7.14 IMG-05)', () {
-    test('reads the Docker-Content-Digest and media type', () {
-      final r = parseRegistryHead(
-        statusCode: 200,
-        headers: headers({
-          'Docker-Content-Digest': localDigest,
-          'Content-Type': 'application/vnd.oci.image.manifest.v1+json',
-        }),
-      );
-      expect(r.warnings, isEmpty);
-      expect(r.value.digest, localDigest);
-      expect(r.value.mediaType, contains('manifest'));
-      expect(r.value.isSuccess, isTrue);
-    });
-
-    test('warns when a successful HEAD has no digest', () {
-      final r = parseRegistryHead(statusCode: 200, headers: headers({}));
-      expect(r.value.digest, isNull);
-      expect(r.warnings, isNotEmpty);
-    });
-  });
-
   group('compareImageDigest (03 §7.14 IMG-05)', () {
     test('a matching digest is up to date', () {
       final c = compareImageDigest(

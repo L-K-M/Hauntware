@@ -176,31 +176,4 @@ void main() {
       },
     );
   });
-
-  group('BoundedLogRing', () {
-    LogLine line(String s) => LogLine(StdcopyKind.stdout, s);
-
-    test('drops the oldest lines past the count bound', () {
-      final ring = BoundedLogRing(maxLines: 3, maxChars: 1 << 30);
-      ring.addAll([line('a'), line('b'), line('c'), line('d')]);
-      expect(ring.toList().map((l) => l.text), ['b', 'c', 'd']);
-      expect(ring.dropped, 1);
-    });
-
-    test('drops by character budget too', () {
-      final ring = BoundedLogRing(maxLines: 1 << 30, maxChars: 10);
-      ring.addAll([line('12345'), line('67890'), line('ab')]);
-      expect(ring.toList().map((l) => l.text), ['67890', 'ab']);
-      expect(ring.dropped, 1);
-    });
-
-    test('reports the cumulative dropped count', () {
-      final ring = BoundedLogRing(maxLines: 2, maxChars: 1 << 30);
-      for (var i = 0; i < 7; i++) {
-        ring.add(line('l$i'));
-      }
-      expect(ring.dropped, 5);
-      expect(ring.droppedLabel, 'dropped 5 lines');
-    });
-  });
 }

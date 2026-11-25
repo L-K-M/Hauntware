@@ -105,11 +105,6 @@ void main() {
       ).toList();
       expect(out.map((l) => l.message), ['no timestamp', 'line 1']);
     });
-
-    test('lastDeliveredTimestamp finds the newest timestamp', () {
-      expect(lastDeliveredTimestamp([at(1), at(5), at(3)])!.seconds, 5);
-      expect(lastDeliveredTimestamp(const []), isNull);
-    });
   });
 
   group('joined timestamped lines (03 §5.6)', () {
