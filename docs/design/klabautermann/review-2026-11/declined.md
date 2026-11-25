@@ -505,3 +505,6 @@ The misleading `stack-file-` prefix and `fileReads` map were renamed (`one-shot-
 - l10n.yaml "pin `synthetic-package: false`": refuted, Flutter 3.47 no longer generates a synthetic package; the generated files already land in `lib/l10n/`.
 - Renaming `unsaved` to `editorUnsaved`, rewording ConvertToAscii's "left" clause, `hh` to `HH` in the timestamp descriptions, pluralizing "N selected": declined, each changes the visible text or the getter names the three apps use, which this refactor keeps as they were on main (the `hh` text is main's).
 - `@editorTextToolRepeat` description copied from `editorTextToolRepeatNone`: real, translator note only; deferred to the F docs/cleanup PR rather than restarting CI. Sort Lines notice description naming Keep/Delete Lines Matching: declined, unverified and translator-only.
+
+## ENG-11 file placement (#836): `src/runtime/`, not `src/engine/`
+ENG-11 names `engine_state.dart`, `engine_fleet.dart`, `engine_sync_chain.dart`, `engine_actions.dart` and `engine_reads.dart` without a directory. D52 keeps runtime code out of `src/engine/` (the protocol guard's directory) and rejected callback-owner entries, and these classes hold functions, so every ENG-11 slice puts them in `klabautermann_core/lib/src/runtime/`.
