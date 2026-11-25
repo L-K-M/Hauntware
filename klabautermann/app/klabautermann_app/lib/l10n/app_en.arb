@@ -10586,10 +10586,6 @@
   "@dockerShellOpen": {
     "description": "Tooltip of the button on a container's details that opens a shell in the container (CTX-07)."
   },
-  "dockerShellHide": "Show details",
-  "@dockerShellHide": {
-    "description": "Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07)."
-  },
   "dockShow": "Show the dock",
   "@dockShow": {
     "description": "Tooltip of the desktop workspace's button that opens the bottom dock, with the server's logs when it holds nothing of the server yet (OV-10)."

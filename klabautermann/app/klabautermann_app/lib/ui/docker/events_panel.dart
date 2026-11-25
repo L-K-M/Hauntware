@@ -7,7 +7,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../panel_kit.dart' show HeadedPanelBody;
 import '../time_display.dart';
-import 'containers_panel.dart' show DockerNotice;
+import 'docker_notice.dart';
 import 'containers_view.dart' show searchTerms;
 
 /// The event types the timeline filters by, each named as the engine

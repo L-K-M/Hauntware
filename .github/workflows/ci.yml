@@ -96,6 +96,11 @@ jobs:
       # agent started in a subtree must read the same working rules.
       - name: Check shared agent rules
         run: python3 scripts/check-shared-rules.py
+      # Pin each ledgered native copy against its renamed sibling source.
+      - name: Check copied native ledger
+        run: |
+          python3 scripts/test_check_shared_ledger.py
+          python3 scripts/check-shared-ledger.py
       # License statements agree with LICENSE (the Unlicense): the README
       # scopes it to the suite's own code and names where the bundled
       # code's notices ship, and every macOS About string and Windows

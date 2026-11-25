@@ -10,6 +10,9 @@ abstract interface class _OwedRead {
   /// to it. A time at or before now means its request goes out now.
   Duration? dueAt(_Server server, _Run run, _Sampler sampler);
 
-  /// Sends this job's request on [sampler] and settles it.
+  /// Sends this job's request on [sampler] and settles it. Before it
+  /// returns, [dueAt] must answer null for this job (a busy sampler, a
+  /// probing run): the scheduler asks the jobs again while the request
+  /// is out, and a job still due would be sent twice.
   void send(_Server server, _Run run, _Sampler sampler);
 }

@@ -5,7 +5,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../logs/log_view.dart';
-import '../logs/logs_panel.dart' show LogStatusNotice;
+import '../logs/log_notices.dart' show LogStatusNotice;
 import '../logs/logs_panel_controller.dart';
 import 'action_entry.dart' show OperationsScope;
 

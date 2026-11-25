@@ -439,7 +439,7 @@ class _DoctorViewState extends State<DoctorView> {
     );
     if (_endpoints.isNotEmpty) {
       unawaited(
-        _monitoring.checkTlsEndpoints(_endpoints).then((checks) {
+        _monitoring.hostReads.checkTlsEndpoints(_endpoints).then((checks) {
           if (!mounted || ticket != _ticket) return;
           setState(() {
             _tlsChecks = checks;

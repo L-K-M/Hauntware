@@ -9,6 +9,7 @@ import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart'
     show ContainerDetailsPage;
 import 'package:klabautermann_app/ui/docker/stacks_panel.dart';
+import 'package:klabautermann_app/ui/docker/stack_overview.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'

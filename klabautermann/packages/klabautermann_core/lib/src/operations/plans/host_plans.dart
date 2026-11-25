@@ -25,6 +25,7 @@ import '../../engine/protocol.dart';
 import '../confirmation.dart';
 import '../impact.dart';
 import '../operation_plan.dart';
+import '../plan_support.dart';
 import '../plan_types.dart';
 import '../protected_targets.dart';
 import '../../sampling/argument_masking.dart'
@@ -89,12 +90,12 @@ Future<PlanAttempt> planHostAction(
       RunSnippet() => _planSnippet(intent, context),
       RefreshPackageLists() => await _planPackageRefresh(intent, context),
       PowerAction() => await _planPower(intent, context),
-      _ => _refused(ActionRefusalReason.notImplemented),
+      _ => refused(ActionRefusalReason.notImplemented),
     };
   } on HostCommandError {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   } on RemoteCommandException {
-    return _refused(ActionRefusalReason.noLink);
+    return refused(ActionRefusalReason.noLink);
   }
 }
 
@@ -103,12 +104,12 @@ Future<PlanAttempt> planHostAction(
 Future<PlanAttempt> _planKill(KillProcess intent, HostPlanContext c) async {
   final ticks = await _read(c.link, HostCommands.startTicks(intent.pid));
   if (ticks == null || ticks != '${intent.startTicks}') {
-    return _refused(ActionRefusalReason.targetChanged);
+    return refused(ActionRefusalReason.targetChanged);
   }
   final facts = await _read(c.link, HostCommands.processFacts(intent.pid));
   final space = facts?.indexOf(' ') ?? -1;
   final uid = space < 0 ? null : int.tryParse(facts!.substring(0, space));
-  if (uid == null) return _refused(ActionRefusalReason.targetChanged);
+  if (uid == null) return refused(ActionRefusalReason.targetChanged);
   final comm = facts!.substring(space + 1);
 
   final elevated = uid != c.profile.uid;
@@ -117,7 +118,7 @@ Future<PlanAttempt> _planKill(KillProcess intent, HostPlanContext c) async {
     comm: comm,
     context: c.protection,
   );
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.kill,
@@ -134,7 +135,7 @@ Future<PlanAttempt> _planKill(KillProcess intent, HostPlanContext c) async {
         ),
       ],
       requiredLevel: elevated ? RequiredLevel.admin : RequiredLevel.login,
-      runner: _runner(c, elevated: elevated),
+      runner: runnerFacts(user: c.profile.user, elevated: elevated),
       hostWrites: const [HostWriteRow.loginRecords],
       impact: protected == ProtectedReason.sessionPath
           ? const PlanImpact(ImpactKind.dropsSession)
@@ -152,7 +153,7 @@ Future<PlanAttempt> _planKill(KillProcess intent, HostPlanContext c) async {
 /// apply in both managers.
 Future<PlanAttempt> _planUnit(UnitAction intent, HostPlanContext c) async {
   final kind = _unitVerbs[intent.verb];
-  if (kind == null) return _refused(ActionRefusalReason.invalidTarget);
+  if (kind == null) return refused(ActionRefusalReason.invalidTarget);
   final manager = _manager(intent.scope, c);
   final elevated = c.adminMode && !manager.isUser;
   final argv = HostCommands.systemctl(
@@ -161,14 +162,14 @@ Future<PlanAttempt> _planUnit(UnitAction intent, HostPlanContext c) async {
     manager: manager,
   );
   final protected = unitProtection(intent.unit, c.protection);
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: kind,
       targetName: intent.unit,
       steps: [ShellStep(argv, elevated: elevated, timeout: StepTimeout.unit)],
       requiredLevel: elevated ? RequiredLevel.admin : RequiredLevel.login,
-      runner: _runner(c, elevated: elevated),
+      runner: runnerFacts(user: c.profile.user, elevated: elevated),
       hostWrites: const [HostWriteRow.loginRecords],
       impact: _impactVerbs.contains(intent.verb)
           ? unitImpact(intent.unit, protected: protected)
@@ -198,11 +199,11 @@ Future<PlanAttempt> _planTimer(StartTimer intent, HostPlanContext c) async {
     HostCommands.timerActivates(intent.timer, manager: manager),
   );
   if (unit == null || unit.isEmpty) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   final argv = HostCommands.timerStart(unit, manager: manager);
   final protected = unitProtection(unit, c.protection);
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.runTimerNow,
@@ -210,7 +211,7 @@ Future<PlanAttempt> _planTimer(StartTimer intent, HostPlanContext c) async {
       // `start` waits for a oneshot service's whole run.
       steps: [ShellStep(argv, elevated: elevated, timeout: StepTimeout.long)],
       requiredLevel: elevated ? RequiredLevel.admin : RequiredLevel.login,
-      runner: _runner(c, elevated: elevated),
+      runner: runnerFacts(user: c.profile.user, elevated: elevated),
       hostWrites: const [HostWriteRow.loginRecords],
       protected: protected,
       // The output follow reads the system journal by unit, where a user
@@ -228,11 +229,11 @@ Future<PlanAttempt> _planPackageRefresh(
   RefreshPackageLists intent,
   HostPlanContext c,
 ) async {
-  if (!c.adminMode) return _refused(ActionRefusalReason.adminRequired);
+  if (!c.adminMode) return refused(ActionRefusalReason.adminRequired);
   final name = await _read(c.link, HostCommands.packageManagerName());
   final manager = PackageManager.values.asNameMap()[name];
-  if (manager == null) return _refused(ActionRefusalReason.invalidTarget);
-  return _planned(
+  if (manager == null) return refused(ActionRefusalReason.invalidTarget);
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.refreshPackageLists,
@@ -245,7 +246,7 @@ Future<PlanAttempt> _planPackageRefresh(
         ),
       ],
       requiredLevel: RequiredLevel.admin,
-      runner: _runner(c, elevated: true),
+      runner: runnerFacts(user: c.profile.user, elevated: true),
       hostWrites: const [HostWriteRow.loginRecords, HostWriteRow.packageLists],
     ),
   );
@@ -256,15 +257,15 @@ Future<PlanAttempt> _planPackageRefresh(
 /// name over the link, so the confirmation names the machine the
 /// command will reach, not the label this device gave it.
 Future<PlanAttempt> _planPower(PowerAction intent, HostPlanContext c) async {
-  if (!c.adminMode) return _refused(ActionRefusalReason.adminRequired);
+  if (!c.adminMode) return refused(ActionRefusalReason.adminRequired);
   final hostname = await _read(c.link, HostCommands.hostname());
   if (hostname == null || hostname.isEmpty) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   final reboot = intent.verb == PowerVerb.reboot;
   final systemd =
       c.profile.systemdDir == true || c.profile.pid1Comm == 'systemd';
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: reboot ? OperationKind.reboot : OperationKind.powerOff,
@@ -277,7 +278,7 @@ Future<PlanAttempt> _planPower(PowerAction intent, HostPlanContext c) async {
         ),
       ],
       requiredLevel: RequiredLevel.admin,
-      runner: _runner(c, elevated: true),
+      runner: runnerFacts(user: c.profile.user, elevated: true),
       hostWrites: const [HostWriteRow.loginRecords],
       impact: PlanImpact(
         reboot ? ImpactKind.restartsHost : ImpactKind.stopsHost,
@@ -314,7 +315,7 @@ Future<PlanAttempt> _planCronRun(
   } else if (source.startsWith(ownUserPrefix)) {
     owner = source.substring(ownUserPrefix.length);
     if (userCrontabSource(owner) != source) {
-      return _refused(ActionRefusalReason.invalidTarget);
+      return refused(ActionRefusalReason.invalidTarget);
     }
     // The login user's own crontab, listed by name in admin mode, reads
     // without -u: cronie refuses -u to anyone but root.
@@ -326,14 +327,14 @@ Future<PlanAttempt> _planCronRun(
     read = ['cat', '--', source];
     system = true;
   } else {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
 
   // Another user's crontab is root's to read (JOB-03).
   final readsAsRoot = owner != null && owner != login;
   final String? text;
   if (readsAsRoot) {
-    if (elevated == null) return _refused(ActionRefusalReason.adminRequired);
+    if (elevated == null) return refused(ActionRefusalReason.adminRequired);
     final result = await elevated(read);
     text = result.exitCode == 0 ? result.stdout : null;
   } else {
@@ -343,7 +344,7 @@ Future<PlanAttempt> _planCronRun(
     );
     text = result.exitCode == 0 ? result.stdout : null;
   }
-  if (text == null) return _refused(ActionRefusalReason.targetChanged);
+  if (text == null) return refused(ActionRefusalReason.targetChanged);
 
   final jobs = parseCrontabText(
     text,
@@ -356,7 +357,7 @@ Future<PlanAttempt> _planCronRun(
     for (final job in jobs)
       if (shown[job]!.raw == intent.raw) job,
   ];
-  if (matches.length != 1) return _refused(ActionRefusalReason.targetChanged);
+  if (matches.length != 1) return refused(ActionRefusalReason.targetChanged);
   final job = matches.single;
 
   // A system table names its user; a crontab runs as its owner.
@@ -365,10 +366,10 @@ Future<PlanAttempt> _planCronRun(
   final argv = _cronArgv(job, runAs: asLogin ? null : runAs);
   final shownArgv = _cronArgv(shown[job]!, runAs: asLogin ? null : runAs);
   if (argv == null || shownArgv == null) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
 
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.cronRunNow,
@@ -384,7 +385,7 @@ Future<PlanAttempt> _planCronRun(
       ],
       requiredLevel: asLogin ? RequiredLevel.login : RequiredLevel.admin,
       runner: asLogin
-          ? _runner(c, elevated: false)
+          ? runnerFacts(user: c.profile.user, elevated: false)
           : RunnerFacts(
               identity: runAs,
               credentials: RunnerCredentials.adminPassword,
@@ -407,7 +408,7 @@ PlanAttempt _planSnippet(RunSnippet intent, HostPlanContext c) {
     '',
     intent.command,
   ], budget: ArgumentMaskingBudget())[1].display;
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.snippetRun,
@@ -422,7 +423,7 @@ PlanAttempt _planSnippet(RunSnippet intent, HostPlanContext c) {
         ),
       ],
       requiredLevel: RequiredLevel.login,
-      runner: _runner(c, elevated: false),
+      runner: runnerFacts(user: c.profile.user, elevated: false),
       hostWrites: const [HostWriteRow.loginRecords],
     ),
   );
@@ -441,13 +442,6 @@ List<String>? _cronArgv(CronJob job, {required String? runAs}) {
   return HostCommands.runCronCommand(script, asUser: runAs);
 }
 
-RunnerFacts _runner(HostPlanContext c, {required bool elevated}) => RunnerFacts(
-  identity: elevated ? 'root' : (c.profile.user ?? 'login user'),
-  credentials: elevated
-      ? RunnerCredentials.adminPassword
-      : RunnerCredentials.session,
-);
-
 /// [argv]'s trimmed stdout, or null when it exits non-zero.
 Future<String?> _read(SshLink link, List<String> argv) async {
   final result = await link.run(
@@ -456,9 +450,3 @@ Future<String?> _read(SshLink link, List<String> argv) async {
   );
   return result.exitCode == 0 ? result.stdout.trim() : null;
 }
-
-PlanAttempt _planned(OperationPlan plan) =>
-    (plan: plan, refusal: null, detail: null);
-
-PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason, detail: null);

@@ -9,7 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../panel_kit.dart';
 import '../sortable_table.dart';
-import 'containers_panel.dart' show DockerNotice;
+import 'docker_notice.dart';
 import 'containers_view.dart' show searchTerms;
 import 'docker_list_state.dart';
 

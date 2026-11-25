@@ -20,17 +20,12 @@ void main() {
   });
 
   group('planEventRefresh (03 §7.12 DKE-02)', () {
-    final now = DateTime.utc(2026, 5, 1, 12);
-
     test('targets the lists one event invalidates', () {
       expect(
-        planEventRefresh(
-          event: event('container', action: 'start'),
-          now: now,
-        ).lists,
+        planEventRefresh(event: event('container', action: 'start')).lists,
         {DockerList.containers, DockerList.stacks},
       );
-      expect(planEventRefresh(event: event('volume'), now: now).lists, {
+      expect(planEventRefresh(event: event('volume')).lists, {
         DockerList.volumes,
       });
     });

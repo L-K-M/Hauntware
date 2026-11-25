@@ -19,7 +19,7 @@ final class _OpsRead implements _OwedRead {
 
   @override
   void send(_Server server, _Run run, _Sampler sampler) {
-    final sampler = run.slow;
+    assert(identical(sampler, run.slow), 'ops reads on the slow sampler');
     sampler.busy = true;
     void recover() {
       sampler.busy = false;

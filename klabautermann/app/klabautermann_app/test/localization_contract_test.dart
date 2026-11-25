@@ -457,6 +457,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'log-${_count++}'",
     r"'$OpenLogStream'",
   },
+  'lib/controllers/host_reads.dart': {
+    // The read ids HostReads mints for its EngineReads, matched in their
+    // answers.
+    r"'host-${_nextHostQuery++}'",
+    r"'unit-${_nextUnitQuery++}'",
+    r"'redact-${_nextRedaction++}'",
+    r"'tls-${_nextTlsCheck++}'",
+  },
   'lib/controllers/monitoring_controller.dart': {
     // Assert messages; programmer diagnostics, never rendered.
     r"'$stream carries no metrics'",
@@ -464,12 +472,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
-    // The read ids this controller mints for its EngineReads, matched in
-    // their answers.
-    r"'host-${_nextHostQuery++}'",
-    r"'unit-${_nextUnitQuery++}'",
-    r"'redact-${_nextRedaction++}'",
-    r"'tls-${_nextTlsCheck++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {
@@ -587,8 +589,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'index'",
     "'a column spans time'",
   },
-  'lib/ui/charts/time_series_chart.dart': {
-    "'one label per lane'",
+  'lib/ui/charts/time_series_chart.dart': {"'one label per lane'"},
+  'lib/ui/charts/time_series_painter.dart': {
+    // Painter assert messages; programmer diagnostics, never rendered.
     "'the window spans time'",
     "'the scale needs a positive top'",
   },
@@ -714,15 +717,23 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'none'",
     "''",
   },
-  'lib/ui/docker/containers_panel.dart': {
+  'lib/ui/docker/container_columns.dart': {
+    // Empty cells: a heading's text and a figure's absent value.
+    "''",
+  },
+  'lib/ui/docker/container_selection.dart': {
+    // A heading's empty cell text and the selection column's table id
+    // (CTR-07), a key.
+    "''",
+    "'select'",
+  },
+  'lib/ui/docker/containers_list.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
-    // text; a heading's row key; empty cells and no ports.
-    r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
+    // text; a heading's row key.
+    r"'${DockerWatchList.containers.name}.row.${containerRowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
-    // The selection column's table id (CTR-07), a key.
-    "'select'",
     "''",
   },
   'lib/ui/docker/containers_view.dart': {
@@ -864,12 +875,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "', '",
   },
   'lib/ui/interfaces.dart': {"'lo'"},
-  'lib/ui/logs/logs_panel.dart': {
-    // The empty server pattern, which reads the whole journal again.
-    "''",
+  'lib/ui/logs/log_pickers.dart': {
     // The folder LOG-08 browses, a path on the server handed to the
     // siblings (X-10), never shown.
     "'/var/log'",
+  },
+  'lib/ui/logs/logs_panel.dart': {
+    // The empty server pattern, which reads the whole journal again.
+    "''",
   },
   'lib/ui/logs/log_query.dart': {
     // PCRE2's inline flags that pin journalctl's case rule (LOG-06):
@@ -972,6 +985,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\u2026'",
     r"'[\n\v\f\r\x85\u2028\u2029]'",
   },
+  'lib/ui/logs/log_text_layout.dart': {
+    // Glyph probes that measure the line height (the space above), the
+    // advance and the ellipsis, never shown.
+    "' '",
+    "'W'",
+    r"'\u2026'",
+  },
   'lib/ui/logs/log_view.dart': {
     // A FocusNode debug label.
     "'LogView'",
@@ -981,10 +1001,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "' '",
     r"'[\u2028\u2029]'",
-    // Glyph probes that measure the line height (the space above), the
-    // advance and the ellipsis, never shown.
-    "'W'",
-    r"'\u2026'",
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {

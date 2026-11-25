@@ -57,7 +57,7 @@ mixin HostReadSectionState<W extends HostReadSection> on State<W> {
   @protected
   Future<void> readHost() async {
     await _latest.run(
-      () => widget.monitoring
+      () => widget.monitoring.hostReads
           .queryHost(widget.serverId, hostQuery)
           .then((result) => result.payload),
     );

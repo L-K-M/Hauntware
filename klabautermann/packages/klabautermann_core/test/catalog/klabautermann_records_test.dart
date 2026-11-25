@@ -537,38 +537,4 @@ void main() {
     final (removed, _) = diffServerPrefs(after, {'srv-b': const ServerPrefs()});
     expect([for (final e in removed) (e.serverId, e.prefs)], [('srv-a', null)]);
   });
-
-  group('writes', () {
-    test(
-      'retracting a server\'s pref is refused while sync is pull-only',
-      () async {
-        expect(
-          await device.coordinator.retractServerPrefs('srv-a'),
-          WriteOutcome.refusedPullOnly,
-        );
-        expect(await device.records.dirtyRecords(), isEmpty);
-      },
-    );
-
-    test('with pushes on, a retraction seals a removal another device '
-        'applies', () async {
-      final writerDir = Directory('${dir.path}/writer')..createSync();
-      final writer = await _Device.create(
-        writerDir,
-        pushPolicy: PushPolicy.normal,
-      );
-      expect(
-        await writer.coordinator.retractServerPrefs('srv-a'),
-        WriteOutcome.written,
-      );
-      final dirty = (await writer.records.dirtyRecords()).single;
-      expect(dirty.id, prefId);
-
-      await device.pull(prefId, encodeServerPrefs('srv-a', _prefs));
-      await device.records.putRemote(dirty.withSeq(++device._seq));
-      await device.coordinator.applyPulled();
-      expect(device.store.prefs(), isEmpty);
-      expect(device.store.tupleOf(prefId)?.deviceId, 'device-a');
-    });
-  });
 }

@@ -8,7 +8,7 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
-import 'containers_panel.dart' show DockerNotice;
+import 'docker_notice.dart';
 import '../time_display.dart';
 import '../timed_reveal.dart';
 import 'images_view.dart';

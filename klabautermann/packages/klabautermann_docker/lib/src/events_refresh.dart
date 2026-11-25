@@ -43,7 +43,5 @@ Set<DockerList> listsForEvent(DockerEvent event) => switch (event.type) {
 /// The event-refresh decision (03 §7.12 DKE-02): the targeted lists one
 /// event invalidates. A reconnect gap is not decided here; the watcher
 /// owns that (`_lostAt`) and re-lists past its threshold itself.
-EventRefreshPlan planEventRefresh({
-  required DockerEvent event,
-  required DateTime now,
-}) => EventRefreshPlan(lists: listsForEvent(event));
+EventRefreshPlan planEventRefresh({required DockerEvent event}) =>
+    EventRefreshPlan(lists: listsForEvent(event));

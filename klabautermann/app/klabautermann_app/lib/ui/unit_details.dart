@@ -80,7 +80,7 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
 
   Future<void> _read() async {
     await _latest.run(
-      () => widget.monitoring
+      () => widget.monitoring.hostReads
           .queryUnit(
             widget.serverId,
             UnitResourcesQuery(widget.unit, scope: widget.scope),
@@ -285,7 +285,7 @@ class _UnitFileViewState extends State<UnitFileView> {
   }
 
   Future<void> _read() async {
-    final result = await widget.monitoring.queryUnit(
+    final result = await widget.monitoring.hostReads.queryUnit(
       widget.serverId,
       UnitFileQuery(widget.unit, scope: widget.scope),
     );

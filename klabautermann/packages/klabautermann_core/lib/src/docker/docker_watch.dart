@@ -487,7 +487,7 @@ final class DockerWatcher {
       if (_lists.contains(DockerWatchList.events)) _timelineDue = true;
     }
 
-    final plan = planEventRefresh(event: event, now: _now());
+    final plan = planEventRefresh(event: event);
     for (final list in plan.lists) {
       switch (list) {
         case DockerList.containers when _wantsContainers:

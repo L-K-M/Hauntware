@@ -6,7 +6,6 @@
 // hashes to what planning read.
 import 'dart:convert';
 
-import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         BackupEntry,
@@ -24,6 +23,7 @@ import '../../engine/protocol.dart';
 import '../confirmation.dart';
 import '../edit_reader.dart' show EditContext, kIndexReadMaxBytes;
 import '../operation_plan.dart';
+import '../plan_support.dart';
 import '../plan_types.dart';
 
 /// Plans [intent], a [KeepLastBackups] or [RemoveBackups], or says why
@@ -40,7 +40,7 @@ Future<PlanAttempt> planBackupRemoval(
   };
   final root = scope == FootprintScope.root;
   final admin = c.admin;
-  if (root && admin == null) return _refused(ActionRefusalReason.adminRequired);
+  if (root && admin == null) return refused(ActionRefusalReason.adminRequired);
 
   Future<RemoteCommandResult> run(List<String> argv) => root
       ? admin!.executor.run(argv, password: admin.password)
@@ -52,13 +52,13 @@ Future<PlanAttempt> planBackupRemoval(
 
   try {
     final dir = root ? kRootBackupsDir : await _userBackupsDir(run);
-    if (dir == null) return _refused(ActionRefusalReason.noLink);
+    if (dir == null) return refused(ActionRefusalReason.noLink);
     final read = await run(EditCommands.backupIndexRead(dir));
-    if (read.exitCode != 0) return _refused(ActionRefusalReason.noLink);
+    if (read.exitCode != 0) return refused(ActionRefusalReason.noLink);
     // An index cut at the output cap is not the index: its hash is not
     // the file's, and the rewrite would lose the lines past the cut.
     if (read.truncated) {
-      return _refused(
+      return refused(
         ActionRefusalReason.invalidTarget,
         detail: 'backup index: too large to read whole',
       );
@@ -66,7 +66,7 @@ Future<PlanAttempt> planBackupRemoval(
     final index = parseBackupIndex(read.stdout);
     // Lines the parser skipped would vanish from the rewrite.
     if (index.warnings.isNotEmpty) {
-      return _refused(ActionRefusalReason.invalidTarget);
+      return refused(ActionRefusalReason.invalidTarget);
     }
 
     final removed = switch (intent) {
@@ -77,13 +77,13 @@ Future<PlanAttempt> planBackupRemoval(
       ],
       _ => const <BackupEntry>[],
     }.toSet();
-    if (removed.isEmpty) return _refused(ActionRefusalReason.invalidTarget);
+    if (removed.isEmpty) return refused(ActionRefusalReason.invalidTarget);
     final kept = [
       for (final entry in index.value)
         if (!removed.contains(entry)) entry,
     ];
 
-    return _planned(
+    return planned(
       OperationPlan(
         intent: intent,
         kind: kind,
@@ -93,10 +93,7 @@ Future<PlanAttempt> planBackupRemoval(
         },
         steps: [
           ShellStep(
-            EditCommands.backupIndexWrite(
-              dir,
-              sha256.convert(utf8.encode(read.stdout)).toString(),
-            ),
+            EditCommands.backupIndexWrite(dir, sha256OfText(read.stdout)),
             elevated: root,
             input: utf8.encode(encodeBackupIndex(kept)),
             exitMeanings: const {
@@ -111,12 +108,7 @@ Future<PlanAttempt> planBackupRemoval(
           ),
         ],
         requiredLevel: root ? RequiredLevel.admin : RequiredLevel.login,
-        runner: RunnerFacts(
-          identity: root ? 'root' : (c.profile.user ?? 'login user'),
-          credentials: root
-              ? RunnerCredentials.adminPassword
-              : RunnerCredentials.session,
-        ),
+        runner: runnerFacts(elevated: root, user: c.profile.user),
         hostWrites: [
           root ? HostWriteRow.rootBackups : HostWriteRow.userBackups,
           HostWriteRow.loginRecords,
@@ -124,9 +116,9 @@ Future<PlanAttempt> planBackupRemoval(
       ),
     );
   } on HostCommandError {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   } on RemoteCommandException {
-    return _refused(ActionRefusalReason.noLink);
+    return refused(ActionRefusalReason.noLink);
   }
 }
 
@@ -149,9 +141,3 @@ Future<String?> _userBackupsDir(
   final dir = result.stdout.trim();
   return result.exitCode == 0 && dir.startsWith('/') ? dir : null;
 }
-
-PlanAttempt _planned(OperationPlan plan) =>
-    (plan: plan, refusal: null, detail: null);
-
-PlanAttempt _refused(ActionRefusalReason reason, {String? detail}) =>
-    (plan: null, refusal: reason, detail: detail);

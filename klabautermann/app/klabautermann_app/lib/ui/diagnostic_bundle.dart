@@ -73,7 +73,7 @@ class _DiagnosticBundleSheet extends StatefulWidget {
 }
 
 class _DiagnosticBundleSheetState extends State<_DiagnosticBundleSheet> {
-  late final _read = widget.monitoring.queryHost(
+  late final _read = widget.monitoring.hostReads.queryHost(
     widget.serverId,
     const DiagnosticBundleQuery(),
   );

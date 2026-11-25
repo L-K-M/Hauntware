@@ -29,7 +29,8 @@ import 'container_command.dart';
 import 'container_logs.dart';
 import 'container_processes.dart';
 import 'container_terminal.dart';
-import 'containers_panel.dart' show ContainerHealthBadge, DockerNotice;
+import 'container_badges.dart' show ContainerHealthBadge;
+import 'docker_notice.dart';
 import 'container_usage_charts.dart';
 import 'containers_view.dart';
 import 'images_view.dart' show shortImageId;
@@ -101,14 +102,10 @@ void openContainerDetails(
 }
 
 /// The desktop inspector's body while it shows a container: its name, a
-/// button that opens its logs ([openContainerLogs]), one that swaps its
-/// details for a [ContainerShellPane] where actions are allowed (CTX-07),
-/// and a close button. It takes keyboard focus as it opens, so the
-/// details are read next, and Escape inside it closes it, except from a
-/// shell pane, whose terminal hands Escape to the container.
-///
-/// The shell pane goes, closing its shell, when another container shows
-/// or actions on the server stop being allowed.
+/// button that opens its logs ([openContainerLogs]), one that opens a
+/// shell in the workspace dock (OV-10) where actions are allowed
+/// (CTX-07), and a close button. It takes keyboard focus as it opens, so
+/// the details are read next, and Escape inside it closes it.
 class ContainerInspectorBody extends StatefulWidget {
   const ContainerInspectorBody({
     super.key,
@@ -127,7 +124,6 @@ class ContainerInspectorBody extends StatefulWidget {
 
 class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
   final _close = FocusNode();
-  bool _shell = false;
 
   @override
   void initState() {
@@ -135,16 +131,6 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _close.requestFocus();
     });
-  }
-
-  @override
-  void didUpdateWidget(ContainerInspectorBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final old = oldWidget.inspected;
-    if (old.serverId != widget.inspected.serverId ||
-        old.container.id != widget.inspected.container.id) {
-      _shell = false;
-    }
   }
 
   @override
@@ -157,9 +143,6 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
   Widget build(BuildContext context) {
     final container = widget.inspected.container;
     final serverId = widget.inspected.serverId;
-    final shell =
-        _shell &&
-        actionsAllowedAt(context, serverId, ActionEntryPoint.containerShell);
     return _RemovedBuilder(
       monitoring: widget.monitoring,
       serverId: serverId,
@@ -168,7 +151,6 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
         context,
         container: container,
         serverId: serverId,
-        shell: shell && !removed,
         removed: removed,
       ),
     );
@@ -178,7 +160,6 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
     BuildContext context, {
     required ContainerSummary container,
     required String serverId,
-    required bool shell,
     required bool removed,
   }) {
     final l10n = AppLocalizations.of(context);
@@ -223,21 +204,15 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
                     serverId: serverId,
                     point: ActionEntryPoint.containerShell,
                     child: IconButton(
-                      tooltip: shell
-                          ? l10n.dockerShellHide
-                          : l10n.dockerShellOpen,
-                      icon: Icon(shell ? Icons.info_outline : Icons.terminal),
+                      tooltip: l10n.dockerShellOpen,
+                      icon: const Icon(Icons.terminal),
                       onPressed: () {
                         // The desktop dock (OV-10) gives a shell the room
                         // the inspector's column lacks.
-                        if (!shell) {
-                          if (WorkspaceDockScope.maybeOf(context)
-                              case final dock?) {
-                            dock.show(DockedShell(serverId, container));
-                            return;
-                          }
+                        if (WorkspaceDockScope.maybeOf(context)
+                            case final dock?) {
+                          dock.show(DockedShell(serverId, container));
                         }
-                        setState(() => _shell = !shell);
                       },
                     ),
                   ),
@@ -252,19 +227,12 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: shell
-                  ? ContainerShellPane(
-                      key: ValueKey((serverId, container.id)),
-                      monitoring: widget.monitoring,
-                      serverId: serverId,
-                      container: container,
-                    )
-                  : ContainerDetailsView(
-                      monitoring: widget.monitoring,
-                      serverId: serverId,
-                      container: container,
-                      padding: EdgeInsets.zero,
-                    ),
+              child: ContainerDetailsView(
+                monitoring: widget.monitoring,
+                serverId: serverId,
+                container: container,
+                padding: EdgeInsets.zero,
+              ),
             ),
           ],
         ),
