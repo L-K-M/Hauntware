@@ -530,3 +530,9 @@ Unreachable: `AdminController`'s report reads (after #838) and `DiskUsageReads` 
 - server_prefs_controller dispose "no longer sets the stopped flag": refuted as an observable change; `_writes.dispose()` stops the `CatalogWrites`, so a later `write` still fails with `ServerPrefsNotSavedException(null)` through the async method, as before.
 - `CatalogWrites.write` returning `Future.error` instead of throwing in an async body: declined as minor; callers await it and see the same exception (only the stack trace differs).
 - Doc wording on `EngineReads._onStop`, a comment on `cancel()` in AdminController, separate StateError messages in the test fake: declined as nits.
+
+## #833 GLM round 1 (1e46186): 0 actionable, merged
+- docker_controller `retryContainer` "lost the fleet guard": refuted, `_ContainerInspects.retry` checks `_controller._listed(serverId)` as the old method did.
+- `DockerDiskUse.took` default branch "drops inFlight and failure": refuted as a regression; main's code is the same, moved unchanged.
+- `took` cast simplification and using `loseView()` in `_ViewWatch.remove`: declined as nits.
+- CI: the one failure (integration `edit_pipeline_test` SAF-14 timeout) passed on rerun; the PR changes only the app.
