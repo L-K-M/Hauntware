@@ -490,3 +490,10 @@ The stage-1 analysis found Klabautermann's resolver skips hosts it cannot fully 
 ## #832 GLM round 1 (02994b1): 0 actionable, no push
 - ssh_config_settings.dart:8 default port defined twice (seance_core's private `_kSshDefaultPort`, Klabautermann's `kSshDefaultPort`): declined as minor; 22 is ssh's fixed default and seance_core must not import Klabautermann.
 - Narrowed `show` lists: every package and app in the suite analyzes clean with them (checked before the PR).
+
+## #831 GLM round 1 (645b278): 1 real regression fixed in 39a1e6c
+- docker_list_panel.dart: the volumes' ages no longer followed the monitoring clock, because the clock's builder returned a body built once outside it. Fixed by building the body inside the builder; regression test "ages follow the monitoring clock" failed before the fix and passes after. Goldens re-verified on Linux.
+- `NetworkColumn.values.byName` "throws on a stored unknown column": refuted, the pre-refactor networks panel used the same lookup over the same full `values` list.
+- "Search no longer clears on a server change": refuted, `DockerListState.sync` still calls `search.clear()`.
+- docker_resource_view.dart `matchesTerms` "joins null fields as the text null": refuted, both callers pass null-aware elements (`?network.driver`, `?volume.driver`), so no null reaches the join.
+- Low-session notice, `actionsAllowedAt` gating, row keys, the effective filter, disabled chips, failure and use-unknown details: checked against main's panels, unchanged.
