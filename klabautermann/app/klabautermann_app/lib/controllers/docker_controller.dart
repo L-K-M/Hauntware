@@ -407,7 +407,7 @@ final class DockerController {
       );
     }
 
-    final queryId = 'stack-file-${_count++}';
+    final queryId = 'one-shot-${_count++}';
     _send(DockerQuery(serverId: serverId, queryId: queryId, query: spec));
     if (_stopped) {
       return Future.value(
@@ -415,7 +415,7 @@ final class DockerController {
       );
     }
     final read = Completer<DockerPayload>();
-    _server(serverId).fileReads[queryId] = read;
+    _server(serverId).oneShots[queryId] = read;
     return read.future;
   }
 
@@ -766,7 +766,7 @@ final class DockerController {
           server.diskUse.value = server.diskUse.value.took(payload, _now());
           return;
         }
-        if (server.fileReads.remove(queryId) case final read?) {
+        if (server.oneShots.remove(queryId) case final read?) {
           read.complete(payload);
           return;
         }
@@ -849,7 +849,7 @@ final class DockerController {
         };
         _servers.removeWhere((serverId, server) {
           if (ids.contains(serverId)) return false;
-          server.endFileReads(DockerQueryFailure.notInFleet);
+          server.endOneShots(DockerQueryFailure.notInFleet);
           _inspected.keepShown(serverId, server);
           server.dispose();
           return true;
@@ -897,7 +897,7 @@ final class DockerController {
           _now(),
         );
       }
-      server.endFileReads(DockerQueryFailure.cancelled);
+      server.endOneShots(DockerQueryFailure.cancelled);
       _inspected.onEngineDone(server);
     }
   }
@@ -975,7 +975,7 @@ final class DockerController {
       history.dispose();
     }
     server.usage.clear();
-    server.endFileReads(DockerQueryFailure.cancelled);
+    server.endOneShots(DockerQueryFailure.cancelled);
     _inspected.reset(server);
   }
 
@@ -1159,21 +1159,23 @@ final class _DockerServer {
   /// The containers details views show, by full id.
   final Map<String, _InspectedContainer> inspected = {};
 
-  /// The one-shot stack reads in flight (files, profiles), by query id,
-  /// each completed with the engine's answer.
-  final Map<String, Completer<DockerPayload>> fileReads = {};
+  /// The one-shot reads in flight ([DockerController._ask]'s: stack
+  /// files, profiles and scans, image history and updates, container
+  /// processes, the review), by query id, each completed with the
+  /// engine's answer.
+  final Map<String, Completer<DockerPayload>> oneShots = {};
 
-  /// Answers every one-shot stack read in flight with [failure]: the engine
+  /// Answers every one-shot read in flight with [failure]: the engine
   /// will not.
-  void endFileReads(DockerQueryFailure failure) {
-    for (final read in fileReads.values) {
+  void endOneShots(DockerQueryFailure failure) {
+    for (final read in oneShots.values) {
       read.complete(DockerQueryFailed(failure));
     }
-    fileReads.clear();
+    oneShots.clear();
   }
 
   void dispose() {
-    endFileReads(DockerQueryFailure.cancelled);
+    endOneShots(DockerQueryFailure.cancelled);
     for (final history in usage.values) {
       history.dispose();
     }
