@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import '../latest_read.dart';
 import 'container_badges.dart' show containerStateText;
 import 'docker_notice.dart';
 
@@ -24,14 +25,13 @@ class ReviewPanel extends StatefulWidget {
   State<ReviewPanel> createState() => _ReviewPanelState();
 }
 
-enum _Phase { idle, reading, done }
-
 class _ReviewPanelState extends State<ReviewPanel> {
-  _Phase _phase = _Phase.idle;
-  DockerPayload? _answer;
-
-  /// Counts reviews, so only the latest answer shows.
-  int _reads = 0;
+  /// The newest review's answer; null until one lands, and no read out
+  /// once [LatestRead.reading] is false again.
+  late final LatestRead<DockerPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   @override
   void didUpdateWidget(ReviewPanel oldWidget) {
@@ -41,31 +41,21 @@ class _ReviewPanelState extends State<ReviewPanel> {
       return;
     }
 
-    _reads++;
-    _phase = _Phase.idle;
-    _answer = null;
+    _latest.reset();
   }
 
   Future<void> _review() async {
-    final read = ++_reads;
-    setState(() => _phase = _Phase.reading);
-    final answer = await widget.docker.reviewContainers(widget.serverId);
-    if (!mounted || read != _reads) return;
-
-    setState(() {
-      _phase = _Phase.done;
-      _answer = answer;
-    });
+    await _latest.run(() => widget.docker.reviewContainers(widget.serverId));
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final run = FilledButton.tonalIcon(
-      onPressed: _phase == _Phase.reading ? null : () => unawaited(_review()),
+      onPressed: _latest.reading ? null : () => unawaited(_review()),
       icon: const Icon(Icons.policy_outlined),
       label: Text(
-        _answer == null ? l10n.dockerReviewRun : l10n.dockerReviewAgain,
+        _latest.value == null ? l10n.dockerReviewRun : l10n.dockerReviewAgain,
       ),
     );
     return ListView(
@@ -84,8 +74,8 @@ class _ReviewPanelState extends State<ReviewPanel> {
   }
 
   List<Widget> _body(BuildContext context, AppLocalizations l10n) {
-    if (_phase == _Phase.idle) return const [];
-    if (_phase == _Phase.reading) {
+    if (!_latest.reading && _latest.value == null) return const [];
+    if (_latest.reading) {
       return [
         DockerNotice(
           icon: Icons.hourglass_empty,
@@ -94,7 +84,7 @@ class _ReviewPanelState extends State<ReviewPanel> {
       ];
     }
 
-    switch (_answer) {
+    switch (_latest.value) {
       case DockerReviewPayload(
         :final reviews,
         :final omitted,

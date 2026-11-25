@@ -12,6 +12,7 @@ import '../actions/action_entry.dart';
 import '../admin_mode_chip.dart';
 import '../edit/editor_display_scope.dart';
 import '../edit/remote_editor.dart';
+import '../latest_read.dart';
 import '../timed_reveal.dart';
 import 'container_details.dart' show ContainerInspectionScope;
 import 'docker_notice.dart';
@@ -152,11 +153,15 @@ class _StackFileViewState extends State<StackFileView> {
   /// The file picked, by path.
   String? _path;
 
-  /// The engine's answer for [_path]; null while it is read.
-  DockerPayload? _answer;
+  /// The newest file read's answer with the path it answered; a stale
+  /// answer never reaches the editor.
+  late final LatestRead<(String, DockerPayload)> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
-  /// Counts reads, so an answer for a file no longer picked is dropped.
-  int _reads = 0;
+  /// The engine's answer for [_path]; null while it is read.
+  DockerPayload? get _answer => _latest.value?.$2;
 
   /// The editor showing [_answer]'s text, masked or revealed.
   EditorController? _editor;
@@ -183,25 +188,25 @@ class _StackFileViewState extends State<StackFileView> {
 
   /// Reads [path], dropping the file shown before and anything revealed.
   Future<void> _open(String path) async {
-    final read = ++_reads;
     _reveal.discard();
     _showText(null);
-    setState(() {
-      _path = path;
-      _answer = null;
-    });
+    setState(() => _path = path);
+    _latest.reset();
 
-    final answer = await widget.monitoring.docker.readStackFile(
-      widget.serverId,
-      project: widget.project.name,
-      path: path,
-    );
-    if (!mounted || read != _reads) return;
-
-    setState(() {
-      _answer = answer;
-      _showText(_text(revealed: false));
+    DockerPayload? answer;
+    await _latest.run(() async {
+      final read = await widget.monitoring.docker.readStackFile(
+        widget.serverId,
+        project: widget.project.name,
+        path: path,
+      );
+      answer = read;
+      return (path, read);
     });
+    // Only this read's own answer opens an editor: a newer file's read
+    // replaces it, and a retry of this path supersedes an earlier one.
+    if (!mounted || !identical(_latest.value?.$2, answer)) return;
+    setState(() => _showText(_text(revealed: false)));
   }
 
   /// The file's text, its masked spans masked unless [revealed]; null

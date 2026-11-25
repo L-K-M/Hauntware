@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import '../latest_read.dart';
 import '../panel_kit.dart';
 import '../timed_reveal.dart';
 import 'docker_notice.dart';
@@ -49,12 +50,12 @@ class ContainerProcessesSection extends StatefulWidget {
 
 class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
     with AutomaticKeepAliveClientMixin {
-  /// The engine's answer; null while it is read or the container is
-  /// stopped.
-  DockerPayload? _answer;
-
-  /// Counts reads, so only the latest answer shows.
-  int _reads = 0;
+  /// The newest top read's answer; null while one is out or the
+  /// container is stopped.
+  late final LatestRead<DockerPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   /// Whether the masked values show, and for how long.
   late final TimedReveals<RevealScope> _reveal;
@@ -83,8 +84,7 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
     // Another container, or this one started or stopped: what showed no
     // longer holds, and nothing revealed carries over.
     _reveal.discard();
-    _reads++;
-    _answer = null;
+    _latest.reset();
     if (widget.up) unawaited(_read());
   }
 
@@ -95,18 +95,12 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
   }
 
   Future<void> _read() async {
-    final read = ++_reads;
-    // A fresh read starts masked: nothing revealed carries over to it.
+    // A fresh read starts masked and replaces what showed.
     _reveal.discard();
-    if (_answer != null) setState(() => _answer = null);
-
-    final answer = await widget.docker.readContainerTop(
-      widget.serverId,
-      widget.containerId,
+    _latest.reset();
+    await _latest.run(
+      () => widget.docker.readContainerTop(widget.serverId, widget.containerId),
     );
-    if (!mounted || read != _reads) return;
-
-    setState(() => _answer = answer);
   }
 
   @override
@@ -133,7 +127,7 @@ class _ContainerProcessesSectionState extends State<ContainerProcessesSection>
       onPressed: _read,
       child: Text(l10n.dockerProcessesReadAgain),
     );
-    switch (_answer) {
+    switch (_latest.value) {
       case null:
         return [
           DockerNotice(
