@@ -497,3 +497,6 @@ The stage-1 analysis found Klabautermann's resolver skips hosts it cannot fully 
 - "Search no longer clears on a server change": refuted, `DockerListState.sync` still calls `search.clear()`.
 - docker_resource_view.dart `matchesTerms` "joins null fields as the text null": refuted, both callers pass null-aware elements (`?network.driver`, `?volume.driver`), so no null reaches the join.
 - Low-session notice, `actionsAllowedAt` gating, row keys, the effective filter, disabled chips, failure and use-unknown details: checked against main's panels, unchanged.
+
+## CTL-07 item 4 (one-shot reads over `EngineReads<DockerPayload>`): partly declined in #833
+The misleading `stack-file-` prefix and `fileReads` map were renamed (`one-shot-`, `oneShots`). Moving `_ask` onto `EngineReads` was declined: that helper answers only an engine stop or a rejection, while a Docker one-shot must also answer `notInFleet` when its server leaves the fleet and `cancelled` on an endpoint change, which the per-server map does. Moving the 20-line method alone into a mixin or part would only add a forwarding layer.
