@@ -1259,6 +1259,74 @@ void _runEngine(
     }
   }
 
+  /// Answers a read that runs under an admin session: a server with no
+  /// ready link answers [onFailure]([noLink]), one whose admin mode is off
+  /// answers [onFailure]([adminRequired]), and otherwise [read] lends the
+  /// session, whose answer is sent. A throw answers
+  /// [onFailure]([transport]), so the request always settles.
+  ///
+  /// Unlike [linkRead], the server need not be in the fleet: an admin read
+  /// answers any server the engine has a link to.
+  void adminRead<E extends EngineEvent, F extends Enum>(
+    String serverId, {
+    required E Function(F failure) onFailure,
+    required F noLink,
+    required F adminRequired,
+    required F transport,
+    required Future<E> Function(AdminSession session) read,
+  }) {
+    if (links?.link(serverId) == null) {
+      uiPort.send(onFailure(noLink));
+      return;
+    }
+    final session = admin?.session(serverId);
+    if (session == null) {
+      uiPort.send(onFailure(adminRequired));
+      return;
+    }
+    admin?.touch(serverId);
+    // Not awaited: one elevated command per user, and the queue keeps
+    // serving the app meanwhile; a lend that fails still answers.
+    unawaited(
+      lendSession(serverId, () => read(session)).then(
+        uiPort.send,
+        onError: (Object _) => uiPort.send(onFailure(transport)),
+      ),
+    );
+  }
+
+  /// Answers a read that needs only a link: a server outside the fleet or
+  /// without one answers [onFailure]([noLink]); [ready] adds another noLink
+  /// condition. Otherwise [read] lends the link, its answer is sent, and a
+  /// throw answers [onTransport]. When [adminRequired] is set the read also
+  /// needs that admin session, which is touched as the admin reads do.
+  void linkRead<E extends EngineEvent, F extends Enum>(
+    String serverId, {
+    required E Function(F failure) onFailure,
+    required F noLink,
+    required Future<E> Function(SshLink link, AdminSession? session) read,
+    required void Function(Object error) onTransport,
+    bool Function()? ready,
+    F? adminRequired,
+  }) {
+    final link = links?.link(serverId);
+    if (!fleetIds.contains(serverId) ||
+        link == null ||
+        (ready != null && !ready())) {
+      uiPort.send(onFailure(noLink));
+      return;
+    }
+    final session = adminRequired == null ? null : admin?.session(serverId);
+    if (adminRequired != null && session == null) {
+      uiPort.send(onFailure(adminRequired));
+      return;
+    }
+    if (session != null) admin?.touch(serverId);
+    // Not awaited, as the other reads: the queue keeps serving the app
+    // meanwhile, and a lend that fails still answers.
+    unawaited(read(link, session).then(uiPort.send, onError: onTransport));
+  }
+
   Future<void> handle(Object? message) async {
     switch (message) {
       case Hello(:final protocolVersion):
@@ -1909,30 +1977,36 @@ void _runEngine(
           verifyFootprint(serverId);
         }
       case ReadEditable(:final serverId, :final requestId, :final target):
-        void answer(EditReadResult result) => uiPort.send(
-          EditRead(serverId: serverId, requestId: requestId, result: result),
-        );
-        final link = links?.link(serverId);
+        // The read runs with the profile the request found, even when a
+        // re-probe drops it while the read waits for the session.
         final profile = profiles[serverId];
-        if (!fleetIds.contains(serverId) || link == null || profile == null) {
-          answer(const EditReadFailed(EditReadFailure.noLink));
-          return;
-        }
-        // Not awaited: the read waits on the host while the queue serves
-        // the app. readEditable answers rather than throws; a lend that
-        // fails still answers, so the editor never waits on nothing.
-        unawaited(
-          lendSession(
+        linkRead<EditRead, EditReadFailure>(
+          serverId,
+          onFailure: (failure) => EditRead(
+            serverId: serverId,
+            requestId: requestId,
+            result: EditReadFailed(failure),
+          ),
+          noLink: EditReadFailure.noLink,
+          // A file read needs the probe's facts as much as the link.
+          ready: () => profile != null,
+          onTransport: (Object error) => uiPort.send(
+            EditRead(
+              serverId: serverId,
+              requestId: requestId,
+              result: EditReadFailed(EditReadFailure.failed, detail: '$error'),
+            ),
+          ),
+          read: (link, _) => lendSession(
             serverId,
-            () => readEditable(target, (
-              link: link,
-              profile: profile,
-              admin: admin?.session(serverId),
-            ), stacks: stackEditLookup(serverId)),
-          ).then(
-            answer,
-            onError: (Object error) => answer(
-              EditReadFailed(EditReadFailure.failed, detail: '$error'),
+            () async => EditRead(
+              serverId: serverId,
+              requestId: requestId,
+              result: await readEditable(target, (
+                link: link,
+                profile: profile!,
+                admin: admin?.session(serverId),
+              ), stacks: stackEditLookup(serverId)),
             ),
           ),
         );
@@ -1991,68 +2065,43 @@ void _runEngine(
           ),
         );
       case ReadUserCrontabs(:final serverId, :final requestId):
-        void fail(UserCrontabsFailure failure) => uiPort.send(
-          UserCrontabs(
+        adminRead<UserCrontabs, UserCrontabsFailure>(
+          serverId,
+          onFailure: (failure) => UserCrontabs(
             serverId: serverId,
             requestId: requestId,
             failure: failure,
           ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(UserCrontabsFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(UserCrontabsFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        // Not awaited: one elevated command per user, and the queue keeps
-        // serving the app meanwhile.
-        unawaited(
-          lendSession(
+          noLink: UserCrontabsFailure.noLink,
+          adminRequired: UserCrontabsFailure.adminRequired,
+          transport: UserCrontabsFailure.transport,
+          read: (session) => readUserCrontabs(
             serverId,
-            () => readUserCrontabs(
-              serverId,
-              requestId: requestId,
-              session: session,
-              profile: profiles[serverId],
-              now: DateTime.now().toUtc(),
-            ),
-          ).then(
-            uiPort.send,
-            // A read that throws still answers, so the view stops waiting.
-            onError: (Object _) => fail(UserCrontabsFailure.transport),
+            requestId: requestId,
+            session: session,
+            profile: profiles[serverId],
+            now: DateTime.now().toUtc(),
           ),
         );
       case ReadAccounts(:final serverId, :final requestId):
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          uiPort.send(
+        linkRead<AccountsReport, AccountsReportFailure>(
+          serverId,
+          onFailure: (failure) => AccountsReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+          noLink: AccountsReportFailure.noLink,
+          onTransport: (Object _) => uiPort.send(
             AccountsReport(
               serverId: serverId,
               requestId: requestId,
-              failure: AccountsReportFailure.noLink,
+              failure: AccountsReportFailure.transport,
             ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads; a lend that fails still
-        // answers.
-        unawaited(
-          lendSession(
+          ),
+          read: (link, _) => lendSession(
             serverId,
             () => readAccounts(serverId, requestId: requestId, link: link),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => uiPort.send(
-              AccountsReport(
-                serverId: serverId,
-                requestId: requestId,
-                failure: AccountsReportFailure.transport,
-              ),
-            ),
           ),
         );
       case ReadDiskUsage(
@@ -2063,81 +2112,70 @@ void _runEngine(
         :final root,
         :final fresh,
       ):
-        void fail(DiskUsageReportFailure failure) => uiPort.send(
-          DiskUsageReport(
+        linkRead<DiskUsageReport, DiskUsageReportFailure>(
+          serverId,
+          onFailure: (failure) => DiskUsageReport(
             serverId: serverId,
             requestId: requestId,
             path: path,
             failure: failure,
           ),
-        );
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          fail(DiskUsageReportFailure.noLink);
-          return;
-        }
-        final session = elevated ? admin?.session(serverId) : null;
-        if (elevated) {
-          if (session == null) {
-            fail(DiskUsageReportFailure.adminRequired);
-            return;
-          }
-          admin?.touch(serverId);
-        }
-        Future<DiskUsageReport> readFolder() => lendSession(
-          serverId,
-          () => readDiskUsage(
-            serverId,
-            path,
-            requestId: requestId,
-            link: link,
-            session: session,
+          noLink: DiskUsageReportFailure.noLink,
+          // Only an elevated read needs the admin session.
+          adminRequired: elevated ? DiskUsageReportFailure.adminRequired : null,
+          onTransport: (Object _) => uiPort.send(
+            DiskUsageReport(
+              serverId: serverId,
+              requestId: requestId,
+              path: path,
+              failure: DiskUsageReportFailure.transport,
+            ),
           ),
-        );
-        // A folder under the explorer's mount point answers from one
-        // export of the whole filesystem where ncdu or gdu is installed
-        // ([diskUsageFromTree]); any other read, or a folder the export
-        // dropped, reads with du.
-        final tool = diskUsageExportToolOf(profiles[serverId]);
-        Future<DiskUsageReport> read() async {
-          if (root != null &&
-              tool != null &&
-              diskUsageFromTree(path: path, root: root, fresh: fresh)) {
-            final tree = await diskTrees.tree(
-              serverId,
-              root,
-              elevated: elevated,
-              fresh: fresh,
-              read: (cancelled) => lendSession(
+          read: (link, session) async {
+            // A folder under the explorer's mount point answers from one
+            // export of the whole filesystem where ncdu or gdu is installed
+            // ([diskUsageFromTree]); any other read, or a folder the export
+            // dropped, reads with du.
+            final tool = diskUsageExportToolOf(profiles[serverId]);
+            if (root != null &&
+                tool != null &&
+                diskUsageFromTree(path: path, root: root, fresh: fresh)) {
+              final tree = await diskTrees.tree(
                 serverId,
-                () => readDiskUsageTree(
-                  root,
-                  tool: tool,
-                  link: link,
-                  session: session,
-                  cancelled: cancelled,
+                root,
+                elevated: elevated,
+                fresh: fresh,
+                read: (cancelled) => lendSession(
+                  serverId,
+                  () => readDiskUsageTree(
+                    root,
+                    tool: tool,
+                    link: link,
+                    session: session,
+                    cancelled: cancelled,
+                  ),
                 ),
+              );
+              if (tree?.listing(path) case final listing?) {
+                return DiskUsageReport(
+                  serverId: serverId,
+                  requestId: requestId,
+                  path: path,
+                  listing: listing,
+                );
+              }
+            }
+            return lendSession(
+              serverId,
+              () => readDiskUsage(
+                serverId,
+                path,
+                requestId: requestId,
+                link: link,
+                session: session,
               ),
             );
-            if (tree?.listing(path) case final listing?) {
-              return DiskUsageReport(
-                serverId: serverId,
-                requestId: requestId,
-                path: path,
-                listing: listing,
-              );
-            }
-          }
-          return readFolder();
-        }
-
-        // Not awaited, as the other reads; a lend that fails still
-        // answers.
-        unawaited(
-          read().then(
-            uiPort.send,
-            onError: (Object _) => fail(DiskUsageReportFailure.transport),
-          ),
+          },
         );
       case ReadTimerDetail(
         :final serverId,
@@ -2145,24 +2183,26 @@ void _runEngine(
         :final requestId,
         :final user,
       ):
-        void fail(TimerDetailFailure failure) => uiPort.send(
-          TimerDetailReport(
+        linkRead<TimerDetailReport, TimerDetailFailure>(
+          serverId,
+          onFailure: (failure) => TimerDetailReport(
             serverId: serverId,
             requestId: requestId,
             unit: unit,
             user: user,
             failure: failure,
           ),
-        );
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          fail(TimerDetailFailure.noLink);
-          return;
-        }
-        // Not awaited, as the other reads; a lend that fails still
-        // answers.
-        unawaited(
-          lendSession(
+          noLink: TimerDetailFailure.noLink,
+          onTransport: (Object _) => uiPort.send(
+            TimerDetailReport(
+              serverId: serverId,
+              requestId: requestId,
+              unit: unit,
+              user: user,
+              failure: TimerDetailFailure.transport,
+            ),
+          ),
+          read: (link, _) => lendSession(
             serverId,
             () => readTimerDetail(
               serverId,
@@ -2172,233 +2212,159 @@ void _runEngine(
               user: user,
               profile: profiles[serverId],
             ),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(TimerDetailFailure.transport),
           ),
         );
       case ReadSmart(:final serverId, :final requestId):
-        void fail(SmartReportFailure failure) => uiPort.send(
-          SmartReport(
+        adminRead<SmartReport, SmartReportFailure>(
+          serverId,
+          onFailure: (failure) => SmartReport(
             serverId: serverId,
             requestId: requestId,
             failure: failure,
           ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(SmartReportFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(SmartReportFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        // Not awaited, as the crontab read above. readSmart answers
-        // rather than throws; a lend that fails still answers, so the
-        // section never waits on nothing.
-        unawaited(
-          lendSession(
+          noLink: SmartReportFailure.noLink,
+          adminRequired: SmartReportFailure.adminRequired,
+          transport: SmartReportFailure.transport,
+          read: (session) => readSmart(
             serverId,
-            () => readSmart(
-              serverId,
-              requestId: requestId,
-              session: session,
-              profile: profiles[serverId],
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(SmartReportFailure.transport),
+            requestId: requestId,
+            session: session,
+            profile: profiles[serverId],
           ),
         );
       case ReadRestarts(:final serverId, :final requestId):
-        void fail(RestartReportFailure failure) => uiPort.send(
-          RestartReport(
+        adminRead<RestartReport, RestartReportFailure>(
+          serverId,
+          onFailure: (failure) => RestartReport(
             serverId: serverId,
             requestId: requestId,
             failure: failure,
           ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(RestartReportFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(RestartReportFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        // Not awaited, as the drive health read, and answering a lend
-        // that fails the same way.
-        unawaited(
-          lendSession(
-            serverId,
-            () =>
-                readRestarts(serverId, requestId: requestId, session: session),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(RestartReportFailure.transport),
-          ),
+          noLink: RestartReportFailure.noLink,
+          adminRequired: RestartReportFailure.adminRequired,
+          transport: RestartReportFailure.transport,
+          read: (session) =>
+              readRestarts(serverId, requestId: requestId, session: session),
         );
       case ReadFirewall(:final serverId, :final requestId):
-        void fail(FirewallReportFailure failure) => uiPort.send(
-          FirewallReport(
+        adminRead<FirewallReport, FirewallReportFailure>(
+          serverId,
+          onFailure: (failure) => FirewallReport(
             serverId: serverId,
             requestId: requestId,
             failure: failure,
           ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(FirewallReportFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(FirewallReportFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        unawaited(
-          lendSession(
-            serverId,
-            () =>
-                readFirewall(serverId, requestId: requestId, session: session),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(FirewallReportFailure.transport),
-          ),
+          noLink: FirewallReportFailure.noLink,
+          adminRequired: FirewallReportFailure.adminRequired,
+          transport: FirewallReportFailure.transport,
+          read: (session) =>
+              readFirewall(serverId, requestId: requestId, session: session),
         );
       case ReadSshdPosture(:final serverId, :final requestId):
-        void fail(SshdPostureFailure failure) => uiPort.send(
-          SshdPostureReport(
+        adminRead<SshdPostureReport, SshdPostureFailure>(
+          serverId,
+          onFailure: (failure) => SshdPostureReport(
             serverId: serverId,
             requestId: requestId,
             failure: failure,
           ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(SshdPostureFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(SshdPostureFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        unawaited(
-          lendSession(
+          noLink: SshdPostureFailure.noLink,
+          adminRequired: SshdPostureFailure.adminRequired,
+          transport: SshdPostureFailure.transport,
+          read: (session) => readSshdPosture(
             serverId,
-            () => readSshdPosture(
-              serverId,
-              requestId: requestId,
-              session: session,
-              profile: profiles[serverId],
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(SshdPostureFailure.transport),
+            requestId: requestId,
+            session: session,
+            profile: profiles[serverId],
           ),
         );
       case ReadPackages(:final serverId, :final requestId, :final fresh):
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          uiPort.send(
+        linkRead<PackagesReport, PackagesReportFailure>(
+          serverId,
+          onFailure: (failure) => PackagesReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+          noLink: PackagesReportFailure.noLink,
+          onTransport: (Object _) => uiPort.send(
             PackagesReport(
               serverId: serverId,
               requestId: requestId,
-              failure: PackagesReportFailure.noLink,
+              failure: PackagesReportFailure.transport,
             ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads: the check answers rather than
-        // throws, a kept answer goes out without one, and a lend that
-        // fails still answers.
-        unawaited(
-          packageReports
-              .read(
+          ),
+          // The tracker may answer from its kept check without a read.
+          read: (link, _) => packageReports.read(
+            serverId,
+            requestId: requestId,
+            fresh: fresh,
+            check: () => lendSession(
+              serverId,
+              () => readPackages(
                 serverId,
                 requestId: requestId,
-                fresh: fresh,
-                check: () => lendSession(
-                  serverId,
-                  () => readPackages(
-                    serverId,
-                    requestId: requestId,
-                    link: link,
-                    now: () => DateTime.now().toUtc(),
-                  ),
-                ),
-              )
-              .then(
-                uiPort.send,
-                onError: (Object _) => uiPort.send(
-                  PackagesReport(
-                    serverId: serverId,
-                    requestId: requestId,
-                    failure: PackagesReportFailure.transport,
-                  ),
-                ),
+                link: link,
+                now: () => DateTime.now().toUtc(),
               ),
+            ),
+          ),
         );
       case UnitQuery(:final serverId, :final requestId, :final query):
-        final link = links?.link(serverId);
+        // The read runs with the profile the request found, even when a
+        // re-probe drops it while the read waits for the session.
         final profile = profiles[serverId];
-        if (!fleetIds.contains(serverId) || link == null || profile == null) {
-          uiPort.send(
+        linkRead<UnitQueryResult, UnitQueryFailure>(
+          serverId,
+          onFailure: (failure) => UnitQueryResult(
+            serverId: serverId,
+            requestId: requestId,
+            payload: UnitQueryFailed(failure),
+          ),
+          noLink: UnitQueryFailure.noLink,
+          // A unit query runs with the profile's manager and units.
+          ready: () => profile != null,
+          onTransport: (Object error) => uiPort.send(
             UnitQueryResult(
               serverId: serverId,
               requestId: requestId,
-              payload: const UnitQueryFailed(UnitQueryFailure.noLink),
+              payload: UnitQueryFailed(
+                UnitQueryFailure.failed,
+                detail: '$error',
+              ),
             ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads: runUnitQuery answers rather
-        // than throws, and a lend that fails still answers.
-        unawaited(
-          lendSession(
+          ),
+          read: (link, _) => lendSession(
             serverId,
             () => runUnitQuery(
               serverId,
               requestId,
               query,
               link: link,
-              profile: profile,
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object error) => uiPort.send(
-              UnitQueryResult(
-                serverId: serverId,
-                requestId: requestId,
-                payload: UnitQueryFailed(
-                  UnitQueryFailure.failed,
-                  detail: '$error',
-                ),
-              ),
+              profile: profile!,
             ),
           ),
         );
       case JobHistoryQuery(:final serverId, :final requestId, :final query):
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          uiPort.send(
+        linkRead<JobHistoryResult, JobHistoryFailure>(
+          serverId,
+          onFailure: (failure) => JobHistoryResult(
+            serverId: serverId,
+            requestId: requestId,
+            payload: JobHistoryFailed(failure),
+          ),
+          noLink: JobHistoryFailure.noLink,
+          onTransport: (Object error) => uiPort.send(
             JobHistoryResult(
               serverId: serverId,
               requestId: requestId,
-              payload: const JobHistoryFailed(JobHistoryFailure.noLink),
+              payload: JobHistoryFailed(
+                JobHistoryFailure.failed,
+                detail: '$error',
+              ),
             ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads: the query answers rather than
-        // throws, and a lend that fails still answers.
-        unawaited(
-          lendSession(
+          ),
+          read: (link, _) => lendSession(
             serverId,
             () => runJobHistoryQuery(
               serverId,
@@ -2406,18 +2372,6 @@ void _runEngine(
               query,
               link: link,
               admin: admin?.session(serverId),
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object error) => uiPort.send(
-              JobHistoryResult(
-                serverId: serverId,
-                requestId: requestId,
-                payload: JobHistoryFailed(
-                  JobHistoryFailure.failed,
-                  detail: '$error',
-                ),
-              ),
             ),
           ),
         );

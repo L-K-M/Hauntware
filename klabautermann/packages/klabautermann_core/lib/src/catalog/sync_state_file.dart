@@ -5,6 +5,7 @@
 /// process holds the support directory alone.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,6 +14,7 @@ import 'package:meta/meta.dart';
 import '../settings/device_settings_store.dart'
     show unusedCorruptCopyPath, writeFileAtomically;
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import '../util/serial_queue.dart';
 
 /// Every sync state file names its schema under this key.
 const String _versionKey = 'version';
@@ -98,7 +100,7 @@ final class SyncStateFile {
   /// absent.
   final SyncStateIssue? issue;
 
-  Future<void> _tail = Future<void>.value();
+  final SerialQueue _writes = SerialQueue();
   int _queuedWrites = 0;
   bool _unsaved = false;
 
@@ -250,13 +252,15 @@ final class SyncStateFile {
     );
     final generation = ++_queuedWrites;
     _unsaved = true;
-    final write = _tail.then((_) => _writer(_file, bytes));
+    final write = _writes.run(() => _writer(_file, bytes));
     // Each caller gets its own write's failure; the queue itself moves on.
     // Only the latest write's success clears the flag: it carries every
     // earlier change, while an earlier success says nothing of later ones.
-    _tail = write.then<void>((_) {
-      if (generation == _queuedWrites) _unsaved = false;
-    }, onError: (Object _) {});
+    unawaited(
+      write.then<void>((_) {
+        if (generation == _queuedWrites) _unsaved = false;
+      }, onError: (Object _) {}),
+    );
     return write;
   }
 }

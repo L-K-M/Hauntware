@@ -62,6 +62,7 @@ import '../admin/admin_mode.dart' show AdminSession;
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
 import '../logs/log_stream_router.dart' show kLogStreamsPerServerMax;
+import '../util/monotonic_clock.dart';
 import 'container_logs.dart';
 import 'container_review.dart';
 import 'docker_ladder.dart';
@@ -113,11 +114,6 @@ const _relayPoolConnections = 1;
 const _retryBase = Duration(seconds: 5);
 const _retryCap = Duration(minutes: 2);
 
-Duration Function() _monotonicClock() {
-  final watch = Stopwatch()..start();
-  return () => watch.elapsed;
-}
-
 /// Owned by the engine isolate, which hands it the Docker queries,
 /// watches, container log streams and endpoint choices ([setEndpoint])
 /// and tells it what changed: [update] after a server's [LinkState],
@@ -141,7 +137,7 @@ final class DockerRouter {
     this._now = DateTime.now,
     Duration Function()? elapsed,
   }) : _quotas = quotas ?? ChannelQuotas(),
-       _elapsed = elapsed ?? _monotonicClock() {
+       _elapsed = elapsed ?? monotonicClock() {
     // A slot another consumer gave back may let a waiting log stream run.
     _quotas.onFreed((serverId) {
       if (_sessions[serverId] case final session?) _serveLogs(session);

@@ -11,6 +11,7 @@ import '../docker/docker_ladder.dart'
     show dockerProgramPathProblem, dockerSocketPathProblem;
 import '../engine/protocol.dart'
     show DockerEndpointCustom, DockerEndpointDetected, DockerEndpointSocket;
+import '../util/serial_queue.dart';
 
 /// The device settings file under the app's support directory (03 §4.10).
 const String deviceSettingsFileName = 'settings.json';
@@ -211,7 +212,7 @@ final class DeviceSettingsStore {
   /// Every key of the document but the version, unknown keys included.
   final Map<String, Object?> _values;
   DeviceSettingsIssue? _issue;
-  Future<void> _writeTail = Future<void>.value();
+  final SerialQueue _writes = SerialQueue();
 
   /// Opens [file], creating it on first launch. Never throws: a file it
   /// cannot use leaves the defaults in place and is reported in [issue].
@@ -1061,8 +1062,8 @@ final class DeviceSettingsStore {
       return Future.error(DeviceSettingsReadOnlyException(kind));
     }
 
-    final write = _writeTail.then(
-      (_) => _writer(
+    final write = _writes.run(
+      () => _writer(
         _file,
         utf8.encode(
           jsonEncode({_versionKey: deviceSettingsSchemaVersion, ..._values}),
@@ -1070,7 +1071,6 @@ final class DeviceSettingsStore {
       ),
     );
     // Each caller gets its own write's failure; the queue itself moves on.
-    _writeTail = write.then<void>((_) {}, onError: (Object _) {});
     return write;
   }
 

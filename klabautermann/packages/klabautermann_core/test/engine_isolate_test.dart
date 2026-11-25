@@ -14,6 +14,7 @@ import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
 import 'package:test/test.dart';
 
 import 'fixtures/ssh_config_fixture.dart';
+import 'support/answering_link.dart';
 
 void main() {
   late Directory support;
@@ -1173,6 +1174,116 @@ void main() {
       expect(answer.requestName, 'Connect');
     });
 
+    test('ENG-1: a run whose host commands throw an unlisted error ends '
+        'with its answer, and the engine goes on serving', () async {
+      const web = 'ssh-config:web';
+      const webConfig = 'Host web\n  HostName 192.0.2.10\n';
+      // Save the import first, so the engine under test starts with web in
+      // its fleet.
+      final first = await spawnEngine();
+      final (events: firstEvents, fleet: _) = await started(first);
+      first.send(const ImportSshConfig(webConfig));
+      expect(await next(firstEvents), isA<CatalogReplaced>());
+      expect(await next(firstEvents), isA<SshConfigImported>());
+      await firstEvents.cancel();
+      await first.shutdown();
+
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        linksEnabled: true,
+        entryPoint: _engineWithThrowingRuns,
+      );
+      addTearDown(client.shutdown);
+      final events = StreamIterator(client.events);
+      addTearDown(events.cancel);
+      expect(await events.moveNext(), isTrue);
+
+      client
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(servers: {web: ServerSafety(management: true)}),
+          ),
+        )
+        ..send(const Connect(web));
+      // The link's states, then the probe the subscription asks for.
+      while (true) {
+        final event = await next(events);
+        if (event case final LinkState state when state.status is LinkReady) {
+          break;
+        }
+      }
+      client.send(
+        const Subscribe(
+          serverId: web,
+          subscriptionId: 'overview',
+          streams: {SampleStream.identity},
+        ),
+      );
+      while (true) {
+        final event = await next(events);
+        if (event case final HostProfileChanged profile) {
+          if (profile.serverId == web && profile.cachedAt == null) break;
+        }
+      }
+
+      client.send(
+        const PlanAction(
+          UnitAction(web, unit: 'nginx.service', verb: SystemctlVerb.restart),
+        ),
+      );
+      ActionPlanned planned;
+      while (true) {
+        final event = await next(events);
+        if (event case final ActionPlanned held) {
+          planned = held;
+          break;
+        }
+        if (event case final ActionRefused refused) {
+          fail(
+            'the plan was refused: ${refused.reason} '
+            '(${refused.detail})',
+          );
+        }
+      }
+
+      final tier = planned.preview.requiredTier;
+      client.send(
+        RunAction(
+          planned.planId,
+          ActionConfirmation(
+            tier: tier,
+            phrase: tier == ConfirmationTier.typedPhrase
+                ? planned.preview.targetName
+                : null,
+          ),
+        ),
+      );
+      EngineEvent run;
+      while (true) {
+        final event = await next(events);
+        if (event is ActionFinished || event is EngineFault) {
+          run = event;
+          break;
+        }
+      }
+      expect(
+        run,
+        isA<ActionFinished>(),
+        reason: 'the run ends with its answer, not a fault',
+      );
+      final finished = run as ActionFinished;
+      expect(finished.outcome, ActionOutcome.failed);
+      expect(finished.failure, ActionFailure.transport);
+
+      // The isolate is still answering.
+      client.send(const Connect('ssh-config:gone'));
+      EngineEvent refused;
+      do {
+        refused = await next(events);
+      } while (refused is! RequestRejected);
+      expect(refused.requestName, 'Connect');
+    });
+
     test('CTL-05: a rejection carries the id of the request it refuses, so '
         'the read it answers does not stay pending', () async {
       final client = await spawnEngine();
@@ -1228,6 +1339,21 @@ void main() {
     });
   });
 }
+
+/// The real engine over an [AnsweringLink]: its `run` answers no host
+/// command, so a run's reads and steps throw, as an unlisted error would.
+void _engineWithThrowingRuns(EngineStart start) => engineMain(
+  start,
+  dial:
+      ({
+        required config,
+        required credentials,
+        required tofu,
+        required onHostKey,
+        onKeyboardInteractive,
+        resolveJumpHost,
+      }) async => AnsweringLink(),
+);
 
 /// The real engine with a timer callback that throws inside it, as work
 /// nobody awaits would.

@@ -288,6 +288,20 @@ void main() {
     );
   });
 
+  test('the attribute step reads the temp back after cp, so GNU cp\'s '
+      'silent chown failure is caught (OPS-1)', () {
+    final attributes = EditCommands.copyAttributes(_target, _temp)[2];
+    // GNU cp exits 0 when it cannot chown: owner and group are compared
+    // and set again, or the edit refuses rather than drop the group.
+    expect(attributes, contains(r'o=$(stat -c %u:%g -- "$t")'));
+    expect(attributes, contains(r'n=$(stat -c %u:%g -- "$tmp")'));
+    expect(attributes, contains(r'[ "$o" != "$n" ] || exit 0'));
+    expect(
+      attributes,
+      contains(r'chown -- "$o" "$tmp" && chmod -- "$m" "$tmp" || exit 107'),
+    );
+  });
+
   test('the readers take what the scripts print', () {
     expect(parseReadHeader('120 0 4 640 $_hash'), (
       size: 120,

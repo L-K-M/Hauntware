@@ -15,6 +15,7 @@ import '../capabilities/capability_cache.dart' show CachePurge;
 import '../engine/protocol.dart' show GapCause, SampleResult;
 import '../fleet/server_file_stem.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import '../util/serial_queue.dart';
 
 /// The directory under the support directory that holds the rings.
 const String historyDirectoryName = 'history';
@@ -292,7 +293,7 @@ final class HistoryStore {
   final Map<String, Future<_ServerRings?>> _rings = {};
   final Map<String, _Accumulator> _minute = {};
   final Map<String, _Accumulator> _tenMinutes = {};
-  Future<void> _tail = Future.value();
+  final SerialQueue _writes = SerialQueue();
 
   /// Bumped per server by [forget], so a write queued before it is
   /// dropped instead of opening the server's rings again.
@@ -359,13 +360,13 @@ final class HistoryStore {
         in _minute.entries.toList()) {
       _closeMinute(serverId, minute);
     }
-    return _tail;
+    return _writes.idle;
   }
 
   /// Awaits every queued write, flush and purge, so a caller about to
   /// delete or reuse the support directory can wait for the store to
   /// finish with it.
-  Future<void> get idle => _tail;
+  Future<void> get idle => _writes.idle;
 
   /// [serverId]'s buckets and gaps in [tier], oldest first: those within
   /// the tier's span up to [now], the filling bucket included. Times
@@ -382,7 +383,7 @@ final class HistoryStore {
     final gaps = <HistoryGap>[];
     // In the queue, as the writes are: a file ring takes one operation
     // at a time, and a write beside the read would fail.
-    await _inTurn(() async {
+    await _writes.run(() async {
       final rings = await _existingRingsOf(serverId);
       if (rings == null) return;
       final bytes = await rings.tiers[tier]!.read(0, _ringBytes(tier));
@@ -441,12 +442,13 @@ final class HistoryStore {
   /// endpoint: their filling buckets, and their rings unless the purge is
   /// withheld.
   Future<void> forget(Set<String> serverIds) {
+    var pending = _writes.idle;
     for (final serverId in serverIds) {
       _minute.remove(serverId);
       _tenMinutes.remove(serverId);
       _generations[serverId] = (_generations[serverId] ?? 0) + 1;
       final rings = _rings.remove(serverId);
-      _tail = _tail.then((_) async {
+      pending = _writes.run(() async {
         try {
           final open = await rings;
           if (open != null) {
@@ -466,7 +468,7 @@ final class HistoryStore {
         }
       });
     }
-    return _tail;
+    return pending;
   }
 
   /// Writes [minute] and folds it into its 10-minute bucket, which is
@@ -534,26 +536,20 @@ final class HistoryStore {
 
   void _queue(String serverId, Future<void> Function(_ServerRings) body) {
     final generation = _generations[serverId] ?? 0;
-    _tail = _tail.then((_) async {
-      // A server forgotten since this write was queued keeps no rings.
-      if ((_generations[serverId] ?? 0) != generation) return;
-      try {
-        final rings = await _ringsOf(serverId);
-        if (rings != null) await body(rings);
-      } on Object {
-        // A write the disk refused costs that bucket, not the run. So
-        // does any other error: one that escaped would fail the tail,
-        // and every later write of every server would be skipped.
-      }
-    });
-  }
-
-  /// Runs [operation] after every file operation asked for before it, and
-  /// answers its result.
-  Future<T> _inTurn<T>(Future<T> Function() operation) {
-    final next = _tail.then((_) => operation());
-    _tail = next.then((_) {}, onError: (Object _) {});
-    return next;
+    unawaited(
+      _writes.run(() async {
+        // A server forgotten since this write was queued keeps no rings.
+        if ((_generations[serverId] ?? 0) != generation) return;
+        try {
+          final rings = await _ringsOf(serverId);
+          if (rings != null) await body(rings);
+        } on Object {
+          // A write the disk refused costs that bucket, not the run. So
+          // does any other error: one that escaped would fail the tail,
+          // and every later write of every server would be skipped.
+        }
+      }),
+    );
   }
 
   /// [serverId]'s open rings, opening them on first use. An open the disk
