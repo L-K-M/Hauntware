@@ -24,7 +24,8 @@ final class EngineReads<A> {
     this._engine,
     this._answerOf, {
     this.sendFailure = SendFailure.thisRead,
-  }) {
+    void Function()? onEngineStopped,
+  }) : _onStop = onEngineStopped {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
   }
 
@@ -36,6 +37,12 @@ final class EngineReads<A> {
 
   /// What a refused send answers.
   final SendFailure sendFailure;
+
+  /// Told once when this helper learns the engine stopped, before its
+  /// waiting reads settle: an owner whose own state follows the engine's
+  /// (as [MonitoringController] cancels its timers) stays in step with a
+  /// refusal, not only with the stream ending.
+  final void Function()? _onStop;
   late final StreamSubscription<EngineEvent> _events;
   // By request id: the request's class name, as the engine names it in a
   // rejection, the read's no-link value, and its answer.
@@ -82,16 +89,27 @@ final class EngineReads<A> {
     }
   }
 
+  /// Whether any read still waits for its answer: an owner that exposes
+  /// that as its busy state asks here rather than keeping a second count.
+  bool get hasWaiting => _pending.isNotEmpty;
+
   void _onEngineDone() {
+    if (_engineStopped) return;
     _engineStopped = true;
     for (final (_, noLink, answer) in _pending.values) {
       answer.complete(noLink());
     }
     _pending.clear();
+    _onStop?.call();
   }
 
   void dispose() {
     unawaited(_events.cancel());
     _onEngineDone();
   }
+
+  /// Stops watching without answering the reads that still wait: an
+  /// owner disposed while its engine lives on leaves them unanswered,
+  /// as a hand-written map did when its own listener went.
+  void cancel() => unawaited(_events.cancel());
 }

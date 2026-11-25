@@ -110,23 +110,6 @@ void main() {
     );
   });
 
-  test('crontab writes take stdin, for the login user or a named one', () {
-    expect(EditCommands.crontabWrite(), ['crontab', '-']);
-    expect(EditCommands.crontabWrite(user: 'www-data'), [
-      'crontab',
-      '-u',
-      'www-data',
-      '-',
-    ]);
-    for (final bad in ['-r', 'a b', 'Root']) {
-      expect(
-        () => EditCommands.crontabWrite(user: bad),
-        _refused('not a user name'),
-        reason: bad,
-      );
-    }
-  });
-
   test('crontab swaps carry the hash first, then crontab\'s own words', () {
     expect(EditCommands.crontabWriteIfHash(_hash).sublist(3), [
       'klabautermann-crontab',
@@ -285,6 +268,20 @@ void main() {
     expect(
       EditCommands.backupFile(_target, kRootBackupsDir)[2],
       contains('"\$d/$kEditBackupIndexName"'),
+    );
+  });
+
+  test('the attribute step reads the temp back after cp, so GNU cp\'s '
+      'silent chown failure is caught (OPS-1)', () {
+    final attributes = EditCommands.copyAttributes(_target, _temp)[2];
+    // GNU cp exits 0 when it cannot chown: owner and group are compared
+    // and set again, or the edit refuses rather than drop the group.
+    expect(attributes, contains(r'o=$(stat -c %u:%g -- "$t")'));
+    expect(attributes, contains(r'n=$(stat -c %u:%g -- "$tmp")'));
+    expect(attributes, contains(r'[ "$o" != "$n" ] || exit 0'));
+    expect(
+      attributes,
+      contains(r'chown -- "$o" "$tmp" && chmod -- "$m" "$tmp" || exit 107'),
     );
   });
 

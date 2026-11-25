@@ -21,7 +21,7 @@ import '../services/sync_compare_controller.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import 'compact/compact_posture.dart' show compactPostureApplies;
 import 'compare_diff_rows.dart';
-import 'editor_strings.dart';
+import 'poltergeist_editor_strings.dart';
 import 'panes/pane_format.dart';
 
 /// The widget keys the compare view exposes to tests. Enum-valued so they
@@ -1167,7 +1167,7 @@ class _CompareSideState extends State<_CompareSide> {
     }
     return pe.PlanchetteEditor(
       controller: editor,
-      strings: PoltergeistEditorStrings(l10n),
+      strings: PoltergeistEditorStrings.of(context),
       editingLocked: true,
       showStatus: false,
       textStyle: poltergeistMonoTextStyle.copyWith(

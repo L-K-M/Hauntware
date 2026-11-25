@@ -6,7 +6,28 @@ library;
 
 export 'package:seance_protocol/seance_protocol.dart';
 
-export 'src/ssh_config/ssh_config_import.dart';
+export 'src/ssh_config/ssh_config_import.dart'
+    show
+        ImportedHost,
+        SkippedHost,
+        SkippedHostReason,
+        SshConfigImport,
+        SshConfigImporter,
+        SshConfigLine;
+export 'src/ssh_config/ssh_config_settings.dart'
+    show
+        ResolvedSshSettings,
+        SshConfigResolution,
+        SshConfigSettings,
+        UnresolvedReason,
+        UnresolvedSshSettings,
+        isImportedIdentityFile,
+        isTcpPort,
+        looksLikeSshAddress,
+        parseSshPort,
+        sshCanonicalHost;
+export 'src/ssh_config/proxy_jump_syntax.dart'
+    show splitSshHost, sshAcceptsProxyJump;
 
 export 'src/hostkey/tofu.dart';
 
@@ -89,7 +110,13 @@ export 'src/sync/pulled_pin_resolver.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/sync_coordinator.dart';
 export 'src/sync/sync_enrollment_validation.dart';
-export 'src/sync/http_sync_client.dart';
+export 'src/sync/http_sync_client.dart' show HttpSyncClient;
+export 'src/sync/sync_transport.dart'
+    show
+        HttpSyncTransport,
+        SyncTransport,
+        SyncTransportFactory,
+        httpSyncTransport;
 
 export 'src/update/version.dart';
 export 'src/update/update_checker.dart';

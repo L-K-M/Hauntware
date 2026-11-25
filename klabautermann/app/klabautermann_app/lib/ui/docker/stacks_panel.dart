@@ -31,10 +31,6 @@ const double _twoPaneWidth = 640;
 /// The list's width beside the overview.
 const double _listWidth = 280;
 
-/// The share of its height the header takes before it scrolls, so large
-/// text never pushes the list out of sight.
-const double _headerShare = 0.4;
-
 /// A stack the command palette asked to open (PLT-07); [serial] tells
 /// two requests for the same stack apart.
 typedef StackRequest = ({String project, int serial});
@@ -214,20 +210,9 @@ class _StacksPanelState extends State<StacksPanel> {
 
         return Padding(
           padding: padding,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * _headerShare,
-                  ),
-                  child: SingleChildScrollView(child: header),
-                ),
-                const SizedBox(height: 12),
-                Expanded(child: _body(context, stacks, wide: wide)),
-              ],
-            ),
+          child: HeadedPanelBody(
+            header: header,
+            body: _body(context, stacks, wide: wide),
           ),
         );
       },

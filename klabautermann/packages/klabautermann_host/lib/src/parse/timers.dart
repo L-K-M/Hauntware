@@ -11,6 +11,7 @@ import 'package:meta/meta.dart';
 
 import '../hws/program.dart' show kTimeoutAbsentMarker;
 import '../jobs/schedule.dart' show MonotonicBase, MonotonicSchedule;
+import 'instant_range.dart';
 import 'models.dart' show splitBlocks;
 import 'parse_result.dart';
 
@@ -330,10 +331,6 @@ int? _usec(Object? v) {
   return null;
 }
 
-/// The furthest instant [DateTime] holds either side of the epoch, in
-/// microseconds (100,000,000 days).
-const _maxInstantUs = 8640000000000000000;
-
 /// An absolute microsecond field ([_usec]) that [SystemdTimer.nextUtc] and
 /// [SystemdTimer.lastUtc] can convert: 0 is "never" and reads as unknown,
 /// and a value beyond [DateTime]'s range warns and reads as unknown
@@ -341,7 +338,7 @@ const _maxInstantUs = 8640000000000000000;
 int? _instantUsec(Object? v, List<String> warnings) {
   final us = _usec(v);
   if (us == 0) return null;
-  if (us == null || (us >= -_maxInstantUs && us <= _maxInstantUs)) return us;
+  if (us == null || (us >= -kMaxInstantUs && us <= kMaxInstantUs)) return us;
   warnings.add('timers_json: instant out of range');
   return null;
 }

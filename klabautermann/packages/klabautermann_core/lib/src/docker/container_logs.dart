@@ -21,7 +21,6 @@ library;
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:math' as math;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 
@@ -34,6 +33,8 @@ import '../logs/log_follower.dart'
         kLogBatchInterval;
 import '../logs/log_service.dart' show kLogWindowMax;
 
+import 'retry.dart';
+
 /// The drivers whose logs the API reads on every engine: Docker's own
 /// files and journald, and Podman's `k8s-file`, which its compat layer
 /// may also report as `json-file`.
@@ -45,9 +46,6 @@ const _cacheDisabled = 'cache-disabled';
 
 /// A container id, or a name as Docker allows them.
 final _containerRef = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$');
-
-const _retryBase = Duration(seconds: 1);
-const _retryCap = Duration(seconds: 30);
 
 /// How many reads in a row may break the wire format without a line
 /// before a follow gives up. A stream the demultiplexer cannot read
@@ -327,10 +325,10 @@ final class ContainerLogReader {
       );
     }
 
-    final delay = _retryBase * math.pow(2, math.min(_retries, 5)).toInt();
+    final delay = kDockerStreamBackoff.delay(_retries);
     _retries++;
     _retry?.cancel();
-    _retry = _startTimer(delay < _retryCap ? delay : _retryCap, () {
+    _retry = _startTimer(delay, () {
       _retry = null;
       if (_target case final target? when epoch == _epoch) {
         unawaited(_open(target, epoch));

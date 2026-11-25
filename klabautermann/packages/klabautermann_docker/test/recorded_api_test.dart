@@ -350,7 +350,10 @@ void main() {
             for (final l in follow)
               if (_timestamp(l) <= since) l,
           ];
-          final last = lastDeliveredTimestamp(delivered)!;
+          final last = delivered
+              .map((l) => l.timestamp)
+              .whereType<LogTimestamp>()
+              .reduce((a, b) => a > b ? a : b);
           final resend = [
             for (final l in follow)
               if (_timestamp(l) >= last) l,
@@ -379,10 +382,16 @@ void main() {
           expect(single.cpuPercent, isNull);
           expect(single.memoryUsage, isNotNull);
 
-          final samples = await client
-              .containerStatsStream('web')
-              .take(2)
-              .toList();
+          final res = await client.requestLines(
+            'GET',
+            '/containers/web/stats',
+            query: const {'stream': '1'},
+          );
+          final samples = <DockerParseResult<ContainerStats>>[];
+          await for (final line in res.body) {
+            samples.add(parseContainerStats(jsonDecode(line)));
+            if (samples.length == 2) break;
+          }
           for (final s in samples) {
             expect(s.warnings, isEmpty);
           }
@@ -475,15 +484,24 @@ String _imageRef(String path) {
   return path.substring(start, path.length - '/json'.length);
 }
 
+/// Reads the recorded `/events` stream as the engine's watcher does:
+/// the raw lines, decoded by [parseDockerEvent] (DKR-6).
 Stream<DockerParseResult<DockerEvent>> _events(
   DockerClient client,
   RecordedCorpus corpus,
-) {
+) async* {
   final query = corpus['events'].query;
-  return client.events(
-    since: LogTimestamp.fromUnix(int.parse(query['since']!)),
-    until: LogTimestamp.fromUnix(int.parse(query['until']!)),
+  final res = await client.requestLines(
+    'GET',
+    '/events',
+    query: {'since': query['since']!, 'until': query['until']!},
   );
+  await for (final line in res.body) {
+    yield parseDockerEvent(
+      jsonDecode(line),
+      expectEventV2: client.gates.usesEventV2,
+    );
+  }
 }
 
 Future<List<TimestampedLogLine>> _follow(DockerClient client) =>

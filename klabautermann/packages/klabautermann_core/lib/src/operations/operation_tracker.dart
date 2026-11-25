@@ -21,6 +21,7 @@ import '../admin/admin_mode.dart' show AdminSession;
 import '../audit/audit_log.dart';
 import '../engine/protocol.dart';
 import '../sampling/sample_results.dart' show collectorUnavailable;
+import '../util/serial_queue.dart';
 import 'operations_shown.dart';
 
 /// How often a server with a running operation reads `ops` again [E]:
@@ -33,9 +34,6 @@ const kRunningOperationsReread = Duration(seconds: 15);
 /// asks for can miss it. A wrapper that fails before its first record
 /// never shows, and the re-reads stop after this.
 const kLaunchListingGrace = Duration(minutes: 1);
-
-/// The exit of `HostCommands.startTicks` for a PID that names no process.
-const _kProcessGone = 3;
 
 /// One server's latest list and its link bookkeeping.
 final class _Server {
@@ -61,9 +59,9 @@ final class _Server {
   /// with when each launched.
   final Map<String, DateTime> unlisted = {};
 
-  /// The tail of this server's steps, run one after another (see
+  /// This server's step queue, run one after another (see
   /// [OperationTracker._serially]).
-  Future<void> steps = Future.value();
+  final SerialQueue steps = SerialQueue();
 }
 
 /// Follows every server's detached operations. The engine isolate owns
@@ -328,9 +326,7 @@ final class OperationTracker {
   Future<T> _serially<T>(String serverId, Future<T> Function() step) {
     final server = _servers[serverId];
     if (server == null) return step();
-    final result = server.steps.then((_) => step());
-    server.steps = result.then<void>((_) {}, onError: (Object _) {});
-    return result;
+    return server.steps.run(step);
   }
 
   // -- listing ----------------------------------------------------------
@@ -363,7 +359,7 @@ final class OperationTracker {
               when record.startTicks == null ||
                   int.tryParse(result.stdout.trim()) == record.startTicks =>
             DetachedOperationState.running,
-          0 || _kProcessGone => DetachedOperationState.lost,
+          0 || kStartTicksGone => DetachedOperationState.lost,
           _ => DetachedOperationState.unknown,
         };
         wrapperGone = state == DetachedOperationState.lost;

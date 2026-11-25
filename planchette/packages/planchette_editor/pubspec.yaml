@@ -11,11 +11,15 @@ dependencies:
   clock: ^1.1.2
   flutter:
     sdk: flutter
+  # The editor catalog's generated EditorLocalizations (l10n.yaml).
+  flutter_localizations:
+    sdk: flutter
   # The bundled monospace fonts the document draws in.
   ghost_fonts:
     path: ../ghost_fonts
   ghost_ui:
     path: ../ghost_ui
+  intl: 0.20.3
   planchette_core:
     path: ../planchette_core
 
@@ -24,3 +28,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+flutter:
+  generate: true

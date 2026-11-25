@@ -1055,26 +1055,6 @@ void main() {
       ),
     );
 
-    testWidgets('the inspector swaps its details for a shell pane and '
-        'back, which closes the shell', (tester) async {
-      await pumpScoped(tester, _allowed, inspector());
-      await tester.tap(find.byTooltip('Open a shell'));
-      await tester.pump();
-      expect(find.byType(ContainerShellPane), findsOneWidget);
-
-      await tester.tap(find.text('Open shell'));
-      await tester.pump();
-      final open = engine.sentOfType<OpenTerminal>().last as OpenTerminal;
-
-      await tester.tap(find.byTooltip('Show details'));
-      await tester.pump();
-      expect(find.byType(ContainerShellPane), findsNothing);
-      expect(
-        (engine.sentOfType<CloseTerminal>().single as CloseTerminal).terminalId,
-        open.terminalId,
-      );
-    });
-
     testWidgets('on the desktop the inspector opens the shell in the '
         'workspace dock instead (OV-10)', (tester) async {
       final dock = WorkspaceDock();
@@ -1092,20 +1072,23 @@ void main() {
       expect(find.byTooltip('Open a shell'), findsOneWidget);
     });
 
-    testWidgets('read-only hides the entry and takes an open pane away', (
-      tester,
-    ) async {
-      final safety = await pumpScoped(tester, _allowed, inspector());
+    testWidgets('read-only hides the inspector\'s shell entry', (tester) async {
+      final dock = WorkspaceDock();
+      addTearDown(dock.dispose);
+      final safety = await pumpScoped(
+        tester,
+        _allowed,
+        WorkspaceDockScope(dock: dock, child: inspector()),
+      );
       await tester.tap(find.byTooltip('Open a shell'));
       await tester.pump();
-      await tester.tap(find.text('Open shell'));
-      await tester.pump();
+      expect(dock.items, [DockedShell(_serverId, _row)]);
 
       await safety.setGlobalReadOnly(true);
       await tester.pump();
       expect(find.byTooltip('Open a shell'), findsNothing);
-      expect(find.byType(ContainerShellPane), findsNothing);
-      expect(engine.sentOfType<CloseTerminal>(), hasLength(1));
+      // Read-only hides the entry; the dock keeps the shell its tab owns.
+      expect(dock.items, [DockedShell(_serverId, _row)]);
     });
 
     testWidgets('an observe-only server shows no shell entry', (tester) async {

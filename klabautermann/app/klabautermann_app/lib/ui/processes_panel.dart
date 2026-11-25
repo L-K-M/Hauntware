@@ -11,22 +11,13 @@ import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import 'actions/host_actions.dart';
 import 'freshness.dart';
+import 'latest_read.dart';
 import 'process_detail_view.dart';
+import 'panel_kit.dart';
 import 'processes_view.dart';
 import 'sortable_table.dart';
-import 'state_notice.dart';
 import 'time_display.dart';
 import 'timed_reveal.dart';
-
-/// The panel width from which the processes show as the sortable table;
-/// narrower, as on a phone, they show as a list of two-line rows rather
-/// than a squeezed table. It grows with the text scale, as the table's
-/// columns do.
-const double _wideWidth = 600;
-
-/// The share of its height the header takes before it scrolls, so large
-/// text never pushes the list out of sight.
-const double _headerShare = 0.4;
 
 /// How old a `procs` reading grows before it reads as stale: twice the
 /// stream's slowest cadence in 03 §6.4 (10 s, Cellular saver), the rule
@@ -64,9 +55,6 @@ class ProcessesPanel extends StatefulWidget {
 }
 
 class _ProcessesPanelState extends State<ProcessesPanel> {
-  /// What the clock's listeners hear instead while nothing ages.
-  static final Listenable _silent = Listenable.merge(const []);
-
   /// The order and filter, which outlive tab switches: the workspace keeps
   /// a panel built once opened. The busiest processes lead, as in top.
   TableSort _sort = TableSort(
@@ -134,7 +122,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
     final theme = Theme.of(context);
     final clock = widget.visible && reading != null
         ? widget.monitoring.clock
-        : _silent;
+        : kSilentListenable;
     final unavailable = switch (latest?.result) {
       final CollectorUnavailable unavailable => unavailable,
       _ => null,
@@ -151,8 +139,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         final header = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 12,
@@ -162,14 +149,14 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 listenable: clock,
                 builder: (context, _) {
                   final now = _freshness(reading, sampling);
-                  return StateNotice(
+                  return PanelNotice.state(
                     icon: now.stale ? Icons.history : Icons.schedule,
                     text: freshnessText(l10n, now),
                   );
                 },
               ),
             if (unavailable != null)
-              StateNotice(
+              PanelNotice.state(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
                     ? Icons.timer_off_outlined
                     : Icons.error_outline,
@@ -177,12 +164,12 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 detail: unavailable.detail,
               )
             else if (result == null)
-              StateNotice(
+              PanelNotice.state(
                 icon: Icons.hourglass_empty,
                 text: l10n.processesWaiting,
               ),
             if (leftOut != null)
-              StateNotice(
+              PanelNotice.state(
                 icon: Icons.filter_alt_outlined,
                 text: switch (leftOut.total) {
                   final total? => l10n.processesShownOf(leftOut.shown, total),
@@ -190,7 +177,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 },
               ),
             if (flagCounts.isNotEmpty)
-              StateNotice(
+              PanelNotice.state(
                 icon: Icons.warning_amber,
                 text: [
                   for (final MapEntry(:key, :value) in flagCounts.entries)
@@ -298,30 +285,15 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
         );
         return Padding(
           padding: padding,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * _headerShare,
-                  ),
-                  child: SingleChildScrollView(child: header),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListenableBuilder(
-                    listenable: clock,
-                    child: body,
-                    builder: (context, body) => Theme(
-                      data: _freshness(reading, sampling).stale
-                          ? greyed
-                          : theme,
-                      child: body!,
-                    ),
-                  ),
-                ),
-              ],
+          child: HeadedPanelBody(
+            header: header,
+            body: ListenableBuilder(
+              listenable: clock,
+              child: body,
+              builder: (context, body) => Theme(
+                data: _freshness(reading, sampling).stale ? greyed : theme,
+                child: body!,
+              ),
             ),
           ),
         );
@@ -770,11 +742,10 @@ class _ProcessSheetState extends State<_ProcessSheet> {
   late final TimedReveals<_Revealed> _revealed;
 
   /// The process read's answer, null while it reads.
-  HostPayload? _detail;
-  bool _reading = false;
-
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
+  late final LatestRead<HostPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   @override
   void initState() {
@@ -787,18 +758,16 @@ class _ProcessSheetState extends State<_ProcessSheet> {
     final ticks = widget.row.startTicks;
     if (ticks == null) return;
 
-    final ticket = ++_ticket;
-    setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      ProcessDetailQuery(pid: widget.row.pid, startTicks: ticks),
-    );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _detail = result.payload;
-      _reading = false;
+    await _latest.run(() async {
+      final result = await widget.monitoring.queryHost(
+        widget.serverId,
+        ProcessDetailQuery(pid: widget.row.pid, startTicks: ticks),
+      );
       // A new read can list other variables at the same places.
-      _revealed.discard(where: (key) => key.$1 == _MaskedKind.variable);
+      if (mounted) {
+        _revealed.discard(where: (key) => key.$1 == _MaskedKind.variable);
+      }
+      return result.payload;
     });
   }
 
@@ -841,7 +810,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: 12,
             children: [
-              StateNotice(
+              PanelNotice.state(
                 icon: freshness.stale ? Icons.history : Icons.schedule,
                 text: freshnessText(l10n, freshness),
               ),
@@ -860,7 +829,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
         ),
       ),
       if (arguments.isEmpty)
-        StateNotice(
+        PanelNotice.state(
           icon: Icons.info_outline,
           text: l10n.processesCommandUnavailable,
         )
@@ -872,7 +841,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
       if (arguments.isNotEmpty && row.argumentsTruncated)
         Text(l10n.processesCommandTruncated, style: theme.textTheme.bodySmall),
     ];
-    final details = _detail;
+    final details = _latest.value;
     final variables = details is ProcessDetails
         ? details.environment ?? const <EnvVar>[]
         : const <EnvVar>[];
@@ -886,12 +855,12 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           ),
         ),
         if (detail.environmentDenied)
-          StateNotice(
+          PanelNotice.state(
             icon: Icons.lock_outline,
             text: l10n.processesEnvironmentDenied,
           )
         else if (environment == null || environment.isEmpty)
-          StateNotice(
+          PanelNotice.state(
             icon: Icons.info_outline,
             text: l10n.processesEnvironmentNone,
           )
@@ -934,12 +903,12 @@ class _ProcessSheetState extends State<_ProcessSheet> {
   List<Widget> _detailLines(AppLocalizations l10n) {
     final theme = Theme.of(context);
     final canRead = widget.row.startTicks != null;
-    final status = switch (_detail) {
-      _ when !canRead => StateNotice(
+    final status = switch (_latest.value) {
+      _ when !canRead => PanelNotice.state(
         icon: Icons.info_outline,
         text: l10n.processesDetailNoStart,
       ),
-      null => StateNotice(
+      null => PanelNotice.state(
         icon: Icons.hourglass_empty,
         text: l10n.processesDetailReading,
       ),
@@ -950,16 +919,16 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           unknown: l10n.chartUnknownValue,
         ),
       ),
-      ProcessEnded(:final end) => StateNotice(
+      ProcessEnded(:final end) => PanelNotice.state(
         icon: Icons.history,
         text: l10n.processesDetailEnded(end.name),
       ),
-      HostQueryFailed(:final failure, :final detail) => StateNotice(
+      HostQueryFailed(:final failure, :final detail) => PanelNotice.state(
         icon: Icons.error_outline,
         text: l10n.processesDetailFailed(failure.name),
         detail: detail,
       ),
-      _ => StateNotice(
+      _ => PanelNotice.state(
         icon: Icons.error_outline,
         text: l10n.processesDetailFailed(HostQueryFailure.failed.name),
       ),
@@ -977,7 +946,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton(
-            onPressed: _reading ? null : () => unawaited(_read()),
+            onPressed: _latest.reading ? null : () => unawaited(_read()),
             child: Text(l10n.processesDetailReadAgain),
           ),
         ),

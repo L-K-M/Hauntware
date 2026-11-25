@@ -12,6 +12,7 @@ import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show ImageActionsButton, PruneButton, imageActionEntries;
 import '../charts/charts.dart' show ChartPalette;
+import '../panel_kit.dart' show HeadedPanelBody, kSilentListenable, panelIsWide;
 import '../sortable_table.dart';
 import '../time_display.dart';
 import 'image_history.dart';
@@ -19,16 +20,8 @@ import 'image_pull.dart' show ImagePullButton;
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
 import 'docker_cells.dart';
+import 'docker_list_state.dart';
 import 'images_view.dart';
-
-/// The panel width from which the images show as the sortable table;
-/// narrower, as on a phone, they show as two-line rows. It grows with the
-/// text scale, as the Containers sub-tab's does.
-const double _wideWidth = 600;
-
-/// The share of its height the header takes before it scrolls, so large
-/// text never pushes the list out of sight.
-const double _headerShare = 0.4;
 
 /// The Images sub-tab (03 §7.14 IMG-01): every image by its tags, short
 /// id, size in IEC units, age and date of creation, whether any
@@ -62,23 +55,17 @@ class ImagesPanel extends StatefulWidget {
 }
 
 class _ImagesPanelState extends State<ImagesPanel> {
-  /// What the clock's listeners hear instead while nothing ages.
-  static final Listenable _silent = Listenable.merge(const []);
-
-  /// The order, search and filter, which outlive sub-tab switches: the
+  /// The order, search and watch, which outlive sub-tab switches: the
   /// tab keeps a sub-tab built once opened.
-  TableSort _sort = TableSort(
-    ImageColumn.tags.name,
-    TableSortDirection.ascending,
+  late final DockerListState _state = DockerListState(
+    initialSort: TableSort(ImageColumn.tags.name, TableSortDirection.ascending),
+    watch: _docker.watchImages,
+    unwatch: _docker.unwatchImages,
+    onServerChanged: _forgetUpdates,
+    onWatched: _checkUpdates,
   );
-  final _search = TextEditingController();
 
-  /// The filter field, which `/` in the table focuses (PLT-06).
-  final _searchFocus = FocusNode();
   ImageFilter _filter = ImageFilter.all;
-
-  /// The server whose image watch this panel holds, if any.
-  String? _held;
 
   /// The update check's last answer, and why the last check failed if
   /// it did, for [ImagesPanel.serverId] (IMG-05).
@@ -91,47 +78,34 @@ class _ImagesPanelState extends State<ImagesPanel> {
 
   DockerController get _docker => widget.monitoring.docker;
 
+  /// Drops the update check's answer for another server's images.
+  void _forgetUpdates() {
+    _updates = null;
+    _updatesFailed = null;
+    _checking = false;
+    _checks++;
+  }
+
   @override
   void initState() {
     super.initState();
-    _sync();
+    _state.sync(visible: widget.visible, serverId: widget.serverId);
   }
 
   @override
   void didUpdateWidget(ImagesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.serverId != oldWidget.serverId) {
-      // Another server's images.
-      _release();
-      _search.clear();
-      _updates = null;
-      _updatesFailed = null;
-      _checking = false;
-      _checks++;
-    }
-    _sync();
+    _state.sync(visible: widget.visible, serverId: widget.serverId);
   }
 
   @override
   void dispose() {
-    _release();
-    _search.dispose();
-    _searchFocus.dispose();
+    _state.dispose();
     super.dispose();
   }
 
-  void _sync() {
-    final wanted = widget.visible ? widget.serverId : null;
-    if (_held == wanted) return;
-    _release();
-    if (wanted == null) return;
-
-    _docker.watchImages(wanted);
-    _held = wanted;
-    _checkUpdates();
-  }
-
-  /// Asks for the update check; the caller rebuilds, as [_sync]'s do.
+  /// Asks for the update check; the caller rebuilds, as [DockerListState]
+  /// does when it takes the watch.
   void _checkUpdates({
     bool refresh = false,
     ImageCheckRunner runner = ImageCheckRunner.host,
@@ -163,14 +137,6 @@ class _ImagesPanelState extends State<ImagesPanel> {
     );
   }
 
-  void _release() {
-    final held = _held;
-    if (held == null) return;
-
-    _held = null;
-    _docker.unwatchImages(held);
-  }
-
   @override
   Widget build(BuildContext context) {
     // Read on every build: a server that left the fleet and came back has
@@ -196,7 +162,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
     final failure = list.failure;
     final clock = widget.visible && (images?.isNotEmpty ?? false)
         ? widget.monitoring.clock
-        : _silent;
+        : kSilentListenable;
     // Without a container list, an image list from before API 1.51 tells
     // nothing of use.
     final useUnknown =
@@ -207,8 +173,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         final header = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 12,
@@ -307,30 +272,13 @@ class _ImagesPanelState extends State<ImagesPanel> {
 
         return Padding(
           padding: padding,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * _headerShare,
-                  ),
-                  child: SingleChildScrollView(child: header),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  // Only the ages move with the clock.
-                  child: ListenableBuilder(
-                    listenable: clock,
-                    builder: (context, _) => _body(
-                      context,
-                      images,
-                      containers.containers,
-                      wide: wide,
-                    ),
-                  ),
-                ),
-              ],
+          child: HeadedPanelBody(
+            header: header,
+            // Only the ages move with the clock.
+            body: ListenableBuilder(
+              listenable: clock,
+              builder: (context, _) =>
+                  _body(context, images, containers.containers, wide: wide),
             ),
           ),
         );
@@ -346,7 +294,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
   }) {
     final l10n = AppLocalizations.of(context);
     final columns = _columns(context, l10n, widget.monitoring.clock.value);
-    final terms = searchTerms(_search.text);
+    final terms = searchTerms(_state.search.text);
     final entries = imageEntries(
       images,
       containers: containers,
@@ -380,17 +328,21 @@ class _ImagesPanelState extends State<ImagesPanel> {
       ),
     );
     if (!wide) {
-      return _list(sortTableRows(entries, columns, _sort), columns, empty);
+      return _list(
+        sortTableRows(entries, columns, _state.sort),
+        columns,
+        empty,
+      );
     }
 
     return SortableTable<ImageEntry>(
       tableId: DockerWatchList.images.name,
-      filterFocus: _searchFocus,
+      filterFocus: _state.searchFocus,
       columns: columns,
       rows: entries,
       rowKey: _rowKey,
-      sort: _sort,
-      onSort: (sort) => setState(() => _sort = sort),
+      sort: _state.sort,
+      onSort: (sort) => setState(() => _state.sort = sort),
       onRowActivated: (entry) => _openHistory(entry.image),
       rowActions:
           actionsAllowedAt(
@@ -408,56 +360,30 @@ class _ImagesPanelState extends State<ImagesPanel> {
     );
   }
 
-  Widget _filters(AppLocalizations l10n) => Wrap(
-    spacing: 12,
-    runSpacing: 8,
-    crossAxisAlignment: WrapCrossAlignment.center,
-    children: [
-      ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: TextField(
-          controller: _search,
-          focusNode: _searchFocus,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            hintText: l10n.dockerImagesSearchHint,
-            suffixIcon: _search.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: l10n.dockerImagesSearchClear,
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(_search.clear),
-                  ),
-          ),
-        ),
-      ),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final filter in ImageFilter.values)
-            ChoiceChip(
-              label: Text(switch (filter) {
-                ImageFilter.all => l10n.dockerImagesFilterAll,
-                ImageFilter.unused => l10n.dockerImagesFilterUnused,
-                ImageFilter.dangling => l10n.dockerImagesFilterDangling,
-                ImageFilter.updates => l10n.dockerImagesFilterUpdates,
-              }),
-              selected: _filter == filter,
-              onSelected: (_) => setState(() => _filter = filter),
-            ),
-        ],
-      ),
-    ],
+  Widget _filters(AppLocalizations l10n) => DockerListFilterRow<ImageFilter>(
+    controller: _state.search,
+    focusNode: _state.searchFocus,
+    hint: l10n.dockerImagesSearchHint,
+    clearTooltip: l10n.dockerImagesSearchClear,
+    filters: ImageFilter.values,
+    label: (l10n, filter) => switch (filter) {
+      ImageFilter.all => l10n.dockerImagesFilterAll,
+      ImageFilter.unused => l10n.dockerImagesFilterUnused,
+      ImageFilter.dangling => l10n.dockerImagesFilterDangling,
+      ImageFilter.updates => l10n.dockerImagesFilterUpdates,
+    },
+    selected: _filter,
+    enabled: true,
+    onChanged: () => setState(() {}),
+    onSelected: (filter) => setState(() => _filter = filter),
   );
 
   /// The phone layout's order: the table's columns in a menu, and the
   /// direction, which the button's tooltip names.
   Widget _sortControls(AppLocalizations l10n) {
     final theme = Theme.of(context);
-    final column = ImageColumn.values.byName(_sort.columnId);
-    final ascending = _sort.direction == TableSortDirection.ascending;
+    final column = ImageColumn.values.byName(_state.sort.columnId);
+    final ascending = _state.sort.direction == TableSortDirection.ascending;
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 8,
@@ -481,7 +407,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
           onChanged: (choice) {
             if (choice == null) return;
             setState(
-              () => _sort = TableSort(
+              () => _state.sort = TableSort(
                 choice.name,
                 _firstDirection.contains(choice)
                     ? TableSortDirection.descending
@@ -496,8 +422,8 @@ class _ImagesPanelState extends State<ImagesPanel> {
               : l10n.tableSortedDescending,
           icon: Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward),
           onPressed: () => setState(
-            () => _sort = TableSort(
-              _sort.columnId,
+            () => _state.sort = TableSort(
+              _state.sort.columnId,
               ascending
                   ? TableSortDirection.descending
                   : TableSortDirection.ascending,

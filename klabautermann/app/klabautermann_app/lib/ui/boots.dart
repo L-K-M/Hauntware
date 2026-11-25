@@ -6,7 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'logs/logs_panel.dart' show serverTimeText;
-import 'system_panel.dart' show PanelSection;
+import 'panel_kit.dart' show PanelSection;
 import 'system_view.dart' show uptimeText;
 
 /// The most boots the section lists: the current one and the earlier ones

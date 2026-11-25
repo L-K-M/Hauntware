@@ -12,7 +12,7 @@ import 'actions/action_preview.dart';
 import 'admin_mode_chip.dart' show AdminScope;
 import 'hand_off_actions.dart';
 import 'power.dart' show PowerWaitProgress, PowerWaitsScope, startPowerAction;
-import 'system_panel.dart' show PanelSection;
+import 'panel_kit.dart' show PanelSection;
 
 /// The device's pinned services for the widgets under it; the
 /// composition root puts it above every route, and a test may leave it

@@ -138,16 +138,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'forward-${_count++}'",
     r"'$OpenPortForward'",
   },
-  // The rejected requests' class names, which RequestRejected carries;
+  // The rejected request's class name, which RequestRejected carries;
   // never shown.
   'lib/controllers/engine_reads.dart': {r"'${request.runtimeType}'"},
-  'lib/controllers/admin_controller.dart': {
-    r"'$ReadUserCrontabs'",
-    r"'$ReadSmart'",
-    r"'$ReadRestarts'",
-    r"'$ReadFirewall'",
-    r"'$ReadSshdPosture'",
-  },
   // The Apps sub-tab's Docker list values (state, network mode, port
   // type, bound addresses), the loopback address and scheme a forward
   // opens at, and host:port notation, none of them prose (DKE-08).
@@ -340,123 +333,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'-'",
     "'@@'",
   },
-  // The shared-editor strings adapter: the text-tool, option and choice
-  // ids it switches on (the shared catalog's stable machine identifiers),
-  // the ARB list joiners and detail tokens it decomposes, the menu-label
-  // ellipsis composition, and the brace-bearing regex tokens that ride
-  // through gen-l10n as placeholder values because ICU messages cannot
-  // hold literal braces. Every rendered word comes from the ARB catalog.
-  'lib/ui/editor_strings.dart': {
-    '\'  \'',
-    '\'{2,4}\'',
-    '\'{1}\'',
-    '\'{name}\'',
-    '\'\\n\'',
-    '\'{NNNN}\'',
-    '\'sortLines\'',
-    '\'reverseLines\'',
-    '\'shuffleLines\'',
-    '\'removeDuplicateLines\'',
-    '\'removeBlankLines\'',
-    '\'collapseBlankLines\'',
-    '\'uppercase\'',
-    '\'lowercase\'',
-    '\'titleCase\'',
-    '\'sentenceCase\'',
-    '\'camelCase\'',
-    '\'pascalCase\'',
-    '\'snakeCase\'',
-    '\'kebabCase\'',
-    '\'constantCase\'',
-    '\'trimTrailingWhitespace\'',
-    '\'trimLeadingWhitespace\'',
-    '\'normalizeSpaces\'',
-    '\'normalizeLineEndings\'',
-    '\'convertIndentationToSpaces\'',
-    '\'convertIndentationToTabs\'',
-    '\'convertTabsToSpaces\'',
-    '\'hardWrap\'',
-    '\'straightenQuotes\'',
-    '\'zapGremlins\'',
-    '\'removeAnsiEscapes\'',
-    '\'convertToAscii\'',
-    '\'stripDiacritics\'',
-    '\'composeAccents\'',
-    '\'decomposeAccents\'',
-    '\'prefixSuffixLines\'',
-    '\'numberLines\'',
-    '\'unwrapParagraphs\'',
-    '\'joinLinesWith\'',
-    '\'urlEncode\'',
-    '\'urlDecode\'',
-    '\'base64Encode\'',
-    '\'base64Decode\'',
-    '\'htmlEntityEncode\'',
-    '\'htmlEntityDecode\'',
-    '\'escapeJsonString\'',
-    '\'unescapeBackslashSequences\'',
-    '\'formatJson\'',
-    '\'minifyJson\'',
-    '\'insertDate\'',
-    '\'insertDateTime\'',
-    '\'insertUtcTimestamp\'',
-    '\'insertUuid\'',
-    '\'keepLinesMatching\'',
-    '\'deleteLinesMatching\'',
-    '\'extractMatches\'',
-    '\'\$name…\'',
-    '\'order\'',
-    '\'ignoreCase\'',
-    '\'numbersByValue\'',
-    '\'byLength\'',
-    '\'ignoreLeadingWhitespace\'',
-    '\'keepFirstLine\'',
-    '\'adjacentOnly\'',
-    '\'ignoreSurroundingWhitespace\'',
-    '\'keepBlankLines\'',
-    '\'removeEveryCopy\'',
-    '\'controls\'',
-    '\'invisible\'',
-    '\'bidi\'',
-    '\'damaged\'',
-    '\'nonAscii\'',
-    '\'action\'',
-    '\'character\'',
-    '\'mode\'',
-    '\'where\'',
-    '\'text\'',
-    '\'skipBlankLines\'',
-    '\'start\'',
-    '\'step\'',
-    '\'separator\'',
-    '\'padding\'',
-    '\'trim\'',
-    '\'width\'',
-    '\'fill\'',
-    '\'ascending\'',
-    '\'descending\'',
-    '\'insert\'',
-    '\'remove\'',
-    '\'add\'',
-    '\'prefix\'',
-    '\'suffix\'',
-    '\'none\'',
-    '\'spaces\'',
-    '\'zeros\'',
-    '\'delete\'',
-    '\'escape\'',
-    '\'replace\'',
-    '\'entity\'',
-    '\'inPlace\'',
-    '\'clipboard\'',
-    '\'newDocument\'',
-    '\'\'',
-    '\', \'',
-    '\':\'',
-    '\'lines\'',
-    '\'unmapped:\'',
-    'r\'\\u{…}\'',
-  },
   // The file editor settings section: its ValueKeys, the picker's empty
   // default family, and the not-saved diagnostic it prints while showing
   // its own ARB toast.
@@ -558,7 +434,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'volumes-${_count++}'",
     r"'networks-${_count++}'",
     r"'events-${_count++}'",
-    r"'stack-file-${_count++}'",
+    r"'one-shot-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
     // The not-saved diagnostic of a purge, which no surface starts; a
@@ -588,20 +464,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
-    // The rejected requests' class names, which RequestRejected carries.
-    r"'$HostQuery'",
-    r"'$UnitQuery'",
-    r"'$RedactLines'",
-    r"'$CheckTlsEndpoints'",
-    // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
+    // The read ids this controller mints for its EngineReads, matched in
+    // their answers.
     r"'host-${_nextHostQuery++}'",
-    // A TLS check's id, which its TlsEndpointsChecked answers by (CRT-01).
-    r"'tls-${_nextTlsCheck++}'",
-    // A unit read's request id, never shown.
     r"'unit-${_nextUnitQuery++}'",
-    // An export redaction's id, which its RedactedLines answers by
-    // (LOG-10).
     r"'redact-${_nextRedaction++}'",
+    r"'tls-${_nextTlsCheck++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {
@@ -906,30 +774,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'stacks.row.${project.name}'",
     r"'stacks.unlisted.${widget.serverId}'",
   },
-  'lib/ui/docker/volumes_panel.dart': {
+  'lib/ui/docker/docker_list_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
     // text.
-    r"'${DockerWatchList.volumes.name}.row.${_rowKey(entry)}'",
+    r"'${widget.tableId}.row.${widget.rowKey(entry)}'",
     r"'\n'",
   },
-  'lib/ui/docker/networks_panel.dart': {
-    // The key tests find a phone row by, in the table rows' form, and the
-    // line break between its cells in its screen-reader label, each ARB
-    // text.
-    r"'${DockerWatchList.networks.name}.row.${_rowKey(entry)}'",
-    r"'\n'",
-  },
-  'lib/ui/docker/networks_view.dart': {
+  'lib/ui/docker/docker_resource_view.dart': {
     // The line break between the fields the search reads.
     r"'\n'",
   },
   'lib/ui/docker/volumes_view.dart': {
-    // The mount type of a named volume, matched, never shown; the line
-    // break between the fields the search reads; the name pattern Docker
-    // accepts (VOL-02).
+    // The mount type of a named volume, matched, never shown; the name
+    // pattern Docker accepts (VOL-02).
     "'volume'",
-    r"'\n'",
     "r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+\$'",
   },
   // The line break between the endpoints the user lists (CRT-01).

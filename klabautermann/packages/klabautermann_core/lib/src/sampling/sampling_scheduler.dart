@@ -24,10 +24,16 @@ import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart' show kSamplerChannels;
+import '../util/monotonic_clock.dart';
 import 'sample_pipeline.dart';
 import 'sample_results.dart' show sampleStreamCollector;
 import 'sampler_session.dart';
 import 'subscriptions.dart';
+
+part 'sampling_diagnostics.dart';
+part 'sampling_ops.dart';
+part 'sampling_owed_read.dart';
+part 'sampling_probe.dart';
 
 /// [stream]'s 03 §6.4 period under [profile]; null for `identity`, read
 /// once per link, and for `timers`, `cron`, `temps` and `gpu` under the
@@ -103,11 +109,6 @@ DateTime _utcNow() => DateTime.now().toUtc();
 
 void _ignoreProbe(String serverId, HostProfile profile) {}
 
-Duration Function() _monotonicClock() {
-  final watch = Stopwatch()..start();
-  return () => watch.elapsed;
-}
-
 /// Runs the samplers of every subscribed server by 03 §6.4's scheduling
 /// rules. The engine isolate owns it, records requests in the
 /// [SamplingSubscriptions] it shares, and tells it what changed:
@@ -143,7 +144,7 @@ final class SamplingScheduler {
     this._startTimer = Timer.new,
     this._now = _utcNow,
     Duration Function()? elapsed,
-  }) : _elapsed = elapsed ?? _monotonicClock();
+  }) : _elapsed = elapsed ?? monotonicClock();
 
   final SamplingSubscriptions _subscriptions;
   final SshLink? Function(String serverId) _linkFor;
@@ -157,6 +158,14 @@ final class SamplingScheduler {
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final DateTime Function() _now;
   final Duration Function() _elapsed;
+
+  /// The owed reads that claim a free sampler ahead of a cadence tick,
+  /// in the order they go out: the probe, `ops`, then a diagnostic
+  /// bundle (03 §6.2, §6.5).
+  late final _ProbeRead _probeJob = _ProbeRead(this);
+  late final _OpsRead _opsJob = _OpsRead(this);
+  late final _DiagnosticsRead _diagnosticsJob = _DiagnosticsRead(this);
+  late final List<_OwedRead> _owedReads = [_probeJob, _opsJob, _diagnosticsJob];
 
   /// One per engine, so a server's [Sample.seq] keeps rising (D44).
   final _sequence = SampleSequence();
@@ -244,20 +253,8 @@ final class SamplingScheduler {
   /// made while a bundle is owed shares its answer. Null when the server
   /// is not sampled or stops before the bundle is read; a sampler that
   /// has not answered after [kDiagnosticsWait] leaves its collectors out.
-  Future<DiagnosticBundle?> readDiagnostics(String serverId) {
-    final server = _servers[serverId];
-    final run = server?.run;
-    if (server == null || run == null) return Future.value();
-
-    final read = server.diagnostics ??= _Diagnostics(
-      _startTimer(kDiagnosticsWait, () => _finishDiagnostics(server)),
-    );
-    final answer = Completer<DiagnosticBundle?>();
-    read.answers.add(answer);
-    _schedule(server, run, run.fast);
-    _schedule(server, run, run.slow);
-    return answer.future;
-  }
+  Future<DiagnosticBundle?> readDiagnostics(String serverId) =>
+      _diagnosticsJob.read(serverId);
 
   /// The session channels [serverId]'s samplers hold now (03 §5.2): both
   /// while it is sampled, one while its slow sampler is lent
@@ -524,73 +521,6 @@ final class SamplingScheduler {
     _schedule(server, run, sampler);
   }
 
-  /// Sends the probe, the first request of a run's ready slow sampler
-  /// unless the link already answered one (03 §6.1). Until it settles
-  /// the slow sampler sends nothing else and, for a server whose profile
-  /// is not known yet, the fast one waits too, so the first readings
-  /// already withhold what a container host's `/proc` would supply
-  /// (D50). A probe that brings no reply goes out again after
-  /// [_owedReadRetry], as a read owed once does, and each later one after
-  /// twice the last wait, up to [_maxProbeRetry]; a reply that framing
-  /// loses every time therefore cannot turn into a loop.
-  void _probe(_Server server, _Run run) {
-    run.probing = true;
-    _settle(
-      run.slow.session.onDemand(Collector.probe, const []),
-      recover: () {
-        if (!identical(server.run, run)) return;
-        // As for a probe that brought no reply: it goes out again.
-        run.probing = false;
-        run.holdFast = false;
-        run.probeAt ??= _elapsed() + run.probeRetry;
-        _schedule(server, run, run.slow);
-        _schedule(server, run, run.fast);
-      },
-      (outcome) {
-        if (!identical(server.run, run)) return;
-
-        run.probing = false;
-        run.holdFast = false;
-        if (outcome is SamplerReplied) {
-          server.probedOn = run.link;
-          run.probeAt = null;
-          _answered(server, run);
-        } else {
-          run.probeAt = _elapsed() + run.probeRetry;
-          // The session closed under the probe (a lending, a stop), so
-          // nothing failed and the next wait stays what it was.
-          if (outcome is! SamplerGap ||
-              outcome.reason != SamplerGapReason.closed) {
-            final doubled = run.probeRetry * 2;
-            run.probeRetry = doubled < _maxProbeRetry
-                ? doubled
-                : _maxProbeRetry;
-          }
-        }
-        _emitAll(server.pipeline.addProbe(outcome));
-        if (outcome is SamplerReplied) {
-          final profile = server.pipeline.profile!;
-          _probed(server.pipeline.serverId, profile);
-          if (profile.epochSeconds case final epoch?) {
-            final at = _now().toUtc();
-            _emit(
-              ServerClock(
-                server.pipeline.serverId,
-                skew: Duration(
-                  milliseconds: epoch * 1000 - at.millisecondsSinceEpoch,
-                ),
-                at: at,
-              ),
-            );
-          }
-        }
-        _schedule(server, run, run.slow);
-        _schedule(server, run, run.fast);
-      },
-    );
-    _schedule(server, run, run.slow);
-  }
-
   /// Hands [request]'s outcome to [settled]. A request the session
   /// refuses with an error (`HwsRequestError`) is read as one it skipped:
   /// nothing was written. Should [settled] throw, [recover] puts the
@@ -622,150 +552,6 @@ final class SamplingScheduler {
             },
           ),
     );
-  }
-
-  /// Sends the `ops` read the server owes on [run]'s free slow sampler,
-  /// which counts as busy until it settles. A read that brings no `ops`
-  /// section stays owed and goes out again after [_owedReadRetry].
-  void _readOps(_Server server, _Run run) {
-    final sampler = run.slow;
-    sampler.busy = true;
-    void recover() {
-      sampler.busy = false;
-      if (identical(server.run, run)) _schedule(server, run, sampler);
-    }
-
-    _settle(
-      sampler.session.onDemand(Collector.ops, const []),
-      recover: recover,
-      (outcome) {
-        sampler.busy = false;
-        if (!identical(server.run, run)) return;
-
-        final section = outcome is SamplerReplied
-            ? outcome.reply.section(Collector.ops.wireName)
-            : null;
-        if (outcome
-            case SamplerReplied() ||
-                SamplerGap(reason: SamplerGapReason.lost)) {
-          _answered(server, run);
-        }
-        if (section == null) {
-          run.opsAt = _elapsed() + _owedReadRetry;
-        } else {
-          server.opsOwed = false;
-          server.opsReadOn = run.link;
-          run.opsAt = null;
-          _opsRead!(server.pipeline.serverId, section);
-        }
-        _schedule(server, run, sampler);
-      },
-    );
-    _schedule(server, run, sampler);
-  }
-
-  /// Sends [read]'s next request on [sampler], free and owing one: the
-  /// slow sampler's probe before its tick. A request the session skips
-  /// stays owed; one that brings no reply leaves its collectors missing.
-  void _readDiagnostics(
-    _Server server,
-    _Run run,
-    _Sampler sampler,
-    _Diagnostics read,
-  ) {
-    final kind = sampler.kind;
-    final probe = kind == SamplerKind.slow && read.probe == null;
-    final collectors = [
-      for (final c in kDiagnosticCollectors)
-        if (c.sampler == kind) c,
-    ];
-    sampler.busy = true;
-    final request = probe
-        ? sampler.session.onDemand(Collector.probe, const [])
-        : sampler.session.tick(collectors);
-    _settle(
-      request,
-      recover: () {
-        sampler.busy = false;
-        if (identical(server.run, run)) _schedule(server, run, sampler);
-      },
-      (outcome) {
-        sampler.busy = false;
-        if (!identical(server.run, run)) return;
-
-        if (outcome
-            case SamplerReplied() ||
-                SamplerGap(reason: SamplerGapReason.lost)) {
-          _answered(server, run);
-        }
-        if (identical(server.diagnostics, read) && outcome is! SamplerSkipped) {
-          final sections = outcome is SamplerReplied
-              ? outcome.reply.sections
-              : const <HwsSection>[];
-          // A tick's collector the reply has no section for gave no
-          // answer, as does the probe when no area came back. The probe's
-          // sections are its areas, named apart from the collector.
-          final answered = {for (final s in sections) s.collector};
-          read.missing.addAll([
-            if (probe && sections.isEmpty) Collector.probe.wireName,
-            if (!probe)
-              for (final c in collectors)
-                if (!answered.contains(c.wireName)) c.wireName,
-          ]);
-          switch ((probe, kind)) {
-            case (true, _):
-              read.probe = sections;
-            case (false, SamplerKind.fast):
-              read.fast = sections;
-            case (false, SamplerKind.slow):
-              read.slow = sections;
-          }
-          if (!read.needs(SamplerKind.fast) && !read.needs(SamplerKind.slow)) {
-            _finishDiagnostics(server);
-          }
-        }
-        _schedule(server, run, sampler);
-      },
-    );
-    // The pump returns after this call, so the other streams' timers are
-    // armed here while the request is out.
-    _schedule(server, run, sampler);
-  }
-
-  /// Answers [server]'s owed bundle with what its samplers sent; the
-  /// collectors of a sampler that has not answered are missing.
-  void _finishDiagnostics(_Server server) {
-    final read = server.diagnostics;
-    if (read == null) return;
-
-    server.diagnostics = null;
-    read.deadline.cancel();
-    final missing = {
-      ...read.missing,
-      if (read.probe == null) Collector.probe.wireName,
-      for (final c in kDiagnosticCollectors)
-        if (read.needs(c.sampler)) c.wireName,
-    };
-    final bundle = DiagnosticBundle(
-      [
-        for (final section in [...?read.probe, ...?read.fast, ...?read.slow])
-          DiagnosticSection(
-            collector: section.collector,
-            status: section.status.name,
-            text: utf8.decode(section.payload, allowMalformed: true),
-          ),
-      ],
-      missing: [
-        for (final name in [
-          Collector.probe.wireName,
-          for (final c in kDiagnosticCollectors) c.wireName,
-        ])
-          if (missing.contains(name)) name,
-      ],
-    );
-    for (final answer in read.answers) {
-      answer.complete(bundle);
-    }
   }
 
   // -- ticks ----------------------------------------------------------
@@ -813,38 +599,22 @@ final class SamplingScheduler {
       sampler.lost.clear();
     }
 
-    final probeAt = sampler.kind == SamplerKind.slow && !sampler.busy
-        ? run.probeAt
-        : null;
-    if (probeAt != null && probeAt <= _elapsed()) {
-      _probe(server, run);
-      return;
+    final now = _elapsed();
+    _OwedRead? ready;
+    Duration? wake;
+    for (final job in _owedReads) {
+      final at = job.dueAt(server, run, sampler);
+      if (at == null) continue;
+      if (wake == null || at < wake) wake = at;
+      if (ready == null && at <= now) ready = job;
     }
-    // `ops` follows the probe, so the first read already knows the host.
-    final opsAt =
-        sampler.kind == SamplerKind.slow &&
-            !sampler.busy &&
-            run.probeAt == null &&
-            server.opsOwed
-        ? run.opsAt ?? Duration.zero
-        : null;
-    if (opsAt != null && opsAt <= _elapsed()) {
-      _readOps(server, run);
-      return;
-    }
-    // A diagnostic bundle follows the probe too, and goes before ticks.
-    if (server.diagnostics case final read?
-        when !sampler.busy && run.probeAt == null && read.needs(sampler.kind)) {
-      _readDiagnostics(server, run, sampler, read);
+    if (ready != null) {
+      ready.send(server, run, sampler);
       return;
     }
 
     final profile = _profileOf(server);
     final next = _next(run, sampler, (s) => !_held(profile, run, sampler, s));
-    final wake = switch ((probeAt, opsAt)) {
-      (final p?, final o?) => p < o ? p : o,
-      (final p, final o) => p ?? o,
-    };
     if (wake != null && (next == null || wake <= next)) {
       _arm(sampler, wake, () => _schedule(server, run, sampler));
     } else if (next != null) {
@@ -1119,25 +889,6 @@ final class _Server {
   _Run? run;
 }
 
-/// A diagnostic bundle being read (CN-18): what each request has
-/// brought so far, null until it answers, and who waits for it.
-final class _Diagnostics {
-  _Diagnostics(this.deadline);
-
-  final Timer deadline;
-  final List<Completer<DiagnosticBundle?>> answers = [];
-  final Set<String> missing = {};
-  List<HwsSection>? probe;
-  List<HwsSection>? fast;
-  List<HwsSection>? slow;
-
-  /// Whether a request of [kind]'s sampler is still owed.
-  bool needs(SamplerKind kind) => switch (kind) {
-    SamplerKind.fast => fast == null,
-    SamplerKind.slow => probe == null || slow == null,
-  };
-}
-
 /// The samplers of one stretch of sampling on one link.
 final class _Run {
   _Run(this.link, this.epoch, {required this.holdFast, required this.probeAt});
@@ -1170,7 +921,7 @@ final class _Run {
   /// period that keeps landing on skipped ticks cannot starve them.
   final Set<SampleStream> missed = {};
 
-  /// The fast sampler waits for the probe (see `_probe`).
+  /// The fast sampler waits for the probe (see [_ProbeRead]).
   bool holdFast;
 
   /// When the probe goes out, by the monotonic clock, while the link

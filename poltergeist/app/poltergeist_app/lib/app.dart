@@ -10,6 +10,7 @@ import 'package:ghost_ui/ghost_ui.dart'
 import 'package:ghost_update/ghost_update.dart';
 import 'package:ghost_desktop/ghost_desktop.dart'
     show ClaimMacosToolbarBand, withMacosToolbarBand;
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 import 'package:poltergeist_core/poltergeist_core.dart'
     show
         BookmarkStore,
@@ -513,6 +514,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       themeMode: themes.themeMode,
       localizationsDelegates: const [
         AppLocalizations.delegate,
+        EditorLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

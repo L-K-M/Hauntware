@@ -222,22 +222,56 @@ const _at = 0x40;
 bool _isNameCharacter(int unit) =>
     _isAlphanumeric(unit) || unit == 0x5F || unit == 0x2D || unit == 0x2E;
 
+/// The quoting of a shell command line as its characters are read left
+/// to right: one scanner for every reading the masking makes, so where a
+/// word ends ([_shellWordEnd]), whether a shown prefix leaves a quote
+/// open ([_closesQuote]) and which newlines separate commands
+/// ([_ShellLine]) cannot drift apart. A divergence would mask too little
+/// (SMP-13).
+final class _ShellQuoteScanner {
+  /// The quote left open, or null outside quotes.
+  int? get quote => _quote;
+
+  int? _quote;
+
+  /// Whether the next character is escaped by a backslash.
+  var _escaped = false;
+
+  /// Reads the code unit of one character. A backslash escapes the next
+  /// character, except inside single quotes, where it is literal.
+  ///
+  /// Returns whether [unit] was escaped, and so carries no meaning: a
+  /// caller watching for a word's blank or a command's newline must ignore
+  /// it.
+  bool read(int unit) {
+    if (_escaped) {
+      _escaped = false;
+      return true;
+    }
+    if (unit == _backslash && _quote != _singleQuote) {
+      _escaped = true;
+      return false;
+    }
+    if (unit == _quote) {
+      _quote = null;
+      return false;
+    }
+    if (_quote == null && _quotes.contains(unit)) {
+      _quote = unit;
+    }
+    return false;
+  }
+}
+
 /// Where the shell word of [text] that starts at [start] ends: at the
 /// first space, tab or newline outside quotes, or at the text's end while
-/// a quote is open. A backslash escapes the next character, except inside
-/// single quotes.
+/// a quote is open.
 int _shellWordEnd(String text, int start) {
-  int? quote;
+  final scanner = _ShellQuoteScanner();
   for (var at = start; at < text.length; at++) {
     final unit = text.codeUnitAt(at);
-    if (quote == null && _blanks.contains(unit)) return at;
-    if (unit == _backslash && quote != _singleQuote) {
-      at++;
-    } else if (unit == quote) {
-      quote = null;
-    } else if (quote == null && _quotes.contains(unit)) {
-      quote = unit;
-    }
+    if (scanner.read(unit)) continue;
+    if (scanner.quote == null && _blanks.contains(unit)) return at;
   }
   return text.length;
 }
@@ -252,18 +286,11 @@ const _backslash = 0x5C;
 /// Whether [kept], a prefix shown before a mask, leaves a quote open that
 /// [last], the last character of the masked shell word, closes.
 bool _closesQuote(String kept, int last) {
-  int? quote;
+  final scanner = _ShellQuoteScanner();
   for (var at = 0; at < kept.length; at++) {
-    final unit = kept.codeUnitAt(at);
-    if (unit == _backslash && quote != _singleQuote) {
-      at++;
-    } else if (unit == quote) {
-      quote = null;
-    } else if (quote == null && _quotes.contains(unit)) {
-      quote = unit;
-    }
+    scanner.read(kept.codeUnitAt(at));
   }
-  return quote != null && quote == last;
+  return scanner.quote == last;
 }
 
 /// A shell's `-c` option, alone or ending a cluster (`-c`, `-ec`, `-lc`):
@@ -276,24 +303,18 @@ final class _ShellLine {
   _ShellLine(this._text);
 
   final String _text;
+  final _ShellQuoteScanner _scanner = _ShellQuoteScanner();
   var _at = 0;
-  int? _quote;
 
   /// Whether a newline outside quotes lies between the end of the last
-  /// call's span and [to]. Each character is read once over all calls.
+  /// call's span and [to]. Each character is read once over all calls; an
+  /// escape that reaches past [to] carries into the next call.
   bool separatesBefore(int to) {
     var separates = false;
-    for (; _at < to; _at++) {
-      final unit = _text.codeUnitAt(_at);
-      if (unit == _backslash && _quote != _singleQuote) {
-        _at++;
-      } else if (unit == _quote) {
-        _quote = null;
-      } else if (_quote == null && _quotes.contains(unit)) {
-        _quote = unit;
-      } else if (_quote == null && unit == _newline) {
-        separates = true;
-      }
+    while (_at < to) {
+      final unit = _text.codeUnitAt(_at++);
+      if (_scanner.read(unit)) continue;
+      if (_scanner.quote == null && unit == _newline) separates = true;
     }
     return separates;
   }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert' show jsonEncode;
 import 'dart:io';
 import 'dart:isolate';
 
@@ -9,7 +8,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show HostProfile, OpDirectoryKind;
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
-    show EndpointPin, EndpointPinStore, endpointPinsFileName;
+    show EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
     show
         CredentialDraft,
@@ -17,19 +16,13 @@ import 'package:seance_core/seance_core.dart'
         ImportedHost,
         Prober,
         SecretRedactor,
-        ServerConfig,
         SshLink,
         TcpBannerProber;
 
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../audit/host_audit_line.dart';
-import '../admin/firewall.dart';
-import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
-import '../admin/smart.dart';
-import '../admin/sshd_posture.dart';
-import '../admin/user_crontabs.dart';
 import '../certificates/tls_check.dart';
 import '../alerts/alert_evaluator.dart';
 import '../forwards/port_forwards.dart';
@@ -38,20 +31,17 @@ import '../capabilities/capability_cache.dart';
 import '../catalog/engine_recovery.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
-import '../catalog/klabautermann_records.dart'
-    show diffServerPrefs, encodeSyncedRule;
 import '../catalog/server_drafts.dart'
     show serverConfigOfDraft, serverDraftProblem;
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../docker/exec_sessions.dart';
 import '../fleet/endpoint_pins.dart';
-import '../fleet/imported_fleet.dart';
+import '../fleet/imported_fleet.dart' show localUserName;
 import '../fleet/monitor_set.dart';
 import '../fleet/reachability_service.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
-import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
 import '../links/channel_quota.dart';
@@ -63,7 +53,6 @@ import '../logs/host_queries.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
 import '../operations/detached_runner.dart';
-import '../operations/edit_reader.dart';
 import '../operations/footprint.dart';
 import '../operations/operation_plan.dart'
     show
@@ -79,12 +68,8 @@ import '../operations/plan_types.dart' show RequiredLevel;
 import '../operations/plans/backup_plans.dart';
 import '../operations/plans/docker_plans.dart';
 import '../operations/plans/edit_plan.dart';
-import '../jobs/job_history_query.dart';
 import '../services/packages.dart';
-import '../services/accounts.dart';
 import '../services/disk_usage.dart';
-import '../services/timer_detail.dart';
-import '../services/unit_queries.dart';
 import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/plans/redeploy_plan.dart';
@@ -92,9 +77,11 @@ import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import '../runtime/engine_fleet.dart';
+import '../runtime/engine_reads.dart';
+import '../runtime/engine_sync_chain.dart';
 import 'protocol.dart';
 import 'request_ids.dart';
-import 'serial_chain.dart';
 
 /// Redacts the lines an export carries (LOG-10, 03 §8.9), as the audit
 /// log and operation output are.
@@ -397,20 +384,10 @@ void _runEngine(
   // The login name for imported hosts and hops that name no user.
   final localUser = localUserName(Platform.environment);
 
-  // The fleet the engine serves: the sync account's servers, then the
-  // imports, with the config of each import and hop it can dial, and its
-  // server ids. A synced server has a config only while its endpoint is
-  // confirmed on this device (03 §4.7, SAF-09), so neither the user nor
-  // a background connect dials it otherwise. Imports count as confirmed
-  // on the device that imported them (03 §4.3, owner question O6's
-  // default).
-  var syncedServers = const <ServerConfig>[];
-  var synced = SyncedFleet.empty;
-  late ImportedFleet fleet;
-  var fleetIds = <String>{};
-  List<FleetEntry> fleetEntries() => [...synced.entries, ...fleet.entries];
-  ServerConfig? configOf(String id) =>
-      synced.serverConfig(id) ?? fleet.serverConfig(id);
+  // The fleet bookkeeping (ENG-11 step 2, ARC-05), assigned once every
+  // dependency it reads exists below. Its state and functions live in
+  // [EngineFleet], testable without an isolate.
+  late final EngineFleet fleet;
 
   // The endpoints this device confirmed (D16): `endpoint_pins.json` while
   // the process holds the support directory alone, otherwise memory only.
@@ -481,11 +458,12 @@ void _runEngine(
               (pin) => pinConfirmed(pin),
             ),
             prompts: prompts,
-            hopConfig: configOf,
+            hopConfig: (id) => fleet.configOf(id),
             dial: dial,
           ).connect,
           // Fleet entries only: the fleet's hop configs serve their routes.
-          configFor: (id) => fleetIds.contains(id) ? configOf(id) : null,
+          configFor: (id) =>
+              fleet.fleetIds.contains(id) ? fleet.configOf(id) : null,
           emit: (event) {
             uiPort.send(event);
             if (event is LinkState) {
@@ -523,7 +501,7 @@ void _runEngine(
           credentials: credentials,
           hostKeys: hostKeys,
           prompts: prompts,
-          hopConfig: configOf,
+          hopConfig: (id) => fleet.configOf(id),
           authenticator: testAuthenticator ?? liveTestAuthenticator,
         )
       : null;
@@ -580,14 +558,10 @@ void _runEngine(
     }
   }
 
-  // FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
-  // `overview` the fleet rows read while the app is in the foreground,
-  // whether or not a view shows them, over links dialed unattended so
-  // nothing prompts. It holds eligible fleet servers only. The servers
-  // a view holds a link to ([Connect] without its [Disconnect] yet) are
-  // kept beside it: a server that leaves the set keeps the link a view
-  // holds, and a view that leaves keeps a monitored server's link.
-  var monitored = const <String>{};
+  // The servers a view holds a link to ([Connect] without its
+  // [Disconnect] yet), kept apart from the fleet's monitor set: a server
+  // that leaves the set keeps the link a view holds, and a view that
+  // leaves keeps a monitored server's link.
   final viewed = <String>{};
 
   // Verifies a server's footprint (SAF-14, P13) and sends what it found:
@@ -623,7 +597,7 @@ void _runEngine(
   if (links != null) {
     admin = AdminModeController(
       linkFor: links.link,
-      endpointOf: (id) => switch (configOf(id)) {
+      endpointOf: (id) => switch (fleet.configOf(id)) {
         final config? => (
           host: config.host,
           port: config.port,
@@ -844,7 +818,7 @@ void _runEngine(
       control: <T>(serverId, call) =>
           router.useEndpoint(serverId, (client, _) => call(client)),
       emit: uiPort.send,
-      fleet: (serverId) => fleetIds.contains(serverId),
+      fleet: (serverId) => fleet.fleetIds.contains(serverId),
       audit: audit.append,
       deviceId: start.deviceId,
     );
@@ -860,235 +834,40 @@ void _runEngine(
         )
       : null;
 
-  // Whether the app has had a fleet. Probing waits for it, since the app
-  // keeps answers only for servers its fleet lists.
-  var fleetSent = false;
-
-  // The synced preferences the app last heard, so a round sends only
-  // what changed.
-  var prefsSent = <String, String>{};
-  // The alert rules the app last heard, encoded; none to start with.
-  var rulesSent = '[]';
-  // The snippets the app last heard, encoded likewise.
-  var snippetsSent = '[]';
-  Future<void> sendServerPrefs() async {
-    final (changes, sent) = diffServerPrefs(
-      prefsSent,
-      await sync.serverPrefs(),
-    );
-    changes.forEach(uiPort.send);
-    prefsSent = sent;
-    // By id, so a reload that lists the same rules in another order
-    // sends nothing.
-    final rules = [...await sync.rules()]..sort((a, b) => a.id.compareTo(b.id));
-    final encoded = jsonEncode([
-      for (final rule in rules) encodeSyncedRule(rule),
-    ]);
-    if (encoded != rulesSent) {
-      uiPort.send(AlertRulesChanged(List.unmodifiable(rules)));
-      rulesSent = encoded;
-    }
-    alerts.setRules(rules, DateTime.now().toUtc()).forEach(uiPort.send);
-
-    final snippets = sync.snippets();
-    final snippetsEncoded = jsonEncode([
-      for (final snippet in snippets) snippet.toJson(),
-    ]);
-    if (snippetsEncoded != snippetsSent) {
-      uiPort.send(SnippetsChanged(List.unmodifiable(snippets)));
-      snippetsSent = snippetsEncoded;
-    }
-  }
-
-  void probeFleet() {
-    if (!fleetSent) return;
-    reachability?.update(probeTargets(fleetEntries(), configOf));
-  }
-
-  // The fleet servers the monitor set may hold now: those the shared rule
-  // allows and the engine can dial, which an import naming no user lacks
-  // on a system that names no local account.
-  Set<String> monitorEligibleIds() => {
-    for (final entry in fleetEntries())
-      if (monitorEligibilityOf(entry) == MonitorEligibility.eligible &&
-          configOf(entry.serverId) != null)
-        entry.serverId,
-  };
-
-  // Makes [next], eligible fleet servers only, the monitor set: a server
-  // that joins gets its subscription and an unattended connect, and one
-  // that leaves loses both, its link only when no view holds it.
-  void applyMonitorSet(Set<String> next) {
-    final before = monitored;
-    monitored = Set.unmodifiable(next);
-    for (final serverId in before.difference(next)) {
-      sampling.unsubscribe(
-        Unsubscribe(serverId: serverId, subscriptionId: monitorSubscriptionId),
-      );
-      scheduler?.update(serverId);
-      if (viewed.contains(serverId)) continue;
-      logs?.disconnect(serverId);
-      links?.disconnect(serverId);
-    }
-    for (final serverId in next.difference(before)) {
-      final subscription = Subscribe(
-        serverId: serverId,
-        subscriptionId: monitorSubscriptionId,
-        streams: const {SampleStream.overview},
-      );
-      sampling.subscribe(subscription);
-      scheduler?.subscribed(subscription);
-      links?.connect(serverId, purpose: ConnectPurpose.background);
-    }
-  }
-
-  // Rebuilds the fleet from the store. A server that left it is forgotten
-  // (03 §5.1): its samplers, link and attempts end and its subscriptions
-  // go. One that keeps its id under another endpoint, an import whose
-  // endpoint changed or a synced server in [moved], loses what the engine
-  // learned or chose for that machine: its cached profile and history,
-  // Docker session and choices, admin state, reports and forwards
-  // (SYN-08).
-  void refreshFleet({Set<String> moved = const {}}) {
-    final previous = fleetIds.isEmpty ? null : fleet;
-    fleet = ImportedFleet(
-      imports.hosts,
-      hops: imports.hops,
-      localUser: localUser,
-      detail: imports.detail,
-    );
-    final before = fleetIds;
-    final entries = fleetEntries();
-    fleetIds = {for (final entry in entries) entry.serverId};
-    sampling.fleet = fleetIds;
-    alerts
-        .setFleet({
-          for (final entry in entries) entry.serverId: entry.group,
-        }, DateTime.now().toUtc())
-        .forEach(uiPort.send);
-    scheduler?.retain(fleetIds);
-    logs?.retain(fleetIds);
-    operations?.retain(fleetIds);
-    channelQuotas.retain(fleetIds);
-    links?.forget(before.difference(fleetIds));
-    viewed.retainAll(fleetIds);
-    // A monitored server that left the fleet or is no longer eligible (a
-    // sync changed its endpoint, an import its credentials) leaves the
-    // set; the app hears the fleet and sends its own set again.
-    if (monitored.isNotEmpty) {
-      applyMonitorSet(monitored.intersection(monitorEligibleIds()));
-    }
-    final forgotten = {
-      for (final id in before)
-        if (!fleetIds.contains(id) ||
-            moved.contains(id) ||
-            previous?.endpointOf(id) != fleet.endpointOf(id))
-          id,
-    };
-    terminals?.forget(forgotten);
-    forwards?.forget(forgotten);
-    docker
-      ?..forget(forgotten)
-      ..retain(fleetIds);
-    admin?.forget(forgotten);
-    plans.forget(forgotten);
-    packageReports.forget(forgotten);
-    diskTrees.forget(forgotten);
-    profiles.removeWhere((id, _) => forgotten.contains(id));
-    // A kept import whose endpoint changed names another machine, so its
-    // link and log streams would otherwise go on serving the old one. A
-    // synced server belongs to [applySynced]: one it moved waits for the
-    // user's confirmation, and one whose pins could not be read stays
-    // undialed until they are.
-    final importedIds = {for (final entry in fleet.entries) entry.serverId};
-    for (final id in forgotten) {
-      if (!importedIds.contains(id)) continue;
-      logs?.disconnect(id);
-      links?.disconnect(id);
-      if (viewed.contains(id)) {
-        links?.connect(id, purpose: ConnectPurpose.interactive);
-      } else if (monitored.contains(id)) {
-        links?.connect(id, purpose: ConnectPurpose.background);
-      }
-    }
-    // Before the caller sends the fleet or an EndpointChanged, so no
-    // probe of a server starts, and no answer for it goes out, once the
-    // app hears it left or lost its pin.
-    probeFleet();
-    detach(capabilities?.forget(forgotten));
-    detach(history?.forget(forgotten));
-  }
-
-  // Lists [servers] against this device's pins. A pin the store cannot
-  // read fails closed: its server waits to be confirmed and nothing dials
-  // it, but it is listed as unreadable rather than changed. The file
-  // store throws only FileSystemException, for a file it cannot read
-  // (corrupt files are quarantined and read as empty); anything else is
-  // a bug and propagates.
-  Future<SyncedFleet> listSynced(List<ServerConfig> servers) async {
-    final pins = <String, EndpointPin>{};
-    final unreadable = <String>{};
-    for (final server in servers) {
-      try {
-        if (await endpointPins.pinFor(server.id) case final pin?) {
-          pins[server.id] = pin;
-        }
-      } on FileSystemException {
-        unreadable.add(server.id);
-      }
-    }
-    return SyncedFleet(servers, pins: pins, unreadable: unreadable);
-  }
-
-  // The synced servers whose endpoints count as confirmed when the next
-  // fleet is compared: those confirmed in the last one, and those whose
-  // pin, or a hop's, could not be read since they were, so a change made
-  // while the store failed is caught once it reads again. A server whose
-  // pin could not be read at startup is here too, as its cached profile
-  // was kept.
-  var trustedIds = const <String>{};
-
-  // Takes [next] as the synced fleet. A trusted server that the account
-  // still holds and that is no longer confirmed, with its pins read, had
-  // its endpoint changed by a sync (03 §4.7, SYN-08): the app hears it,
-  // its link and log streams close, and refreshFleet forgets what the
-  // engine held for the old machine, as for a moved import. Nothing redials it until the user
-  // confirms it again. One whose pins could not be read is only not
-  // dialed for now: a store failure is no endpoint change. A server the
-  // account no longer holds needs nothing here: refreshFleet drops it
-  // from fleetIds, so its link, streams, samplers and cached profile go
-  // with the retain and forget there (03 §5.1).
-  void applySynced(SyncedFleet next) {
-    final changed = {
-      for (final id in trustedIds)
-        if (next.lists(id) &&
-            !next.confirmedIds.contains(id) &&
-            !next.unreadableIds.contains(id))
-          id,
-    };
-    trustedIds = {
-      ...next.confirmedIds,
-      for (final id in trustedIds)
-        if (next.unreadableIds.contains(id)) id,
-    };
-    synced = next;
-    refreshFleet(moved: changed);
-    for (final id in changed) {
-      uiPort.send(EndpointChanged(id));
-      logs?.disconnect(id);
-      links?.disconnect(id);
-    }
-  }
-
-  // Lists the synced servers again with the pins as they stand. A
-  // confirmation in the request queue and a sync round beside it both
-  // relist; one whose servers a round replaced while it read the pins
-  // leaves the fleet to that round's own relist, which reads them later.
-  Future<void> relistSynced() async {
-    final servers = syncedServers;
-    final next = await listSynced(servers);
-    if (identical(servers, syncedServers)) applySynced(next);
-  }
+  // The fleet object, once every dependency it reads exists. Each
+  // nullable consumer is a getter because the links block below assigns
+  // it later, and the stores and sync arrive in the startup chain.
+  fleet = EngineFleet(
+    sampling: sampling,
+    alerts: alerts,
+    scheduler: () => scheduler,
+    logs: () => logs,
+    operations: () => operations,
+    channelQuotas: channelQuotas,
+    links: links,
+    viewed: viewed,
+    terminals: () => terminals,
+    forwards: () => forwards,
+    docker: () => docker,
+    admin: () => admin,
+    plans: plans,
+    packageReports: packageReports,
+    diskTrees: diskTrees,
+    profiles: profiles,
+    capabilities: () => capabilities,
+    history: () => history,
+    reachability: reachability,
+    imports: (
+      hosts: () => imports.hosts,
+      hops: () => imports.hops,
+      detail: () => imports.detail,
+    ),
+    localUser: localUser,
+    endpointPins: endpointPins,
+    sync: () => sync,
+    detach: detach,
+    send: uiPort.send,
+  );
 
   // A server's cached profile goes out when a request first names it,
   // since the startup events reach only the app's first listener.
@@ -1102,140 +881,25 @@ void _runEngine(
   // request queue rather than in it: an enrollment waits on the network,
   // a key derivation and the app's keystore answers, which arrive as
   // requests, and links, sampling and imports go on meanwhile.
-  var syncTail = Future<void>.value();
-  // Each link completes normally whatever its body throws: [onError]
-  // answers the request that asked, and without one the error is
-  // reported as a fault.
-  void chain(
-    Future<void> Function() body, {
-    void Function(Object error)? onError,
-  }) {
-    syncTail = chainAfter(syncTail, body, onError: onError, onFault: fault);
-  }
+  final syncChain = EngineSyncChain(
+    sync: () => sync,
+    send: uiPort.send,
+    alerts: alerts,
+    fleetEntries: fleet.fleetEntries,
+    syncedFleet: () => fleet.synced,
+    refreshSynced: fleet.refreshSynced,
+    relistSynced: fleet.relistSynced,
+    endpointPins: endpointPins,
+    pinPublicationRelease: start.pinPublicationRelease,
+    fault: fault,
+  );
 
   pinConfirmed = (pin) {
     if (!syncOpened) return;
-    chain(() => sync.publishPin(pin, release: start.pinPublicationRelease));
-  };
-  // Null while no release is offered: the app's default state says so.
-  PinPublicationState? pinPublicationState() {
-    final release = start.pinPublicationRelease;
-    if (release == null) return null;
-    return PinPublicationState(
-      release: release,
-      asserted: sync.pinPublicationAsserted(release),
+    syncChain.chain(
+      () => sync.publishPin(pin, release: start.pinPublicationRelease),
     );
-  }
-
-  // [requestId] is the request's own, echoed on each status; null for a
-  // round the engine starts itself.
-  void runSync(
-    SyncOperation operation,
-    Future<SyncStatus> Function() body, {
-    String? requestId,
-  }) {
-    chain(() async {
-      uiPort.send(
-        SyncStatus(
-          SyncPhase.running,
-          operation: operation,
-          requestId: requestId,
-          account: sync.account,
-        ),
-      );
-      final SyncStatus status;
-      try {
-        status = await body();
-        // The fleet first, so it shows the servers when the answer arrives.
-        if (status.phase == SyncPhase.succeeded) {
-          syncedServers = await sync.servers();
-          await relistSynced();
-        }
-      } on Object catch (error) {
-        // EngineSync answers every failure itself; this keeps the chain
-        // alive should that, or the fleet refresh, ever slip: a chained
-        // operation runs only after the one before it completes normally.
-        uiPort.send(
-          SyncStatus(
-            SyncPhase.failed,
-            operation: operation,
-            requestId: requestId,
-            account: sync.account,
-            failure: SyncFailure.other,
-            detail: '$error',
-          ),
-        );
-        return;
-      }
-      if (status.phase == SyncPhase.succeeded) {
-        uiPort.send(CatalogReplaced(fleetEntries()));
-        // The round took, so it is answered as it ended even when the
-        // preferences it pulled cannot be sent on: records from other
-        // devices are encoded there, and the next round sends them again.
-        try {
-          await sendServerPrefs();
-        } on Object catch (error, stack) {
-          fault(error, stack);
-        }
-      }
-      uiPort.send(status.answering(requestId));
-    });
-  }
-
-  // A catalog write runs on the sync chain too, so it never overlaps a
-  // round. One that took shows in the fleet and the preferences before
-  // its answer, and a round queued behind it pushes it. A saved server's
-  // endpoint counts as confirmed on this device: the user typed it (M5
-  // plan P16).
-  void runWrite(
-    String requestId,
-    Future<EngineEvent> Function() body, {
-    String? confirm,
-    bool confirmWritten = false,
-  }) {
-    chain(() async {
-      final EngineEvent answer;
-      try {
-        answer = await body();
-      } on Object catch (error) {
-        // EngineSync answers every refusal itself; this keeps the chain
-        // alive should a write slip past that.
-        uiPort.send(
-          CatalogWriteRefused(
-            requestId: requestId,
-            failure: CatalogWriteFailure.other,
-            detail: '$error',
-          ),
-        );
-        return;
-      }
-      if (answer is CatalogWritten) {
-        // The write is sealed, so it is answered as written and pushed
-        // even when its fleet refresh, a pin's save or the preferences
-        // throw; the next round's refresh shows what this one missed. A
-        // throw here would also end the chain: a chained operation runs
-        // only after the one before it completes normally.
-        try {
-          syncedServers = await sync.servers();
-          await relistSynced();
-          final confirmed =
-              confirm ?? (confirmWritten ? answer.serverId : null);
-          if (confirmed != null) {
-            for (final pin in synced.pinsFor([confirmed], DateTime.now())) {
-              await endpointPins.confirm(pin);
-            }
-            await relistSynced();
-          }
-          uiPort.send(CatalogReplaced(fleetEntries()));
-          await sendServerPrefs();
-        } on Object {
-          // Recovered as above.
-        }
-      }
-      uiPort.send(answer);
-      if (answer is CatalogWritten) runSync(SyncOperation.round, sync.runRound);
-    });
-  }
+  };
 
   Future<void> replyToRecovery(
     String requestId,
@@ -1259,6 +923,10 @@ void _runEngine(
     }
   }
 
+  // The read handlers (ENG-11 step 5, ARC-05), built once startup has
+  // opened every store they read, so their history is this run's.
+  late final EngineReads reads;
+
   Future<void> handle(Object? message) async {
     switch (message) {
       case Hello(:final protocolVersion):
@@ -1279,22 +947,22 @@ void _runEngine(
             syncAccount: sync.account,
             syncStoreIssues: sync.issues,
             auditInMemory: audit.storage == AuditStorage.memory,
-            pinPublication: pinPublicationState(),
+            pinPublication: syncChain.pinPublicationState(),
           ),
         );
         // The fleet as the engine starts: the servers the last sync left
         // and the imports an earlier run saved (none when the stores were
         // empty or unusable), so the rail shows them before the user does
         // anything.
-        uiPort.send(CatalogReplaced(fleetEntries()));
-        fleetSent = true;
+        uiPort.send(CatalogReplaced(fleet.fleetEntries()));
+        fleet.fleetSent = true;
         // The probes start whatever the stored preferences do.
         try {
-          await sendServerPrefs();
+          await syncChain.sendServerPrefs();
         } on Object catch (error, stack) {
           fault(error, stack);
         }
-        probeFleet();
+        fleet.probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
@@ -1310,9 +978,9 @@ void _runEngine(
         } else {
           // A fleet server without a config is the user's to fix, so the
           // app is told why; any other id is not a server it lists.
-          switch (fleetIds.contains(serverId)
-              ? synced.missingConfigReason(serverId) ??
-                    fleet.missingConfigReason(serverId)
+          switch (fleet.fleetIds.contains(serverId)
+              ? fleet.synced.missingConfigReason(serverId) ??
+                    fleet.fleet.missingConfigReason(serverId)
               : null) {
             case final reason?:
               uiPort.send(ConnectRejected(serverId, reason));
@@ -1325,7 +993,7 @@ void _runEngine(
         // A monitored server keeps its link for the monitor set. One
         // without a link yet gives up the view's attempt, and with it any
         // prompt the view raised, and goes on dialing unattended.
-        final monitoredServer = monitored.contains(serverId);
+        final monitoredServer = fleet.monitored.contains(serverId);
         if (monitoredServer && links?.link(serverId) != null) return;
         // Its streams end before its link closes, so none reports
         // waiting for that link first.
@@ -1425,7 +1093,7 @@ void _runEngine(
         switch (hostQueries) {
           case null:
             reject(message, 'links are off in this engine');
-          case _ when !fleetIds.contains(serverId):
+          case _ when !fleet.fleetIds.contains(serverId):
             reject(message, 'no fleet server $serverId');
           case final queries:
             // Not awaited: the queue keeps serving while the host answers.
@@ -1531,8 +1199,8 @@ void _runEngine(
         // writes nothing until an import saves (D59).
         final saved = await imports.replace(result.hosts, hops: result.hops);
         capabilities?.fleetSave = saved ? FleetSave.saved : FleetSave.unsaved;
-        refreshFleet();
-        uiPort.send(CatalogReplaced(fleetEntries()));
+        fleet.refreshFleet();
+        uiPort.send(CatalogReplaced(fleet.fleetEntries()));
         uiPort.send(
           SshConfigImported(
             importedCount: result.hosts.length,
@@ -1549,7 +1217,7 @@ void _runEngine(
         final seen = shown == null
             ? serverIds
             : [
-                for (final entry in synced.entries)
+                for (final entry in fleet.synced.entries)
                   if (serverIds.contains(entry.serverId) &&
                       shown[entry.serverId] == ShownEndpoint.of(entry))
                     entry.serverId,
@@ -1559,7 +1227,11 @@ void _runEngine(
         // fleet, so the fleet's answer ends the request either way; the
         // others still count.
         Object? failure;
-        for (final pin in synced.pinsFor(seen, DateTime.now(), shown: shown)) {
+        for (final pin in fleet.synced.pinsFor(
+          seen,
+          DateTime.now(),
+          shown: shown,
+        )) {
           try {
             await endpointPins.confirm(pin);
           } on Object catch (error) {
@@ -1569,8 +1241,8 @@ void _runEngine(
         if (failure != null) {
           reject(message, '$endpointPinsFileName not saved: $failure');
         }
-        await relistSynced();
-        uiPort.send(CatalogReplaced(fleetEntries()));
+        await fleet.relistSynced();
+        uiPort.send(CatalogReplaced(fleet.fleetEntries()));
       case SetMonitorSet(:final serverIds):
         // The app offers only what the engine allows (FL-21), so a
         // rejection means the two saw different fleets; the app's next
@@ -1580,28 +1252,36 @@ void _runEngine(
           reject(message, 'more than $kMonitorSetLimit servers');
           return;
         }
-        final eligible = monitorEligibleIds();
-        applyMonitorSet(requested.intersection(eligible));
+        final eligible = fleet.monitorEligibleIds();
+        fleet.applyMonitorSet(requested.intersection(eligible));
         final skipped = requested.difference(eligible);
         if (skipped.isNotEmpty) {
           reject(message, 'not eligible fleet servers: ${skipped.join(', ')}');
         }
       case EnrollSync(:final requestId):
-        runSync(
+        syncChain.runSync(
           SyncOperation.enroll,
           () => sync.enroll(message),
           requestId: requestId,
         );
       case RunSyncRound(:final requestId):
-        runSync(SyncOperation.round, sync.runRound, requestId: requestId);
+        syncChain.runSync(
+          SyncOperation.round,
+          sync.runRound,
+          requestId: requestId,
+        );
       case SignOutSync(:final requestId):
         // The fleet refresh after it drops the account's servers, which
         // closes their links and forgets their profiles and history.
-        runSync(SyncOperation.signOut, sync.signOut, requestId: requestId);
+        syncChain.runSync(
+          SyncOperation.signOut,
+          sync.signOut,
+          requestId: requestId,
+        );
       case ReadPinConflicts():
         // Behind any round already queued, so a read never races the diff
         // that round is about to change.
-        chain(
+        syncChain.chain(
           () async =>
               uiPort.send(PinConflictsChanged(await sync.pinConflicts())),
           onError: (error) => reject(message, '$error'),
@@ -1612,7 +1292,7 @@ void _runEngine(
         :final localFingerprintSha256,
         :final pulledFingerprintSha256,
       ):
-        chain(() async {
+        syncChain.chain(() async {
           try {
             final conflicts = await sync.resolvePinConflict(
               locator,
@@ -1633,17 +1313,21 @@ void _runEngine(
           ),
         );
       case SaveServer(:final requestId, :final draft):
-        runWrite(requestId, () => sync.saveServer(message), confirm: draft.id);
+        syncChain.runWrite(
+          requestId,
+          () => sync.saveServer(message),
+          confirm: draft.id,
+        );
       case DuplicateServer(:final requestId, :final serverId):
         // A copy of an endpoint this device confirmed is confirmed too: it
         // is the same endpoint, copied by the user.
-        runWrite(
+        syncChain.runWrite(
           requestId,
           () => sync.duplicateServer(message),
-          confirmWritten: synced.confirmedIds.contains(serverId),
+          confirmWritten: fleet.synced.confirmedIds.contains(serverId),
         );
       case DeleteServer(:final requestId):
-        runWrite(requestId, () => sync.deleteServer(message));
+        syncChain.runWrite(requestId, () => sync.deleteServer(message));
       case TestServerConnection(
         :final requestId,
         :final draft,
@@ -1694,11 +1378,11 @@ void _runEngine(
           onError: (error, _) => reject(message, 'connection test: $error'),
         );
       case SetServerPrefs(:final requestId):
-        runWrite(requestId, () => sync.setServerPrefs(message));
+        syncChain.runWrite(requestId, () => sync.setServerPrefs(message));
       case PutRule(:final requestId):
-        runWrite(requestId, () => sync.putRule(message));
+        syncChain.runWrite(requestId, () => sync.putRule(message));
       case RemoveRule(:final requestId):
-        runWrite(requestId, () => sync.removeRule(message));
+        syncChain.runWrite(requestId, () => sync.removeRule(message));
       case PlanAction(:final intent):
         void refuse(ActionRefusalReason reason, {String? detail}) =>
             uiPort.send(
@@ -1900,7 +1584,7 @@ void _runEngine(
               refuse(ActionRefusalReason.engineUnavailable, detail: '$error'),
         );
       case FootprintQuery(:final serverId):
-        if (!fleetIds.contains(serverId)) {
+        if (!fleet.fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');
         } else if (links?.link(serverId) == null ||
             profiles[serverId] == null) {
@@ -1908,50 +1592,10 @@ void _runEngine(
         } else {
           verifyFootprint(serverId);
         }
-      case ReadEditable(:final serverId, :final requestId, :final target):
-        void answer(EditReadResult result) => uiPort.send(
-          EditRead(serverId: serverId, requestId: requestId, result: result),
-        );
-        final link = links?.link(serverId);
-        final profile = profiles[serverId];
-        if (!fleetIds.contains(serverId) || link == null || profile == null) {
-          answer(const EditReadFailed(EditReadFailure.noLink));
-          return;
-        }
-        // Not awaited: the read waits on the host while the queue serves
-        // the app. readEditable answers rather than throws; a lend that
-        // fails still answers, so the editor never waits on nothing.
-        unawaited(
-          lendSession(
-            serverId,
-            () => readEditable(target, (
-              link: link,
-              profile: profile,
-              admin: admin?.session(serverId),
-            ), stacks: stackEditLookup(serverId)),
-          ).then(
-            answer,
-            onError: (Object error) => answer(
-              EditReadFailed(EditReadFailure.failed, detail: '$error'),
-            ),
-          ),
-        );
-      case AuditQuery(:final serverId, :final after, :final limit):
-        // The query names no id a rejection could echo, and the app
-        // matches answers by server: a read that throws answers as a log
-        // that could not be read, so the page waiting on it settles.
-        try {
-          final (:records, :next, :unreadable) = await audit.query(
-            serverId,
-            after: after,
-            limit: limit,
-          );
-          uiPort.send(
-            AuditRecords(serverId, records, next: next, unreadable: unreadable),
-          );
-        } on Object {
-          uiPort.send(AuditRecords(serverId, const [], unreadable: true));
-        }
+      case ReadEditable():
+        reads.editable(message);
+      case AuditQuery():
+        await reads.audit(message);
       case AcknowledgeOperation(:final serverId, :final id):
         final tracker = operations;
         if (tracker == null) {
@@ -1971,456 +1615,30 @@ void _runEngine(
                 reject(message, 'acknowledgement: $error'),
           ),
         );
-      case ReadHistory(:final serverId, :final tier, :final requestId):
-        const nothing = HistoryRange(buckets: [], gaps: []);
-        // The app waits on the answer, so a read that fails answers
-        // nothing recorded rather than nothing at all. A server outside
-        // the fleet, such as one a view still shows while it is removed,
-        // has no history to read.
-        final store = fleetIds.contains(serverId) ? history : null;
-        final range =
-            await (store?.read(serverId, tier, now: DateTime.now().toUtc()) ??
-                    Future.value(nothing))
-                .catchError((Object _) => nothing);
-        uiPort.send(
-          HistoryRead(
-            requestId: requestId,
-            serverId: serverId,
-            tier: tier,
-            range: range,
-          ),
-        );
-      case ReadUserCrontabs(:final serverId, :final requestId):
-        void fail(UserCrontabsFailure failure) => uiPort.send(
-          UserCrontabs(
-            serverId: serverId,
-            requestId: requestId,
-            failure: failure,
-          ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(UserCrontabsFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(UserCrontabsFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        // Not awaited: one elevated command per user, and the queue keeps
-        // serving the app meanwhile.
-        unawaited(
-          lendSession(
-            serverId,
-            () => readUserCrontabs(
-              serverId,
-              requestId: requestId,
-              session: session,
-              profile: profiles[serverId],
-              now: DateTime.now().toUtc(),
-            ),
-          ).then(
-            uiPort.send,
-            // A read that throws still answers, so the view stops waiting.
-            onError: (Object _) => fail(UserCrontabsFailure.transport),
-          ),
-        );
-      case ReadAccounts(:final serverId, :final requestId):
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          uiPort.send(
-            AccountsReport(
-              serverId: serverId,
-              requestId: requestId,
-              failure: AccountsReportFailure.noLink,
-            ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads; a lend that fails still
-        // answers.
-        unawaited(
-          lendSession(
-            serverId,
-            () => readAccounts(serverId, requestId: requestId, link: link),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => uiPort.send(
-              AccountsReport(
-                serverId: serverId,
-                requestId: requestId,
-                failure: AccountsReportFailure.transport,
-              ),
-            ),
-          ),
-        );
-      case ReadDiskUsage(
-        :final serverId,
-        :final path,
-        :final requestId,
-        :final elevated,
-        :final root,
-        :final fresh,
-      ):
-        void fail(DiskUsageReportFailure failure) => uiPort.send(
-          DiskUsageReport(
-            serverId: serverId,
-            requestId: requestId,
-            path: path,
-            failure: failure,
-          ),
-        );
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          fail(DiskUsageReportFailure.noLink);
-          return;
-        }
-        final session = elevated ? admin?.session(serverId) : null;
-        if (elevated) {
-          if (session == null) {
-            fail(DiskUsageReportFailure.adminRequired);
-            return;
-          }
-          admin?.touch(serverId);
-        }
-        Future<DiskUsageReport> readFolder() => lendSession(
-          serverId,
-          () => readDiskUsage(
-            serverId,
-            path,
-            requestId: requestId,
-            link: link,
-            session: session,
-          ),
-        );
-        // A folder under the explorer's mount point answers from one
-        // export of the whole filesystem where ncdu or gdu is installed
-        // ([diskUsageFromTree]); any other read, or a folder the export
-        // dropped, reads with du.
-        final tool = diskUsageExportToolOf(profiles[serverId]);
-        Future<DiskUsageReport> read() async {
-          if (root != null &&
-              tool != null &&
-              diskUsageFromTree(path: path, root: root, fresh: fresh)) {
-            final tree = await diskTrees.tree(
-              serverId,
-              root,
-              elevated: elevated,
-              fresh: fresh,
-              read: (cancelled) => lendSession(
-                serverId,
-                () => readDiskUsageTree(
-                  root,
-                  tool: tool,
-                  link: link,
-                  session: session,
-                  cancelled: cancelled,
-                ),
-              ),
-            );
-            if (tree?.listing(path) case final listing?) {
-              return DiskUsageReport(
-                serverId: serverId,
-                requestId: requestId,
-                path: path,
-                listing: listing,
-              );
-            }
-          }
-          return readFolder();
-        }
-
-        // Not awaited, as the other reads; a lend that fails still
-        // answers.
-        unawaited(
-          read().then(
-            uiPort.send,
-            onError: (Object _) => fail(DiskUsageReportFailure.transport),
-          ),
-        );
-      case ReadTimerDetail(
-        :final serverId,
-        :final unit,
-        :final requestId,
-        :final user,
-      ):
-        void fail(TimerDetailFailure failure) => uiPort.send(
-          TimerDetailReport(
-            serverId: serverId,
-            requestId: requestId,
-            unit: unit,
-            user: user,
-            failure: failure,
-          ),
-        );
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          fail(TimerDetailFailure.noLink);
-          return;
-        }
-        // Not awaited, as the other reads; a lend that fails still
-        // answers.
-        unawaited(
-          lendSession(
-            serverId,
-            () => readTimerDetail(
-              serverId,
-              unit,
-              requestId: requestId,
-              link: link,
-              user: user,
-              profile: profiles[serverId],
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(TimerDetailFailure.transport),
-          ),
-        );
-      case ReadSmart(:final serverId, :final requestId):
-        void fail(SmartReportFailure failure) => uiPort.send(
-          SmartReport(
-            serverId: serverId,
-            requestId: requestId,
-            failure: failure,
-          ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(SmartReportFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(SmartReportFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        // Not awaited, as the crontab read above. readSmart answers
-        // rather than throws; a lend that fails still answers, so the
-        // section never waits on nothing.
-        unawaited(
-          lendSession(
-            serverId,
-            () => readSmart(
-              serverId,
-              requestId: requestId,
-              session: session,
-              profile: profiles[serverId],
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(SmartReportFailure.transport),
-          ),
-        );
-      case ReadRestarts(:final serverId, :final requestId):
-        void fail(RestartReportFailure failure) => uiPort.send(
-          RestartReport(
-            serverId: serverId,
-            requestId: requestId,
-            failure: failure,
-          ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(RestartReportFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(RestartReportFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        // Not awaited, as the drive health read, and answering a lend
-        // that fails the same way.
-        unawaited(
-          lendSession(
-            serverId,
-            () =>
-                readRestarts(serverId, requestId: requestId, session: session),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(RestartReportFailure.transport),
-          ),
-        );
-      case ReadFirewall(:final serverId, :final requestId):
-        void fail(FirewallReportFailure failure) => uiPort.send(
-          FirewallReport(
-            serverId: serverId,
-            requestId: requestId,
-            failure: failure,
-          ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(FirewallReportFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(FirewallReportFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        unawaited(
-          lendSession(
-            serverId,
-            () =>
-                readFirewall(serverId, requestId: requestId, session: session),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(FirewallReportFailure.transport),
-          ),
-        );
-      case ReadSshdPosture(:final serverId, :final requestId):
-        void fail(SshdPostureFailure failure) => uiPort.send(
-          SshdPostureReport(
-            serverId: serverId,
-            requestId: requestId,
-            failure: failure,
-          ),
-        );
-        if (links?.link(serverId) == null) {
-          fail(SshdPostureFailure.noLink);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (session == null) {
-          fail(SshdPostureFailure.adminRequired);
-          return;
-        }
-        admin?.touch(serverId);
-        unawaited(
-          lendSession(
-            serverId,
-            () => readSshdPosture(
-              serverId,
-              requestId: requestId,
-              session: session,
-              profile: profiles[serverId],
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object _) => fail(SshdPostureFailure.transport),
-          ),
-        );
-      case ReadPackages(:final serverId, :final requestId, :final fresh):
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          uiPort.send(
-            PackagesReport(
-              serverId: serverId,
-              requestId: requestId,
-              failure: PackagesReportFailure.noLink,
-            ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads: the check answers rather than
-        // throws, a kept answer goes out without one, and a lend that
-        // fails still answers.
-        unawaited(
-          packageReports
-              .read(
-                serverId,
-                requestId: requestId,
-                fresh: fresh,
-                check: () => lendSession(
-                  serverId,
-                  () => readPackages(
-                    serverId,
-                    requestId: requestId,
-                    link: link,
-                    now: () => DateTime.now().toUtc(),
-                  ),
-                ),
-              )
-              .then(
-                uiPort.send,
-                onError: (Object _) => uiPort.send(
-                  PackagesReport(
-                    serverId: serverId,
-                    requestId: requestId,
-                    failure: PackagesReportFailure.transport,
-                  ),
-                ),
-              ),
-        );
-      case UnitQuery(:final serverId, :final requestId, :final query):
-        final link = links?.link(serverId);
-        final profile = profiles[serverId];
-        if (!fleetIds.contains(serverId) || link == null || profile == null) {
-          uiPort.send(
-            UnitQueryResult(
-              serverId: serverId,
-              requestId: requestId,
-              payload: const UnitQueryFailed(UnitQueryFailure.noLink),
-            ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads: runUnitQuery answers rather
-        // than throws, and a lend that fails still answers.
-        unawaited(
-          lendSession(
-            serverId,
-            () => runUnitQuery(
-              serverId,
-              requestId,
-              query,
-              link: link,
-              profile: profile,
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object error) => uiPort.send(
-              UnitQueryResult(
-                serverId: serverId,
-                requestId: requestId,
-                payload: UnitQueryFailed(
-                  UnitQueryFailure.failed,
-                  detail: '$error',
-                ),
-              ),
-            ),
-          ),
-        );
-      case JobHistoryQuery(:final serverId, :final requestId, :final query):
-        final link = links?.link(serverId);
-        if (!fleetIds.contains(serverId) || link == null) {
-          uiPort.send(
-            JobHistoryResult(
-              serverId: serverId,
-              requestId: requestId,
-              payload: const JobHistoryFailed(JobHistoryFailure.noLink),
-            ),
-          );
-          return;
-        }
-        // Not awaited, as the other reads: the query answers rather than
-        // throws, and a lend that fails still answers.
-        unawaited(
-          lendSession(
-            serverId,
-            () => runJobHistoryQuery(
-              serverId,
-              requestId,
-              query,
-              link: link,
-              admin: admin?.session(serverId),
-            ),
-          ).then(
-            uiPort.send,
-            onError: (Object error) => uiPort.send(
-              JobHistoryResult(
-                serverId: serverId,
-                requestId: requestId,
-                payload: JobHistoryFailed(
-                  JobHistoryFailure.failed,
-                  detail: '$error',
-                ),
-              ),
-            ),
-          ),
-        );
+      case ReadHistory():
+        await reads.history(message);
+      case ReadUserCrontabs():
+        reads.userCrontabs(message);
+      case ReadAccounts():
+        reads.accounts(message);
+      case ReadDiskUsage():
+        reads.diskUsage(message);
+      case ReadTimerDetail():
+        reads.timerDetail(message);
+      case ReadSmart():
+        reads.smart(message);
+      case ReadRestarts():
+        reads.restarts(message);
+      case ReadFirewall():
+        reads.firewall(message);
+      case ReadSshdPosture():
+        reads.sshdPosture(message);
+      case ReadPackages():
+        reads.packages(message);
+      case UnitQuery():
+        reads.units(message);
+      case JobHistoryQuery():
+        reads.jobHistory(message);
       case SetSafetyPolicy(:final policy):
         if (validateSafetyPolicy(policy) case final problem?) {
           reject(message, problem);
@@ -2440,7 +1658,7 @@ void _runEngine(
           reject(message, 'no release is offered for pin publication');
           return;
         }
-        chain(() async {
+        syncChain.chain(() async {
           try {
             await sync.setPinPublication(asserted ? release : null);
           } on Object {
@@ -2448,12 +1666,14 @@ void _runEngine(
             // with the next change (sync_state_file.dart), so the event
             // reports what this session goes by.
           }
-          if (pinPublicationState() case final state?) uiPort.send(state);
+          if (syncChain.pinPublicationState() case final state?) {
+            uiPort.send(state);
+          }
         });
       case SetSyncSecrets(:final enabled):
         // Behind any sync operation already queued, which runs under the
         // switch as it was when it was asked for.
-        chain(() => sync.setSyncSecrets(enabled: enabled));
+        syncChain.chain(() => sync.setSyncSecrets(enabled: enabled));
       case NewRecoveryCode(:final requestId):
         await replyToRecovery(
           requestId,
@@ -2518,7 +1738,7 @@ void _runEngine(
           }),
         );
       case SetAdminMode(:final serverId, :final enabled):
-        if (!fleetIds.contains(serverId)) {
+        if (!fleet.fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');
           return;
         }
@@ -2655,9 +1875,12 @@ void _runEngine(
               transport: syncTransport,
             );
             syncOpened = true;
-            syncedServers = await sync.servers();
-            synced = await listSynced(syncedServers);
-            trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
+            fleet.syncedServers = await sync.servers();
+            fleet.synced = await fleet.listSynced(fleet.syncedServers);
+            fleet.trustedIds = {
+              ...fleet.synced.confirmedIds,
+              ...fleet.synced.unreadableIds,
+            };
             if (links != null) {
               final link = links;
               operations = OperationTracker(
@@ -2673,11 +1896,11 @@ void _runEngine(
                 deviceId: start.deviceId,
               );
             }
-            refreshFleet();
+            fleet.refreshFleet();
             capabilities = await CapabilityCache.open(
               Directory(start.supportDirectory),
               access: start.supportDirectoryAccess,
-              fleet: fleetIds,
+              fleet: fleet.fleetIds,
               // A store left as it is saves no import this run, so its fleet
               // says nothing about which servers the user removed.
               purge: switch (store.issue?.kind) {
@@ -2690,7 +1913,7 @@ void _runEngine(
             history = await HistoryStore.open(
               Directory(start.supportDirectory),
               access: start.supportDirectoryAccess,
-              fleet: fleetIds,
+              fleet: fleet.fleetIds,
               purge: switch (store.issue?.kind) {
                 ImportStoreIssueKind.leftAsIs ||
                 ImportStoreIssueKind.newerVersion => CachePurge.never,
@@ -2709,15 +1932,28 @@ void _runEngine(
             // synced server not confirmed now describes another machine. One
             // whose pins could not be read keeps it until they read.
             final unconfirmed = {
-              for (final entry in synced.entries)
+              for (final entry in fleet.synced.entries)
                 if (entry.endpoint != EndpointConfirmation.confirmed &&
-                    !synced.unreadableIds.contains(entry.serverId))
+                    !fleet.synced.unreadableIds.contains(entry.serverId))
                   entry.serverId,
             };
             if (unconfirmed.isNotEmpty) {
               detach(capabilities!.forget(unconfirmed));
               detach(history!.forget(unconfirmed));
             }
+            reads = EngineReads(
+              links: links,
+              admin: admin,
+              audit: audit,
+              history: history,
+              profiles: profiles,
+              packageReports: packageReports,
+              diskTrees: diskTrees,
+              fleetIds: () => fleet.fleetIds,
+              stackEditLookup: stackEditLookup,
+              lendSession: lendSession,
+              send: uiPort.send,
+            );
           })
           .catchError((Object error) {
             startupFailure = error;

@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show ghostFormatBinarySize;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorController, PlanchetteEditor;
+    show EditorController, EditorStrings, PlanchetteEditor;
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'edit/editor_display_scope.dart';
-import 'editor_strings.dart' show KlabautermannEditorStrings;
+import 'latest_read.dart';
 import 'time_display.dart';
 import 'timed_reveal.dart';
 
@@ -56,11 +56,10 @@ class UnitResourcesView extends StatefulWidget {
 }
 
 class _UnitResourcesViewState extends State<UnitResourcesView> {
-  /// The engine's latest answer; null while it is read.
-  UnitPayload? _answer;
-
-  /// Counts reads, so an answer a newer read replaced is dropped.
-  int _reads = 0;
+  late final LatestRead<UnitPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   @override
   void initState() {
@@ -80,13 +79,14 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
   }
 
   Future<void> _read() async {
-    final read = ++_reads;
-    final result = await widget.monitoring.queryUnit(
-      widget.serverId,
-      UnitResourcesQuery(widget.unit, scope: widget.scope),
+    await _latest.run(
+      () => widget.monitoring
+          .queryUnit(
+            widget.serverId,
+            UnitResourcesQuery(widget.unit, scope: widget.scope),
+          )
+          .then((result) => result.payload),
     );
-    if (!mounted || read != _reads) return;
-    setState(() => _answer = result.payload);
   }
 
   @override
@@ -114,7 +114,7 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
       runSpacing: 4,
       children: [
         ...widget.leading,
-        ...switch (_answer) {
+        ...switch (_latest.value) {
           null => const <Widget>[],
           UnitResourcesPayload(:final resources) => [
             for (final (label, value) in _rows(context, l10n, resources))
@@ -389,7 +389,7 @@ class _UnitFileViewState extends State<UnitFileView> {
                   key: ObjectKey(editor),
                   controller: editor,
                   editingLocked: true,
-                  strings: KlabautermannEditorStrings(l10n),
+                  strings: EditorStrings.of(context),
                   textStyle: editorDisplayTextStyle(display),
                   ligatures: display.ligatures,
                 ),

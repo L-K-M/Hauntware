@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:ghost_ui/ghost_ui.dart' show FailedSaves, PersistedSetting;
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize;
-
-import 'persisted_setting.dart';
 
 /// The file editors' font on this device: a family as Settings →
 /// Appearance stores it (empty for the editor's default), whether its
@@ -83,7 +82,7 @@ final class EditorDisplayNotSavedException implements Exception {
 final class EditorDisplayController extends PersistedSetting<EditorDisplay>
     implements EditorDisplaySettings {
   EditorDisplayController({EditorDisplay? display, this._save})
-    : super(display ?? EditorDisplay());
+    : super(display ?? EditorDisplay(), failedSaves: FailedSaves.retry);
 
   final Future<void> Function(
     String? family,

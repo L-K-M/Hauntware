@@ -6,6 +6,7 @@
 import 'dart:math';
 
 import 'operation_plan.dart';
+import 'plan_support.dart';
 
 /// How long a previewed plan stays runnable [E].
 const kPlanLifetime = Duration(minutes: 5);
@@ -42,7 +43,7 @@ final class PlanRegistry {
     _dropExpired();
     String id;
     do {
-      id = _newId();
+      id = randomHexToken(_random);
     } while (_plans.containsKey(id));
     _plans[id] = _Held(plan, linkGeneration, _now().add(kPlanLifetime));
     return id;
@@ -79,11 +80,6 @@ final class PlanRegistry {
     final now = _now();
     _plans.removeWhere((_, held) => !now.isBefore(held.expiresAt));
   }
-
-  String _newId() => [
-    for (var i = 0; i < 8; i++)
-      _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
-  ].join();
 }
 
 final class _Held {

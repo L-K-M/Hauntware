@@ -1,14 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:seance_core/seance_core.dart' show ImportedHost;
+import 'package:seance_core/seance_core.dart'
+    show ImportedHost, isImportedIdentityFile, isTcpPort;
 
 import '../engine/protocol.dart';
 import '../settings/device_settings_store.dart'
     show unusedCorruptCopyPath, writeFileAtomically;
 import 'imported_fleet.dart' show ImportedHostDetail;
 import 'jump_routes.dart';
-import 'ssh_config_settings.dart';
 
 /// D13's device-local store for FL-02 imports, under the app's support
 /// directory (03 §4.10).

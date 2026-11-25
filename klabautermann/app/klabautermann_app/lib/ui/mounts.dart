@@ -6,8 +6,10 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'latest_read.dart';
 import 'read_section.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection, SystemSection;
+import 'panel_kit.dart' show PanelNotice, PanelSection;
+import 'system_panel.dart' show SystemSection;
 
 /// DSK-05's part of a mount's details: the source it is mounted from and
 /// its options, which the `fs` stream does not carry, read once the
@@ -32,7 +34,10 @@ class MountOptions extends StatefulWidget {
 }
 
 class _MountOptionsState extends State<MountOptions> {
-  HostPayload? _read;
+  late final LatestRead<HostPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   @override
   void initState() {
@@ -41,17 +46,17 @@ class _MountOptionsState extends State<MountOptions> {
   }
 
   Future<void> _load() async {
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      const MountsQuery(),
+    await _latest.run(
+      () => widget.monitoring
+          .queryHost(widget.serverId, const MountsQuery())
+          .then((result) => result.payload),
     );
-    if (mounted) setState(() => _read = result.payload);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    switch (_read) {
+    switch (_latest.value) {
       case null:
         return PanelNotice(
           icon: Icons.hourglass_empty,
