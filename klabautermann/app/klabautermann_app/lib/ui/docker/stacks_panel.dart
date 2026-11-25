@@ -13,8 +13,8 @@ import '../actions/docker_actions.dart'
 import '../hand_off_actions.dart' show FolderHandOffs, folderHandOffsShown;
 import '../panel_kit.dart';
 import 'container_details.dart' show openContainerDetails;
-import 'containers_panel.dart'
-    show ContainerHealthBadge, ContainerStateBadge, DockerNotice;
+import 'container_badges.dart' show ContainerHealthBadge, ContainerStateBadge;
+import 'docker_notice.dart';
 import 'containers_view.dart';
 import 'stack_file_view.dart' show openStackFiles;
 import 'stacks_view.dart';

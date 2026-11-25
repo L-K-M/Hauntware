@@ -714,15 +714,23 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'none'",
     "''",
   },
-  'lib/ui/docker/containers_panel.dart': {
+  'lib/ui/docker/container_columns.dart': {
+    // Empty cells: a heading's text and a figure's absent value.
+    "''",
+  },
+  'lib/ui/docker/container_selection.dart': {
+    // A heading's empty cell text and the selection column's table id
+    // (CTR-07), a key.
+    "''",
+    "'select'",
+  },
+  'lib/ui/docker/containers_list.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
-    // text; a heading's row key; empty cells and no ports.
-    r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
+    // text; a heading's row key.
+    r"'${DockerWatchList.containers.name}.row.${rowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
-    // The selection column's table id (CTR-07), a key.
-    "'select'",
     "''",
   },
   'lib/ui/docker/containers_view.dart': {

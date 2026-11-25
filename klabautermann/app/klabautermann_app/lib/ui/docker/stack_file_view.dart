@@ -14,7 +14,7 @@ import '../edit/editor_display_scope.dart';
 import '../edit/remote_editor.dart';
 import '../timed_reveal.dart';
 import 'container_details.dart' show ContainerInspectionScope;
-import 'containers_panel.dart' show DockerNotice;
+import 'docker_notice.dart';
 import 'stacks_view.dart';
 
 /// The largest the desktop's file dialog grows.

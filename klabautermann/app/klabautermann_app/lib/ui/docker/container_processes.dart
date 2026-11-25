@@ -9,7 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import '../panel_kit.dart';
 import '../timed_reveal.dart';
-import 'containers_panel.dart' show DockerNotice;
+import 'docker_notice.dart';
 
 /// The `ps` column whose value is resident memory in KiB, which the
 /// section shows as a size.
