@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:ghost_ui/ghost_ui.dart' show ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/docker_controller.dart';
@@ -8,16 +7,10 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show NetworkActionsButton, PruneButton, networkActionEntries;
-import '../panel_kit.dart' show panelIsWide;
 import '../sortable_table.dart';
-import 'containers_panel.dart' show DockerNotice;
-import 'containers_view.dart' show searchTerms;
+import 'docker_list_panel.dart';
 import 'docker_cells.dart';
 import 'networks_view.dart';
-
-/// The share of its height the header takes before it scrolls, so large
-/// text never pushes the list out of sight.
-const double _headerShare = 0.4;
 
 /// The Networks sub-tab (03 §7.15 DNW-01): every network by name, its
 /// driver, scope and first subnet, and how many containers are on it,
@@ -30,7 +23,8 @@ const double _headerShare = 0.4;
 /// ([DockerController.watchNetworks]), which reads the containers too:
 /// their networks tell which are in use ([containersByNetwork]). Hidden,
 /// it lets the watch go. A failed read keeps the last list under why it
-/// failed.
+/// failed. The shared [DockerListPanel] owns that state and the layout;
+/// this panel supplies its columns, filters, notices and row widgets.
 class NetworksPanel extends StatefulWidget {
   const NetworksPanel({
     super.key,
@@ -48,429 +42,100 @@ class NetworksPanel extends StatefulWidget {
 }
 
 class _NetworksPanelState extends State<NetworksPanel> {
-  /// The order, search and filter, which outlive sub-tab switches: the
-  /// tab keeps a sub-tab built once opened.
-  TableSort _sort = TableSort(
-    NetworkColumn.name.name,
-    TableSortDirection.ascending,
-  );
-  final _search = TextEditingController();
-
-  /// The filter field, which `/` in the table focuses (PLT-06).
-  final _searchFocus = FocusNode();
-  NetworkFilter _filter = NetworkFilter.all;
-
-  /// The server whose network watch this panel holds, if any.
-  String? _held;
-
   DockerController get _docker => widget.monitoring.docker;
 
   @override
-  void initState() {
-    super.initState();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(NetworksPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.serverId != oldWidget.serverId) {
-      // Another server's networks.
-      _release();
-      _search.clear();
-    }
-    _sync();
-  }
-
-  @override
-  void dispose() {
-    _release();
-    _search.dispose();
-    _searchFocus.dispose();
-    super.dispose();
-  }
-
-  void _sync() {
-    final wanted = widget.visible ? widget.serverId : null;
-    if (_held == wanted) return;
-    _release();
-    if (wanted == null) return;
-
-    _docker.watchNetworks(wanted);
-    _held = wanted;
-  }
-
-  void _release() {
-    final held = _held;
-    if (held == null) return;
-
-    _held = null;
-    _docker.unwatchNetworks(held);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Read on every build: a server that left the fleet and came back has
-    // new listenables (SYN-08).
-    final networks = _docker.networksFor(widget.serverId);
-    final containers = _docker.containersFor(widget.serverId);
-    final endpoint = _docker.endpointFor(widget.serverId);
-    return ListenableBuilder(
-      listenable: Listenable.merge([networks, containers, endpoint]),
-      builder: (context, _) =>
-          _build(context, networks.value, containers.value, endpoint.value),
-    );
-  }
-
-  Widget _build(
-    BuildContext context,
-    DockerNetworkList list,
-    DockerContainerList containers,
-    DockerEndpointState? endpoint,
-  ) {
-    final l10n = AppLocalizations.of(context);
-    final networks = list.networks;
-    final failure = list.failure;
-    // The network list names no container, so without a container list
-    // the use is unknown.
-    final useUnknown =
-        containers.containers == null &&
-        containers.failure != null &&
-        (networks?.isNotEmpty ?? false);
-
-    return LayoutBuilder(
-      builder: (context, box) {
-        final wide = panelIsWide(context, box);
-        final header = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 12,
+  Widget build(BuildContext context) =>
+      DockerListPanel<
+        NetworkSummary,
+        NetworkEntry,
+        NetworkFilter,
+        NetworkColumn
+      >(
+        serverId: widget.serverId,
+        visible: widget.visible,
+        list: () => _docker.networksFor(widget.serverId),
+        containers: () => _docker.containersFor(widget.serverId),
+        endpoint: () => _docker.endpointFor(widget.serverId),
+        watch: _docker.watchNetworks,
+        unwatch: _docker.unwatchNetworks,
+        retry: () => _docker.retryNetworks(widget.serverId),
+        itemsOf: (payload) => (payload as DockerNetworkList?)?.networks,
+        failureOf: (payload) => (payload as DockerNetworkList?)?.failure,
+        initialSort: TableSort(
+          NetworkColumn.name.name,
+          TableSortDirection.ascending,
+        ),
+        filters: NetworkFilter.values,
+        initialFilter: NetworkFilter.all,
+        filterLabel: (l10n, filter) => switch (filter) {
+          NetworkFilter.all => l10n.dockerImagesFilterAll,
+          NetworkFilter.unused => l10n.dockerImagesFilterUnused,
+        },
+        shownFilter: (selected, useKnown) =>
+            useKnown ? selected : NetworkFilter.all,
+        useKnown: (containers) => containers.containers != null,
+        searchHint: (l10n) => l10n.dockerNetworksSearchHint,
+        columns: (context, l10n) => _columns(l10n),
+        sortColumns: NetworkColumn.values,
+        sortLabel: (l10n, column) => _label(l10n, column),
+        descendingFirst: (column) => column == NetworkColumn.use,
+        entries: (items, containers, filter, terms) => networkEntries(
+          items,
+          containers: containers,
+          filter: filter,
+          terms: terms,
+        ),
+        empty: (items, filter, terms, l10n) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            items.isEmpty
+                ? l10n.dockerNetworksEmpty
+                : terms.isNotEmpty
+                ? l10n.dockerNetworksNoMatch
+                : switch (filter) {
+                    NetworkFilter.unused => l10n.dockerNetworksNoneUnused,
+                    // Every network passes; the engine listed none.
+                    NetworkFilter.all => l10n.dockerNetworksEmpty,
+                  },
+          ),
+        ),
+        tableId: DockerWatchList.networks.name,
+        rowKey: _rowKey,
+        heading: (context, entry) => Wrap(
+          spacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            // On the socket forward the events stream costs no session,
-            // so low-session mode changes nothing the list shows.
-            if ((endpoint?.lowSession ?? false) &&
-                endpoint?.route?.rank != DockerRank.streamlocal)
-              DockerNotice(
-                icon: Icons.speed_outlined,
-                text: l10n.dockerImagesLowSessionRelay,
-              ),
-            if (failure != null) ...[
-              DockerNotice(
-                icon: Icons.error_outline,
-                text: l10n.dockerNetworksFailed(failure.failure.name),
-                detail: failure.detail,
-                action: TextButton(
-                  onPressed: () => _docker.retryNetworks(widget.serverId),
-                  child: Text(l10n.dockerRetry),
-                ),
-              ),
-              if (networks != null)
-                DockerNotice(icon: Icons.history, text: l10n.dockerImagesKept),
-            ] else if (networks == null)
-              DockerNotice(
-                icon: Icons.hourglass_empty,
-                text: l10n.dockerNetworksReading,
-              ),
-            if (useUnknown)
-              DockerNotice(
-                icon: Icons.error_outline,
-                text: l10n.dockerNetworksUseUnknown,
-                detail: containers.failure?.detail,
-              ),
-            if (networks != null &&
-                actionsAllowedAt(
-                  context,
-                  widget.serverId,
-                  ActionEntryPoint.prune,
-                ))
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: PruneButton(
-                  choices: [
-                    PruneDocker(
-                      widget.serverId,
-                      kind: DockerPruneKind.networks,
-                    ),
-                  ],
-                ),
-              ),
-            if (networks != null)
-              _filters(l10n, useKnown: containers.containers != null),
-            if (networks != null && !wide) _sortControls(l10n),
+            Text(
+              entry.network.name,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            if (entry.builtin) const NetworkBuiltinBadge(),
           ],
-        );
-        final padding = EdgeInsets.all(wide ? 20 : 16);
-        if (networks == null) {
-          return SingleChildScrollView(padding: padding, child: header);
-        }
-
-        return Padding(
-          padding: padding,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * _headerShare,
-                  ),
-                  child: SingleChildScrollView(child: header),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: _body(
-                    context,
-                    networks,
-                    containers.containers,
-                    wide: wide,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _body(
-    BuildContext context,
-    List<NetworkSummary> networks,
-    List<ContainerSummary>? containers, {
-    required bool wide,
-  }) {
-    final l10n = AppLocalizations.of(context);
-    final columns = _columns(l10n);
-    final terms = searchTerms(_search.text);
-    final filter = _shownFilter(useKnown: containers != null);
-    final entries = networkEntries(
-      networks,
-      containers: containers,
-      filter: filter,
-      terms: terms,
-    );
-    final empty = Padding(
-      padding: const EdgeInsets.all(16),
-      child: Text(
-        networks.isEmpty
-            ? l10n.dockerNetworksEmpty
-            : terms.isNotEmpty
-            ? l10n.dockerNetworksNoMatch
-            : switch (filter) {
-                NetworkFilter.unused => l10n.dockerNetworksNoneUnused,
-                // Every network passes; the engine listed none.
-                NetworkFilter.all => l10n.dockerNetworksEmpty,
-              },
-      ),
-    );
-    if (!wide) {
-      return _list(sortTableRows(entries, columns, _sort), columns, empty);
-    }
-
-    return SortableTable<NetworkEntry>(
-      tableId: DockerWatchList.networks.name,
-      filterFocus: _searchFocus,
-      columns: columns,
-      rows: entries,
-      rowKey: _rowKey,
-      sort: _sort,
-      onSort: (sort) => setState(() => _sort = sort),
-      rowActions:
-          actionsAllowedAt(
-            context,
-            widget.serverId,
-            ActionEntryPoint.networkRemove,
-          )
-          ? (entry) => networkActionEntries(
-              context,
-              serverId: widget.serverId,
-              entry: entry,
-            )
-          : null,
-      empty: empty,
-    );
-  }
-
-  /// The filter the list applies: every network while no container list
-  /// says which are unused, so an empty list never claims that every
-  /// network has a container on it when that is unknown.
-  NetworkFilter _shownFilter({required bool useKnown}) =>
-      useKnown ? _filter : NetworkFilter.all;
-
-  Widget _filters(AppLocalizations l10n, {required bool useKnown}) => Wrap(
-    spacing: 12,
-    runSpacing: 8,
-    crossAxisAlignment: WrapCrossAlignment.center,
-    children: [
-      ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: TextField(
-          controller: _search,
-          focusNode: _searchFocus,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            hintText: l10n.dockerNetworksSearchHint,
-            suffixIcon: _search.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: l10n.dockerImagesSearchClear,
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(_search.clear),
-                  ),
-          ),
         ),
-      ),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final filter in NetworkFilter.values)
-            ChoiceChip(
-              label: Text(switch (filter) {
-                NetworkFilter.all => l10n.dockerImagesFilterAll,
-                NetworkFilter.unused => l10n.dockerImagesFilterUnused,
-              }),
-              selected: _shownFilter(useKnown: useKnown) == filter,
-              onSelected: useKnown
-                  ? (_) => setState(() => _filter = filter)
-                  : null,
-            ),
-        ],
-      ),
-    ],
-  );
-
-  /// The phone layout's order: the table's columns in a menu, and the
-  /// direction, which the button's tooltip names.
-  Widget _sortControls(AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final column = NetworkColumn.values.byName(_sort.columnId);
-    final ascending = _sort.direction == TableSortDirection.ascending;
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 8,
-      children: [
-        Text(
-          l10n.dockerImagesSortBy,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        DropdownButton<NetworkColumn>(
-          value: column,
-          isDense: ghostIsDesktopPlatform(theme.platform),
-          items: [
-            for (final choice in NetworkColumn.values)
-              DropdownMenuItem(
-                value: choice,
-                child: Text(_label(l10n, choice)),
-              ),
-          ],
-          onChanged: (choice) {
-            if (choice == null) return;
-            setState(
-              () => _sort = TableSort(
-                choice.name,
-                choice == NetworkColumn.use
-                    ? TableSortDirection.descending
-                    : TableSortDirection.ascending,
-              ),
-            );
-          },
-        ),
-        IconButton(
-          tooltip: ascending
-              ? l10n.tableSortedAscending
-              : l10n.tableSortedDescending,
-          icon: Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward),
-          onPressed: () => setState(
-            () => _sort = TableSort(
-              _sort.columnId,
-              ascending
-                  ? TableSortDirection.descending
-                  : TableSortDirection.ascending,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// The phone layout: two-line rows that wrap at large text, the name
-  /// over the other figures, each row one node naming its cells as the
-  /// table's rows do.
-  Widget _list(
-    List<NetworkEntry> entries,
-    List<SortableTableColumn<NetworkEntry>> columns,
-    Widget empty,
-  ) {
-    if (entries.isEmpty) return empty;
-
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return ListView.separated(
-      itemCount: entries.length,
-      separatorBuilder: (context, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        final cells = [
-          for (final column in columns)
-            (label: column.label, text: column.text(entry)),
-        ];
-        final row = Semantics(
-          key: ValueKey(_phoneRowKey(entry)),
-          container: true,
-          label: [
-            for (final cell in cells)
-              l10n.tableCellSemantics(cell.label, cell.text),
-          ].join('\n'),
-          excludeSemantics: true,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      entry.network.name,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall,
-                    ),
-                    if (entry.builtin) const NetworkBuiltinBadge(),
-                  ],
-                ),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 2,
-                  children: [
-                    // The name heads the row.
-                    for (final cell in cells.skip(1))
-                      Text(
-                        l10n.dockerImagesFact(cell.label, cell.text),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-        // The actions sit beside the row's one node, so a screen reader
-        // reaches them as a button of their own.
-        return Row(
-          children: [
-            Expanded(child: row),
+        phoneActions: (context, entry) =>
             NetworkActionsButton(serverId: widget.serverId, entry: entry),
-          ],
-        );
-      },
-    );
-  }
+        menuActions: (context, entry) => networkActionEntries(
+          context,
+          serverId: widget.serverId,
+          entry: entry,
+        ),
+        actionPoint: ActionEntryPoint.networkRemove,
+        failedText: (l10n, failure) => l10n.dockerNetworksFailed(failure),
+        keptText: (l10n) => l10n.dockerImagesKept,
+        readingText: (l10n) => l10n.dockerNetworksReading,
+        useUnknownText: (l10n) => l10n.dockerNetworksUseUnknown,
+        actions: (context) =>
+            actionsAllowedAt(context, widget.serverId, ActionEntryPoint.prune)
+            ? PruneButton(
+                choices: [
+                  PruneDocker(widget.serverId, kind: DockerPruneKind.networks),
+                ],
+              )
+            : null,
+      );
 
   List<SortableTableColumn<NetworkEntry>> _columns(AppLocalizations l10n) {
     final unknown = l10n.chartUnknownValue;
@@ -539,10 +204,6 @@ class _NetworksPanelState extends State<NetworksPanel> {
     ];
   }
 }
-
-/// The key tests find a phone row by, in the table rows' form.
-String _phoneRowKey(NetworkEntry entry) =>
-    '${DockerWatchList.networks.name}.row.${_rowKey(entry)}';
 
 /// A row's identity: the network's id.
 Object _rowKey(NetworkEntry entry) => entry.network.id;
