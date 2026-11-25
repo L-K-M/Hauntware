@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/ui/docker/containers_panel.dart'
     show DockerNotice;
-import 'package:klabautermann_app/ui/state_notice.dart';
+import 'package:klabautermann_app/ui/panel_kit.dart' show PanelNotice;
 
 void main() {
   Future<void> pump(WidgetTester tester, Widget notice) => tester.pumpWidget(
@@ -18,7 +18,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     await pump(
       tester,
-      const StateNotice(
+      const PanelNotice.state(
         icon: Icons.error_outline,
         text: 'The read failed.',
         detail: 'permission denied',
@@ -27,7 +27,7 @@ void main() {
 
     expect(find.byIcon(Icons.error_outline), findsOne);
     expect(
-      tester.getSemantics(find.byType(StateNotice)),
+      tester.getSemantics(find.byType(PanelNotice)),
       matchesSemantics(label: 'The read failed.\npermission denied'),
     );
     semantics.dispose();
@@ -36,13 +36,13 @@ void main() {
   testWidgets('leaves out a missing or empty detail', (tester) async {
     await pump(
       tester,
-      const StateNotice(icon: Icons.info_outline, text: 'Nothing here.'),
+      const PanelNotice.state(icon: Icons.info_outline, text: 'Nothing here.'),
     );
     expect(find.byType(Text), findsOne);
 
     await pump(
       tester,
-      const StateNotice(
+      const PanelNotice.state(
         icon: Icons.info_outline,
         text: 'Nothing here.',
         detail: '',
@@ -68,7 +68,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(StateNotice), findsOne);
+    expect(find.byType(PanelNotice), findsOne);
     expect(find.text('timeout'), findsOne);
     expect(
       tester.getTopLeft(find.text('Retry')).dy,

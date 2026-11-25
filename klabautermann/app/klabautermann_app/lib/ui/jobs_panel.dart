@@ -17,13 +17,9 @@ import 'actions/run_output_sheet.dart';
 import 'edit/remote_editor.dart';
 import 'freshness.dart';
 import 'jobs_view.dart';
+import 'panel_kit.dart';
 import 'server_surfaces.dart' show ServerPanel;
 import 'sortable_table.dart';
-import 'system_panel.dart' show PanelNotice;
-
-/// The panel width from which the jobs table adds its source and schedule
-/// columns, growing with the text scale as the other panels' does.
-const double _wideWidth = 600;
 
 /// The DST icon after a next run and the gap before it.
 const double _dstIconSize = 14;
@@ -31,10 +27,6 @@ const double _dstIconGap = 4;
 
 /// A table cell's horizontal padding, both sides: [SortableTable]'s.
 const double _cellPadding = 16;
-
-/// The share of its height the notices take before they scroll, so large
-/// text never pushes the table out of sight.
-const double _headerShare = 0.4;
 
 /// The list's stale limit under [cadence], or null when the cellular
 /// saver reads `cron` and `timers` only once per subscription, so no
@@ -97,9 +89,6 @@ class JobsPanel extends StatefulWidget {
 }
 
 class _JobsPanelState extends State<JobsPanel> {
-  /// What the panel listens to instead of the clock while nothing ages.
-  static final Listenable _silent = Listenable.merge(const []);
-
   /// The table's order, which outlives tab switches: the workspace keeps a
   /// panel built once opened. The next job to run leads.
   TableSort? _sort = TableSort(_Column.next.name, TableSortDirection.ascending);
@@ -317,29 +306,18 @@ class _JobsPanelState extends State<JobsPanel> {
     ];
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         return Padding(
           padding: EdgeInsets.all(wide ? 20 : 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: box.maxHeight * _headerShare,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 8,
-                    children: notices,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (read != null && read.failure == null)
-                Expanded(
-                  child: SortableTable<JobEntry>(
+          child: HeadedPanelBody(
+            headerMaxHeight: box.maxHeight * kPanelHeaderShare,
+            header: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 8,
+              children: notices,
+            ),
+            body: read != null && read.failure == null
+                ? SortableTable<JobEntry>(
                     tableId: '${ServerPanel.jobs.name}.others',
                     columns: _columns(
                       context,
@@ -364,9 +342,8 @@ class _JobsPanelState extends State<JobsPanel> {
                       padding: const EdgeInsets.all(16),
                       child: Text(l10n.jobsOtherUsersEmpty),
                     ),
-                  ),
-                ),
-            ],
+                  )
+                : const SizedBox.shrink(),
           ),
         );
       },
@@ -606,7 +583,7 @@ class _JobsPanelState extends State<JobsPanel> {
       ?_sourceSwitch(context),
       if (oldest != null || freshnessAt(clock.value) is FreshnessPaused)
         ListenableBuilder(
-          listenable: ticking ? clock : _silent,
+          listenable: ticking ? clock : kSilentListenable,
           builder: (context, _) {
             final freshness = freshnessAt(clock.value);
             return PanelNotice(
@@ -657,124 +634,119 @@ class _JobsPanelState extends State<JobsPanel> {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         return Padding(
           padding: EdgeInsets.all(wide ? 20 : 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: box.maxHeight * _headerShare,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 8,
-                    children: notices,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (readings.isNotEmpty)
-                Expanded(
-                  flex: 3,
-                  child: _ClockGate(
-                    clock: clock,
-                    ticking: ticking,
-                    // The times turn stale, or a run they show passes.
-                    dueAfter: (now) => _earliest([
-                      if (!freshnessAt(now).stale && staleAfter != null)
-                        ?oldest?.add(staleAfter),
-                      for (final job in jobs) ?_nextAfter(job, now),
-                    ]),
-                    builder: (context, now) => SortableTable<JobEntry>(
-                      tableId: ServerPanel.jobs.name,
-                      columns: _columns(
-                        context,
-                        jobs,
-                        wide: wide,
-                        stale: freshnessAt(now).stale,
-                        serverOffset: serverOffset,
-                        now: now,
-                        anacron: _anacronJobs,
-                      ),
-                      rows: jobs,
-                      rowKey: (job) => job.id,
-                      sort: _sort,
-                      onSort: (sort) => setState(() => _sort = sort),
-                      // The table cuts commands and schedules short
-                      // (A11Y-09); the details do not.
-                      onRowActivated: (job) => _showDetails(
-                        context,
-                        job,
-                        profile,
-                        clock.value,
-                        anacron: _anacronJobs,
-                        run: _runNow,
-                        lastRun: _lastRun,
-                        readTimer: (unit) => widget.monitoring.timerDetails
-                            .read(widget.serverId, unit),
-                      ),
-                      // JOB-08 on timer rows and JOB-19 on cron lines no
-                      // other manager owns, where actions are allowed (M4
-                      // E21); the table keeps no slot otherwise.
-                      rowActions:
-                          actionsAllowedAt(
-                            context,
-                            widget.serverId,
-                            ActionEntryPoint.timerRunNow,
-                          )
-                          ? (job) => switch (job) {
-                              TimerJobEntry(:final timer) => timerActionEntries(
-                                context,
-                                serverId: widget.serverId,
-                                timer: timer.unit,
-                                onRun: _showOutput,
+          child: HeadedPanelBody(
+            headerMaxHeight: box.maxHeight * kPanelHeaderShare,
+            header: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 8,
+              children: notices,
+            ),
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (readings.isNotEmpty)
+                  Expanded(
+                    flex: 3,
+                    child: _ClockGate(
+                      clock: clock,
+                      ticking: ticking,
+                      // The times turn stale, or a run they show passes.
+                      dueAfter: (now) => _earliest([
+                        if (!freshnessAt(now).stale && staleAfter != null)
+                          ?oldest?.add(staleAfter),
+                        for (final job in jobs) ?_nextAfter(job, now),
+                      ]),
+                      builder: (context, now) => SortableTable<JobEntry>(
+                        tableId: ServerPanel.jobs.name,
+                        columns: _columns(
+                          context,
+                          jobs,
+                          wide: wide,
+                          stale: freshnessAt(now).stale,
+                          serverOffset: serverOffset,
+                          now: now,
+                          anacron: _anacronJobs,
+                        ),
+                        rows: jobs,
+                        rowKey: (job) => job.id,
+                        sort: _sort,
+                        onSort: (sort) => setState(() => _sort = sort),
+                        // The table cuts commands and schedules short
+                        // (A11Y-09); the details do not.
+                        onRowActivated: (job) => _showDetails(
+                          context,
+                          job,
+                          profile,
+                          clock.value,
+                          anacron: _anacronJobs,
+                          run: _runNow,
+                          lastRun: _lastRun,
+                          readTimer: (unit) => widget.monitoring.timerDetails
+                              .read(widget.serverId, unit),
+                        ),
+                        // JOB-08 on timer rows and JOB-19 on cron lines no
+                        // other manager owns, where actions are allowed (M4
+                        // E21); the table keeps no slot otherwise.
+                        rowActions:
+                            actionsAllowedAt(
+                              context,
+                              widget.serverId,
+                              ActionEntryPoint.timerRunNow,
+                            )
+                            ? (job) => switch (job) {
+                                TimerJobEntry(:final timer) =>
+                                  timerActionEntries(
+                                    context,
+                                    serverId: widget.serverId,
+                                    timer: timer.unit,
+                                    onRun: _showOutput,
+                                  ),
+                                CronJobEntry(:final job)
+                                    when job.managedBy == null =>
+                                  [
+                                    ...cronActionEntries(
+                                      context,
+                                      serverId: widget.serverId,
+                                      source: job.source,
+                                      raw: job.raw,
+                                      onRun: _showCronOutput,
+                                    ),
+                                    ...cronPauseEntries(
+                                      context,
+                                      serverId: widget.serverId,
+                                      job: job,
+                                    ),
+                                  ],
+                                _ => const [],
+                              }
+                            : null,
+                        empty: empty == null
+                            ? null
+                            : Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(empty),
                               ),
-                              CronJobEntry(:final job)
-                                  when job.managedBy == null =>
-                                [
-                                  ...cronActionEntries(
-                                    context,
-                                    serverId: widget.serverId,
-                                    source: job.source,
-                                    raw: job.raw,
-                                    onRun: _showCronOutput,
-                                  ),
-                                  ...cronPauseEntries(
-                                    context,
-                                    serverId: widget.serverId,
-                                    job: job,
-                                  ),
-                                ],
-                              _ => const [],
-                            }
-                          : null,
-                      empty: empty == null
-                          ? null
-                          : Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text(empty),
-                            ),
+                      ),
                     ),
                   ),
-                ),
-              // JOB-04: anacron's own table, under the jobs list. A
-              // host without jobs keeps the list's full height and says
-              // so in a notice instead.
-              if (_anacron?.jobs.isNotEmpty ?? false) ...[
-                const Divider(height: 16),
-                Expanded(
-                  flex: 2,
-                  child: _AnacronSection(
-                    jobs: _anacron!.jobs,
-                    pending: _readingAnacron,
+                // JOB-04: anacron's own table, under the jobs list. A
+                // host without jobs keeps the list's full height and says
+                // so in a notice instead.
+                if (_anacron?.jobs.isNotEmpty ?? false) ...[
+                  const Divider(height: 16),
+                  Expanded(
+                    flex: 2,
+                    child: _AnacronSection(
+                      jobs: _anacron!.jobs,
+                      pending: _readingAnacron,
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         );
       },

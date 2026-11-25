@@ -15,8 +15,8 @@ import 'fleet_row_state.dart' show kFleetRowStaleAfter;
 import 'freshness.dart';
 import 'threshold_scope.dart';
 import 'time_display.dart';
+import 'panel_kit.dart';
 import 'server_surfaces.dart' show SampledSurface;
-import 'system_panel.dart' show PanelNotice, PanelSection;
 
 /// The window of the session chart, as long as the session rings hold at
 /// the Desktop `core` cadence (OV-03).
@@ -96,10 +96,6 @@ class ServerCoverageCard extends StatelessWidget {
   /// Whether the Overview shows; the clock and the `units` read follow it.
   final bool visible;
 
-  /// What the chart listens to instead of the clock while nothing in it
-  /// ages or it hides.
-  static final Listenable _silent = Listenable.merge(const []);
-
   @override
   Widget build(BuildContext context) {
     // Read on every build: a server that left the fleet and came back has
@@ -135,7 +131,7 @@ class ServerCoverageCard extends StatelessWidget {
                   listenable:
                       visible && (history.length > 0 || history.gaps.isNotEmpty)
                       ? monitoring.clock
-                      : _silent,
+                      : kSilentListenable,
                   builder: (context, _) => _SessionChart(
                     serverId: serverId,
                     history: history,
@@ -494,7 +490,7 @@ class _FreshnessLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: reading == null ? ServerCoverageCard._silent : monitoring.clock,
+    listenable: reading == null ? kSilentListenable : monitoring.clock,
     builder: (context, _) {
       final freshness = freshnessOf(
         now: monitoring.clock.value,

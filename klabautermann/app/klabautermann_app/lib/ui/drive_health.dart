@@ -9,7 +9,7 @@ import '../l10n/app_localizations.dart';
 import 'admin_mode_chip.dart' show AdminScope;
 import 'read_section.dart';
 import 'sortable_table.dart';
-import 'system_panel.dart' show PanelSection;
+import 'panel_kit.dart' show PanelSection;
 
 /// The table's columns with the width each claims before text scaling.
 /// The drive's is the least it is given before the table drops all but

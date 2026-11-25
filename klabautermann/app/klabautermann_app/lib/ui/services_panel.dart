@@ -17,22 +17,12 @@ import 'failed_units_summary.dart';
 import 'logs/log_level.dart';
 import 'logs/log_view.dart';
 import 'logs/log_view_controller.dart';
+import 'panel_kit.dart';
 import 'services_view.dart';
 import 'server_surfaces.dart' show ServerPanel;
 import 'sortable_table.dart';
 import 'unit_details.dart';
 import 'workspace_navigation.dart';
-
-/// The panel width from which the unit table adds its load and description
-/// columns and a unit's page opens under the table instead of in its
-/// place. It grows with the text scale, as the table's columns do, so
-/// larger text takes the narrow layout before the table would scroll
-/// sideways.
-const double _wideWidth = 600;
-
-/// The share of its height a header takes before it scrolls, so large
-/// text never pushes a table or log view out of sight.
-const double _headerShare = 0.4;
 
 /// The share of the screen SVC-04's sheet opens at, and the least it
 /// drags down to before it closes.
@@ -286,9 +276,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
     final units = result is UnitsResult ? result.units : null;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide =
-            constraints.maxWidth >=
-            MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, constraints);
         final padding = EdgeInsets.all(wide ? 20 : 16);
         final open = _open;
         final page = open == null
@@ -426,32 +414,30 @@ class _ServicesPanelState extends State<ServicesPanel> {
         // there to ask (SVC-09).
         final CollectorUnavailable unavailable when _scope == UnitScope.user =>
           _notice(
-            theme,
             Icons.person_off_outlined,
             l10n.servicesUserUnavailable,
             unavailable.detail,
           ),
         final CollectorUnavailable unavailable => _unavailable(
           l10n,
-          theme,
           unavailable,
         ),
-        _ => _notice(theme, Icons.hourglass_empty, l10n.servicesWaiting),
+        _ => _notice(Icons.hourglass_empty, l10n.servicesWaiting),
       };
     }
     // A reply without a unit list block lists nothing.
     if (units.format == UnitListFormat.none) {
-      return _notice(theme, Icons.error_outline, l10n.servicesUnavailableError);
+      return _notice(Icons.error_outline, l10n.servicesUnavailableError);
     }
 
     final states = [for (final unit in units.units) unitStatesOf(unit)];
-    return _headed(
+    return HeadedPanelBody(
       header: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 12,
         children: [
           if (units.format == UnitListFormat.text)
-            _notice(theme, Icons.info_outline, l10n.servicesTextFallback),
+            _notice(Icons.info_outline, l10n.servicesTextFallback),
           FailedUnitsSummary(failed: units.failed, onUnitSelected: _openUnit),
           Wrap(
             spacing: 24,
@@ -741,7 +727,7 @@ class _UnitPage extends StatelessWidget {
           spacing: 8,
           children: [
             ...facts,
-            _notice(theme, Icons.info_outline, l10n.servicesUserLogsAbsent),
+            _notice(Icons.info_outline, l10n.servicesUserLogsAbsent),
           ],
         ),
       );
@@ -752,7 +738,7 @@ class _UnitPage extends StatelessWidget {
         serverId: serverId,
         name: name,
         visible: visible,
-        builder: (context, notice, lines) => _headed(
+        builder: (context, notice, lines) => HeadedPanelBody(
           header: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 8,
@@ -830,7 +816,7 @@ class _UnitPage extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: _headed(
+      child: HeadedPanelBody(
         // Dragging the heading drags the sheet; the lines scroll alone.
         headerScroll: scroll,
         header: Column(
@@ -969,7 +955,6 @@ class _UnitLogsState extends State<_UnitLogs> {
       read == null || notice == null
           ? null
           : _notice(
-              Theme.of(context),
               read.ended ? Icons.info_outline : Icons.hourglass_empty,
               notice,
               switch (read.state) {
@@ -985,67 +970,25 @@ class _UnitLogsState extends State<_UnitLogs> {
   }
 }
 
-Widget _unavailable(
-  AppLocalizations l10n,
-  ThemeData theme,
-  CollectorUnavailable unavailable,
-) => _notice(theme, Icons.error_outline, switch (unavailable.reason) {
-  CollectorUnavailableReason.missing => l10n.servicesUnavailableMissing,
-  CollectorUnavailableReason.denied => l10n.servicesUnavailableDenied,
-  CollectorUnavailableReason.timeout => l10n.servicesUnavailableTimeout,
-  CollectorUnavailableReason.error => l10n.servicesUnavailableError,
-}, unavailable.detail);
+Widget _unavailable(AppLocalizations l10n, CollectorUnavailable unavailable) =>
+    _notice(Icons.error_outline, switch (unavailable.reason) {
+      CollectorUnavailableReason.missing => l10n.servicesUnavailableMissing,
+      CollectorUnavailableReason.denied => l10n.servicesUnavailableDenied,
+      CollectorUnavailableReason.timeout => l10n.servicesUnavailableTimeout,
+      CollectorUnavailableReason.error => l10n.servicesUnavailableError,
+    }, unavailable.detail);
 
-/// [header] over [body], the header scrolling within [_headerShare] of
-/// the height when it would take more, under [headerScroll] if given.
-Widget _headed({
-  required Widget header,
-  required Widget body,
-  ScrollController? headerScroll,
-}) => LayoutBuilder(
-  builder: (context, constraints) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: constraints.maxHeight * _headerShare,
-        ),
-        child: SingleChildScrollView(controller: headerScroll, child: header),
-      ),
-      const SizedBox(height: 12),
-      Expanded(child: body),
-    ],
-  ),
-);
-
-/// A state the panel is in rather than data, read out when it changes;
-/// [detail] is the server's own error text, cut to four lines.
-Widget _notice(ThemeData theme, IconData icon, String text, [String? detail]) =>
-    Semantics(
-      liveRegion: true,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 8,
-        children: [
-          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Text(text),
-                if (detail != null && detail.isNotEmpty)
-                  Text(
-                    detail,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+/// A state the panel is in rather than data: a 20 px icon and a live
+/// region, with [detail], the server's own error text, unmuted under it.
+PanelNotice _notice(IconData icon, String text, [String? detail]) =>
+    PanelNotice(
+      icon: icon,
+      text: text,
+      detail: detail,
+      iconSize: 20,
+      live: true,
+      mutedDetail: false,
+      omitEmptyDetail: true,
     );
 
 /// A label beside its value or control, read as one.

@@ -18,18 +18,14 @@ import 'fleet_row_state.dart' show kFleetRowStaleAfter;
 import 'freshness.dart';
 import 'overview_cards.dart';
 import 'history_card.dart';
+import 'panel_kit.dart';
 import 'quick_actions.dart';
 import 'slowness.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
 import 'threshold_announcer.dart';
 import 'threshold_scope.dart';
 import 'time_display.dart';
 import 'top_lists.dart';
-
-/// The panel width from which the cards sit in two columns, growing with
-/// the text scale as the System tab's does.
-const double _wideWidth = 600;
 
 const double _gap = 16;
 const double _sparklineHeight = 40;
@@ -133,9 +129,6 @@ class OverviewPanel extends StatelessWidget {
   /// and the phone's screen compose it with the server's name.
   final Widget? statusCard;
 
-  /// What the panel listens to instead of the clock while nothing ages.
-  static final Listenable _silent = Listenable.merge(const []);
-
   @override
   Widget build(BuildContext context) {
     // Read on every build: a server that left the fleet and came back has
@@ -168,7 +161,7 @@ class OverviewPanel extends StatelessWidget {
           builder: (context, _) => ListenableBuilder(
             listenable: visible && (reading.value != null || slow.aging)
                 ? monitoring.clock
-                : _silent,
+                : kSilentListenable,
             builder: (context, _) => _build(
               context,
               latest.value,
@@ -241,8 +234,7 @@ class OverviewPanel extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         final layout =
             OverviewLayoutScope.maybeOf(context)?.value ??
             OverviewLayout.standard;

@@ -23,6 +23,7 @@ import 'attention.dart' show AttentionWatch, openProblemsByServer;
 import 'fleet_summary.dart';
 import 'fleet_triage.dart';
 import 'monitor_set_feedback.dart';
+import 'panel_kit.dart' show kSilentListenable;
 import 'server_editing.dart';
 import 'sidebar_kit.dart';
 import 'threshold_scope.dart';
@@ -703,10 +704,6 @@ class FleetServerRow extends StatelessWidget {
     (_, SidebarKitDensity.compact) => 8,
   };
 
-  /// What a row with no age to count listens to instead of the clock: it
-  /// never notifies, so the clock stops once no row shows an age.
-  static final Listenable _silent = Listenable.merge(const []);
-
   @override
   Widget build(BuildContext context) {
     final id = server.id;
@@ -732,7 +729,9 @@ class FleetServerRow extends StatelessWidget {
         // its keyboard focus.
         final counting = samples.overview != null || samples.core != null;
         return ListenableBuilder(
-          listenable: counting && onstage ? monitoring.clock : _silent,
+          listenable: counting && onstage
+              ? monitoring.clock
+              : kSilentListenable,
           builder: (context, _) => _build(
             context,
             samples,
