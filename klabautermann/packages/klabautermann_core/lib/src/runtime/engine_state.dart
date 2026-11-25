@@ -1372,7 +1372,10 @@ final class EngineState {
         forwards?.dispose();
         commands.close();
         Isolate.exit();
-      case EngineRequest():
+      // The request kinds with no handler above. [AnswerKeystore] is
+      // normally taken ahead of the queue, so this is its fallback too.
+      case HandleAlert():
+      case AnswerKeystore():
         uiPort.send(
           RequestRejected(
             message.runtimeType.toString(),
