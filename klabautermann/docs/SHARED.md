@@ -3,8 +3,10 @@
 Dart code is shared through packages and never copied. Native runner code
 cannot be shared that way, so Klabautermann copies it from a sibling and
 records each copy here (03 D32): the source path and commit, how the copy
-diverges, and who owns it. Update the entry whenever either side changes,
-and review the code for a shared plugin before another copy appears.
+diverges, and who owns it. Update the entry whenever either side changes;
+`scripts/check-shared-ledger.py` checks the pinned whole-file diffs, and
+its `--update` mode refreshes them after review. Review the code for a
+shared plugin before another copy appears.
 
 Paths are relative to the repository root. "Copied at" is the `origin/main`
 commit the files were taken from; "last changed" is the source file's own
@@ -195,9 +197,38 @@ wired to its native peer:
 
 | Klabautermann file | Source (last changed) | Divergences |
 |---|---|---|
-| `klabautermann/app/klabautermann_app/macos/Runner/MenuChecks.swift` | `poltergeist/app/poltergeist_app/macos/Runner/MenuChecks.swift` (`c90eb5a`) | Channel `klabautermann/menu_checks`; the header comment names this ledger. |
+| `klabautermann/app/klabautermann_app/macos/Runner/MenuChecks.swift` | `poltergeist/app/poltergeist_app/macos/Runner/MenuChecks.swift` (`c90eb5a`) | Channel `klabautermann/menu_checks`; the header comment names this ledger and drops Poltergeist's active-workspace reference. |
 
 `klabautermann/app/klabautermann_app/test/desktop_chrome_runner_test.dart`
 checks the wiring on Linux; only macOS compiles it, and only a person can
 check the titlebar, a restore or the menus on a real desktop
 (docs/STATUS.md).
+
+## Checked copies
+
+`scripts/check-shared-ledger.py` reads only the block below. It folds the
+source product's name into Klabautermann's, diffs each folded source against
+its copy, and pins that diff as `same` or a digest. Table rows that copy or
+excerpt only part of a file, such as the xcconfig setting, the pbxproj
+wiring and the `MainFlutterWindow.swift` line sets, are reviewed by hand and
+have no partial entries in the block; the whole-file
+`flutter_window.{h,cpp}` copies named in the settings wiring row are in it.
+After reviewing a divergence and updating its table row, refresh the pinned
+digest with `scripts/check-shared-ledger.py --update`.
+
+```text
+klabautermann/app/klabautermann_app/macos/Runner/KlabautermannFlutterViewController.h seance/app/seance_app/macos/Runner/SeanceFlutterViewController.h 13a5f68190b53973
+klabautermann/app/klabautermann_app/macos/Runner/KlabautermannFlutterViewController.m seance/app/seance_app/macos/Runner/SeanceFlutterViewController.m 44ecda8208a9212c
+klabautermann/app/klabautermann_app/macos/Runner/Runner-Bridging-Header.h seance/app/seance_app/macos/Runner/Runner-Bridging-Header.h same
+klabautermann/app/klabautermann_app/macos/RunnerTests/AccessibilityLifecycleTest.mm seance/app/seance_app/macos/RunnerTests/AccessibilityLifecycleTest.mm same
+klabautermann/app/klabautermann_app/macos/Runner/SettingsWindow.swift seance/app/seance_app/macos/Runner/SettingsWindow.swift 48eb8a624df936fa
+klabautermann/app/klabautermann_app/linux/runner/settings_window.h seance/app/seance_app/linux/runner/settings_window.h aedad9cb5d7bd883
+klabautermann/app/klabautermann_app/linux/runner/settings_window.cc seance/app/seance_app/linux/runner/settings_window.cc fe41a25926212f42
+klabautermann/app/klabautermann_app/linux/runner/window_title.h seance/app/seance_app/linux/runner/window_title.h 343f7f0af1b35dd8
+klabautermann/app/klabautermann_app/linux/runner/window_title.cc seance/app/seance_app/linux/runner/window_title.cc same
+klabautermann/app/klabautermann_app/windows/runner/settings_window.h seance/app/seance_app/windows/runner/settings_window.h 13d2715e8791e2db
+klabautermann/app/klabautermann_app/windows/runner/settings_window.cpp seance/app/seance_app/windows/runner/settings_window.cpp 48bce9279ef8591f
+klabautermann/app/klabautermann_app/windows/runner/flutter_window.h seance/app/seance_app/windows/runner/flutter_window.h same
+klabautermann/app/klabautermann_app/windows/runner/flutter_window.cpp seance/app/seance_app/windows/runner/flutter_window.cpp 1dace80bdb6c93a1
+klabautermann/app/klabautermann_app/macos/Runner/MenuChecks.swift poltergeist/app/poltergeist_app/macos/Runner/MenuChecks.swift 89072afd6951d352
+```

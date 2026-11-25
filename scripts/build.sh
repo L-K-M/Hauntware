@@ -10,7 +10,8 @@
 #   scripts/build.sh --install        # build each product's app for this host
 #                                     # and install it (macOS: /Applications,
 #                                     # which then opens in the Finder)
-#   scripts/build.sh --check          # print the resolved config; build nothing
+#   scripts/build.sh --check          # print the resolved config and run the
+#                                     # copy-ledger check; build nothing
 #
 # Each product keeps its own build (planchette/scripts/build.sh and
 # siblings) — this orchestrator runs them in sequence and unions their
@@ -81,7 +82,15 @@ if $CHECK; then
     found="$(command -v "$tool" 2>/dev/null || true)"
     echo "  $tool  ${found:-not found}"
   done
-  exit 0
+  echo
+  echo "Checks:"
+  echo "  shared ledger:"
+  # HAUNTWARE_BUILD_ROOT can be a partial contract-test fixture, while the
+  # ledger belongs to the checkout that owns this script.
+  ledger_output="$(python3 "$SELF_DIR/check-shared-ledger.py" 2>&1)"
+  ledger_status=$?
+  printf '%s\n' "$ledger_output" | sed 's/^/    /'
+  exit "$ledger_status"
 fi
 
 explicit=false
