@@ -15,8 +15,8 @@ import '../actions/action_entry.dart';
 import 'containers_view.dart' show containerNameOf;
 
 /// Opens a shell in [container] on a page of its own, full screen with
-/// the keyboard bar, as a phone pushes it (03 §10.5). The desktop
-/// inspector shows a [ContainerShellPane] in its own region instead.
+/// the keyboard bar, as a phone pushes it (03 §10.5). The desktop shows
+/// a [ContainerShellPane] in the workspace dock (OV-10) instead.
 void openContainerShellPage(
   BuildContext context, {
   required MonitoringController monitoring,
