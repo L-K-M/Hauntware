@@ -545,3 +545,7 @@ The finding marks moving the ten sub-controllers' construction from `MonitoringC
 
 ## SMP-14 device settings table (#844): small size win, kept
 The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200 lines (non-uniform settings and format docs dominate), but 21 setter pairs now share one decoder per value kind, and 34 new format-contract tests written before the change pin every key and fallback.
+
+## #842 GLM round 1 (45e99b7): 1 applied, 1 deferred
+- compose_test: removing `composeRestart`'s test dropped the only case where `validateComposeServiceName` refuses a name; a direct expect restores it.
+- `planEventRefresh`'s now-unused `now` parameter: deferred to the DKR-6 watcher follow-up, since `docker_watch.dart` (being edited by #841) passes it.
