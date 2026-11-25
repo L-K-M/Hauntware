@@ -8,7 +8,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show HostProfile, OpDirectoryKind;
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
-    show EndpointPin, EndpointPinStore, endpointPinsFileName;
+    show EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
     show
         CredentialDraft,
@@ -16,7 +16,6 @@ import 'package:seance_core/seance_core.dart'
         ImportedHost,
         Prober,
         SecretRedactor,
-        ServerConfig,
         SshLink,
         TcpBannerProber;
 
@@ -38,12 +37,11 @@ import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../docker/exec_sessions.dart';
 import '../fleet/endpoint_pins.dart';
-import '../fleet/imported_fleet.dart';
+import '../fleet/imported_fleet.dart' show localUserName;
 import '../fleet/monitor_set.dart';
 import '../fleet/reachability_service.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
-import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
 import '../links/channel_quota.dart';
@@ -79,6 +77,7 @@ import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import '../runtime/engine_fleet.dart';
 import '../runtime/engine_reads.dart';
 import '../runtime/engine_sync_chain.dart';
 import 'protocol.dart';
@@ -385,20 +384,10 @@ void _runEngine(
   // The login name for imported hosts and hops that name no user.
   final localUser = localUserName(Platform.environment);
 
-  // The fleet the engine serves: the sync account's servers, then the
-  // imports, with the config of each import and hop it can dial, and its
-  // server ids. A synced server has a config only while its endpoint is
-  // confirmed on this device (03 §4.7, SAF-09), so neither the user nor
-  // a background connect dials it otherwise. Imports count as confirmed
-  // on the device that imported them (03 §4.3, owner question O6's
-  // default).
-  var syncedServers = const <ServerConfig>[];
-  var synced = SyncedFleet.empty;
-  late ImportedFleet fleet;
-  var fleetIds = <String>{};
-  List<FleetEntry> fleetEntries() => [...synced.entries, ...fleet.entries];
-  ServerConfig? configOf(String id) =>
-      synced.serverConfig(id) ?? fleet.serverConfig(id);
+  // The fleet bookkeeping (ENG-11 step 2, ARC-05), assigned once every
+  // dependency it reads exists below. Its state and functions live in
+  // [EngineFleet], testable without an isolate.
+  late final EngineFleet fleet;
 
   // The endpoints this device confirmed (D16): `endpoint_pins.json` while
   // the process holds the support directory alone, otherwise memory only.
@@ -469,11 +458,12 @@ void _runEngine(
               (pin) => pinConfirmed(pin),
             ),
             prompts: prompts,
-            hopConfig: configOf,
+            hopConfig: (id) => fleet.configOf(id),
             dial: dial,
           ).connect,
           // Fleet entries only: the fleet's hop configs serve their routes.
-          configFor: (id) => fleetIds.contains(id) ? configOf(id) : null,
+          configFor: (id) =>
+              fleet.fleetIds.contains(id) ? fleet.configOf(id) : null,
           emit: (event) {
             uiPort.send(event);
             if (event is LinkState) {
@@ -511,7 +501,7 @@ void _runEngine(
           credentials: credentials,
           hostKeys: hostKeys,
           prompts: prompts,
-          hopConfig: configOf,
+          hopConfig: (id) => fleet.configOf(id),
           authenticator: testAuthenticator ?? liveTestAuthenticator,
         )
       : null;
@@ -568,14 +558,10 @@ void _runEngine(
     }
   }
 
-  // FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
-  // `overview` the fleet rows read while the app is in the foreground,
-  // whether or not a view shows them, over links dialed unattended so
-  // nothing prompts. It holds eligible fleet servers only. The servers
-  // a view holds a link to ([Connect] without its [Disconnect] yet) are
-  // kept beside it: a server that leaves the set keeps the link a view
-  // holds, and a view that leaves keeps a monitored server's link.
-  var monitored = const <String>{};
+  // The servers a view holds a link to ([Connect] without its
+  // [Disconnect] yet), kept apart from the fleet's monitor set: a server
+  // that leaves the set keeps the link a view holds, and a view that
+  // leaves keeps a monitored server's link.
   final viewed = <String>{};
 
   // Verifies a server's footprint (SAF-14, P13) and sends what it found:
@@ -611,7 +597,7 @@ void _runEngine(
   if (links != null) {
     admin = AdminModeController(
       linkFor: links.link,
-      endpointOf: (id) => switch (configOf(id)) {
+      endpointOf: (id) => switch (fleet.configOf(id)) {
         final config? => (
           host: config.host,
           port: config.port,
@@ -832,7 +818,7 @@ void _runEngine(
       control: <T>(serverId, call) =>
           router.useEndpoint(serverId, (client, _) => call(client)),
       emit: uiPort.send,
-      fleet: (serverId) => fleetIds.contains(serverId),
+      fleet: (serverId) => fleet.fleetIds.contains(serverId),
       audit: audit.append,
       deviceId: start.deviceId,
     );
@@ -848,199 +834,40 @@ void _runEngine(
         )
       : null;
 
-  // Whether the app has had a fleet. Probing waits for it, since the app
-  // keeps answers only for servers its fleet lists.
-  var fleetSent = false;
-
-  void probeFleet() {
-    if (!fleetSent) return;
-    reachability?.update(probeTargets(fleetEntries(), configOf));
-  }
-
-  // The fleet servers the monitor set may hold now: those the shared rule
-  // allows and the engine can dial, which an import naming no user lacks
-  // on a system that names no local account.
-  Set<String> monitorEligibleIds() => {
-    for (final entry in fleetEntries())
-      if (monitorEligibilityOf(entry) == MonitorEligibility.eligible &&
-          configOf(entry.serverId) != null)
-        entry.serverId,
-  };
-
-  // Makes [next], eligible fleet servers only, the monitor set: a server
-  // that joins gets its subscription and an unattended connect, and one
-  // that leaves loses both, its link only when no view holds it.
-  void applyMonitorSet(Set<String> next) {
-    final before = monitored;
-    monitored = Set.unmodifiable(next);
-    for (final serverId in before.difference(next)) {
-      sampling.unsubscribe(
-        Unsubscribe(serverId: serverId, subscriptionId: monitorSubscriptionId),
-      );
-      scheduler?.update(serverId);
-      if (viewed.contains(serverId)) continue;
-      logs?.disconnect(serverId);
-      links?.disconnect(serverId);
-    }
-    for (final serverId in next.difference(before)) {
-      final subscription = Subscribe(
-        serverId: serverId,
-        subscriptionId: monitorSubscriptionId,
-        streams: const {SampleStream.overview},
-      );
-      sampling.subscribe(subscription);
-      scheduler?.subscribed(subscription);
-      links?.connect(serverId, purpose: ConnectPurpose.background);
-    }
-  }
-
-  // Rebuilds the fleet from the store. A server that left it is forgotten
-  // (03 §5.1): its samplers, link and attempts end and its subscriptions
-  // go. One that keeps its id under another endpoint, an import whose
-  // endpoint changed or a synced server in [moved], loses what the engine
-  // learned or chose for that machine: its cached profile and history,
-  // Docker session and choices, admin state, reports and forwards
-  // (SYN-08).
-  void refreshFleet({Set<String> moved = const {}}) {
-    final previous = fleetIds.isEmpty ? null : fleet;
-    fleet = ImportedFleet(
-      imports.hosts,
-      hops: imports.hops,
-      localUser: localUser,
-      detail: imports.detail,
-    );
-    final before = fleetIds;
-    final entries = fleetEntries();
-    fleetIds = {for (final entry in entries) entry.serverId};
-    sampling.fleet = fleetIds;
-    alerts
-        .setFleet({
-          for (final entry in entries) entry.serverId: entry.group,
-        }, DateTime.now().toUtc())
-        .forEach(uiPort.send);
-    scheduler?.retain(fleetIds);
-    logs?.retain(fleetIds);
-    operations?.retain(fleetIds);
-    channelQuotas.retain(fleetIds);
-    links?.forget(before.difference(fleetIds));
-    viewed.retainAll(fleetIds);
-    // A monitored server that left the fleet or is no longer eligible (a
-    // sync changed its endpoint, an import its credentials) leaves the
-    // set; the app hears the fleet and sends its own set again.
-    if (monitored.isNotEmpty) {
-      applyMonitorSet(monitored.intersection(monitorEligibleIds()));
-    }
-    final forgotten = {
-      for (final id in before)
-        if (!fleetIds.contains(id) ||
-            moved.contains(id) ||
-            previous?.endpointOf(id) != fleet.endpointOf(id))
-          id,
-    };
-    terminals?.forget(forgotten);
-    forwards?.forget(forgotten);
-    docker
-      ?..forget(forgotten)
-      ..retain(fleetIds);
-    admin?.forget(forgotten);
-    plans.forget(forgotten);
-    packageReports.forget(forgotten);
-    diskTrees.forget(forgotten);
-    profiles.removeWhere((id, _) => forgotten.contains(id));
-    // A kept import whose endpoint changed names another machine, so its
-    // link and log streams would otherwise go on serving the old one. A
-    // synced server belongs to [applySynced]: one it moved waits for the
-    // user's confirmation, and one whose pins could not be read stays
-    // undialed until they are.
-    final importedIds = {for (final entry in fleet.entries) entry.serverId};
-    for (final id in forgotten) {
-      if (!importedIds.contains(id)) continue;
-      logs?.disconnect(id);
-      links?.disconnect(id);
-      if (viewed.contains(id)) {
-        links?.connect(id, purpose: ConnectPurpose.interactive);
-      } else if (monitored.contains(id)) {
-        links?.connect(id, purpose: ConnectPurpose.background);
-      }
-    }
-    // Before the caller sends the fleet or an EndpointChanged, so no
-    // probe of a server starts, and no answer for it goes out, once the
-    // app hears it left or lost its pin.
-    probeFleet();
-    detach(capabilities?.forget(forgotten));
-    detach(history?.forget(forgotten));
-  }
-
-  // Lists [servers] against this device's pins. A pin the store cannot
-  // read fails closed: its server waits to be confirmed and nothing dials
-  // it, but it is listed as unreadable rather than changed. The file
-  // store throws only FileSystemException, for a file it cannot read
-  // (corrupt files are quarantined and read as empty); anything else is
-  // a bug and propagates.
-  Future<SyncedFleet> listSynced(List<ServerConfig> servers) async {
-    final pins = <String, EndpointPin>{};
-    final unreadable = <String>{};
-    for (final server in servers) {
-      try {
-        if (await endpointPins.pinFor(server.id) case final pin?) {
-          pins[server.id] = pin;
-        }
-      } on FileSystemException {
-        unreadable.add(server.id);
-      }
-    }
-    return SyncedFleet(servers, pins: pins, unreadable: unreadable);
-  }
-
-  // The synced servers whose endpoints count as confirmed when the next
-  // fleet is compared: those confirmed in the last one, and those whose
-  // pin, or a hop's, could not be read since they were, so a change made
-  // while the store failed is caught once it reads again. A server whose
-  // pin could not be read at startup is here too, as its cached profile
-  // was kept.
-  var trustedIds = const <String>{};
-
-  // Takes [next] as the synced fleet. A trusted server that the account
-  // still holds and that is no longer confirmed, with its pins read, had
-  // its endpoint changed by a sync (03 §4.7, SYN-08): the app hears it,
-  // its link and log streams close, and refreshFleet forgets what the
-  // engine held for the old machine, as for a moved import. Nothing redials it until the user
-  // confirms it again. One whose pins could not be read is only not
-  // dialed for now: a store failure is no endpoint change. A server the
-  // account no longer holds needs nothing here: refreshFleet drops it
-  // from fleetIds, so its link, streams, samplers and cached profile go
-  // with the retain and forget there (03 §5.1).
-  void applySynced(SyncedFleet next) {
-    final changed = {
-      for (final id in trustedIds)
-        if (next.lists(id) &&
-            !next.confirmedIds.contains(id) &&
-            !next.unreadableIds.contains(id))
-          id,
-    };
-    trustedIds = {
-      ...next.confirmedIds,
-      for (final id in trustedIds)
-        if (next.unreadableIds.contains(id)) id,
-    };
-    synced = next;
-    refreshFleet(moved: changed);
-    for (final id in changed) {
-      uiPort.send(EndpointChanged(id));
-      logs?.disconnect(id);
-      links?.disconnect(id);
-    }
-  }
-
-  // Lists the synced servers again with the pins as they stand. A
-  // confirmation in the request queue and a sync round beside it both
-  // relist; one whose servers a round replaced while it read the pins
-  // leaves the fleet to that round's own relist, which reads them later.
-  Future<void> relistSynced() async {
-    final servers = syncedServers;
-    final next = await listSynced(servers);
-    if (identical(servers, syncedServers)) applySynced(next);
-  }
+  // The fleet object, once every dependency it reads exists. Each
+  // nullable consumer is a getter because the links block below assigns
+  // it later, and the stores and sync arrive in the startup chain.
+  fleet = EngineFleet(
+    sampling: sampling,
+    alerts: alerts,
+    scheduler: () => scheduler,
+    logs: () => logs,
+    operations: () => operations,
+    channelQuotas: channelQuotas,
+    links: links,
+    viewed: viewed,
+    terminals: () => terminals,
+    forwards: () => forwards,
+    docker: () => docker,
+    admin: () => admin,
+    plans: plans,
+    packageReports: packageReports,
+    diskTrees: diskTrees,
+    profiles: profiles,
+    capabilities: () => capabilities,
+    history: () => history,
+    reachability: reachability,
+    imports: (
+      hosts: () => imports.hosts,
+      hops: () => imports.hops,
+      detail: () => imports.detail,
+    ),
+    localUser: localUser,
+    endpointPins: endpointPins,
+    sync: () => sync,
+    detach: detach,
+    send: uiPort.send,
+  );
 
   // A server's cached profile goes out when a request first names it,
   // since the startup events reach only the app's first listener.
@@ -1048,13 +875,6 @@ void _runEngine(
     if (capabilities?.takeCached(serverId) case final cached?) {
       uiPort.send(cached);
     }
-  }
-
-  // Lists the synced servers again after a round or write took, so a
-  // chained operation never reads a fleet a later one replaced.
-  Future<void> refreshSynced() async {
-    syncedServers = await sync.servers();
-    await relistSynced();
   }
 
   // Sync, one operation at a time in request order, beside the
@@ -1065,10 +885,10 @@ void _runEngine(
     sync: () => sync,
     send: uiPort.send,
     alerts: alerts,
-    fleetEntries: fleetEntries,
-    syncedFleet: () => synced,
-    refreshSynced: refreshSynced,
-    relistSynced: relistSynced,
+    fleetEntries: fleet.fleetEntries,
+    syncedFleet: () => fleet.synced,
+    refreshSynced: fleet.refreshSynced,
+    relistSynced: fleet.relistSynced,
     endpointPins: endpointPins,
     pinPublicationRelease: start.pinPublicationRelease,
     fault: fault,
@@ -1134,15 +954,15 @@ void _runEngine(
         // and the imports an earlier run saved (none when the stores were
         // empty or unusable), so the rail shows them before the user does
         // anything.
-        uiPort.send(CatalogReplaced(fleetEntries()));
-        fleetSent = true;
+        uiPort.send(CatalogReplaced(fleet.fleetEntries()));
+        fleet.fleetSent = true;
         // The probes start whatever the stored preferences do.
         try {
           await syncChain.sendServerPrefs();
         } on Object catch (error, stack) {
           fault(error, stack);
         }
-        probeFleet();
+        fleet.probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
@@ -1158,9 +978,9 @@ void _runEngine(
         } else {
           // A fleet server without a config is the user's to fix, so the
           // app is told why; any other id is not a server it lists.
-          switch (fleetIds.contains(serverId)
-              ? synced.missingConfigReason(serverId) ??
-                    fleet.missingConfigReason(serverId)
+          switch (fleet.fleetIds.contains(serverId)
+              ? fleet.synced.missingConfigReason(serverId) ??
+                    fleet.fleet.missingConfigReason(serverId)
               : null) {
             case final reason?:
               uiPort.send(ConnectRejected(serverId, reason));
@@ -1173,7 +993,7 @@ void _runEngine(
         // A monitored server keeps its link for the monitor set. One
         // without a link yet gives up the view's attempt, and with it any
         // prompt the view raised, and goes on dialing unattended.
-        final monitoredServer = monitored.contains(serverId);
+        final monitoredServer = fleet.monitored.contains(serverId);
         if (monitoredServer && links?.link(serverId) != null) return;
         // Its streams end before its link closes, so none reports
         // waiting for that link first.
@@ -1273,7 +1093,7 @@ void _runEngine(
         switch (hostQueries) {
           case null:
             reject(message, 'links are off in this engine');
-          case _ when !fleetIds.contains(serverId):
+          case _ when !fleet.fleetIds.contains(serverId):
             reject(message, 'no fleet server $serverId');
           case final queries:
             // Not awaited: the queue keeps serving while the host answers.
@@ -1379,8 +1199,8 @@ void _runEngine(
         // writes nothing until an import saves (D59).
         final saved = await imports.replace(result.hosts, hops: result.hops);
         capabilities?.fleetSave = saved ? FleetSave.saved : FleetSave.unsaved;
-        refreshFleet();
-        uiPort.send(CatalogReplaced(fleetEntries()));
+        fleet.refreshFleet();
+        uiPort.send(CatalogReplaced(fleet.fleetEntries()));
         uiPort.send(
           SshConfigImported(
             importedCount: result.hosts.length,
@@ -1397,7 +1217,7 @@ void _runEngine(
         final seen = shown == null
             ? serverIds
             : [
-                for (final entry in synced.entries)
+                for (final entry in fleet.synced.entries)
                   if (serverIds.contains(entry.serverId) &&
                       shown[entry.serverId] == ShownEndpoint.of(entry))
                     entry.serverId,
@@ -1407,7 +1227,11 @@ void _runEngine(
         // fleet, so the fleet's answer ends the request either way; the
         // others still count.
         Object? failure;
-        for (final pin in synced.pinsFor(seen, DateTime.now(), shown: shown)) {
+        for (final pin in fleet.synced.pinsFor(
+          seen,
+          DateTime.now(),
+          shown: shown,
+        )) {
           try {
             await endpointPins.confirm(pin);
           } on Object catch (error) {
@@ -1417,8 +1241,8 @@ void _runEngine(
         if (failure != null) {
           reject(message, '$endpointPinsFileName not saved: $failure');
         }
-        await relistSynced();
-        uiPort.send(CatalogReplaced(fleetEntries()));
+        await fleet.relistSynced();
+        uiPort.send(CatalogReplaced(fleet.fleetEntries()));
       case SetMonitorSet(:final serverIds):
         // The app offers only what the engine allows (FL-21), so a
         // rejection means the two saw different fleets; the app's next
@@ -1428,8 +1252,8 @@ void _runEngine(
           reject(message, 'more than $kMonitorSetLimit servers');
           return;
         }
-        final eligible = monitorEligibleIds();
-        applyMonitorSet(requested.intersection(eligible));
+        final eligible = fleet.monitorEligibleIds();
+        fleet.applyMonitorSet(requested.intersection(eligible));
         final skipped = requested.difference(eligible);
         if (skipped.isNotEmpty) {
           reject(message, 'not eligible fleet servers: ${skipped.join(', ')}');
@@ -1500,7 +1324,7 @@ void _runEngine(
         syncChain.runWrite(
           requestId,
           () => sync.duplicateServer(message),
-          confirmWritten: synced.confirmedIds.contains(serverId),
+          confirmWritten: fleet.synced.confirmedIds.contains(serverId),
         );
       case DeleteServer(:final requestId):
         syncChain.runWrite(requestId, () => sync.deleteServer(message));
@@ -1760,7 +1584,7 @@ void _runEngine(
               refuse(ActionRefusalReason.engineUnavailable, detail: '$error'),
         );
       case FootprintQuery(:final serverId):
-        if (!fleetIds.contains(serverId)) {
+        if (!fleet.fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');
         } else if (links?.link(serverId) == null ||
             profiles[serverId] == null) {
@@ -1914,7 +1738,7 @@ void _runEngine(
           }),
         );
       case SetAdminMode(:final serverId, :final enabled):
-        if (!fleetIds.contains(serverId)) {
+        if (!fleet.fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');
           return;
         }
@@ -2051,9 +1875,12 @@ void _runEngine(
               transport: syncTransport,
             );
             syncOpened = true;
-            syncedServers = await sync.servers();
-            synced = await listSynced(syncedServers);
-            trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
+            fleet.syncedServers = await sync.servers();
+            fleet.synced = await fleet.listSynced(fleet.syncedServers);
+            fleet.trustedIds = {
+              ...fleet.synced.confirmedIds,
+              ...fleet.synced.unreadableIds,
+            };
             if (links != null) {
               final link = links;
               operations = OperationTracker(
@@ -2069,11 +1896,11 @@ void _runEngine(
                 deviceId: start.deviceId,
               );
             }
-            refreshFleet();
+            fleet.refreshFleet();
             capabilities = await CapabilityCache.open(
               Directory(start.supportDirectory),
               access: start.supportDirectoryAccess,
-              fleet: fleetIds,
+              fleet: fleet.fleetIds,
               // A store left as it is saves no import this run, so its fleet
               // says nothing about which servers the user removed.
               purge: switch (store.issue?.kind) {
@@ -2086,7 +1913,7 @@ void _runEngine(
             history = await HistoryStore.open(
               Directory(start.supportDirectory),
               access: start.supportDirectoryAccess,
-              fleet: fleetIds,
+              fleet: fleet.fleetIds,
               purge: switch (store.issue?.kind) {
                 ImportStoreIssueKind.leftAsIs ||
                 ImportStoreIssueKind.newerVersion => CachePurge.never,
@@ -2105,9 +1932,9 @@ void _runEngine(
             // synced server not confirmed now describes another machine. One
             // whose pins could not be read keeps it until they read.
             final unconfirmed = {
-              for (final entry in synced.entries)
+              for (final entry in fleet.synced.entries)
                 if (entry.endpoint != EndpointConfirmation.confirmed &&
-                    !synced.unreadableIds.contains(entry.serverId))
+                    !fleet.synced.unreadableIds.contains(entry.serverId))
                   entry.serverId,
             };
             if (unconfirmed.isNotEmpty) {
@@ -2122,7 +1949,7 @@ void _runEngine(
               profiles: profiles,
               packageReports: packageReports,
               diskTrees: diskTrees,
-              fleetIds: () => fleetIds,
+              fleetIds: () => fleet.fleetIds,
               stackEditLookup: stackEditLookup,
               lendSession: lendSession,
               send: uiPort.send,
