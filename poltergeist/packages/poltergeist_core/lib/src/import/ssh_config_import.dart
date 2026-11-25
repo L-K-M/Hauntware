@@ -1,20 +1,21 @@
 /// ssh_config import with preview + dedupe (D22; 07 §3.3).
 ///
 /// Séance's `SshConfigImporter` — consumed through the git pin, never a
-/// local copy — parses host blocks, and its `SshConfigLine` splits every
-/// line this module scans, so both read each line the same way. What the
-/// pinned importer silently discards is exactly what this module makes
-/// loud instead:
+/// local copy — settles each host as ssh does where it can, and its
+/// `SshConfigLine` splits every line this module scans, so both read each
+/// line the same way. What an unresolved alias still loses is exactly what
+/// this module makes loud instead:
 ///
 /// - a plain, top-level `Include` is resolved read-only at import time
 ///   (the same local-file trust already granted to `~/.ssh/config`
 ///   itself and any `IdentityFile` it references, D22), with OpenSSH's
 ///   recursion cap and cycle leniency;
-/// - constructs the importer ignores (`ProxyCommand`, `ProxyJump`,
-///   `Match` blocks, `Include` inside a host or match block) surface as
-///   per-row limitations so the preview can badge "won't behave as in
-///   ssh" instead of silently importing bookmarks that fail to connect
-///   the way the user's real ssh does.
+/// - constructs the importer cannot evaluate (`ProxyCommand`, `ProxyJump`,
+///   unevaluated `Match` criteria, `Include` inside a host or match block)
+///   surface as per-row limitations on the rows whose alias stayed
+///   best-effort, so the preview can badge "won't behave as in ssh"
+///   instead of silently importing bookmarks that fail to connect the way
+///   the user's real ssh does.
 ///
 /// The module is pure: all filesystem access crosses the injected
 /// [SshConfigFileSource] seam, implemented by the app with `dart:io`.
@@ -53,10 +54,10 @@ enum SshConfigImportLimitation {
   /// one.
   proxyCommand,
 
-  /// The resolved config contains `Match` blocks. Poltergeist ignores
-  /// them, and without evaluating their criteria any host could connect
-  /// with different settings than ssh would use — so every row is badged,
-  /// erring loud rather than silently wrong (D22's own bias).
+  /// The resolved config contains `Match` blocks and this row's alias was
+  /// imported with best-effort values, so the criteria that decide what ssh
+  /// would use were not evaluated for it. A row whose alias the shared
+  /// resolver settled carries no such badge: ssh's result for it is known.
   matchBlock,
 
   /// An `Include` inside this host's own block is not resolved; ssh would
@@ -72,11 +73,12 @@ enum SshConfigImportLimitation {
   invalidPort,
 
   /// Connection defaults — `Port`, `User`, `HostName`, `IdentityFile` —
-  /// set before the first block or inside a wildcard `Host *` block.
-  /// ssh applies them to every connection; the pinned importer drops
-  /// both shapes (a top-level directive lands in no host block, and a
-  /// wildcard-only block is deliberately not a host), so the imported
-  /// bookmark will not inherit them.
+  /// set before the first block or inside a wildcard `Host *` block, on a
+  /// row whose alias was imported with best-effort values: the block-local
+  /// reading drops both shapes (a top-level directive lands in no host
+  /// block, and a wildcard-only block is deliberately not a host), so the
+  /// imported bookmark will not inherit them. A row whose alias the shared
+  /// resolver settled inherited them and carries no badge.
   wildcardDefaults,
 }
 
@@ -294,6 +296,13 @@ class SshConfigImportService {
         ...?resolver.hostLimitations[parsed.host.alias],
         if (parsed.host.proxyJump != null) SshConfigImportLimitation.proxyJump,
       };
+      if (!parsed.approximate) {
+        // The resolver read these constructs as ssh does, so the badges
+        // that report them as dropped or unevaluated would be false here.
+        limitations
+          ..remove(SshConfigImportLimitation.wildcardDefaults)
+          ..remove(SshConfigImportLimitation.matchBlock);
+      }
       final refusedPort = parsed.refusedPort;
       if (refusedPort != null) {
         // The row can never import, so it takes no part in dedupe.
@@ -347,11 +356,20 @@ class _ParsedHost {
   final ImportedHost host;
   final String sourcePath;
 
-  /// The `Port` argument the pinned importer refused; null for a host it
-  /// imports.
+  /// The `Port` argument the importer refused; null for a host it imports.
   final String? refusedPort;
 
-  const _ParsedHost(this.host, this.sourcePath, {this.refusedPort});
+  /// Whether [host] carries the block-local reading because the shared
+  /// resolver left its alias unresolved; badges about constructs ssh may
+  /// decide differently stay on such rows only.
+  final bool approximate;
+
+  const _ParsedHost(
+    this.host,
+    this.sourcePath, {
+    this.refusedPort,
+    this.approximate = false,
+  });
 }
 
 /// Walks the resolved config accumulating hosts, limitations, and
@@ -413,7 +431,16 @@ class _Resolver {
 
     for (final chunk in chunks) {
       final parsed = SshConfigImporter.parse(chunk.text);
-      hosts.addAll(parsed.hosts.map((host) => _ParsedHost(host, path)));
+      final approximate = parsed.approximate;
+      hosts.addAll(
+        parsed.hosts.map(
+          (host) => _ParsedHost(
+            host,
+            path,
+            approximate: approximate.contains(host.alias),
+          ),
+        ),
+      );
       // Refused hosts follow the chunk's importable ones: they never
       // import, so their position decides no first-obtained dedupe.
       for (final skipped in parsed.skipped) {
@@ -509,7 +536,8 @@ class _Resolver {
           context = _advanceContext(context, line);
         case 'match':
           // Match criteria evaluation is out of scope (that would
-          // reimplement ssh semantics); any Match block badges every row.
+          // reimplement ssh semantics); any Match block badges every row
+          // whose alias the shared resolver could not settle.
           globalLimitations.add(SshConfigImportLimitation.matchBlock);
           context = _advanceContext(context, line);
         case 'proxycommand':
@@ -537,7 +565,9 @@ class _Resolver {
             case _BlockContextWildcard():
               // A wildcard block matches every connection, so its
               // behavior-affecting directives are global for preview
-              // honesty even though the pinned importer drops the block.
+              // honesty. A non-`none` ProxyCommand leaves every matching
+              // alias unresolved, so those rows keep the badge; `none`
+              // means a direct connection, which the resolver applies.
               globalLimitations.add(limitation);
             case _BlockContextMatch():
               break; // the matchBlock badge already covers the row
@@ -555,10 +585,11 @@ class _Resolver {
         case 'user':
         case 'hostname':
         case 'identityfile':
-          // Connection defaults the pinned importer drops: top-level
-          // directives land in no host block and a wildcard-only block
-          // is deliberately not a host, yet ssh applies both to every
-          // connection — the badge keeps that loss visible (D22).
+          // Connection defaults the block-local reading drops for an
+          // approximate row: top-level directives land in no host block
+          // and a wildcard-only block is deliberately not a host, yet ssh
+          // applies both to every connection — the badge keeps that loss
+          // visible (D22). Resolved rows inherit them and drop the badge.
           switch (context) {
             case _BlockContextTop():
               if (promoteTopLevelDefaults) {
