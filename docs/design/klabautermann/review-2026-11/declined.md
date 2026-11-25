@@ -566,3 +566,18 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
   a counter that starts at 0 and only increments; no negative input exists.
 - Extra test for a custom `exponentLimit`: nit, deferred; no caller
   sets a non-default limit today, so the case has no production user.
+
+### PR #844 GLM review (device settings key table)
+
+- "Sorted encode reorders pins": refuted. main already stored
+  `ids.toList()..sort()` for pinned servers, admin memory and the monitor
+  set; the table keeps exactly that.
+- "`_write` must not sort containerColumns": refuted. It uses
+  `_stringListSetting`, whose encoder `_copyStringList` keeps order.
+- "safety/attention must deep-copy": refuted. `_jsonObjectSetting` encodes
+  with `_jsonObjectCopy`, the same `jsonDecode(jsonEncode(...))` round trip.
+- Empty parent object after the last server entry: pre-existing format,
+  out of scope for a behavior-preserving refactor; reads treat `{}` and a
+  missing key alike.
+- Shared mutable test fixtures, repeated `setLogDisplay` rows, int text
+  size pin, error-timing test: informational or nits; no change.
