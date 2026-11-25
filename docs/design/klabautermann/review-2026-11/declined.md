@@ -508,3 +508,7 @@ The misleading `stack-file-` prefix and `fileReads` map were renamed (`one-shot-
 
 ## ENG-11 file placement (#836): `src/runtime/`, not `src/engine/`
 ENG-11 names `engine_state.dart`, `engine_fleet.dart`, `engine_sync_chain.dart`, `engine_actions.dart` and `engine_reads.dart` without a directory. D52 keeps runtime code out of `src/engine/` (the protocol guard's directory) and rejected callback-owner entries, and these classes hold functions, so every ENG-11 slice puts them in `klabautermann_core/lib/src/runtime/`.
+
+## #834 GLM round 1 (510f13e): 1 real (test only) fixed, 1 deferred
+- ghost_ui persisted_setting_test: the apply-before-save `expect` ran inside a ChangeNotifier listener, which reports rather than throws, so it could not fail. Fixed: the count is recorded at notification and asserted after.
+- A shared `dockerRetryDelay` helper beside the moved constants: deferred to DKR-11, which replaces the three backoffs with one `Backoff` type; this PR only shares the constants.
