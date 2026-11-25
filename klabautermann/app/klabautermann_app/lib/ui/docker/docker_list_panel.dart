@@ -284,7 +284,9 @@ class _DockerListPanelState<S, R, F extends Enum, C extends Enum>
           return SingleChildScrollView(padding: padding, child: header);
         }
 
-        final body = _body(
+        // Built inside the clock's builder, so the figures that age with
+        // it are read again on each tick.
+        Widget body(BuildContext context) => _body(
           context,
           items,
           containers.containers,
@@ -297,10 +299,10 @@ class _DockerListPanelState<S, R, F extends Enum, C extends Enum>
           child: HeadedPanelBody(
             header: header,
             body: clock == null
-                ? body
+                ? body(context)
                 : ListenableBuilder(
                     listenable: clock,
-                    builder: (context, _) => body,
+                    builder: (context, _) => body(context),
                   ),
           ),
         );

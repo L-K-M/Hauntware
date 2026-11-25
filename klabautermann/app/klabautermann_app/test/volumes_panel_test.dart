@@ -22,6 +22,9 @@ const _phone = Size(390, 900);
 /// machine's zone.
 final _now = DateTime(2026, 10, 15, 14, 30);
 
+/// What the monitoring clock reads; tests move it.
+late DateTime _clock;
+
 /// Three volumes: one two containers mount, one a stopped container
 /// mounts, and one nothing mounts (VOL-01).
 final _volumes = [
@@ -82,7 +85,8 @@ Future<_Panel> _pump(
   addTearDown(tester.view.reset);
 
   final engine = FakeEngineClient();
-  final monitoring = MonitoringController(engine, now: () => _now);
+  _clock = _now;
+  final monitoring = MonitoringController(engine, now: () => _clock);
   final visible = ValueNotifier(true);
   addTearDown(() async {
     monitoring.dispose();
@@ -201,6 +205,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Every volume is mounted by a container.'), findsNothing);
     expect(find.text('No volume matches the search.'), findsOneWidget);
+  });
+
+  testWidgets('ages follow the monitoring clock', (tester) async {
+    final panel = await _pump(tester);
+    await panel.list(tester, containers: _containers);
+    expect(_label(tester, 'cache'), contains('5 hours ago'));
+
+    _clock = _now.add(const Duration(hours: 2));
+    await tester.pump(kFreshnessTick);
+    expect(_label(tester, 'cache'), contains('7 hours ago'));
   });
 
   testWidgets('without a container list the use is unknown and says why', (
