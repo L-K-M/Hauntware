@@ -581,3 +581,18 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
   missing key alike.
 - Shared mutable test fixtures, repeated `setLogDisplay` rows, int text
   size pin, error-timing test: informational or nits; no change.
+
+### PR #845 GLM review (commands and scheduler split)
+
+- `_OpsRead.send` shadows `sampler` with `run.slow`: no bug, both
+  `dueAt`s answer only for `SamplerKind.slow` and a run has one slow
+  sampler. The shadow is main's `_sendOps(server, run)` body moved as is.
+  Deferred to the core cleanup follow-up (assert identity instead), with
+  a one-line re-entrancy contract on `_OwedRead.send`, rather than
+  restarting this PR's CI.
+- Dangling `[E]` in `kAuditLinePartMax`'s doc: pre-existing on main
+  (commands.dart:19), moved verbatim; deferred to the same follow-up.
+- `==` tool marker prefixes `== cgroup`, `.zst` rotated logs: pre-existing
+  wire format and behavior, out of scope for a pure move.
+- "Gate the merge on the analyzer": CI's `dart analyze --fatal-infos`
+  covers dropped or duplicated declarations; nothing to change.
