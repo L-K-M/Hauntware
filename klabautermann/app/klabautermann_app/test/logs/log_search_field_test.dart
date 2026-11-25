@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/logs/log_search.dart';
 import 'package:klabautermann_app/ui/logs/log_view_controller.dart';
-import 'package:klabautermann_app/ui/logs/logs_panel.dart';
+import 'package:klabautermann_app/ui/logs/log_search_field.dart';
 
 Future<LogSearch> _pump(
   WidgetTester tester, {

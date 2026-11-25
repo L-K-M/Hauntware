@@ -11,7 +11,7 @@ import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'adaptive_shell.dart' show showsDesktopShell;
-import 'docker/containers_panel.dart' show containerStateText;
+import 'docker/container_badges.dart' show containerStateText;
 import 'docker/containers_view.dart' show containerNameOf;
 import 'menus/app_commands.dart';
 import 'phone_shell.dart' show kTabletSplitMinShortestSide;

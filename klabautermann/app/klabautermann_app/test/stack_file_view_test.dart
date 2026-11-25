@@ -7,7 +7,7 @@ import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/docker/container_details.dart'
     show ContainerInspectionScope, InspectedContainer;
 import 'package:klabautermann_app/ui/docker/stack_file_view.dart';
-import 'package:klabautermann_app/ui/docker/stacks_panel.dart';
+import 'package:klabautermann_app/ui/docker/stack_overview.dart';
 import 'package:klabautermann_app/ui/docker/stacks_view.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_editor/planchette_editor.dart' show PlanchetteEditor;

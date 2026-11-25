@@ -12,7 +12,7 @@ import 'package:klabautermann_app/controllers/tls_endpoints.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/certificates.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart';
-import 'package:klabautermann_app/ui/charts/time_series_chart.dart';
+import 'package:klabautermann_app/ui/charts/time_series_painter.dart';
 import 'package:klabautermann_app/ui/time_display.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
