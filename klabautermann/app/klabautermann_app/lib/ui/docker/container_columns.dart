@@ -17,7 +17,7 @@ import 'docker_cells.dart' show dockerAgeText;
 const Duration _statsStaleAfter = Duration(seconds: 20);
 
 /// The columns whose largest values matter, which start descending.
-const firstDirection = {
+const descendingFirstColumns = {
   ContainerColumn.cpu,
   ContainerColumn.memory,
   ContainerColumn.network,
@@ -26,25 +26,26 @@ const firstDirection = {
 };
 
 /// A column's label, as the table and its chooser name it.
-String label(AppLocalizations l10n, ContainerColumn column) => switch (column) {
-  ContainerColumn.name => l10n.dockerContainersColumnName,
-  ContainerColumn.state => l10n.dockerContainersColumnState,
-  ContainerColumn.health => l10n.dockerContainersColumnHealth,
-  ContainerColumn.status => l10n.dockerContainersColumnStatus,
-  ContainerColumn.image => l10n.dockerContainersColumnImage,
-  ContainerColumn.ports => l10n.dockerContainersColumnPorts,
-  ContainerColumn.stack => l10n.dockerContainersColumnStack,
-  ContainerColumn.cpu => l10n.dockerContainersColumnCpu,
-  ContainerColumn.memory => l10n.dockerContainersColumnMemory,
-  ContainerColumn.network => l10n.dockerContainersColumnNetwork,
-  ContainerColumn.blockIo => l10n.dockerContainersColumnBlockIo,
-  ContainerColumn.pids => l10n.dockerContainersColumnPids,
-  ContainerColumn.ip => l10n.dockerContainersColumnIp,
-  ContainerColumn.started => l10n.dockerContainersColumnStarted,
-};
+String containerColumnLabel(AppLocalizations l10n, ContainerColumn column) =>
+    switch (column) {
+      ContainerColumn.name => l10n.dockerContainersColumnName,
+      ContainerColumn.state => l10n.dockerContainersColumnState,
+      ContainerColumn.health => l10n.dockerContainersColumnHealth,
+      ContainerColumn.status => l10n.dockerContainersColumnStatus,
+      ContainerColumn.image => l10n.dockerContainersColumnImage,
+      ContainerColumn.ports => l10n.dockerContainersColumnPorts,
+      ContainerColumn.stack => l10n.dockerContainersColumnStack,
+      ContainerColumn.cpu => l10n.dockerContainersColumnCpu,
+      ContainerColumn.memory => l10n.dockerContainersColumnMemory,
+      ContainerColumn.network => l10n.dockerContainersColumnNetwork,
+      ContainerColumn.blockIo => l10n.dockerContainersColumnBlockIo,
+      ContainerColumn.pids => l10n.dockerContainersColumnPids,
+      ContainerColumn.ip => l10n.dockerContainersColumnIp,
+      ContainerColumn.started => l10n.dockerContainersColumnStarted,
+    };
 
 /// The table's columns, each with its text, sort key and cell.
-List<SortableTableColumn<ContainerListEntry>> columns(
+List<SortableTableColumn<ContainerListEntry>> containerTableColumns(
   AppLocalizations l10n,
   Map<String, ContainerListStats> stats,
   DateTime now,
@@ -60,7 +61,7 @@ List<SortableTableColumn<ContainerListEntry>> columns(
     Widget Function(BuildContext context, ContainerSummary container)? cell,
   }) => SortableTableColumn(
     id: id.name,
-    label: label(l10n, id),
+    label: containerColumnLabel(l10n, id),
     text: (entry) => switch (entry) {
       ContainerEntry(:final container) => text(container),
       ContainerGroupEntry() => '',
@@ -69,7 +70,7 @@ List<SortableTableColumn<ContainerListEntry>> columns(
       ContainerEntry(:final container) => sortKey(container),
       ContainerGroupEntry() => null,
     },
-    firstDirection: firstDirection.contains(id)
+    firstDirection: descendingFirstColumns.contains(id)
         ? TableSortDirection.descending
         : TableSortDirection.ascending,
     extent: extent,
@@ -248,7 +249,7 @@ List<SortableTableColumn<ContainerListEntry>> columns(
 }
 
 /// The columns shown, the name first, then [chosen]'s in order.
-List<SortableTableColumn<ContainerListEntry>> shownColumns(
+List<SortableTableColumn<ContainerListEntry>> shownContainerColumns(
   List<SortableTableColumn<ContainerListEntry>> all,
   List<ContainerColumn> chosen,
 ) {
@@ -342,7 +343,7 @@ class _ColumnsDialogState extends State<ColumnsDialog> {
               CheckboxListTile(
                 key: ValueKey(column),
                 value: _shown.contains(column),
-                title: Text(label(l10n, column)),
+                title: Text(containerColumnLabel(l10n, column)),
                 controlAffinity: ListTileControlAffinity.leading,
                 secondary: ReorderableDragStartListener(
                   index: index,

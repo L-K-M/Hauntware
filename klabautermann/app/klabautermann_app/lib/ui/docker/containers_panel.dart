@@ -361,8 +361,12 @@ class _ContainersPanelState extends State<ContainersPanel> {
     required bool wide,
   }) {
     final l10n = AppLocalizations.of(context);
-    final allColumns = columns(l10n, stats, widget.monitoring.clock.value);
-    final tableColumns = shownColumns(allColumns, _chosen);
+    final allColumns = containerTableColumns(
+      l10n,
+      stats,
+      widget.monitoring.clock.value,
+    );
+    final tableColumns = shownContainerColumns(allColumns, _chosen);
     final terms = searchTerms(_state.search.text);
     final selecting = _selecting && _bulkAllowed(context);
     final shown = _shownContainers(containers);
@@ -412,11 +416,11 @@ class _ContainersPanelState extends State<ContainersPanel> {
       filterFocus: _state.searchFocus,
       keyActions: _keyActions(l10n),
       columns: [
-        if (selecting) selectColumn(l10n, _selected, _toggleSelected),
+        if (selecting) containerSelectColumn(l10n, _selected, _toggleSelected),
         ...tableColumns,
       ],
       rows: entries,
-      rowKey: rowKey,
+      rowKey: containerRowKey,
       sort: _state.sort,
       onSort: (sort) => setState(() => _state.sort = sort),
       rowOrder: TableRowOrder.asGiven,
@@ -639,14 +643,17 @@ class _ContainersPanelState extends State<ContainersPanel> {
           isDense: ghostIsDesktopPlatform(theme.platform),
           items: [
             for (final choice in shown)
-              DropdownMenuItem(value: choice, child: Text(label(l10n, choice))),
+              DropdownMenuItem(
+                value: choice,
+                child: Text(containerColumnLabel(l10n, choice)),
+              ),
           ],
           onChanged: (choice) {
             if (choice == null) return;
             setState(
               () => _state.sort = TableSort(
                 choice.name,
-                firstDirection.contains(choice)
+                descendingFirstColumns.contains(choice)
                     ? TableSortDirection.descending
                     : TableSortDirection.ascending,
               ),

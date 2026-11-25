@@ -729,7 +729,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
     // text; a heading's row key.
-    r"'${DockerWatchList.containers.name}.row.${rowKey(entry)}'",
+    r"'${DockerWatchList.containers.name}.row.${containerRowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
     "''",

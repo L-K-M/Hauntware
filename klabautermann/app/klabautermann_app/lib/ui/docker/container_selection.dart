@@ -102,7 +102,7 @@ class SelectionBar extends StatelessWidget {
 
 /// The table's checkbox column while selecting; it reads as whether the
 /// row is selected.
-SortableTableColumn<ContainerListEntry> selectColumn(
+SortableTableColumn<ContainerListEntry> containerSelectColumn(
   AppLocalizations l10n,
   Set<String> selected,
   ValueChanged<String> onToggle,

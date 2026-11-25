@@ -9,14 +9,14 @@ import 'container_selection.dart' show GroupHeading, Selectable;
 import 'containers_view.dart';
 
 /// A row's identity: a container's id, or a heading's project.
-Object rowKey(ContainerListEntry entry) => switch (entry) {
+Object containerRowKey(ContainerListEntry entry) => switch (entry) {
   ContainerEntry(:final container) => container.id,
   ContainerGroupEntry(:final project) => 'group.${project ?? ''}',
 };
 
 /// The key tests find a phone row by, in the table rows' form.
 String _phoneRowKey(ContainerListEntry entry) =>
-    '${DockerWatchList.containers.name}.row.${rowKey(entry)}';
+    '${DockerWatchList.containers.name}.row.${containerRowKey(entry)}';
 
 /// The phone list's built running rows, by id in build order, which
 /// [onChanged] hears of as they come and go.
