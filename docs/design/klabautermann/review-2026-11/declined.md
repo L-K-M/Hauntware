@@ -461,3 +461,15 @@ Every bullet has a test that came with its fix in #805/#806: http_pool_test (DKR
 - Fixed in the next commit: operation_runner_test's API and launch unlisted-error tests did not show their throwing stub ran; both now assert it.
 - Declined as minor: the ENG-1 isolate test's wait loops have no failure guard (a failure is only slower to diagnose), the ENG-3 sync test leaves its parked keystore and recovery requests unanswered at teardown (the file passes in full and the isolate is shut down).
 - "Unexpected errors are reported as transport failures": a comment on ENG-1's design (always answer the request), outside this tests-only PR.
+
+## ARC-16 (notice widgets' empty-detail decision): settled in #828
+`PanelNotice` keeps both behaviours as an explicit `omitEmptyDetail` parameter (`PanelNotice.state` for the reads' notices), so no call site's rendering changed; verified pixel-identical against the Linux goldens.
+
+## ARC-08 text drift found while unifying the editor catalog (2026-11-25)
+The shared editor's `unsaved` reads "Not saved" in Klabautermann and Planchette and "Unsaved edits" in Poltergeist; `browseTextTools` differs too but only Planchette shows it. The refactor keeps every app's visible text (the catalog takes "Not saved" and "Browse Text Tools…", Poltergeist overrides `unsaved`). Unifying the wording is a product choice left to the owner.
+
+## #827 GLM round 1 (b321d23): 0 actionable, no push
+- engine_isolate.dart:2346 (major) "`profile!` can throw and leave the request unanswered": refuted. `profile` is a local captured when the request arrives and `ready` (checked before `read` runs) refuses a null one; a throw inside the lend would still reach `onTransport` through the future chain.
+- adminRead "widens admin reads to servers outside the fleet": refuted. The five admin handlers never tested `fleetIds` before this PR either; the helper keeps that difference on purpose and the PR says so.
+- Raw `$error` in `UnitQuery` and `ReadEditable` details: unchanged from before the PR (both answered `failed` with `'$error'`), so out of this refactor's scope.
+- The `profile!` invariant resting on `ready`: declined as minor.

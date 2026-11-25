@@ -14,3 +14,4 @@
 - Planchette app lock: ADD optional lock (off by default), shared code, local_auth, Android FragmentActivity, iOS Face ID string. (user, 2026-11-16)
 
 - Klab review 2026-11-24 (user): quit-while-locked stays (UIB-4 declined); BUILD anacron (JOB-04) and sockets (SVC-10) screens; app RESTARTS the engine after it dies and says so.
+- Klab review 2026-11-25 (user): ARC-15 MOVE Klabautermann's ssh_config resolver into seance_core and have Séance's importer use it (Séance and Poltergeist then import with full ssh -G semantics).
