@@ -2,10 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show DockerCancelToken;
-import 'package:klabautermann_host/klabautermann_host.dart'
-    show HostProfile, OpDirectoryKind;
+import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPinStore, endpointPinsFileName;
@@ -21,7 +18,6 @@ import 'package:seance_core/seance_core.dart'
 
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
-import '../audit/host_audit_line.dart';
 import '../admin/safety_policy.dart';
 import '../certificates/tls_check.dart';
 import '../alerts/alert_evaluator.dart';
@@ -51,32 +47,15 @@ import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/host_queries.dart';
 import '../logs/log_stream_router.dart';
-import '../operations/confirmation.dart';
-import '../operations/detached_runner.dart';
-import '../operations/footprint.dart';
-import '../operations/operation_plan.dart'
-    show
-        DockerTargetUnchanged,
-        PlanAttempt,
-        StackConfigUnchanged,
-        refusalDetail;
-import '../operations/operation_runner.dart';
 import '../operations/operation_tracker.dart';
 import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
-import '../operations/plan_types.dart' show RequiredLevel;
-import '../operations/plans/backup_plans.dart';
-import '../operations/plans/docker_plans.dart';
-import '../operations/plans/edit_plan.dart';
 import '../services/packages.dart';
 import '../services/disk_usage.dart';
-import '../operations/stack_edits.dart';
-import '../operations/plans/host_plans.dart';
-import '../operations/plans/redeploy_plan.dart';
-import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import '../runtime/engine_actions.dart';
 import '../runtime/engine_fleet.dart';
 import '../runtime/engine_reads.dart';
 import '../runtime/engine_sync_chain.dart';
@@ -356,12 +335,6 @@ void _runEngine(
   final profiles = <String, HostProfile>{};
   final packageReports = PackageReports(now: () => DateTime.now().toUtc());
   final diskTrees = DiskUsageTrees();
-  OperationRunner? runner;
-
-  // The running image pulls by plan id, which [CancelAction] stops
-  // (IMG-03).
-  final pullCancels = PullCancels();
-
   // Each server's channel slots, one quota for both routers, so the host
   // log reads and the Docker session's channels count against the same
   // shares (M9).
@@ -493,6 +466,30 @@ void _runEngine(
         )
       : null;
 
+  // The action handlers (ENG-11 step 4, ARC-05), built once the links
+  // exist: their runner lends sessions over them, and the read handlers
+  // point at their session lender and stack edit lookup. The nullable
+  // consumers stay getters because they are assigned in the links block
+  // below and the stores and sync arrive in the startup chain.
+  final EngineActions actions = EngineActions(
+    links: links,
+    admin: () => admin,
+    audit: audit,
+    scheduler: () => scheduler,
+    profiles: profiles,
+    plans: plans,
+    linkGenerations: linkGenerations,
+    channelQuotas: channelQuotas,
+    docker: () => docker,
+    operations: () => operations,
+    safetyPolicy: () => safetyPolicy,
+    deviceName: () => deviceName,
+    fleetIds: () => fleet.fleetIds,
+    send: uiPort.send,
+    detach: detach,
+    reject: reject,
+  );
+
   // The server editor's Test connection (FL-03): the links' credentials,
   // pins and prompts, never their pin publishing, since a test pins
   // nothing. None while links are off, as nothing then dials.
@@ -506,93 +503,11 @@ void _runEngine(
         )
       : null;
 
-  // A stack file's edit (STK-07) looks its project up on the server's
-  // Docker endpoint, for its read and again for its plan: null while
-  // links are off.
-  StackEditLookup? stackEditLookup(String serverId) {
-    final router = docker;
-    if (router == null) return null;
-    return (project, path) async {
-      try {
-        return await router.useStacks(serverId, (client, route, stacks) async {
-          final found = await stacks.editable(client, project, path);
-          return (
-            project: found.project,
-            socketPath: route.socketPath,
-            dockerProgram: route.dockerProgram,
-            failure: found.failure,
-          );
-        });
-      } on Object {
-        // No endpoint, or the list failed: nothing to edit against.
-        return (
-          project: null,
-          socketPath: null,
-          dockerProgram: null,
-          failure: StackFileFailure.readFailed,
-        );
-      }
-    };
-  }
-
-  // A user-initiated step on a link at its learned session limit borrows
-  // the slow sampler's session for the while; the fast sampler samples on
-  // (M4 plan M6). Elsewhere the step runs as it is.
-  Future<T> lendSession<T>(String serverId, Future<T> Function() body) async {
-    final link = links?.link(serverId);
-    final inUse =
-        (scheduler?.samplerSessions(serverId) ?? 0) +
-        channelQuotas.of(serverId).sessionsHeld;
-    if (link == null ||
-        !leavesNoSession(
-          learnedSessionLimit: link.seen.learnedSessionLimit,
-          inUse: inUse,
-        )) {
-      return body();
-    }
-    final giveBack = await scheduler?.yieldSlowSampler(serverId);
-    try {
-      return await body();
-    } finally {
-      giveBack?.call();
-    }
-  }
-
   // The servers a view holds a link to ([Connect] without its
   // [Disconnect] yet), kept apart from the fleet's monitor set: a server
   // that leaves the set keeps the link a view holds, and a view that
   // leaves keeps a monitored server's link.
   final viewed = <String>{};
-
-  // Verifies a server's footprint (SAF-14, P13) and sends what it found:
-  // on every connect, when admin mode turns on (root's part), after an
-  // edit or a backup removal, and on request. readFootprint answers
-  // rather than throws; a lend that fails still answers, with nothing
-  // verified, rather than leaving an unhandled error to end the engine.
-  void verifyFootprint(String serverId) {
-    final link = links?.link(serverId);
-    final profile = profiles[serverId];
-    if (link == null || profile == null) return;
-    unawaited(
-      lendSession(
-        serverId,
-        () => readFootprint(serverId, (
-          link: link,
-          profile: profile,
-          admin: admin?.session(serverId),
-        )),
-      ).then(
-        uiPort.send,
-        onError: (Object error) => uiPort.send(
-          FootprintState(
-            serverId,
-            rootUnchecked: true,
-            warnings: ['footprint: $error'],
-          ),
-        ),
-      ),
-    );
-  }
 
   if (links != null) {
     admin = AdminModeController(
@@ -612,7 +527,9 @@ void _runEngine(
         // A sudo relay and an elevated follow live only while admin mode
         // does (plan M7, LOG-22).
         docker?.adminChanged(event.serverId);
-        if (event.phase == AdminModePhase.on) verifyFootprint(event.serverId);
+        if (event.phase == AdminModePhase.on) {
+          actions.verifyFootprint(event.serverId);
+        }
         logs?.adminChanged(event.serverId);
         if (event.phase != AdminModePhase.on) {
           terminals?.adminEnded(event.serverId);
@@ -621,143 +538,6 @@ void _runEngine(
         if (event.phase == AdminModePhase.on) {
           detach(operations?.adminOn(event.serverId));
         }
-      },
-    );
-    // One-off commands' output is redacted as the audit log redacts the
-    // steps (CTX-08, 03 §8.10).
-    final execRedactor = SecretRedactor();
-    runner = OperationRunner(
-      linkFor: links.link,
-      emit: uiPort.send,
-      lend: lendSession,
-      api: (serverId, planId, step) async {
-        final router = docker;
-        if (router == null) {
-          throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
-        }
-        final pull = isPullStep(step);
-        final cancel = pull ? pullCancels.start(planId) : DockerCancelToken();
-        final int status;
-        try {
-          status = await router.useEndpoint(
-            serverId,
-            (client, _) => pull
-                ? runPullStep(
-                    client,
-                    step,
-                    cancel: cancel,
-                    onProgress: (layers, status) => uiPort.send(
-                      ImagePullProgress(
-                        planId: planId,
-                        layers: layers,
-                        status: status,
-                      ),
-                    ),
-                  )
-                : runApiStep(client, step),
-          );
-        } finally {
-          if (pull) pullCancels.finish(planId);
-        }
-        if (status >= 200 && status < 300) {
-          final (:container, :containers, :images, :volumes, :networks) =
-              apiStepChanges(step);
-          router.actionRan(
-            serverId,
-            containers: {?container},
-            everyContainer: containers,
-            images: images,
-            volumes: volumes,
-            networks: networks,
-          );
-        }
-        return status;
-      },
-      exec: (serverId, step) {
-        final router = docker;
-        if (router == null) {
-          throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
-        }
-        return runOneOffExec(
-          step,
-          open: () => router.openExec(serverId),
-          control: <T>(call) =>
-              router.useEndpoint(serverId, (client, _) => call(client)),
-          redact: execRedactor.redact,
-        );
-      },
-      docker: (serverId, check) async {
-        final router = docker;
-        if (router == null) return RevalidationFailure.unreadable;
-        try {
-          return await router.useStacks(
-            serverId,
-            (client, _, stacks) => switch (check) {
-              final StackConfigUnchanged stack => revalidateStackConfig(
-                stacks,
-                stack,
-              ),
-              final DockerTargetUnchanged target => revalidateDockerTarget(
-                client,
-                target,
-              ),
-              _ => Future.value(RevalidationFailure.unreadable),
-            },
-          );
-        } on Object {
-          return RevalidationFailure.unreadable;
-        }
-      },
-      launch: (serverId, plan, session) async {
-        final link = links.link(serverId);
-        final uid = profiles[serverId]?.uid;
-        final runner = plan.detachedRunner!;
-        final id = newOpId();
-        if (link == null || uid == null) {
-          return (
-            id: id,
-            dir: null,
-            pid: null,
-            failure: LaunchFailure.transport,
-            exitCode: null,
-          );
-        }
-        final launched = await launchDetached(
-          link: link,
-          runner: runner,
-          uid: uid,
-          argv: detachedArgv(plan),
-          id: id,
-          session: session,
-        );
-        if (launched.failure == null) {
-          await operations?.launched(
-            serverId,
-            id,
-            directory: runner.runsAsRoot
-                ? OpDirectoryKind.root
-                : OpDirectoryKind.user,
-            launch: OperationLaunch.ofPlan(
-              plan,
-              startedAt: DateTime.now().toUtc(),
-            ),
-          );
-        }
-        return launched;
-      },
-      // A record that cannot be written is lost; the run itself stands. A
-      // started detached operation is audited with its result, once the
-      // app has shown it (03 §7.17).
-      finished: (result) {
-        if (result.plan.intent
-            case EditFile() || KeepLastBackups() || RemoveBackups()) {
-          verifyFootprint(result.plan.intent.serverId);
-        }
-        if (result.plan.detached &&
-            result.finished.outcome == ActionOutcome.succeeded) {
-          return;
-        }
-        unawaited(audit.recordRun(result).catchError((Object _) {}));
       },
     );
     scheduler = SamplingScheduler(
@@ -784,7 +564,7 @@ void _runEngine(
       probed: (serverId, profile) {
         profiles[serverId] = profile;
         admin?.probed(serverId, profile);
-        verifyFootprint(serverId);
+        actions.verifyFootprint(serverId);
         detach(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
@@ -1383,238 +1163,16 @@ void _runEngine(
         syncChain.runWrite(requestId, () => sync.putRule(message));
       case RemoveRule(:final requestId):
         syncChain.runWrite(requestId, () => sync.removeRule(message));
-      case PlanAction(:final intent):
-        void refuse(ActionRefusalReason reason, {String? detail}) =>
-            uiPort.send(
-              ActionRefused(
-                reason,
-                intent: intent,
-                detail: refusalDetail(detail),
-              ),
-            );
-        // The policy first (M4 plan M4).
-        if (safetyRefusal(safetyPolicy, intent.serverId) case final reason?) {
-          refuse(reason);
-          return;
-        }
-        final serverId = intent.serverId;
-        final link = links?.link(serverId);
-        final profile = profiles[serverId];
-        if (link == null || profile == null) {
-          refuse(ActionRefusalReason.noLink);
-          return;
-        }
-        // The plan holds the generation it was made on, so a reconnect
-        // while it waits for the user makes it stale.
-        final generation = linkGenerations[serverId] ?? 0;
-        final protection = protectionContextOf(
-          samplerPids: scheduler?.samplerPids(serverId) ?? const {},
-          profile: profile,
-          safety: safetyPolicy.servers[serverId],
-        );
-        final Future<PlanAttempt> attempt;
-        switch (intent) {
-          case KillProcess() ||
-              UnitAction() ||
-              StartTimer() ||
-              RunCronJob() ||
-              RunSnippet() ||
-              RefreshPackageLists() ||
-              PowerAction():
-            // Planning reads the target over the link, as the run will.
-            final session = admin?.session(serverId);
-            attempt = lendSession(
-              serverId,
-              () => planHostAction(
-                intent,
-                (
-                  link: link,
-                  profile: profile,
-                  protection: protection,
-                  adminMode: session != null,
-                ),
-                elevated: session == null
-                    ? null
-                    : (argv) => session.executor.run(
-                        argv,
-                        password: session.password,
-                      ),
-              ),
-            );
-          case ContainerAction() ||
-              RemoveContainer() ||
-              ContainerBulkAction() ||
-              RemoveImage() ||
-              CreateVolume() ||
-              RemoveVolume() ||
-              RemoveNetwork() ||
-              PruneDocker() ||
-              PullImage(via: PullRoute.engine) ||
-              StackAction() ||
-              ContainerExec():
-            final router = docker;
-            if (router == null) {
-              refuse(ActionRefusalReason.engineUnavailable);
-              return;
-            }
-            attempt = router
-                .useEndpoint(
-                  serverId,
-                  (client, route) => planDockerAction(intent, (
-                    client: client,
-                    route: route,
-                    protection: protection,
-                    loginUser: profile.user ?? 'login user',
-                  )),
-                )
-                .catchError(
-                  (Object error) => (
-                    plan: null,
-                    refusal: ActionRefusalReason.engineUnavailable,
-                    detail: '$error',
-                  ),
-                );
-          case RedeployStack() || StackComposeAction() || PullImage():
-            final router = docker;
-            if (router == null) {
-              refuse(ActionRefusalReason.engineUnavailable);
-              return;
-            }
-            // Planning verifies the stack and lists its services over the
-            // link, so it borrows a session as a run does.
-            attempt =
-                lendSession(
-                  serverId,
-                  () => router.useStacks(serverId, (client, route, stacks) {
-                    final RedeployPlanContext context = (
-                      client: client,
-                      route: route,
-                      stacks: stacks,
-                      profile: profile,
-                      adminMode: admin?.session(serverId) != null,
-                      sudoAllows: (program) async {
-                        final session = admin?.session(serverId);
-                        if (session == null) return true;
-                        return sudoAllowsProgram(
-                          link: link,
-                          session: session,
-                          profile: profile,
-                          program: program,
-                        );
-                      },
-                      protection: protection,
-                      loginUser: profile.user ?? 'login user',
-                    );
-                    return switch (intent) {
-                      final RedeployStack redeploy => planRedeploy(
-                        redeploy,
-                        context,
-                      ),
-                      final StackComposeAction compose => planStackCompose(
-                        compose,
-                        context,
-                      ),
-                      final PullImage pull => planHostPull(pull, context),
-                      _ => throw StateError(
-                        'not a compose intent: ${intent.runtimeType}',
-                      ),
-                    };
-                  }),
-                ).catchError(
-                  (Object error) => (
-                    plan: null,
-                    refusal: ActionRefusalReason.engineUnavailable,
-                    detail: '$error',
-                  ),
-                );
-          case KeepLastBackups() || RemoveBackups():
-            attempt = lendSession(
-              serverId,
-              () => planBackupRemoval(intent, (
-                link: link,
-                profile: profile,
-                admin: admin?.session(serverId),
-              )),
-            );
-          case EditFile():
-            // Planning reads the target again over the link, through admin
-            // mode where it needs root, as the run will.
-            attempt = lendSession(
-              serverId,
-              () => planEdit(intent, (
-                link: link,
-                profile: profile,
-                admin: admin?.session(serverId),
-              ), stacks: stackEditLookup(serverId)),
-            );
-        }
-        // Not awaited: planning reads over the link, and the queue keeps
-        // serving the app meanwhile. A planner that throws rather than
-        // refusing still answers, or the app's preview would stay
-        // pending for good.
-        detach(
-          attempt
-              .catchError(
-                (Object error) => (
-                  plan: null,
-                  refusal: ActionRefusalReason.engineUnavailable,
-                  detail: '$error',
-                ),
-              )
-              .then((attempt) {
-                final plan = attempt.plan;
-                if (plan == null) {
-                  refuse(attempt.refusal!, detail: attempt.detail);
-                  return;
-                }
-                // The switch and name as they are now, when the user sees
-                // the plan; the preview lists the line among the steps.
-                final held = withHostAuditLine(
-                  withAdminCredentials(plan, admin?.session(serverId)),
-                  enabled:
-                      safetyPolicy.servers[serverId]?.hostAuditLine ?? true,
-                  deviceName: deviceName,
-                );
-                final planId = plans.hold(held, linkGeneration: generation);
-                uiPort.send(ActionPlanned(planId, held.preview));
-              }),
-          // What follows the planner can throw too, such as the audit
-          // line's own checks: the preview is refused, not left pending.
-          onError: (error, _) =>
-              refuse(ActionRefusalReason.engineUnavailable, detail: '$error'),
-        );
-      case FootprintQuery(:final serverId):
-        if (!fleet.fleetIds.contains(serverId)) {
-          reject(message, 'no fleet server $serverId');
-        } else if (links?.link(serverId) == null ||
-            profiles[serverId] == null) {
-          reject(message, 'no connection to $serverId');
-        } else {
-          verifyFootprint(serverId);
-        }
+      case PlanAction():
+        actions.planAction(message);
+      case FootprintQuery():
+        actions.footprintQuery(message);
       case ReadEditable():
         reads.editable(message);
       case AuditQuery():
         await reads.audit(message);
-      case AcknowledgeOperation(:final serverId, :final id):
-        final tracker = operations;
-        if (tracker == null) {
-          reject(message, 'links are off');
-          return;
-        }
-        // Not awaited: the answer waits for the server's listing in
-        // flight, which reads over the link, and the queue keeps serving
-        // the app meanwhile. The tracker is not expected to throw; if it
-        // does, the engine answers rather than dying with every link.
-        unawaited(
-          tracker.acknowledge(serverId, id).then(
-            (reason) {
-              if (reason != null) reject(message, reason);
-            },
-            onError: (Object error) =>
-                reject(message, 'acknowledgement: $error'),
-          ),
-        );
+      case AcknowledgeOperation():
+        actions.acknowledgeOperation(message);
       case ReadHistory():
         await reads.history(message);
       case ReadUserCrontabs():
@@ -1759,58 +1317,10 @@ void _runEngine(
         // queue.
         // enable reports its own failures as AdminModeState.
         detach(admin!.enable(serverId));
-      case CancelAction(:final planId):
-        pullCancels.cancel(planId);
-      case RunAction(:final planId, :final confirmation):
-        // A plan is taken once: a refused run needs a new preview.
-        final (:plan, :missing) = plans.take(
-          planId,
-          linkGeneration: (id) => linkGenerations[id] ?? 0,
-        );
-        void refuse(ActionRefusalReason reason) =>
-            uiPort.send(ActionRefused(reason, planId: planId));
-        if (plan == null) {
-          refuse(switch (missing!) {
-            PlanMissing.unknown => ActionRefusalReason.unknownPlan,
-            PlanMissing.expired => ActionRefusalReason.expiredPlan,
-            PlanMissing.stale => ActionRefusalReason.stalePlan,
-          });
-          return;
-        }
-        final serverId = plan.intent.serverId;
-        if (safetyRefusal(safetyPolicy, serverId) case final reason?) {
-          refuse(reason);
-          return;
-        }
-        if (!confirmationSatisfies(
-          required: plan.tier,
-          given: confirmation.tier,
-          targetName: plan.targetName,
-          phrase: confirmation.phrase,
-        )) {
-          refuse(ActionRefusalReason.confirmationMismatch);
-          return;
-        }
-        final planRunner = runner;
-        if (planRunner == null) {
-          refuse(ActionRefusalReason.notImplemented);
-          return;
-        }
-        final session = admin?.session(serverId);
-        if (plan.requiredLevel == RequiredLevel.admin && session == null) {
-          refuse(ActionRefusalReason.adminRequired);
-          return;
-        }
-        if (session != null) admin?.touch(serverId);
-        // Not awaited, like the reads: a plan's steps take as long as
-        // they take, and the queue keeps serving the app meanwhile.
-        // The runner always answers with one ActionFinished, so an error
-        // here comes from after it and is a fault, not a second answer.
-        detach(
-          planRunner.run(planId, plan, session: session).then((finished) {
-            if (session != null) admin?.touch(serverId);
-          }),
-        );
+      case CancelAction():
+        actions.cancelAction(message);
+      case RunAction():
+        actions.runAction(message);
       case Shutdown():
         // The buckets still filling are written and open shells end,
         // side by side within one grace, so their TerminalClosed and audit
@@ -1950,8 +1460,8 @@ void _runEngine(
               packageReports: packageReports,
               diskTrees: diskTrees,
               fleetIds: () => fleet.fleetIds,
-              stackEditLookup: stackEditLookup,
-              lendSession: lendSession,
+              stackEditLookup: actions.stackEditLookup,
+              lendSession: actions.lendSession,
               send: uiPort.send,
             );
           })
