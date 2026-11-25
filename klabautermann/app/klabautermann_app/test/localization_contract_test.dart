@@ -138,16 +138,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'forward-${_count++}'",
     r"'$OpenPortForward'",
   },
-  // The rejected requests' class names, which RequestRejected carries;
+  // The rejected request's class name, which RequestRejected carries;
   // never shown.
   'lib/controllers/engine_reads.dart': {r"'${request.runtimeType}'"},
-  'lib/controllers/admin_controller.dart': {
-    r"'$ReadUserCrontabs'",
-    r"'$ReadSmart'",
-    r"'$ReadRestarts'",
-    r"'$ReadFirewall'",
-    r"'$ReadSshdPosture'",
-  },
   // The Apps sub-tab's Docker list values (state, network mode, port
   // type, bound addresses), the loopback address and scheme a forward
   // opens at, and host:port notation, none of them prose (DKE-08).
