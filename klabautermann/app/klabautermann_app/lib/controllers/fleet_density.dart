@@ -1,4 +1,4 @@
-import 'persisted_setting.dart';
+import 'package:ghost_ui/ghost_ui.dart' show PersistedSetting;
 
 /// FL-08's layouts for the fleet board, the desktop workspace's view of
 /// every server while none is open (03 §10.3): [auto] picks [cards] for
@@ -51,7 +51,7 @@ final class FleetDensityNotSavedException implements Exception {
 /// save tries the save again.
 final class FleetDensityController extends PersistedSetting<FleetDensity> {
   FleetDensityController({FleetDensity density = FleetDensity.auto, this._save})
-    : super(density);
+    : super(density, retryFailedSaves: true);
 
   final Future<void> Function(String name)? _save;
 

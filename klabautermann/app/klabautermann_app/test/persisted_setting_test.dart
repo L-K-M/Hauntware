@@ -2,7 +2,7 @@
 // is saved, a failed save throws the setting's own exception and keeps
 // the change, and the same value picked again retries the save.
 import 'package:flutter_test/flutter_test.dart';
-import 'package:klabautermann_app/controllers/persisted_setting.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 final class _NotSaved implements Exception {
   const _NotSaved(this.message);
@@ -11,7 +11,7 @@ final class _NotSaved implements Exception {
 }
 
 final class _Setting extends PersistedSetting<int> {
-  _Setting(super.value, this.saves);
+  _Setting(super.value, this.saves) : super(retryFailedSaves: true);
 
   /// The values saved; each true entry in [failures] fails a save.
   final List<int> saves;
@@ -91,7 +91,7 @@ void main() {
 }
 
 final class _Unsaved extends PersistedSetting<int> {
-  _Unsaved(super.value);
+  _Unsaved(super.value) : super(retryFailedSaves: true);
 
   Future<void> set(int next) => change(next);
 
