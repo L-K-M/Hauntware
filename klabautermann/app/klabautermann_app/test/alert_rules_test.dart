@@ -160,6 +160,23 @@ void main() {
         ),
       );
     });
+
+    test(
+      'a refused send fails the write as the engine stopping would',
+      () async {
+        engine.refuseSends = true;
+        await expectLater(
+          rules.put(_rule('x').rule),
+          throwsA(
+            isA<AlertRuleNotSavedException>().having(
+              (e) => e.failure,
+              'failure',
+              isNull,
+            ),
+          ),
+        );
+      },
+    );
   });
 
   testWidgets('a server\'s rules page lists the rules that apply to it, '

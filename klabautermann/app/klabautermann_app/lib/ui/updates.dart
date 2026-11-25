@@ -13,6 +13,7 @@ import 'actions/action_entry.dart';
 import 'actions/action_preview.dart' show startAction;
 import 'admin_mode_chip.dart' show AdminScope;
 import 'fleet_updates.dart';
+import 'latest_read.dart';
 import 'sortable_table.dart';
 import 'time_display.dart';
 import 'panel_kit.dart' show PanelSection;
@@ -120,8 +121,11 @@ class UpdatesSection extends StatefulWidget {
 }
 
 class _UpdatesSectionState extends State<UpdatesSection> {
-  PackagesReport? _report;
-  bool _reading = false;
+  late final LatestRead<PackagesReport> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
+
   bool _refreshStarted = false;
   RestartReport? _restarts;
 
@@ -129,7 +133,6 @@ class _UpdatesSectionState extends State<UpdatesSection> {
   final _restartReads = <String>{};
 
   bool get _readingRestarts => _restartReads.contains(widget.serverId);
-  int _ticket = 0;
   TableSort? _sort = TableSort(
     UpdateColumn.security.name,
     TableSortDirection.ascending,
@@ -148,7 +151,7 @@ class _UpdatesSectionState extends State<UpdatesSection> {
         oldWidget.reads == widget.reads) {
       return;
     }
-    _report = null;
+    _latest.reset();
     _refreshStarted = false;
     _restarts = null;
     unawaited(_read(fresh: false));
@@ -169,23 +172,19 @@ class _UpdatesSectionState extends State<UpdatesSection> {
   }
 
   Future<void> _read({required bool fresh}) async {
-    final ticket = ++_ticket;
-    setState(() => _reading = true);
-    final report = await widget.reads.read(widget.serverId, fresh: fresh);
-    // Only the newest read lands, so a slow answer for another server
-    // never replaces a later one.
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _report = report;
-      _reading = false;
+    await _latest.run(() async {
+      final report = await widget.reads.read(widget.serverId, fresh: fresh);
+      // The refresh note goes with its own read's answer. A server or
+      // controller change supersedes this run and clears the note first.
       if (fresh) _refreshStarted = false;
+      return report;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final report = _report;
+    final report = _latest.value;
     final check = report?.check;
     final failure = report?.failure;
     final checkFailure = check?.failure;
@@ -242,7 +241,7 @@ class _UpdatesSectionState extends State<UpdatesSection> {
               displayTime(context, widget.serverId, cachedAt),
             ),
           ),
-        if (_reading)
+        if (_latest.reading)
           Text(l10n.systemUpdatesChecking)
         else
           Wrap(

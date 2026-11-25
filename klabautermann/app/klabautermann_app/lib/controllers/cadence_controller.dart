@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:ghost_ui/ghost_ui.dart' show FailedSaves, PersistedSetting;
 import 'package:klabautermann_core/klabautermann_core.dart' show CadenceProfile;
-
-import 'persisted_setting.dart';
 
 /// The polling budget's presets (SAF-19): [automatic] samples at the
 /// Desktop column's cadence on a computer and the Phone column's on a
@@ -69,7 +68,7 @@ final class CadenceController extends PersistedSetting<CadencePreset>
   CadenceController({
     CadencePreset preset = CadencePreset.automatic,
     this._save,
-  }) : super(preset);
+  }) : super(preset, failedSaves: FailedSaves.retry);
 
   final Future<void> Function(String name)? _save;
 
