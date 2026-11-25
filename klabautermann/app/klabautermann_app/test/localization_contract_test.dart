@@ -855,9 +855,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'crontab'",
     // The other users' table's key prefix, never shown.
     r"'${ServerPanel.jobs.name}.others'",
-    // systemd's Result word for a service that succeeded, matched in
-    // its answer (JOB-05); the details word it themselves.
-    "'success'",
   },
   'lib/ui/listening_ports.dart': {
     // A row's key, the PIDs joined, and the addresses a port listens on,
@@ -1069,13 +1066,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
-  'lib/ui/overview_panel.dart': {
-    // The trailing core number of a /proc/stat name such as cpu12, which
-    // orders the per-core figures; the names themselves are server data.
-    r"r'\d+$'",
-    // An assert message; programmer diagnostic, never rendered.
+  // The trailing core number of a /proc/stat name such as cpu12, which
+  // orders the per-core figures; the names themselves are server data.
+  'lib/ui/overview_core_cards.dart': {r"r'\d+$'"},
+  // An assert message; programmer diagnostic, never rendered.
+  'lib/ui/overview_docker_card.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
+  // systemd's Result word for a service that succeeded, matched in its
+  // answer (JOB-05); the details word it themselves.
+  'lib/ui/job_details.dart': {"'success'"},
   // debugPrint of a failed theme change; the toast is ARB text.
   // The top lists' subscription surface kind (D45), and a process with
   // no name, which shows its id.
@@ -1083,7 +1083,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The Poltergeist link's root folder, and the pin's diagnostic.
   'lib/ui/quick_actions.dart': {"'/'", r"'$error'"},
   'lib/ui/fleet_board.dart': {r"'$error'"},
-  'lib/ui/settings_page.dart': {r"'$error'"},
+  'lib/ui/settings/general_settings.dart': {r"'$error'"},
+  'lib/ui/settings/sync_settings.dart': {r"'$error'"},
   // A sign-out's failure diagnostics; the toast is ARB text.
   'lib/ui/settings/sync_sign_out_section.dart': {r"'$error'"},
   // The separator in a refused sign-out's diagnostic, never shown.
