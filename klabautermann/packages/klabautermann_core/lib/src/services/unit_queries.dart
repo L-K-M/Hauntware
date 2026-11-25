@@ -18,13 +18,11 @@ import 'package:seance_core/seance_core.dart'
     show RemoteCommandException, RemoteCommandResult, SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
+import '../limits.dart';
 import '../sampling/argument_masking.dart' show maskCommandLine;
 
 /// The first systemd release whose `list-sockets` prints JSON (03 §6.4).
 const int _jsonTablesSince = 246;
-
-/// The most of a failure's error text a [UnitQueryFailed] carries.
-const int _detailLimit = 500;
 
 /// The line `systemctl show` prints for a unit it cannot find.
 final _notFound = RegExp(r'^LoadState=not-found\s*$', multiLine: true);
@@ -115,8 +113,8 @@ UnitQueryFailed _failure(RemoteCommandResult result) {
   }
   return UnitQueryFailed(
     UnitQueryFailure.failed,
-    detail: stderr.length > _detailLimit
-        ? stderr.substring(0, _detailLimit)
+    detail: stderr.length > kDetailLimit
+        ? stderr.substring(0, kDetailLimit)
         : stderr,
   );
 }
