@@ -500,3 +500,8 @@ The stage-1 analysis found Klabautermann's resolver skips hosts it cannot fully 
 
 ## CTL-07 item 4 (one-shot reads over `EngineReads<DockerPayload>`): partly declined in #833
 The misleading `stack-file-` prefix and `fileReads` map were renamed (`one-shot-`, `oneShots`). Moving `_ask` onto `EngineReads` was declined: that helper answers only an engine stop or a rejection, while a Docker one-shot must also answer `notInFleet` when its server leaves the fleet and `cancelled` on an endpoint change, which the per-server map does. Moving the 20-line method alone into a mixin or part would only add a forwarding layer.
+
+## #830 GLM round 1 (aa16762): minor only, merged without a push
+- l10n.yaml "pin `synthetic-package: false`": refuted, Flutter 3.47 no longer generates a synthetic package; the generated files already land in `lib/l10n/`.
+- Renaming `unsaved` to `editorUnsaved`, rewording ConvertToAscii's "left" clause, `hh` to `HH` in the timestamp descriptions, pluralizing "N selected": declined, each changes the visible text or the getter names the three apps use, which this refactor keeps as they were on main (the `hh` text is main's).
+- `@editorTextToolRepeat` description copied from `editorTextToolRepeatNone`: real, translator note only; deferred to the F docs/cleanup PR rather than restarting CI. Sort Lines notice description naming Keep/Delete Lines Matching: declined, unverified and translator-only.
