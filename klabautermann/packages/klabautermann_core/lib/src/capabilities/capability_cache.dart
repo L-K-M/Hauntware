@@ -17,6 +17,7 @@ import '../fleet/server_file_stem.dart';
 import '../sampling/sample_pipeline.dart' show volatileProfileKeys;
 import '../settings/device_settings_store.dart' show writeFileAtomically;
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import '../util/serial_queue.dart';
 
 /// The cache's directory under the support directory (03 §4.10).
 const String capabilityCacheDirectoryName = 'capabilities';
@@ -169,7 +170,7 @@ final class CapabilityCache {
   /// Fresh profiles read at open and not handed out or superseded yet.
   final Map<String, CachedProfileFresh> _unsent = {};
 
-  Future<void> _tail = Future.value();
+  final SerialQueue _writes = SerialQueue();
 
   /// Set after each import: while [FleetSave.unsaved], [probed] writes no
   /// file, which the next start would read for the store's older
@@ -224,7 +225,7 @@ final class CapabilityCache {
 
   /// Awaits every queued write and purge, so a caller about to delete or
   /// reuse the support directory can wait for the cache to finish with it.
-  Future<void> get idle => _tail;
+  Future<void> get idle => _writes.idle;
 
   /// Records a probe answer for [serverId]: its cached profile is no
   /// longer sent, and its file holds [profile] without the clock and
@@ -348,7 +349,7 @@ final class CapabilityCache {
     final name = capabilityCacheFileName(serverId);
     if (name == null) return Future.value(CacheUpdate.unnamed);
 
-    final result = _tail.then((_) async {
+    return _writes.run(() async {
       try {
         await change(_file(name));
         return CacheUpdate.applied;
@@ -359,8 +360,6 @@ final class CapabilityCache {
         return CacheUpdate.failed;
       }
     });
-    _tail = result;
-    return result;
   }
 
   /// Deletes this cache's files that belong to no server in [fleet].

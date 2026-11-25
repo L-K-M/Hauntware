@@ -12,6 +12,7 @@ import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operation_runner.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show DockerCancelledException, DockerConflictException;
+import 'package:klabautermann_host/klabautermann_host.dart' show DetachedRunner;
 import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
@@ -82,6 +83,7 @@ OperationPlan _plan(
   RequiredLevel level = RequiredLevel.login,
   List<Revalidation> revalidate = const [],
   List<ShellStep> cleanup = const [],
+  DetachedRunner? detachedRunner,
 }) => OperationPlan(
   intent: const UnitAction(
     _server,
@@ -95,6 +97,7 @@ OperationPlan _plan(
   runner: const RunnerFacts(identity: 'deploy'),
   revalidate: revalidate,
   cleanup: cleanup,
+  detachedRunner: detachedRunner,
 );
 
 void main() {
@@ -110,11 +113,13 @@ void main() {
     TestLinkBase? link, {
     ApiStepRunner? api,
     ExecStepRunner? exec,
+    DetachedLauncher? launch,
   }) => OperationRunner(
     linkFor: (_) => link,
     emit: events.add,
     api: api,
     exec: exec,
+    launch: launch,
     finished: results.add,
   );
 
@@ -662,6 +667,65 @@ void main() {
       expect(finished.failure, ActionFailure.transport);
       expect(events.whereType<ActionFinished>(), [same(finished)]);
       expect(link.commands.single, contains("'cleanup'"));
+    });
+
+    test('an API step whose runner throws an unlisted error still ends '
+        'the run with its answer, after the cleanup', () async {
+      final link = _Link((_, _) => _ok);
+      var called = false;
+      final finished =
+          await runner(
+            link,
+            api: (_, _, _) async {
+              called = true;
+              throw StateError('unexpected');
+            },
+          ).run(
+            'plan-1',
+            _plan(
+              [ApiStep(method: 'POST', path: '/v1.44/containers/abc/restart')],
+              cleanup: [
+                ShellStep(['cleanup']),
+              ],
+            ),
+          );
+
+      expect(finished.outcome, ActionOutcome.failed);
+      expect(finished.failure, ActionFailure.transport);
+      expect(events.whereType<ActionFinished>(), [same(finished)]);
+      expect(link.commands.single, contains("'cleanup'"));
+      expect(called, isTrue, reason: 'the error came from the API runner');
+    });
+
+    test('a detached launch that throws an unlisted error still ends the '
+        'run with its answer, after the cleanup', () async {
+      final link = _Link((_, _) => _ok);
+      var called = false;
+      final finished =
+          await runner(
+            link,
+            launch: (_, _, _) async {
+              called = true;
+              throw StateError('unexpected');
+            },
+          ).run(
+            'plan-1',
+            _plan(
+              [
+                ShellStep(['true']),
+              ],
+              detachedRunner: DetachedRunner.loginSetsid,
+              cleanup: [
+                ShellStep(['cleanup']),
+              ],
+            ),
+          );
+
+      expect(finished.outcome, ActionOutcome.failed);
+      expect(finished.failure, ActionFailure.transport);
+      expect(events.whereType<ActionFinished>(), [same(finished)]);
+      expect(link.commands.single, contains("'cleanup'"));
+      expect(called, isTrue, reason: 'the error came from the launcher');
     });
 
     test('a lender or a finished hook that throws does not lose the '

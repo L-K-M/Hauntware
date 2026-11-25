@@ -1,18 +1,39 @@
-import 'package:planchette_editor/planchette_editor.dart';
+import 'package:flutter/widgets.dart';
+import 'package:planchette_core/planchette_core.dart';
 
-import '../l10n/app_localizations.dart';
+import '../l10n/editor_localizations.dart';
+import 'editor_commands.dart';
+import 'editor_strings.dart';
+import 'text_tool_history.dart';
 
-/// Adapt the shared editor's user-facing copy to Poltergeist's localization
-/// resources. Every string the shared surface can render while this host
-/// shows it — find and replace bars, Go to Line, the text-tools browser,
-/// the tool bar, the post-run notice and the status row — comes from the
-/// ARB catalog. [regexHint] stays the package's own technical text, like
-/// the engine detail inside [patternInvalid] and the parser detail inside a
-/// syntax error's [problemMessage]; so do the status row's format names
-/// (LF, CRLF, UTF-8) and the proper-noun language names.
-class PoltergeistEditorStrings extends EditorStrings {
-  const PoltergeistEditorStrings(this.l10n);
-  final AppLocalizations l10n;
+/// The shared editor's user-facing copy read from the package's own
+/// generated catalog ([EditorLocalizations]).
+///
+/// Every string the editor surface renders (find and replace bars, Go to
+/// Line, the text-tools browser, the tool bar, the post-run notice and the
+/// status row) comes from that catalog. [regexHint] stays the package's own
+/// technical text, like the engine detail inside [patternInvalid] and the
+/// parser detail inside a syntax error's [problemMessage]; so do the status
+/// row's format names (LF, CRLF, UTF-8) and the proper-noun language names.
+///
+/// Hosts extend this to keep a few of their own words: override only the
+/// getters whose text their product differs on. [EditorStrings.of] returns
+/// it when the package delegate is installed.
+class LocalizedEditorStrings extends EditorStrings {
+  const LocalizedEditorStrings(this.l10n);
+
+  /// The catalog this instance reads.
+  final EditorLocalizations l10n;
+
+  /// Catalog-backed strings for [context], or null when no
+  /// [EditorLocalizations] delegate is installed.
+  static LocalizedEditorStrings? maybeOf(BuildContext context) {
+    final l10n = Localizations.of<EditorLocalizations>(
+      context,
+      EditorLocalizations,
+    );
+    return l10n == null ? null : LocalizedEditorStrings(l10n);
+  }
 
   @override
   String get findHint => l10n.editorFindHint;
@@ -70,8 +91,9 @@ class PoltergeistEditorStrings extends EditorStrings {
       : l10n.editorStatusSelection(characters);
   @override
   String get saving => l10n.editorStatusSaving;
+  // The remote editor's own unsaved wording, "Not saved".
   @override
-  String get unsaved => l10n.editorStatusUnsaved;
+  String get unsaved => l10n.editUnsaved;
   @override
   String get largeFile => l10n.editorStatusLargeFile;
   @override
@@ -235,7 +257,7 @@ class PoltergeistEditorStrings extends EditorStrings {
     EditorCommand.previousProblem => l10n.editorCommandPreviousProblem,
   };
   @override
-  String get browseTextTools => l10n.editorTextToolsTooltip;
+  String get browseTextTools => l10n.editorBrowseTextTools;
 
   @override
   String textToolGroupName(TextToolGroup group) => switch (group) {

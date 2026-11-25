@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show withMacosToolbarBand;
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/workspace_windows/window_titlebar.dart';
@@ -35,7 +36,10 @@ class EditorWindowApp extends StatelessWidget {
       theme: themes.theme,
       darkTheme: themes.darkTheme,
       themeMode: themes.themeMode,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        ...AppLocalizations.localizationsDelegates,
+        EditorLocalizations.delegate,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       // Poltergeist's no-scope default is the windowed layout.
       builder: (context, child) => withMacosToolbarBand(

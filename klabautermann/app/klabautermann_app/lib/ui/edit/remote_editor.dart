@@ -16,7 +16,7 @@ import 'package:planchette_core/planchette_core.dart'
         textFormatFor,
         validateText;
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorController, EditorStatusLead, PlanchetteEditor;
+    show EditorController, EditorStatusLead, EditorStrings, PlanchetteEditor;
 
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
@@ -24,7 +24,6 @@ import '../actions/action_entry.dart' show OperationsScope;
 import '../actions/action_preview.dart' show planRefusedText, startAction;
 import '../admin_mode_chip.dart' show TurnOnAdminModeButton;
 import '../docker/containers_panel.dart' show DockerNotice;
-import '../editor_strings.dart' show KlabautermannEditorStrings;
 import 'editor_display_scope.dart';
 
 /// Below this width the editor takes the whole screen, as on phones
@@ -509,7 +508,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
                     // A new text is a new editor.
                     key: ObjectKey(editor),
                     controller: editor,
-                    strings: KlabautermannEditorStrings(l10n),
+                    strings: EditorStrings.of(context),
                     textStyle: editorDisplayTextStyle(display),
                     ligatures: display.ligatures,
                     statusBuilder: _statusBar,
@@ -544,8 +543,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
   /// the base this save is planned against is [_dirty]'s. Saves are engine
   /// runs, so the row has no saving state to show.
   Widget _statusBar(BuildContext context, EditorController editor) {
-    final l10n = AppLocalizations.of(context);
-    final strings = KlabautermannEditorStrings(l10n);
+    final strings = EditorStrings.of(context);
     final theme = Theme.of(context);
     final (line, column) = editor.caretLineColumn;
     final selected = editor.selectionStats;

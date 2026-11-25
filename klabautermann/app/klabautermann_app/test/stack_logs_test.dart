@@ -420,6 +420,76 @@ void main() {
     expect(tester.state<ScrollableState>(view.first).position.pixels, offset);
   });
 
+  testWidgets('a paused view keeps its open fields and current match when '
+      'an older batch arrives (UIB-3)', (tester) async {
+    final monitoring = MonitoringController(engine);
+    addTearDown(monitoring.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: StackLogsPage(
+          monitoring: monitoring,
+          serverId: _serverId,
+          project: 'web',
+          containers: [_web, _db],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    engine.emit(
+      containerLogBatch(streamOf('web1'), [
+        containerLine('{"level":"error","msg":"alpha"}', at: _at(10)),
+        containerLine('plain line', at: _at(11)),
+        containerLine('{"level":"warn","msg":"gamma"}', at: _at(12)),
+      ]),
+    );
+    await tester.pump(kStackLogsHold);
+    await tester.pumpAndSettle();
+
+    // Open the first JSON row's fields, which pauses the view.
+    final row = find.textContaining('"msg":"alpha"', findRichText: true);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('level=error', findRichText: true), findsOne);
+    expect(find.textContaining('msg=alpha', findRichText: true), findsOne);
+
+    // Search 'msg' and step to the oldest match.
+    await tester.enterText(find.byType(TextField), 'msg');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    expect(find.text('1 of 2'), findsOne);
+
+    final view = find.descendant(
+      of: find.byType(LogView),
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(view.first).position;
+    final offset = position.pixels;
+
+    // The other container's batch of the same interval arrives later: an
+    // older line, then a newer one. Before the hold these rebuilt the view
+    // and renumbered every line, closing the fields and losing the match.
+    engine.emit(
+      containerLogBatch(streamOf('db1'), [
+        containerLine('older', at: _at(9)),
+        containerLine('newer', at: _at(13)),
+      ]),
+    );
+    await tester.pump(kStackLogsHold);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('level=error', findRichText: true),
+      findsOne,
+      reason: 'the open fields stayed open',
+    );
+    expect(find.text('1 of 2'), findsOne, reason: 'the match stayed current');
+    expect(position.pixels, offset, reason: 'the paused view held its place');
+    expect(find.textContaining('newer', findRichText: true), findsOne);
+  });
+
   testWidgets('the page reads a redeployed stack\'s new containers '
       '(UIB-9)', (tester) async {
     final monitoring = MonitoringController(engine);

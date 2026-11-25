@@ -15,6 +15,7 @@ import '../fleet/server_file_stem.dart';
 import '../operations/operation_runner.dart' show OperationResult;
 import '../settings/device_settings_store.dart'
     show unusedCorruptCopyPath, writeFileAtomically;
+import '../util/serial_queue.dart';
 
 /// How long records stay [E] (03 §8.10).
 const kAuditRetention = Duration(days: 90);
@@ -60,9 +61,9 @@ final class AuditLog {
   final DateTime Function() _now;
   final Map<String, List<AuditRecord>> _memory = {};
 
-  // File operations run one after another ([_inTurn]), so lines never
-  // interleave and a rewrite never drops an append.
-  Future<void> _tail = Future.value();
+  // File operations run one after another, so lines never interleave and
+  // a rewrite never drops an append.
+  final SerialQueue _fileWrites = SerialQueue();
 
   /// The record of [result], redacted, appended to its server's log.
   Future<void> recordRun(OperationResult result) {
@@ -96,7 +97,7 @@ final class AuditLog {
       (_memory[record.serverId] ??= []).add(record);
       return Future.value();
     }
-    return _inTurn(() async {
+    return _fileWrites.run(() async {
       await file.parent.create(recursive: true);
       await file.writeAsString(
         '${jsonEncode(_encode(record))}\n',
@@ -118,7 +119,7 @@ final class AuditLog {
     final stored = <AuditRecord>[];
     if (storage == AuditStorage.files && file != null) {
       try {
-        stored.addAll(_recordsOf(await _inTurn(() => _read(file))));
+        stored.addAll(_recordsOf(await _fileWrites.run(() => _read(file))));
       } on FileSystemException {
         unreadable = true;
       }
@@ -171,7 +172,7 @@ final class AuditLog {
   /// engine start. Memory starts empty, so it has nothing to prune.
   Future<void> prune() async {
     if (storage == AuditStorage.memory) return;
-    await _inTurn(_prune);
+    await _fileWrites.run(_prune);
   }
 
   Future<void> _prune() async {
@@ -188,15 +189,6 @@ final class AuditLog {
       if (kept.length == lines.length) continue;
       await _rewrite(entity, kept);
     }
-  }
-
-  /// Runs [operation] after every file operation asked for before it.
-  /// A read rewrites a damaged file and a prune rewrites old records
-  /// away, so neither may overlap an append whose line it would drop.
-  Future<T> _inTurn<T>(Future<T> Function() operation) {
-    final next = _tail.then((_) => operation());
-    _tail = next.then((_) {}, onError: (Object _) {});
-    return next;
   }
 
   /// [serverId]'s log file, or null when the id names no per-server

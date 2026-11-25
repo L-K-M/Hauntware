@@ -6,7 +6,28 @@ library;
 
 export 'package:seance_protocol/seance_protocol.dart';
 
-export 'src/ssh_config/ssh_config_import.dart';
+export 'src/ssh_config/ssh_config_import.dart'
+    show
+        ImportedHost,
+        SkippedHost,
+        SkippedHostReason,
+        SshConfigImport,
+        SshConfigImporter,
+        SshConfigLine;
+export 'src/ssh_config/ssh_config_settings.dart'
+    show
+        ResolvedSshSettings,
+        SshConfigResolution,
+        SshConfigSettings,
+        UnresolvedReason,
+        UnresolvedSshSettings,
+        isImportedIdentityFile,
+        isTcpPort,
+        looksLikeSshAddress,
+        parseSshPort,
+        sshCanonicalHost;
+export 'src/ssh_config/proxy_jump_syntax.dart'
+    show splitSshHost, sshAcceptsProxyJump;
 
 export 'src/hostkey/tofu.dart';
 

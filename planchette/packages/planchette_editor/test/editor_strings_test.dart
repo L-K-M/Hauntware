@@ -1,4 +1,7 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/l10n/editor_localizations_en.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 void main() {
@@ -94,4 +97,69 @@ void main() {
       );
     });
   });
+
+  group('EditorStrings.of', () {
+    testWidgets('reads the package catalog when its delegate is installed', (
+      tester,
+    ) async {
+      EditorStrings? seen;
+      await tester.pumpWidget(
+        Localizations(
+          locale: const Locale('en'),
+          delegates: const [
+            _MarkedCatalogDelegate(),
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          child: Builder(
+            builder: (context) {
+              seen = EditorStrings.of(context);
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(seen, isA<LocalizedEditorStrings>());
+      expect(seen!.findHint, '[catalog find hint]');
+    });
+
+    testWidgets('falls back to the English defaults without the delegate', (
+      tester,
+    ) async {
+      EditorStrings? seen;
+      await tester.pumpWidget(
+        Builder(
+          builder: (context) {
+            seen = EditorStrings.of(context);
+            return const SizedBox();
+          },
+        ),
+      );
+
+      expect(seen, isNot(isA<LocalizedEditorStrings>()));
+      expect(seen!.findHint, 'Find in file');
+    });
+  });
+}
+
+class _MarkedCatalog extends EditorLocalizationsEn {
+  _MarkedCatalog();
+
+  @override
+  String get editorFindHint => '[catalog find hint]';
+}
+
+class _MarkedCatalogDelegate
+    extends LocalizationsDelegate<EditorLocalizations> {
+  const _MarkedCatalogDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'en';
+
+  @override
+  Future<EditorLocalizations> load(Locale locale) async => _MarkedCatalog();
+
+  @override
+  bool shouldReload(_MarkedCatalogDelegate old) => false;
 }

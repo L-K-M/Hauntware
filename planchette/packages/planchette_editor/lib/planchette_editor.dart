@@ -3,6 +3,7 @@ library;
 
 export 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
+export 'l10n/editor_localizations.dart';
 export 'src/code_editing_controller.dart';
 export 'src/editor_commands.dart';
 export 'src/editor_controller.dart';
@@ -12,6 +13,7 @@ export 'src/editor_strings.dart';
 export 'src/editor_text_size.dart';
 export 'src/editor_view.dart';
 export 'src/ghost_menus.dart';
+export 'src/localized_editor_strings.dart';
 export 'src/search_history.dart';
 export 'src/text_tool_history.dart';
 export 'src/text_tools_browser.dart';
