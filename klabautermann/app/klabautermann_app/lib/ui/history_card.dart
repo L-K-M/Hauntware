@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/history_reads.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
+import 'latest_read.dart';
 import 'charts/charts.dart';
 import 'threshold_scope.dart';
 import 'time_display.dart';
@@ -109,9 +110,12 @@ class _HistoryCardState extends State<HistoryCard> {
 
   HistoryTier _tier = HistoryTier.minute;
   AlertMetric _metric = AlertMetric.cpuBusy;
-  HistoryRange? _range;
-  DateTime? _readAt;
-  int _reading = 0;
+
+  /// The newest read's range and the clock it counts from.
+  late final LatestRead<(HistoryRange, DateTime)> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   @override
   void initState() {
@@ -124,29 +128,25 @@ class _HistoryCardState extends State<HistoryCard> {
     super.didUpdateWidget(old);
     if (old.serverId != widget.serverId || old.reads != widget.reads) {
       // The last server's chart goes at once, not when this one answers.
-      _range = null;
-      _readAt = null;
+      _latest.reset();
       unawaited(_read());
     }
   }
 
   Future<void> _read() async {
-    final ticket = ++_reading;
-    final range = await widget.reads.read(widget.serverId, _tier);
-    // Only the newest read lands, so a slow answer for another tier or
-    // server never replaces a later one.
-    if (!mounted || ticket != _reading) return;
-    setState(() {
-      _range = range;
-      _readAt = widget.now().toUtc();
+    final tier = _tier;
+    await _latest.run(() async {
+      final range = await widget.reads.read(widget.serverId, tier);
+      return (range, widget.now().toUtc());
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final range = _range;
-    final readAt = _readAt;
+    final answer = _latest.value;
+    final range = answer?.$1;
+    final readAt = answer?.$2;
     final empty = range != null && range.buckets.isEmpty;
     return PanelSection(
       title: l10n.historyTitle,
@@ -171,8 +171,7 @@ class _HistoryCardState extends State<HistoryCard> {
                   // The other tier's buckets never draw at this one's width.
                   setState(() {
                     _tier = tier;
-                    _range = null;
-                    _readAt = null;
+                    _latest.reset();
                   });
                   unawaited(_read());
                 },
