@@ -37,7 +37,7 @@ final class ServerEditorController {
       (failure, detail) => failure == null
           ? const ServerEditEngineStopped()
           : ServerEditRefused(failure, detail),
-      settleOnRejection: true,
+      rejection: WriteRejection.failsWrite,
     );
   }
 

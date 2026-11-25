@@ -2,13 +2,27 @@ import 'dart:async';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+/// What a [RequestRejected] naming a pending write's id does to it.
+enum WriteRejection {
+  /// Left alone: the rule and preference writes answer only
+  /// [CatalogWritten] and [CatalogWriteRefused].
+  ignored,
+
+  /// Fails the write, as ServerEditorController settled its ids.
+  failsWrite,
+}
+
 /// The catalog-write bookkeeping the alert-rule, server-preference and
 /// server-editor controllers share (03 §4.8): each [write] sends its
 /// request under its own id and completes with the engine's
 /// [CatalogWritten], or fails with [refuse] when the engine refused it or
 /// stopped before it answered. One per concern, for one engine run.
 final class CatalogWrites {
-  CatalogWrites(this._engine, this._refuse, {this.settleOnRejection = false}) {
+  CatalogWrites(
+    this._engine,
+    this._refuse, {
+    this.rejection = WriteRejection.ignored,
+  }) {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
   }
 
@@ -19,11 +33,8 @@ final class CatalogWrites {
   final Exception Function(CatalogWriteFailure? failure, String? detail)
   _refuse;
 
-  /// Whether a [RequestRejected] naming a pending write's id fails it,
-  /// as ServerEditorController settled its ids; the rule and preference
-  /// writes answer only [CatalogWritten] and [CatalogWriteRefused], and
-  /// keep leaving a rejection alone.
-  final bool settleOnRejection;
+  /// What a [RequestRejected] naming a pending write's id does.
+  final WriteRejection rejection;
 
   late final StreamSubscription<EngineEvent> _events;
   final Map<String, Completer<CatalogWritten>> _pending = {};
@@ -51,7 +62,7 @@ final class CatalogWrites {
       case CatalogWriteRefused(:final requestId, :final failure, :final detail):
         _pending.remove(requestId)?.completeError(_refuse(failure, detail));
       case RequestRejected(:final requestId?, :final reason)
-          when settleOnRejection:
+          when rejection == WriteRejection.failsWrite:
         _pending
             .remove(requestId)
             ?.completeError(_refuse(CatalogWriteFailure.other, reason));
