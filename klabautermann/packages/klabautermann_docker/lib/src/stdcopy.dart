@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:typed_data';
 
 import 'api_version.dart';
@@ -11,11 +10,6 @@ const int defaultMaxStdcopyFrameBytes = 8 * 1024 * 1024;
 /// 03 §5.6: cap on one log line, in characters. Overlong lines are hard
 /// split so memory stays bounded.
 const int defaultMaxLogLineChars = 128 * 1024;
-
-/// 03 §5.6: the bounded ring's defaults, kept under the 64 MiB viewer
-/// budget of 03 §11.4.
-const int defaultLogRingLines = 2000;
-const int defaultLogRingChars = 16 * 1024 * 1024;
 
 /// The multiplexed-stream `Content-Type` values the daemon sends from
 /// API 1.42 (03 §5.6).
@@ -54,6 +48,11 @@ final class StdcopyFrame {
 /// frame header is 8 bytes: type, 3 unused, 4-byte big-endian length.
 /// Robust to any input split; an oversized or untyped frame and a
 /// truncated tail are protocol errors.
+///
+/// Cancelling the returned stream takes effect at the next chunk of
+/// [input], so while the daemon is quiet the read stays open. A caller
+/// that must stop a quiet read closes the client, as the engine's
+/// container log reader does.
 Stream<StdcopyFrame> demuxStdcopy(
   Stream<List<int>> input, {
   int maxFrameBytes = defaultMaxStdcopyFrameBytes,
@@ -147,51 +146,4 @@ final class LogLine {
   /// The stdcopy stream the line came from (`stdout` for raw streams).
   final StdcopyKind stream;
   final String text;
-}
-
-/// The bounded ring behind a log view (03 §5.6): when the consumer falls
-/// behind, the oldest lines drop and [dropped] reports "dropped N lines".
-/// Bounded by line count and by characters.
-final class BoundedLogRing {
-  BoundedLogRing({
-    this.maxLines = defaultLogRingLines,
-    this.maxChars = defaultLogRingChars,
-  });
-
-  final int maxLines;
-  final int maxChars;
-
-  final Queue<LogLine> _lines = Queue<LogLine>();
-  int _chars = 0;
-  int _dropped = 0;
-
-  /// Lines dropped so far because the ring was full.
-  int get dropped => _dropped;
-
-  /// The view label of 03 §5.6: "dropped N lines".
-  String get droppedLabel => 'dropped $dropped lines';
-
-  int get length => _lines.length;
-
-  List<LogLine> toList() => List<LogLine>.of(_lines);
-
-  void add(LogLine line) {
-    _lines.add(line);
-    _chars += line.text.length;
-    while (_lines.length > maxLines || _chars > maxChars) {
-      _chars -= _lines.removeFirst().text.length;
-      _dropped++;
-    }
-  }
-
-  void addAll(Iterable<LogLine> lines) {
-    for (final l in lines) {
-      add(l);
-    }
-  }
-
-  void clear() {
-    _lines.clear();
-    _chars = 0;
-  }
 }

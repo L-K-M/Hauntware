@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/account_reads.dart';
 import '../l10n/app_localizations.dart';
+import 'latest_read.dart';
 import 'sortable_table.dart';
 import 'time_display.dart';
 import 'panel_kit.dart' show PanelSection;
@@ -114,10 +115,12 @@ class AccountsSection extends StatefulWidget {
 }
 
 class _AccountsSectionState extends State<AccountsSection> {
-  AccountsReport? _report;
-  bool _reading = false;
+  late final LatestRead<AccountsReport> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
+
   bool _showSystem = false;
-  int _ticket = 0;
   TableSort? _sort = TableSort(
     AccountColumn.root.name,
     TableSortDirection.descending,
@@ -126,7 +129,6 @@ class _AccountsSectionState extends State<AccountsSection> {
   @override
   void initState() {
     super.initState();
-    _reading = true;
     unawaited(_read());
   }
 
@@ -137,21 +139,17 @@ class _AccountsSectionState extends State<AccountsSection> {
         oldWidget.reads == widget.reads) {
       return;
     }
-    _report = null;
+    _latest.reset();
     unawaited(_read());
   }
 
   Future<void> _read() async {
-    // A read for an earlier server, or an earlier read, answers late.
-    final ticket = ++_ticket;
-    if (!_reading) setState(() => _reading = true);
-    final report = await widget.reads.read(widget.serverId);
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
+    await _latest.run(() async {
+      final report = await widget.reads.read(widget.serverId);
       // A failed read again keeps the accounts last read for this server
       // in view under its failure.
-      final kept = _report?.snapshot;
-      _report = report.failure != null && kept != null
+      final kept = _latest.value?.snapshot;
+      return report.failure != null && kept != null
           ? AccountsReport(
               serverId: report.serverId,
               requestId: report.requestId,
@@ -159,14 +157,13 @@ class _AccountsSectionState extends State<AccountsSection> {
               failure: report.failure,
             )
           : report;
-      _reading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final report = _report;
+    final report = _latest.value;
     final snapshot = report?.snapshot;
     final failure = report?.failure;
     final accounts = [
@@ -183,7 +180,7 @@ class _AccountsSectionState extends State<AccountsSection> {
       children: [
         if (failure != null)
           Text(l10n.systemAccountsFailed(failure.name))
-        else if (snapshot == null && _reading)
+        else if (snapshot == null && _latest.reading)
           Text(l10n.systemAccountsReading),
         if (accounts.isNotEmpty)
           LayoutBuilder(
@@ -224,7 +221,7 @@ class _AccountsSectionState extends State<AccountsSection> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton(
-            onPressed: _reading ? null : () => unawaited(_read()),
+            onPressed: _latest.reading ? null : () => unawaited(_read()),
             child: Text(l10n.systemAccountsReadAgain),
           ),
         ),

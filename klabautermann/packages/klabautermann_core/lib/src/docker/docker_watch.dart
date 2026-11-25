@@ -426,10 +426,10 @@ final class DockerWatcher {
     _stream = null;
     unawaited(stream?.close());
 
-    final delay = kDockerRetryBase * math.pow(2, math.min(_retries, 5)).toInt();
+    final delay = kDockerStreamBackoff.delay(_retries);
     _retries++;
     _retry?.cancel();
-    _retry = _startTimer(delay < kDockerRetryCap ? delay : kDockerRetryCap, () {
+    _retry = _startTimer(delay, () {
       _retry = null;
       if (_target case final target? when epoch == _epoch) {
         unawaited(_open(target, epoch));
