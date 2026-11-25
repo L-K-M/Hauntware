@@ -635,7 +635,8 @@ SyncPrefixBudget prefixBudgetOf(Iterable<EncryptedRecord> records) {
 }
 
 /// Local `klabautermann:` writes, sealed through the coordinator's
-/// [CatalogWriter.sealLocal] funnel and refused under `PushPolicy.none`.
+/// [CatalogWriter.sealLocal] funnel. The coordinator runs at
+/// `engineSyncPushPolicy`, which seals locally and pushes on each round.
 extension KlabautermannRecordWrites on RecordCoordinator {
   /// Retracts [serverId]'s `pref` record with a sealed removal dated now,
   /// as when the server becomes excluded from sync (03 §4.8).

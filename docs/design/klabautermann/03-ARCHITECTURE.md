@@ -1096,6 +1096,9 @@ user's retry of a connect. The proposals the owner answered on
   account behind it); synced servers as connect targets before K41
   (SAF-09). As built in K41 (D64, 4.7), a synced server gets its
   `ServerConfig` as its connect config once its endpoint is confirmed.
+  *As built in v1 (M5 plan M05), the coordinator runs under
+  `engineSyncPushPolicy` (`PushPolicy.normal`): local writes seal through
+  `CatalogWriter.sealLocal`, and every round pushes them (§4.4).*
 - **D64. A server's confirmation covers its route (K41, M2).** A synced
   server is dialed only while its own endpoint pin and the pin of every
   jump host on its route that the account holds match their current
@@ -1856,15 +1859,18 @@ graph TD
 
 `klabautermann_app` reaches `seance_core` types only through
 `klabautermann_core`'s curated barrel with explicit `show` lists (precedent
-`PC/poltergeist_core.dart:11-14` [R]). As built in M1 (PR #151), the
-barrel (`klabautermann/packages/klabautermann_core/lib/klabautermann_core.dart`)
-re-exports exactly one `seance_core` name, the home rule the app uses to
-find `~/.ssh/config` for the FL-02 import (it also undoes a macOS
-sandbox's container `HOME`). The engine imports Séance's ssh_config
-tokenizer and host type under its own `show` lists
+`PC/poltergeist_core.dart:11-14` [R]). The barrel
+(`klabautermann/packages/klabautermann_core/lib/klabautermann_core.dart`)
+shows the `seance_core` value types the app uses, from the home rule that
+finds `~/.ssh/config` for the FL-02 import (it also undoes a macOS
+sandbox's container `HOME`) to the link builders, the update checker, and
+the snippet and danger-finding types. The engine imports Séance's
+ssh_config tokenizer and host type under its own `show` lists
 (`klabautermann/packages/klabautermann_core/lib/src/fleet/`) and maps
-its hosts to `FleetEntry` values (10.1), so no `seance_core` type crosses
-the isolate boundary (D18). The device settings store (4.10) mints the
+its hosts to `FleetEntry` values (10.1). Protocol types stay plain
+sendable data with no function-typed fields; the `seance_core` value types
+they carry, such as `Snippet` and `DangerFinding`, are ones the barrel
+shows (D18). The device settings store (4.10) mints the
 device id with `uuidV4` and syncs the directory after each atomic write
 with the catalog library's `syncLocalDirectory`. The engine's import store
 (4.10) saves through the same writer, so the file's `seance_core` edge

@@ -205,6 +205,9 @@ copies of the standalone workflows, kept only because tests and
   update.
 - Resolve ambiguity before making consequential changes. State low-risk
   assumptions; ask when scope, safety, or expected behavior is unclear.
+- Decide procedural questions yourself, such as which PR a change goes
+  in, whether to fold it in or follow up, and the order of steps. State
+  the choice and continue; do not wait for an answer on them.
 - Keep changes focused. Do not modify unrelated code, formatting, or comments.
 - Prefer surgical edits over whole-file rewrites when the result is equivalent.
 - Stage only intended files. Inspect the diff before committing.
@@ -335,9 +338,18 @@ confirmed blockers, unresolved human review requests, or required checks.
 
 ### Reviewer integration failures
 
-After two consecutive reviewer-integration failures, stop and report the
-review gap. Do not treat failures as approval. An explicit user instruction
-may waive review; report that waiver rather than claiming review passed.
+Do not let GLM block a PR. Its run time grows with the diff, so a large
+PR can exhaust its review budget, and each new push cancels the running
+review. When GLM has not finished in time or has failed, pick one:
+
+- Split the change into smaller PRs that GLM can review in time.
+- Run an independent subagent review of the latest commit. Verify its
+  findings against primary evidence, as for GLM findings.
+- Merge when required checks pass and you are reasonably confident in
+  the change.
+
+A missing or failed review is never approval. Report which option you
+took and the review gap rather than claiming review passed.
 
 ## Ending a task
 

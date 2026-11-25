@@ -2867,11 +2867,10 @@ paste (X-01, shipped with M4).
 | X7: manifest checksums verified on connect | M16's connect-time check; M20a reports a backup changed on the host | met |
 | X8: hand-off links carry no command parameter (parser tests) | F5d-2's link corpus in seance_core, which refuses every command-like parameter; M31's builders, which carry a server id, a folder or a path only | met |
 
-Left open: the pin publication switch, which waits on the release above;
-admin mode for an account whose only sudo rule is NOPASSWD `docker`
-(M4's X5, which the owner kept as built on 2026-11-04); and the device
-and real-host checks below, which M5 extends by privileged writes under
-SELinux, link intake on real devices and the container terminal on
+Left open: admin mode for an account whose only sudo rule is NOPASSWD
+`docker` (M4's X5, which the owner kept as built on 2026-11-04); and the
+device and real-host checks below, which M5 extends by privileged writes
+under SELinux, link intake on real devices and the container terminal on
 phones.
 
 ## M6 exit
@@ -2961,6 +2960,10 @@ is not a device smoke test:
   SELinux enforcing: a root-owned file the engine edits keeps its label
   (`ls -Z` before and after the write, which runs `restorecon`). The
   spike's containers cannot observe labels.
+- Host-key pin publication against a real Séance 1.9.3+ account (M5,
+  D15, X4): confirm a first-seen pin on a server connect, then check that
+  it reaches the account and installs on Séance, while a conflicting pin
+  is reported and left out.
 - The 24 h soak (03 §11.4) against ten hosts, which CI runs only for
   minutes.
 - Link intake on real devices (M5, X-03, X-04, X-10): on each phone and
