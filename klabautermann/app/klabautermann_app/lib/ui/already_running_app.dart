@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show AppAppearance, GhostTheme;
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
@@ -23,7 +24,10 @@ class AlreadyRunningApp extends StatelessWidget {
     );
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        ...AppLocalizations.localizationsDelegates,
+        EditorLocalizations.delegate,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       theme: themes.theme,
       darkTheme: themes.darkTheme,
@@ -69,7 +73,10 @@ class EngineFailedApp extends StatelessWidget {
     );
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        ...AppLocalizations.localizationsDelegates,
+        EditorLocalizations.delegate,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       theme: themes.theme,
       darkTheme: themes.darkTheme,

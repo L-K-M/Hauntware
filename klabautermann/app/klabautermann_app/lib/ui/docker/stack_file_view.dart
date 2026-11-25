@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show ghostFormatBinarySize;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorController, PlanchetteEditor;
+    show EditorController, EditorStrings, PlanchetteEditor;
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
@@ -12,7 +12,6 @@ import '../actions/action_entry.dart';
 import '../admin_mode_chip.dart';
 import '../edit/editor_display_scope.dart';
 import '../edit/remote_editor.dart';
-import '../editor_strings.dart' show KlabautermannEditorStrings;
 import '../timed_reveal.dart';
 import 'container_details.dart' show ContainerInspectionScope;
 import 'containers_panel.dart' show DockerNotice;
@@ -407,7 +406,7 @@ class _StackFileViewState extends State<StackFileView> {
                       key: ObjectKey(editor),
                       controller: editor,
                       editingLocked: true,
-                      strings: KlabautermannEditorStrings(l10n),
+                      strings: EditorStrings.of(context),
                       textStyle: editorDisplayTextStyle(display),
                       ligatures: display.ligatures,
                     ),

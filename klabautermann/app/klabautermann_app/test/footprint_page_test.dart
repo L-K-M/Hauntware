@@ -12,6 +12,7 @@ import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/footprint_page.dart';
 import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 import 'package:planchette_editor/planchette_editor.dart' show PlanchetteEditor;
 
 import 'support/fake_engine.dart';
@@ -103,7 +104,10 @@ Future<_Page> _pump(WidgetTester tester, {bool readOnly = false}) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: GhostTheme.light(klabautermannThemeStyle),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        ...AppLocalizations.localizationsDelegates,
+        EditorLocalizations.delegate,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (context, child) => SafetyScope(
         safety: safety,
