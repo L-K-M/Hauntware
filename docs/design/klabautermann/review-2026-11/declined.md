@@ -815,3 +815,15 @@ Eight low findings appear in the reports but in no PLAN.md row.
 - ARC-18: DEFERRED. A generic `RemoteValue<T>` in `ghost_desktop` touches
   Poltergeist's settings window too; the reviewer rated it size L, risk
   medium, lowest priority, and did not read the file in full.
+
+### PR #858 GLM review (ARC-02 protocol removals): 0 real, no push
+
+- "Removing `TerminalEndInput` drops stdin EOF": intended; ARC-02 removes
+  requests no client sends. Nothing in the app sends it, and the
+  terminal controller ends a shell with `CloseTerminal`.
+- "`withoutCommands` possibly unused": refuted; `docker_watch.dart`
+  calls it twice.
+- Unwatch before the timed section in `docker_fallback_test`: a
+  verification request; the integration job runs it in CI.
+- "The protocol bump is breaking; deploy in lockstep": the engine runs
+  in the app's own isolate and ships in the same binary.
