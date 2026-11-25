@@ -1799,7 +1799,7 @@ abstract class EditorLocalizations {
   /// **'Repeat'**
   String get editorTextToolRepeatNone;
 
-  /// The browser's Repeat row before the first text-tool run.
+  /// The browser's Repeat row, naming the text tool it will rerun.
   ///
   /// In en, this message translates to:
   /// **'Repeat {name}'**

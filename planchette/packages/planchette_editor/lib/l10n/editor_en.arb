@@ -1151,7 +1151,7 @@
   },
   "editorTextToolRepeat": "Repeat {name}",
   "@editorTextToolRepeat": {
-    "description": "The browser's Repeat row before the first text-tool run.",
+    "description": "The browser's Repeat row, naming the text tool it will rerun.",
     "placeholders": {"name": {"type": "String"}}
   },
   "editorTextToolRepeatWithSummary": "Repeat {name} ({summary})",

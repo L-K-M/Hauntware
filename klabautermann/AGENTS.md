@@ -101,11 +101,15 @@ its software-rendered numbers are provisional (`docs/evidence/s5/`).
   settings keys under the `klabautermann.` prefix.
 - All SSH, sampling, parsing, Docker, sync and rule evaluation run in one
   engine isolate (D18); the UI sends plain-data requests over it. Engine
-  protocol types carry no function-typed fields and no `seance_core` or
-  dartssh2 types. The protocol guard enforces this once the engine
+  protocol types are plain sendable data: no function-typed fields, and
+  `seance_core` value types where the barrel shows them. The protocol guard
+  enforces the engine-location and function-field rules; the engine
   directory is registered in `tool/guards.yaml`.
-- Pull-only from the start (D14): nothing the app sends may push or write
-  catalog records; a widget test guards it.
+- Catalog writes go through the engine's requests (`SaveServer`,
+  `DeleteServer`, `SetServerPrefs`, `PutRule`, `RemoveRule`), which seal
+  their records with `CatalogWriter.sealLocal`; a confirmed host-key pin is
+  published the same way. The `~/.ssh/config` import is device-local, never
+  a catalog write (D14). A widget test names the requests that write.
 - Committed `ci-release.jks` and `key.properties` are a deliberately
   public debug-grade CI identity (the same tradeoff the siblings made):
   upgrade continuity, not publisher authenticity.
@@ -113,9 +117,9 @@ its software-rendered numbers are provisional (`docs/evidence/s5/`).
 
 ## Gotchas inherited from the siblings (they will bite here too)
 
-- **`dart test` / `dart analyze` with no path** at the workspace root will
-  fail once the Flutter app exists ("requires the Flutter SDK"). Always
-  pass explicit package paths.
+- **`dart test` / `dart analyze` with no path** at the workspace root fails
+  while the Flutter app is in the tree ("requires the Flutter SDK").
+  Always pass explicit package paths.
 - The Flutter app must stay **out** of the root `workspace:` list; it
   path-depends on the workspace members instead.
 - **`dart test` reads `dart_test.yaml` from the directory it runs in.**
@@ -126,8 +130,8 @@ its software-rendered numbers are provisional (`docs/evidence/s5/`).
 - macOS: the restricted `keychain-access-groups` entitlement blocks ad-hoc
   signed builds from launching; use the legacy login keychain like Séance
   does. Release entitlements stay deliberately empty.
-- Platform folders carry identity, icons, and entitlements; commit them
-  once `flutter create` scaffolds the app.
+- Platform folders carry identity, icons, and entitlements; keep their
+  committed copies current.
 - **The desktop settings window is a second engine** (Séance's lesson,
   D32): `main` gives it the settings window's app before `settings.json`
   opens and the engine isolate starts, and it reaches the app only over
@@ -165,6 +169,9 @@ its software-rendered numbers are provisional (`docs/evidence/s5/`).
   update.
 - Resolve ambiguity before making consequential changes. State low-risk
   assumptions; ask when scope, safety, or expected behavior is unclear.
+- Decide procedural questions yourself, such as which PR a change goes
+  in, whether to fold it in or follow up, and the order of steps. State
+  the choice and continue; do not wait for an answer on them.
 - Keep changes focused. Do not modify unrelated code, formatting, or comments.
 - Prefer surgical edits over whole-file rewrites when the result is equivalent.
 - Stage only intended files. Inspect the diff before committing.
@@ -295,9 +302,18 @@ confirmed blockers, unresolved human review requests, or required checks.
 
 ### Reviewer integration failures
 
-After two consecutive reviewer-integration failures, stop and report the
-review gap. Do not treat failures as approval. An explicit user instruction
-may waive review; report that waiver rather than claiming review passed.
+Do not let GLM block a PR. Its run time grows with the diff, so a large
+PR can exhaust its review budget, and each new push cancels the running
+review. When GLM has not finished in time or has failed, pick one:
+
+- Split the change into smaller PRs that GLM can review in time.
+- Run an independent subagent review of the latest commit. Verify its
+  findings against primary evidence, as for GLM findings.
+- Merge when required checks pass and you are reasonably confident in
+  the change.
+
+A missing or failed review is never approval. Report which option you
+took and the review gap rather than claiming review passed.
 
 ## Ending a task
 

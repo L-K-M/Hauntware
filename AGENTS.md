@@ -72,9 +72,9 @@ squash the initial migration PR: original source ancestry must reach main.
   vendor third-party code without its license file.
 - Flutter's NOTICES carries the pub packages' licenses. Anything else a
   client bundles needs a Flutter license chunk in a package `LICENSE`
-  (ghost_fonts, pdfium_dart through its `tool/pdfium_licenses.py`, the app
-  `LICENSE` files for the Windows NuGet packages and file_picker's iOS Swift
-  packages), and every Android Maven license a text in the app's
+  (ghost_fonts, pdfium_dart through its `tool/pdfium_licenses.py`, and the
+  app `LICENSE` files for the Windows NuGet packages), and every Android
+  Maven license a text in the app's
   `android/app/config/`, where code a Maven artifact shades (the Protocol
   Buffers runtime in tink-android) also needs a bundled entry. The sync
   server's notices come from `seance/scripts/licenses/`, and the AppImage

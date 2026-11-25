@@ -36,7 +36,16 @@ corrupted download or a foreign mirror. They cannot attest a compromised
 release pipeline, and a matching checksum says nothing about who produced
 the binary: the only origin assurance is that this repository's CI built
 it from the pushed tag. An installer or "update" offered anywhere else is
-not ours. Klabautermann never updates itself.
+not ours.
+
+At launch Klabautermann sends one request to GitHub for this repository's
+latest release and compares the version locally. A newer release appears in
+a banner; turn the check off in Settings > General. On Android the banner
+downloads the release APK once you choose Update and opens the system
+installer. The app checks the download against the size and SHA-256 digest
+GitHub published for that asset before it opens anything. Every other
+platform's banner links to the Releases page. Nothing is downloaded until
+you choose Update.
 
 ## macOS
 
@@ -106,8 +115,10 @@ later. There is no Play Store listing; you install the APK yourself:
    (`-r` replaces an installed copy and keeps its data).
 
 A later release's APK installs over the current one and keeps your
-servers and settings. Install it the same way: Klabautermann does not
-download updates.
+servers and settings. Install it yourself as above, or choose Update in the
+app's update banner: on Android the app downloads that release's APK,
+checks it against the release's published size and SHA-256 digest, and
+opens the system installer. It downloads nothing until you choose Update.
 
 Android's backup and phone-to-phone transfer do not carry Klabautermann's
 data: the key that seals your saved credentials never leaves the phone.
