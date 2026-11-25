@@ -230,7 +230,8 @@ final class _ContainerInspects {
 
   /// [containerId]'s row in [server]'s latest list, if listed.
   ContainerSummary? _summaryIn(_DockerServer server, String containerId) {
-    for (final container in server.containers.value.containers ?? const []) {
+    for (final container
+        in server.containers.value.containers ?? const <ContainerSummary>[]) {
       if (container.id == containerId) return container;
     }
     return null;

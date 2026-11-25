@@ -110,7 +110,7 @@ List<PaletteCommand> paletteCommands({
           run: () => navigation.openPanel(selected.id, panel),
         ),
     if (selected != null)
-      for (final container in containers ?? const [])
+      for (final container in [...?containers])
         PaletteCommand(
           label: containerNameOf(container),
           path: l10n.paletteContainers(selected.displayName),
@@ -124,7 +124,7 @@ List<PaletteCommand> paletteCommands({
           run: () => navigation.openContainer(selected.id, container),
         ),
     if (selected != null)
-      for (final unit in units ?? const [])
+      for (final unit in [...?units])
         // A row the host misread names no unit the tab could open.
         if (unitStatesOf(unit).type != null)
           switch (unitDescriptionOf(unit)) {
@@ -141,7 +141,7 @@ List<PaletteCommand> paletteCommands({
             ),
           },
     if (selected != null)
-      for (final project in stacks ?? const [])
+      for (final project in [...?stacks])
         PaletteCommand(
           label: project.name,
           path: l10n.paletteStacks(selected.displayName),

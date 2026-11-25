@@ -38,7 +38,7 @@ final class AccountSize {
     required this.warnBytes,
     required List<AccountSizeRow> rows,
   }) : rows = List.unmodifiable(
-         [...rows]..sort((a, b) {
+         <AccountSizeRow>[...rows]..sort((a, b) {
            final bySize = b.bytes.compareTo(a.bytes);
            return bySize != 0 ? bySize : a.prefix.compareTo(b.prefix);
          }),

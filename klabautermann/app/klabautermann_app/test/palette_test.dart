@@ -1,5 +1,7 @@
 // PLT-07: the command palette over the app's commands, the fleet, the
 // selected server's tabs, containers, units and stacks (03 §10.6).
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,7 +71,7 @@ void main() {
     final palette = host.commands.singleWhere(
       (command) => command.id == kAppCommandPaletteCommandId,
     );
-    palette.run(tester.element(find.byKey(_query)));
+    unawaited(palette.run(tester.element(find.byKey(_query))));
     await tester.pumpAndSettle();
 
     expect(find.byKey(_query), findsOne);
