@@ -1,6 +1,8 @@
 import 'package:klabautermann_core/klabautermann_core.dart'
     show ContainerSummary, NetworkSummary;
 
+import 'docker_resource_view.dart';
+
 /// The Networks sub-tab's columns, whose names key them in the table and
 /// its sort (03 §7.15 DNW-01).
 enum NetworkColumn { name, driver, scope, subnet, gateway, use }
@@ -12,25 +14,14 @@ enum NetworkFilter { all, unused }
 /// How many containers hold an endpoint on each network, by name, as
 /// [containers] (the full list) name them: a running container's
 /// networks carry its address there, and a stopped one holds none.
-Map<String, int> containersByNetwork(List<ContainerSummary> containers) {
-  final counts = <String, int>{};
-  for (final container in containers) {
-    for (final name in container.networks.keys) {
-      counts.update(name, (n) => n + 1, ifAbsent: () => 1);
-    }
-  }
-  return counts;
-}
+Map<String, int> containersByNetwork(List<ContainerSummary> containers) =>
+    countContainerUse(containers, (container) => container.networks.keys);
 
 /// One network the tab lists, with how many containers are on it.
-final class NetworkEntry {
-  const NetworkEntry(this.network, this.containers);
+final class NetworkEntry extends DockerResourceEntry<NetworkSummary> {
+  const NetworkEntry(super.summary, super.containers);
 
-  final NetworkSummary network;
-
-  /// How many containers hold an endpoint on [network], or null while no
-  /// container list was read: the network list itself names none.
-  final int? containers;
+  NetworkSummary get network => summary;
 
   /// Whether [network] is one of the engine's own (`bridge`, `host`,
   /// `none`), which stay.
@@ -38,6 +29,7 @@ final class NetworkEntry {
 
   /// Whether no container is on [network], a user-defined one; false
   /// while unknown.
+  @override
   bool get unused => containers == 0 && !builtin;
 }
 
@@ -49,33 +41,22 @@ List<NetworkEntry> networkEntries(
   required List<ContainerSummary>? containers,
   required NetworkFilter filter,
   required List<String> terms,
-}) {
-  final byNetwork = containers == null ? null : containersByNetwork(containers);
-  return [
-    for (final network in networks)
-      if (NetworkEntry(
-            network,
-            byNetwork == null ? null : byNetwork[network.name] ?? 0,
-          )
-          case final entry
-          when (filter == NetworkFilter.all || entry.unused) &&
-              networkMatches(network, terms))
-        entry,
-  ];
-}
+}) => dockerResourceEntries(
+  networks,
+  countUse: containersByNetwork,
+  create: NetworkEntry.new,
+  keeps: (entry, filter) => filter == NetworkFilter.all || entry.unused,
+  matches: networkMatches,
+  nameOf: (network) => network.name,
+  containers: containers,
+  filter: filter,
+  terms: terms,
+);
 
 /// Whether every term of [terms] is in [network]'s name, driver or
 /// subnet.
-bool networkMatches(NetworkSummary network, List<String> terms) {
-  if (terms.isEmpty) return true;
-
-  final haystack = [
-    network.name,
-    ?network.driver,
-    ?network.subnet,
-  ].join('\n').toLowerCase();
-  return terms.every(haystack.contains);
-}
+bool networkMatches(NetworkSummary network, List<String> terms) =>
+    matchesTerms(terms, [network.name, ?network.driver, ?network.subnet]);
 
 /// The gateway of [network]'s first configured subnet, the one the list
 /// shows beside it.
