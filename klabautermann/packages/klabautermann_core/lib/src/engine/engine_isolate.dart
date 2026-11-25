@@ -49,8 +49,9 @@ final class EngineStart {
   /// too; [CloseStream], [DockerUnwatch], [Disconnect],
   /// [RefreshSubscription], [ClosePortForward] and [SetAppActivity]
   /// change nothing,
-  /// subscriptions are only recorded, and no [Prompt] is ever open. The app's composition root leaves
-  /// them off; tests turn them on.
+  /// subscriptions are only recorded, and no [Prompt] is ever open. The
+  /// app's composition root turns them on; tests that need no links leave
+  /// them off, so they dial nothing.
   final bool linksEnabled;
 
   /// Whether the engine probes the reachability of the fleet's confirmed
@@ -115,10 +116,11 @@ final class EngineStart {
 /// [ConnectRejected], [SetMonitorSet] samples its eligible servers'
 /// `overview` over links dialed unattended (FL-21, 03 §4.3 step 4),
 /// [AnswerKeystore] completes the keystore call it names ahead of the
-/// queue, a [PlanAction] gets [ActionRefused] until its planner lands and
-/// a [RunAction] because no plan is held yet (03 §8.5), [Shutdown] ends
-/// every log stream and exits, and every other 03 §10.1 row gets
-/// [RequestRejected] until its milestone lands.
+/// queue, a [PlanAction] previews or holds a plan and a [RunAction] runs
+/// the held one over the link generation it was planned on (03 §8.5),
+/// [Shutdown] ends every log stream and exits, and the only 03 §10.1 row
+/// still unanswered is [HandleAlert] (v1.x): it gets [RequestRejected],
+/// 'not implemented yet (M1a scaffold)'.
 ///
 /// With probes on, the fleet's confirmed endpoints are probed once the
 /// app has the fleet ([Hello]'s answer), and each answer goes out as a
