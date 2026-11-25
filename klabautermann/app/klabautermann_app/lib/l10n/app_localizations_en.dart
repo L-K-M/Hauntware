@@ -8795,9 +8795,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerShellOpen => 'Open a shell';
 
   @override
-  String get dockerShellHide => 'Show details';
-
-  @override
   String get dockShow => 'Show the dock';
 
   @override
