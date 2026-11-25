@@ -637,3 +637,22 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
   are both called; nothing leaked.
 - `ringStreams` not re-exported: nit; no consumer outside the controller
   files needs it.
+
+### PR #846 GLM review (dead code): 0 in scope, no push
+
+- "Removed barrel exports may break other packages": refuted. Outside the
+  app's `lib/`/`test/` and core itself, only
+  `app/integration_test/frame_timing_test.dart` imports the barrel, and
+  `flutter analyze --fatal-infos` (which covers `integration_test/`) and
+  `dart analyze --fatal-infos` of core and host were clean on the branch.
+- "Plan ids from a non-secure Random": refuted. `PlanRegistry` and the
+  edit planner default to `Random.secure()`; only tests inject a seeded
+  one, as before. `randomHexToken` takes the caller's `Random` unchanged.
+- "Shell button does nothing without a dock": refuted. The inspector body
+  is built only by `InspectorPane`, which only `DesktopShell` builds,
+  inside its `WorkspaceDockScope`; the removed fallback was unreachable.
+- Barrel test's CWD-relative path: `flutter test` runs from the package
+  root, as every app test that reads repository files does; nit.
+- Word-boundary match counts comments as uses: accepted limitation of a
+  cheap check; a name only a comment mentions is rare and visible in
+  review. No change.
