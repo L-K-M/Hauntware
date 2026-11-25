@@ -10,21 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/log_export_host.dart';
 import 'log_view_controller.dart';
 
-/// Where LOG-10's export goes besides the clipboard: a file the user
-/// names, or the platform's share sheet. A host service, so tests, and
-/// platforms without a share sheet, stand in for the plugins.
-abstract interface class LogExportHost {
-  /// Whether this platform has a share sheet to hand a file to.
-  bool get canShare;
-
-  /// Asks where to save [bytes] as [fileName] and writes them there;
-  /// false when the user cancelled.
-  Future<bool> save(String fileName, Uint8List bytes);
-
-  /// Hands [bytes] as [fileName] to the share sheet, anchored at [origin]
-  /// where the platform needs one (an iPad's popover).
-  Future<void> share(String fileName, Uint8List bytes, {Rect? origin});
-}
+export '../../services/log_export_host.dart' show LogExportHost;
 
 /// Puts a [LogExportHost] in place of the plugins' for the subtree.
 class LogExportScope extends InheritedWidget {
