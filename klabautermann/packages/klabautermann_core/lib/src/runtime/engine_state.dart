@@ -70,6 +70,17 @@ const Set<SampleStream> _historyStreams = {
   SampleStream.fs,
 };
 
+/// What an opening import store's issue says a fleet-keyed cache should
+/// purge. A store left as it is, or from a newer schema, saves no import
+/// this run, so its fleet says nothing about which servers the user
+/// removed; every other case drops the cached servers the fleet no longer
+/// holds.
+CachePurge _purgeFor(ImportStoreIssueKind? kind) => switch (kind) {
+  ImportStoreIssueKind.leftAsIs ||
+  ImportStoreIssueKind.newerVersion => CachePurge.never,
+  ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
+};
+
 /// The engine isolate's state (ENG-11 step 1, ARC-05), moved out of the
 /// `engineMain` closure: the fields every request reads and the functions
 /// that act on them live in one place, and [run] keeps the closure's
@@ -613,25 +624,13 @@ final class EngineState {
                 Directory(start.supportDirectory),
                 access: start.supportDirectoryAccess,
                 fleet: fleet.fleetIds,
-                // A store left as it is saves no import this run, so its fleet
-                // says nothing about which servers the user removed.
-                purge: switch (store.issue?.kind) {
-                  ImportStoreIssueKind.leftAsIs ||
-                  ImportStoreIssueKind.newerVersion => CachePurge.never,
-                  ImportStoreIssueKind.recovered ||
-                  null => CachePurge.removedServers,
-                },
+                purge: _purgeFor(store.issue?.kind),
               );
               history = await HistoryStore.open(
                 Directory(start.supportDirectory),
                 access: start.supportDirectoryAccess,
                 fleet: fleet.fleetIds,
-                purge: switch (store.issue?.kind) {
-                  ImportStoreIssueKind.leftAsIs ||
-                  ImportStoreIssueKind.newerVersion => CachePurge.never,
-                  ImportStoreIssueKind.recovered ||
-                  null => CachePurge.removedServers,
-                },
+                purge: _purgeFor(store.issue?.kind),
               );
               // Tests run the engine in their own isolate, where Shutdown cannot
               // exit it, so they drain the stores' queued writes before deleting

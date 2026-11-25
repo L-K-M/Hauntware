@@ -1,12 +1,8 @@
 import 'package:seance_core/catalog.dart' show EndpointPin;
 import 'package:seance_core/seance_core.dart'
-    show AuthMethod, ServerConfig, serverSearchHaystack;
+    show AuthMethod, ServerConfig, maxJumpHosts, serverSearchHaystack;
 
 import '../engine/protocol.dart';
-
-/// The most jump hops a synced route lists, as Séance's connector refuses
-/// a longer route (03 §10.1).
-const int _maxRouteHops = 16;
 
 /// The servers the sync account holds as the engine lists and dials them
 /// (03 §4.3, §4.7, §10.1), in the catalog's order. Read-only in the MVP
@@ -211,7 +207,7 @@ final class SyncedFleet {
   /// `jumpHostId` back. A hop the account does not hold ends the route,
   /// and one that loops ends with the id that closes the loop, so a
   /// server naming itself still has a route; neither passes
-  /// [_maxRouteHops].
+  /// [maxJumpHosts].
   static List<String> _routeIds(
     ServerConfig server,
     Map<String, ServerConfig> byId,
@@ -219,7 +215,7 @@ final class SyncedFleet {
     final hops = <String>[];
     final seen = {server.id};
     var next = server.jumpHostId;
-    while (next != null && hops.length < _maxRouteHops) {
+    while (next != null && hops.length < maxJumpHosts) {
       hops.add(next);
       if (!seen.add(next)) break;
       next = byId[next]?.jumpHostId;

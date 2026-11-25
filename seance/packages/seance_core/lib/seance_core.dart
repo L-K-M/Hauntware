@@ -25,7 +25,8 @@ export 'src/ssh_config/ssh_config_settings.dart'
         isTcpPort,
         looksLikeSshAddress,
         parseSshPort,
-        sshCanonicalHost;
+        sshCanonicalHost,
+        utf8ReplacementCharacter;
 export 'src/ssh_config/proxy_jump_syntax.dart'
     show splitSshHost, sshAcceptsProxyJump;
 

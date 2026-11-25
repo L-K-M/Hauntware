@@ -1,16 +1,17 @@
 import 'package:seance_core/seance_core.dart'
-    show ImportedHost, looksLikeSshAddress, splitSshHost, sshCanonicalHost;
+    show
+        ImportedHost,
+        looksLikeSshAddress,
+        maxJumpHosts,
+        splitSshHost,
+        sshCanonicalHost,
+        utf8ReplacementCharacter;
 
 import '../engine/protocol.dart' show kSshDefaultPort;
 
 /// Prefixes a [JumpHop.id]. Import ids are `ssh-config:<alias>` and synced
 /// ids bare UUIDs, so a hop id collides with neither.
 const String _hopIdPrefix = 'ssh-config-hop:';
-
-/// The most hops a route may have: Séance's connector refuses a longer one
-/// (`_maxJumpHosts` in seance_core's `ssh_session.dart`), so the engine
-/// never imports a route it could not dial.
-const int _maxJumpHops = 16;
 
 /// A decimal TCP port, as the engine reads one in a `ProxyJump`.
 final RegExp _decimal = RegExp(r'^[0-9]+$');
@@ -19,11 +20,6 @@ final RegExp _decimal = RegExp(r'^[0-9]+$');
 /// dots in a row: a letter or digit, then letters, digits, `.`, `-` and
 /// `_`.
 final RegExp _domain = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]*$');
-
-/// U+FFFD, which the app's UTF-8 decoding of the config puts in place of
-/// bytes that are not UTF-8. A hop's host holding one is a name the
-/// import leaves out; its user, which ssh signs in as, is refused here.
-const String _replacement = '\u{FFFD}';
 
 /// What `isspace()` finds in the C locale.
 const String _cWhitespace = ' \t\n\v\f\r';
@@ -368,7 +364,7 @@ final class _Router {
   _Followed follow(
     ImportedHost host, [
     Set<String>? visiting,
-    int limit = _maxJumpHops,
+    int limit = maxJumpHosts,
   ]) {
     visiting ??= {host.alias};
 
@@ -507,7 +503,7 @@ List<_Hop>? _parseProxyJump(String value) {
         hop.host.startsWith('ssh://') ||
         !_isShellWord(hop.user ?? '') ||
         (hop.user?.startsWith('-') ?? false) ||
-        (hop.user?.contains(_replacement) ?? false)) {
+        (hop.user?.contains(utf8ReplacementCharacter) ?? false)) {
       return null;
     }
     hops.add((name: name, user: hop.user, host: hop.host, port: hop.port));
