@@ -19,6 +19,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         ImportStoreIssue,
         InstanceLockUnavailable,
         SyncStoreIssue;
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'controllers/admin_controller.dart';
@@ -435,7 +436,10 @@ class KlabautermannApp extends StatelessWidget {
         return MaterialApp(
           navigatorKey: appNavigatorKey,
           onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+            ...AppLocalizations.localizationsDelegates,
+            EditorLocalizations.delegate,
+          ],
           supportedLocales: AppLocalizations.supportedLocales,
           theme: themes.theme,
           darkTheme: themes.darkTheme,

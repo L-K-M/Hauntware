@@ -42,7 +42,6 @@ import 'services/workspace_remote_files.dart';
 import 'ui/workspace_servers_dialog.dart';
 import 'ui/workspace_remote_folder_dialog.dart';
 import 'ui/document_windows_root.dart';
-import 'ui/editor_strings.dart';
 import 'theme/planchette_theme.dart';
 import 'widgets/disk_notice.dart';
 import 'widgets/document_status_bar.dart';
@@ -122,7 +121,10 @@ class PlanchetteApp extends StatelessWidget {
     listenable: settings,
     builder: (context, _) => MaterialApp(
       title: _productName,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        ...AppLocalizations.localizationsDelegates,
+        EditorLocalizations.delegate,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       navigatorKey: navigatorKey ?? window?.navigatorKey,
       debugShowCheckedModeBanner: false,
@@ -849,10 +851,9 @@ class _DocumentShellState extends State<_DocumentShell>
 
   bool _paletteOpen = false;
 
-  /// The editor's display strings from the ARB catalog (F7), for the
+  /// The editor's display strings from the package catalog, for the
   /// editor surface, its status row and the Text-menu tool names.
-  EditorStrings get _editorStrings =>
-      PlanchetteEditorStrings(AppLocalizations.of(context));
+  EditorStrings get _editorStrings => EditorStrings.of(context);
 
   /// Lists every command the menus define, enabled or not — a greyed row
   /// still answers "where does that live". The native macOS menu stays

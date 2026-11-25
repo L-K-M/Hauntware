@@ -5,6 +5,7 @@
 // changes crosses the settings link (services/settings_window/).
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show AppAppearance, GhostTheme;
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/remote_settings.dart';
@@ -126,7 +127,10 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
     );
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).settingsTitle,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        ...AppLocalizations.localizationsDelegates,
+        EditorLocalizations.delegate,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       theme: themes.theme,
       darkTheme: themes.darkTheme,

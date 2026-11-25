@@ -16,6 +16,7 @@ import 'package:klabautermann_app/ui/docker/stack_file_view.dart';
 import 'package:klabautermann_app/ui/edit/remote_editor.dart';
 import 'package:klabautermann_app/ui/server_safety.dart' show SafetyScope;
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 import 'package:planchette_editor/planchette_editor.dart' show PlanchetteEditor;
 
 import 'support/docker.dart';
@@ -136,7 +137,10 @@ Future<_Editor> _pump(
   await tester.pumpWidget(
     MaterialApp(
       theme: GhostTheme.light(klabautermannThemeStyle),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        ...AppLocalizations.localizationsDelegates,
+        EditorLocalizations.delegate,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       // As in the app, the scopes sit above the navigator, so dialogs see
       // them.

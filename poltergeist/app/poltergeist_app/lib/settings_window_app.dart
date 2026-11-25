@@ -7,6 +7,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:planchette_editor/l10n/editor_localizations.dart';
 
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/remote_settings.dart';
@@ -121,6 +122,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
       themeMode: themes.themeMode,
       localizationsDelegates: const [
         AppLocalizations.delegate,
+        EditorLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
