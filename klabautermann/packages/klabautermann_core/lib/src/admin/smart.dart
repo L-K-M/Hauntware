@@ -7,14 +7,12 @@ import 'package:seance_core/seance_core.dart'
     show ElevationException, RemoteCommandException;
 
 import '../engine/protocol.dart';
+import '../limits.dart';
 import 'admin_mode.dart';
 
 /// The most drives one read reads, one elevated command each, in scan
 /// order [E]. The rest are counted in [SmartReport.notRead].
 const kSmartDrivesRead = 32;
-
-/// The exit status a shell gives a command it cannot find.
-const _commandNotFound = 127;
 
 /// Reads every drive's health on [serverId] through [session]. A probe
 /// that found no smartctl in [profile] answers without running anything.
@@ -35,7 +33,7 @@ Future<SmartReport> readSmart(
       HostCommands.smartScan(),
       password: session.password,
     );
-    if (scan.exitCode == _commandNotFound ||
+    if (scan.exitCode == kCommandNotFound ||
         scan.stderr.contains('command not found')) {
       return failed(SmartReportFailure.missing);
     }
