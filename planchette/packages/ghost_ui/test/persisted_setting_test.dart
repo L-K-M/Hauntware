@@ -42,12 +42,16 @@ void main() {
     final saves = <int>[];
     final setting = _Setting(1, saves);
     addTearDown(setting.dispose);
-    // Listeners see the change before the save starts.
-    setting.addListener(() => expect(saves, isEmpty));
+    // Listeners see the change before the save starts. Recorded rather
+    // than asserted in the listener: ChangeNotifier reports a listener's
+    // throw instead of failing the test.
+    final savesAtNotify = <int>[];
+    setting.addListener(() => savesAtNotify.add(saves.length));
 
     await setting.set(2);
     expect(setting.value, 2);
     expect(saves, [2]);
+    expect(savesAtNotify, [0]);
   });
 
   test('the value in force is a no-op', () async {
