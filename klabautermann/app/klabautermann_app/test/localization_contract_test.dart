@@ -789,30 +789,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'stacks.row.${project.name}'",
     r"'stacks.unlisted.${widget.serverId}'",
   },
-  'lib/ui/docker/volumes_panel.dart': {
+  'lib/ui/docker/docker_list_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
     // text.
-    r"'${DockerWatchList.volumes.name}.row.${_rowKey(entry)}'",
+    r"'${widget.tableId}.row.${widget.rowKey(entry)}'",
     r"'\n'",
   },
-  'lib/ui/docker/networks_panel.dart': {
-    // The key tests find a phone row by, in the table rows' form, and the
-    // line break between its cells in its screen-reader label, each ARB
-    // text.
-    r"'${DockerWatchList.networks.name}.row.${_rowKey(entry)}'",
-    r"'\n'",
-  },
-  'lib/ui/docker/networks_view.dart': {
+  'lib/ui/docker/docker_resource_view.dart': {
     // The line break between the fields the search reads.
     r"'\n'",
   },
   'lib/ui/docker/volumes_view.dart': {
-    // The mount type of a named volume, matched, never shown; the line
-    // break between the fields the search reads; the name pattern Docker
-    // accepts (VOL-02).
+    // The mount type of a named volume, matched, never shown; the name
+    // pattern Docker accepts (VOL-02).
     "'volume'",
-    r"'\n'",
     "r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+\$'",
   },
   // The line break between the endpoints the user lists (CRT-01).
