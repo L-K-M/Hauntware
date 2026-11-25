@@ -596,13 +596,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
   'lib/ui/attention.dart': {r"'$error'"},
-  'lib/ui/docker/container_details.dart': {
+  // The separator between a network's aliases, machine data.
+  'lib/ui/docker/container_details.dart': {"', '"},
+  'lib/ui/docker/container_details_parts.dart': {
     // A mount's type as the Engine API names it, matched, never shown;
-    // the empty type a mount without one reads as; the separator between
-    // a network's aliases, machine data.
+    // the empty type a mount without one reads as.
     "'volume'",
     "''",
-    "', '",
   },
   // The ps column title of resident memory, matched, never shown.
   'lib/ui/docker/container_processes.dart': {"'RSS'"},
