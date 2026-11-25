@@ -111,11 +111,11 @@ final class EngineFleet {
   /// The synced servers the last [refreshSynced] read from the account.
   /// Only the engine assigns it: the startup chain before the first
   /// request, and [refreshSynced] itself.
-  var _syncedServers = const <ServerConfig>[];
+  var syncedServers = const <ServerConfig>[];
 
   /// The synced servers as listed against this device's pins; see
   /// [applySynced].
-  var _synced = SyncedFleet.empty;
+  var synced = SyncedFleet.empty;
 
   /// The current imports, rebuilt by [refreshFleet].
   late ImportedFleet _fleet;
@@ -130,7 +130,7 @@ final class EngineFleet {
   /// while the store failed is caught once it reads again. A server whose
   /// pin could not be read at startup is here too, as its cached profile
   /// was kept.
-  var _trustedIds = const <String>{};
+  var trustedIds = const <String>{};
 
   /// FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
   /// `overview` the fleet rows read while the app is in the foreground,
@@ -143,18 +143,7 @@ final class EngineFleet {
 
   /// Whether the app has had a fleet. Probing waits for it, since the app
   /// keeps answers only for servers its fleet lists.
-  var _fleetSent = false;
-
-  /// The synced servers the account last held, which [relistSynced] reads
-  /// the pins against.
-  // ignore: unnecessary_getters_setters
-  List<ServerConfig> get syncedServers => _syncedServers;
-  set syncedServers(List<ServerConfig> servers) => _syncedServers = servers;
-
-  /// The synced servers as the engine lists and dials them.
-  // ignore: unnecessary_getters_setters
-  SyncedFleet get synced => _synced;
-  set synced(SyncedFleet value) => _synced = value;
+  var fleetSent = false;
 
   /// The imports as the engine lists and connects to them.
   ImportedFleet get fleet => _fleet;
@@ -162,32 +151,22 @@ final class EngineFleet {
   /// The fleet's server ids.
   Set<String> get fleetIds => _fleetIds;
 
-  /// The synced ids the next comparison treats as confirmed.
-  // ignore: unnecessary_getters_setters
-  Set<String> get trustedIds => _trustedIds;
-  set trustedIds(Set<String> value) => _trustedIds = value;
-
   /// The servers the monitor set samples now.
   Set<String> get monitored => _monitored;
 
-  /// Whether the app has had a fleet.
-  // ignore: unnecessary_getters_setters
-  bool get fleetSent => _fleetSent;
-  set fleetSent(bool value) => _fleetSent = value;
-
   /// The fleet's entries in listing order: the synced servers, then the
   /// imports.
-  List<FleetEntry> fleetEntries() => [..._synced.entries, ..._fleet.entries];
+  List<FleetEntry> fleetEntries() => [...synced.entries, ..._fleet.entries];
 
   /// The config of the synced server or import [id] while the engine can
   /// dial it; null otherwise.
   ServerConfig? configOf(String id) =>
-      _synced.serverConfig(id) ?? _fleet.serverConfig(id);
+      synced.serverConfig(id) ?? _fleet.serverConfig(id);
 
   // Probes the confirmed endpoints (FL-04, 03 §5.12); none while probes
   // are off. A server with a link is answered online without a probe.
   void probeFleet() {
-    if (!_fleetSent) return;
+    if (!fleetSent) return;
     _reachability?.update(probeTargets(fleetEntries(), configOf));
   }
 
@@ -338,18 +317,18 @@ final class EngineFleet {
   // with the retain and forget there (03 §5.1).
   void applySynced(SyncedFleet next) {
     final changed = {
-      for (final id in _trustedIds)
+      for (final id in trustedIds)
         if (next.lists(id) &&
             !next.confirmedIds.contains(id) &&
             !next.unreadableIds.contains(id))
           id,
     };
-    _trustedIds = {
+    trustedIds = {
       ...next.confirmedIds,
-      for (final id in _trustedIds)
+      for (final id in trustedIds)
         if (next.unreadableIds.contains(id)) id,
     };
-    _synced = next;
+    synced = next;
     refreshFleet(moved: changed);
     for (final id in changed) {
       _send(EndpointChanged(id));
@@ -363,15 +342,15 @@ final class EngineFleet {
   // relist; one whose servers a round replaced while it read the pins
   // leaves the fleet to that round's own relist, which reads them later.
   Future<void> relistSynced() async {
-    final servers = _syncedServers;
+    final servers = syncedServers;
     final next = await listSynced(servers);
-    if (identical(servers, _syncedServers)) applySynced(next);
+    if (identical(servers, syncedServers)) applySynced(next);
   }
 
   // Lists the synced servers again after a round or write took, so a
   // chained operation never reads a fleet a later one replaced.
   Future<void> refreshSynced() async {
-    _syncedServers = await _sync().servers();
+    syncedServers = await _sync().servers();
     await relistSynced();
   }
 }
