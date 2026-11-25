@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show commandPaletteQueryKey;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
-import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
+import 'package:klabautermann_app/ui/docker/stack_overview.dart'
     show StackOverview;
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
 import 'package:klabautermann_app/ui/menus/app_menu_host.dart' show AppMenuHost;
