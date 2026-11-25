@@ -522,3 +522,6 @@ Every comment targets code the PR moved byte-identically (verified by a sorted l
 
 ## #837 GLM round 1 (ef2ad4d): 1 minor, no push
 - `SshConfigImport.skipped` doc "say that a resolved alias drops its skip": declined as minor; `SshConfigImporter.parse` and the class doc already say resolved aliases import with ssh's values and only unresolved aliases keep the block-local outcome.
+
+## UIA-09 last bullet (no error path in `readAdmin`, restarts, disk explorer): declined
+Unreachable: `AdminController`'s report reads (after #838) and `DiskUsageReads` go through `EngineReads.read`, which never throws; it answers the read's no-link value on an engine stop, a refused send or a matching rejection. The converted sections got `try/finally` through `LatestRead` (#839).
