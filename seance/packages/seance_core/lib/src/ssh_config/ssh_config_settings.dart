@@ -1,11 +1,11 @@
 import 'dart:convert' show utf8;
 import 'dart:io' show InternetAddress;
 
-import 'package:seance_core/seance_core.dart'
-    show ImportedHost, SshConfigImporter;
+import 'proxy_jump_syntax.dart' show sshAcceptsProxyJump;
+import 'ssh_config_import.dart';
 
-import '../engine/protocol.dart' show kSshDefaultPort;
-import 'jump_routes.dart' show sshAcceptsProxyJump;
+/// The port ssh dials when the config sets none.
+const int _kSshDefaultPort = 22;
 
 /// The TCP port range; a stored `Port` outside it names no reachable
 /// endpoint.
@@ -891,7 +891,7 @@ final class _Reading {
         alias: name,
         // ssh lowercases the host it dials unless it is an address.
         hostName: _isAddress(host) ? host : _asciiLower(host),
-        port: port ?? kSshDefaultPort,
+        port: port ?? _kSshDefaultPort,
         user: user,
         identityFile: key,
         proxyJump: route == null || route.command ? null : route.value,

@@ -1,12 +1,20 @@
+import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:planchette_core/planchette_core.dart';
 
 import 'editor_commands.dart';
+import 'localized_editor_strings.dart';
 import 'text_tool_history.dart';
 
 /// User-facing editor copy. Hosts can adapt their existing localization system
 /// without taking a dependency on another application's generated resources.
 class EditorStrings {
   const EditorStrings();
+
+  /// The strings for [context]'s locale: [LocalizedEditorStrings] when the
+  /// package's catalog delegate is installed, otherwise these English
+  /// defaults.
+  static EditorStrings of(BuildContext context) =>
+      LocalizedEditorStrings.maybeOf(context) ?? const EditorStrings();
 
   String get findHint => 'Find in file';
   String get matchCase => 'Match case';
