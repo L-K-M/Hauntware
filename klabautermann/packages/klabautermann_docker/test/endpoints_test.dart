@@ -19,6 +19,18 @@ DockerClient clientFor(FakeDaemon daemon, ApiVersion version) => DockerClient(
   apiVersion: version,
 );
 
+/// The request [spec] names, exactly as the engine's planners see it.
+void expectSpec(
+  DockerRequestSpec spec,
+  String method,
+  String path,
+  Map<String, String> query,
+) {
+  expect(spec.method, method);
+  expect(spec.path, path);
+  expect(spec.query, query);
+}
+
 void main() {
   group('container endpoints', () {
     test('listContainers versions the path and parses the list', () async {
@@ -69,6 +81,15 @@ void main() {
       await started;
       expect(daemon.text, startsWith('POST /v1.44/containers/abc123/start'));
 
+      final stopped = client.stopContainer(
+        'abc123',
+        t: const Duration(seconds: 7),
+      );
+      await daemon.gotBytes(daemon.received.length + 1);
+      daemon.feed(wireResponse('204 No Content'));
+      await stopped;
+      expect(daemon.text, contains('POST /v1.44/containers/abc123/stop?t=7'));
+
       final removed = client.removeContainer(
         'abc123',
         volumes: true,
@@ -83,6 +104,85 @@ void main() {
       );
     });
 
+    test('the request specs name every mutation option', () {
+      expectSpec(
+        startContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/start',
+        {},
+      );
+      expectSpec(
+        stopContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/stop',
+        {},
+      );
+      expectSpec(
+        stopContainerRequest('abc123', t: const Duration(seconds: 9)),
+        'POST',
+        '/containers/abc123/stop',
+        {'t': '9'},
+      );
+      expectSpec(
+        restartContainerRequest('abc123', t: const Duration(seconds: 3)),
+        'POST',
+        '/containers/abc123/restart',
+        {'t': '3'},
+      );
+      expectSpec(
+        pauseContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/pause',
+        {},
+      );
+      expectSpec(
+        unpauseContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/unpause',
+        {},
+      );
+      expectSpec(
+        killContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/kill',
+        {},
+      );
+      expectSpec(
+        killContainerRequest('abc123', signal: 'TERM'),
+        'POST',
+        '/containers/abc123/kill',
+        {'signal': 'TERM'},
+      );
+      // The plans omit link; the client sends it, defaulting to 0.
+      expectSpec(
+        removeContainerRequest('abc123'),
+        'DELETE',
+        '/containers/abc123',
+        {'v': '0', 'force': '0'},
+      );
+      expectSpec(
+        removeContainerRequest(
+          'abc123',
+          volumes: true,
+          force: true,
+          link: true,
+        ),
+        'DELETE',
+        '/containers/abc123',
+        {'v': '1', 'force': '1', 'link': '1'},
+      );
+      expectSpec(removeImageRequest('app:1'), 'DELETE', '/images/app%3A1', {
+        'force': '0',
+        'noprune': '0',
+      });
+      expectSpec(
+        removeImageRequest('app:1', force: true, noprune: true),
+        'DELETE',
+        '/images/app%3A1',
+        {'force': '1', 'noprune': '1'},
+      );
+    });
+
     test('killContainer sends an enum signal', () async {
       final daemon = FakeDaemon();
       final client = clientFor(daemon, const ApiVersion(1, 44));
@@ -93,6 +193,19 @@ void main() {
       expect(
         daemon.text,
         contains('POST /v1.44/containers/abc123/kill?signal=SIGTERM'),
+      );
+    });
+
+    test('removeImage sends force and noprune', () async {
+      final daemon = FakeDaemon();
+      final client = clientFor(daemon, const ApiVersion(1, 44));
+      final sent = client.removeImage('app:1', force: true, noprune: true);
+      await daemon.gotBytes(1);
+      daemon.feed(wireResponse('204 No Content'));
+      await sent;
+      expect(
+        daemon.text,
+        contains('DELETE /v1.44/images/app%3A1?force=1&noprune=1'),
       );
     });
   });

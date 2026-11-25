@@ -80,7 +80,19 @@ export 'src/docker_summary.dart'
         dockerSummary,
         imageContainerCount;
 export 'src/duplex.dart' show ByteDuplex, DuplexOpener, HijackedDuplex;
-export 'src/endpoints.dart' show DockerEndpoints, DockerSignal;
+export 'src/endpoints.dart'
+    show
+        DockerEndpoints,
+        DockerRequestSpec,
+        DockerSignal,
+        killContainerRequest,
+        pauseContainerRequest,
+        removeContainerRequest,
+        removeImageRequest,
+        restartContainerRequest,
+        startContainerRequest,
+        stopContainerRequest,
+        unpauseContainerRequest;
 export 'src/errors.dart'
     show
         DockerApiException,

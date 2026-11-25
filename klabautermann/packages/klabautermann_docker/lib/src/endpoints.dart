@@ -24,6 +24,79 @@ import 'models/system_df.dart';
 import 'models/volume.dart';
 import 'stdcopy.dart';
 
+/// One Engine API mutation as data (ARC-09): [method], the unversioned
+/// [path] and the [query]. The typed client methods build one and send
+/// it, and the engine's Docker planners build their `ApiStep`s from the
+/// same functions, so a previewed request and the request that runs are
+/// one definition. [DockerClient.request] adds the version prefix.
+final class DockerRequestSpec {
+  DockerRequestSpec(this.method, this.path, Map<String, String> query)
+    : query = Map.unmodifiable(query);
+
+  final String method;
+  final String path;
+  final Map<String, String> query;
+}
+
+/// `POST /containers/{id}/start` (03 §7.12 CTR-02).
+DockerRequestSpec startContainerRequest(String id) =>
+    DockerRequestSpec('POST', '/containers/${_seg(id)}/start', const {});
+
+/// `POST /containers/{id}/stop?t=<seconds>` (03 §7.12 CTR-02); no `t`
+/// when [t] is null.
+DockerRequestSpec stopContainerRequest(String id, {Duration? t}) =>
+    DockerRequestSpec('POST', '/containers/${_seg(id)}/stop', {
+      if (t != null) 't': '${t.inSeconds}',
+    });
+
+/// `POST /containers/{id}/restart?t=<seconds>` (03 §7.12 CTR-02); no
+/// `t` when [t] is null.
+DockerRequestSpec restartContainerRequest(String id, {Duration? t}) =>
+    DockerRequestSpec('POST', '/containers/${_seg(id)}/restart', {
+      if (t != null) 't': '${t.inSeconds}',
+    });
+
+/// `POST /containers/{id}/pause` (03 §7.12 CTR-05).
+DockerRequestSpec pauseContainerRequest(String id) =>
+    DockerRequestSpec('POST', '/containers/${_seg(id)}/pause', const {});
+
+/// `POST /containers/{id}/unpause` (03 §7.12 CTR-05).
+DockerRequestSpec unpauseContainerRequest(String id) =>
+    DockerRequestSpec('POST', '/containers/${_seg(id)}/unpause', const {});
+
+/// `POST /containers/{id}/kill?signal=` (03 §7.12 CTR-05, §8.8). The
+/// signal is a name, never an enum value the caller forgot to map: the
+/// engine's plans send the bare name (`TERM`), while the client sends
+/// its [DockerSignal]'s `SIG`-prefixed name.
+DockerRequestSpec killContainerRequest(String id, {String? signal}) =>
+    DockerRequestSpec('POST', '/containers/${_seg(id)}/kill', {
+      'signal': ?signal,
+    });
+
+/// `DELETE /containers/{id}?v=&force=&link=` (03 §7.12 CTR-06). [link]
+/// is omitted when null, which is what the engine's plans send; the
+/// client always sends it, as `0` unless asked for.
+DockerRequestSpec removeContainerRequest(
+  String id, {
+  bool volumes = false,
+  bool force = false,
+  bool? link,
+}) => DockerRequestSpec('DELETE', '/containers/${_seg(id)}', {
+  'v': volumes ? '1' : '0',
+  'force': force ? '1' : '0',
+  if (link != null) 'link': link ? '1' : '0',
+});
+
+/// `DELETE /images/{name}?force=&noprune=` (03 §7.14 IMG-02).
+DockerRequestSpec removeImageRequest(
+  String name, {
+  bool force = false,
+  bool noprune = false,
+}) => DockerRequestSpec('DELETE', '/images/${_seg(name)}', {
+  'force': force ? '1' : '0',
+  'noprune': noprune ? '1' : '0',
+});
+
 /// Typed endpoint helpers over the versioned [DockerClient] (03 §5.6,
 /// §5.8, §7.12 to §7.16). Every parser is tolerant: malformed daemon
 /// input becomes a warning, not a throw. HTTP failures still surface as
@@ -174,9 +247,8 @@ extension DockerEndpoints on DockerClient {
     String id, {
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'POST',
-    '/containers/${_seg(id)}/start',
+  }) => _send(
+    startContainerRequest(id),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -187,10 +259,8 @@ extension DockerEndpoints on DockerClient {
     Duration? t,
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'POST',
-    '/containers/${_seg(id)}/stop',
-    query: {if (t != null) 't': '${t.inSeconds}'},
+  }) => _send(
+    stopContainerRequest(id, t: t),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -201,10 +271,8 @@ extension DockerEndpoints on DockerClient {
     Duration? t,
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'POST',
-    '/containers/${_seg(id)}/restart',
-    query: {if (t != null) 't': '${t.inSeconds}'},
+  }) => _send(
+    restartContainerRequest(id, t: t),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -214,9 +282,8 @@ extension DockerEndpoints on DockerClient {
     String id, {
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'POST',
-    '/containers/${_seg(id)}/pause',
+  }) => _send(
+    pauseContainerRequest(id),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -226,9 +293,8 @@ extension DockerEndpoints on DockerClient {
     String id, {
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'POST',
-    '/containers/${_seg(id)}/unpause',
+  }) => _send(
+    unpauseContainerRequest(id),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -240,10 +306,8 @@ extension DockerEndpoints on DockerClient {
     DockerSignal signal = DockerSignal.sigkill,
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'POST',
-    '/containers/${_seg(id)}/kill',
-    query: {'signal': signal.name.toUpperCase()},
+  }) => _send(
+    killContainerRequest(id, signal: signal.name.toUpperCase()),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -258,14 +322,8 @@ extension DockerEndpoints on DockerClient {
     bool link = false,
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'DELETE',
-    '/containers/${_seg(id)}',
-    query: {
-      'v': volumes ? '1' : '0',
-      'force': force ? '1' : '0',
-      'link': link ? '1' : '0',
-    },
+  }) => _send(
+    removeContainerRequest(id, volumes: volumes, force: force, link: link),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -344,10 +402,11 @@ extension DockerEndpoints on DockerClient {
     ExecConsoleSize size, {
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'POST',
-    '/exec/${_seg(execId)}/resize',
-    query: {'h': '${size.rows}', 'w': '${size.columns}'},
+  }) => _send(
+    DockerRequestSpec('POST', '/exec/${_seg(execId)}/resize', {
+      'h': '${size.rows}',
+      'w': '${size.columns}',
+    }),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -444,10 +503,8 @@ extension DockerEndpoints on DockerClient {
     bool noprune = false,
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) => _action(
-    'DELETE',
-    '/images/${_seg(name)}',
-    query: {'force': force ? '1' : '0', 'noprune': noprune ? '1' : '0'},
+  }) => _send(
+    removeImageRequest(name, force: force, noprune: noprune),
     timeout: timeout,
     cancelToken: cancelToken,
   );
@@ -635,21 +692,18 @@ extension DockerEndpoints on DockerClient {
     }
   }
 
-  Future<void> _action(
-    String method,
-    String path, {
-    Map<String, String>? query,
+  /// Sends [spec] as the versioned request it names.
+  Future<void> _send(
+    DockerRequestSpec spec, {
     Duration? timeout,
     DockerCancelToken? cancelToken,
-  }) async {
-    await request(
-      method,
-      path,
-      query: query,
-      timeout: timeout,
-      cancelToken: cancelToken,
-    );
-  }
+  }) => request(
+    spec.method,
+    spec.path,
+    query: spec.query,
+    timeout: timeout,
+    cancelToken: cancelToken,
+  );
 }
 
 /// The signals accepted by `POST /containers/{id}/kill` (03 §7.12 CTR-05,

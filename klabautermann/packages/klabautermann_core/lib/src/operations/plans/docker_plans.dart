@@ -107,12 +107,13 @@ Future<PlanAttempt> _planContainer(
       kind: _containerKinds[intent.verb]!,
       targetName: name,
       steps: [
-        ApiStep(
-          method: 'POST',
-          path: _path(c, '/containers/${container.id}/${intent.verb.name}'),
-          query: {
-            if (intent.signal case final signal?) 'signal': signal.wireName,
-          },
+        _apiStep(
+          c,
+          _containerRequest(
+            intent.verb,
+            container.id,
+            signal: intent.signal?.wireName,
+          ),
         ),
       ],
       requiredLevel: _level(c),
@@ -179,16 +180,7 @@ Future<PlanAttempt> _planBulk(
       targetName: targets.map(_nameOf).join(', '),
       steps: [
         for (final container in targets)
-          verb == ContainerBulkVerb.remove
-              ? ApiStep(
-                  method: 'DELETE',
-                  path: _path(c, '/containers/${container.id}'),
-                  query: const {'v': '0', 'force': '0'},
-                )
-              : ApiStep(
-                  method: 'POST',
-                  path: _path(c, '/containers/${container.id}/${verb.name}'),
-                ),
+          _apiStep(c, _bulkRequest(verb, container.id)),
       ],
       requiredLevel: _level(c),
       runner: _runner(c),
@@ -277,13 +269,13 @@ Future<PlanAttempt> _planRemoveContainer(
           : OperationKind.removeContainer,
       targetName: name,
       steps: [
-        ApiStep(
-          method: 'DELETE',
-          path: _path(c, '/containers/${container.id}'),
-          query: {
-            'v': intent.volumes ? '1' : '0',
-            'force': intent.force ? '1' : '0',
-          },
+        _apiStep(
+          c,
+          removeContainerRequest(
+            container.id,
+            volumes: intent.volumes,
+            force: intent.force,
+          ),
         ),
       ],
       requiredLevel: _level(c),
@@ -327,13 +319,7 @@ Future<PlanAttempt> _planRemoveImage(
           ? OperationKind.forceRemoveImageInUse
           : OperationKind.removeUnusedImage,
       targetName: intent.image,
-      steps: [
-        ApiStep(
-          method: 'DELETE',
-          path: _path(c, '/images/${Uri.encodeComponent(reference)}'),
-          query: {'force': intent.force ? '1' : '0', 'noprune': '0'},
-        ),
-      ],
+      steps: [_apiStep(c, removeImageRequest(reference, force: intent.force))],
       requiredLevel: _level(c),
       runner: _runner(c),
       hostWrites: const [HostWriteRow.engineState],
@@ -907,10 +893,7 @@ Future<PlanAttempt> _planStack(StackAction intent, DockerPlanContext c) async {
   final steps = [
     for (final service in services)
       for (final container in byService[service]!..sort(_byName))
-        ApiStep(
-          method: 'POST',
-          path: _path(c, '/containers/${container.id}/${intent.verb.name}'),
-        ),
+        _apiStep(c, _stackRequest(intent.verb, container.id)),
   ];
   final targets = [for (final s in services) ...byService[s]!];
   ProtectedReason? protected = stackProtection(intent.project, c.protection);
@@ -1144,6 +1127,44 @@ PlanImpact _containerImpact(ProtectedReason? protected) =>
 /// [path] under the endpoint's negotiated version, as the runner sends it.
 String _path(DockerPlanContext c, String path) =>
     '/${c.client.apiVersion.pathSegment}$path';
+
+/// One [spec] as the plan's exact API step (ARC-09): the method, path
+/// and query come from the same klabautermann_docker function the client
+/// call sends through.
+ApiStep _apiStep(DockerPlanContext c, DockerRequestSpec spec) =>
+    ApiStep(method: spec.method, path: _path(c, spec.path), query: spec.query);
+
+/// The request a single-container [verb] sends on [id]. [signal] only
+/// applies to [ContainerVerb.kill], as its bare wire name.
+DockerRequestSpec _containerRequest(
+  ContainerVerb verb,
+  String id, {
+  String? signal,
+}) => switch (verb) {
+  ContainerVerb.start => startContainerRequest(id),
+  ContainerVerb.stop => stopContainerRequest(id),
+  ContainerVerb.restart => restartContainerRequest(id),
+  ContainerVerb.pause => pauseContainerRequest(id),
+  ContainerVerb.unpause => unpauseContainerRequest(id),
+  ContainerVerb.kill => killContainerRequest(id, signal: signal),
+};
+
+/// The request a bulk [verb] sends on each [id]. Removal never takes
+/// volumes or forces, as CTR-07 requires.
+DockerRequestSpec _bulkRequest(ContainerBulkVerb verb, String id) =>
+    switch (verb) {
+      ContainerBulkVerb.remove => removeContainerRequest(id),
+      ContainerBulkVerb.start => startContainerRequest(id),
+      ContainerBulkVerb.stop => stopContainerRequest(id),
+      ContainerBulkVerb.restart => restartContainerRequest(id),
+    };
+
+/// The request a stack [verb] sends on one of its containers.
+DockerRequestSpec _stackRequest(StackVerb verb, String id) => switch (verb) {
+  StackVerb.start => startContainerRequest(id),
+  StackVerb.stop => stopContainerRequest(id),
+  StackVerb.restart => restartContainerRequest(id),
+};
 
 /// Over the sudo relay (rank 3, E16) every API step reaches the engine as
 /// root through an elevated relay, which exists only in admin mode.
