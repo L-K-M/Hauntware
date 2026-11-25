@@ -552,18 +552,6 @@ abstract final class EditCommands {
     return ['sh', '-c', _kBackupScript, 'klabautermann-backup', target, dir];
   }
 
-  /// Replaces [user]'s crontab, or the login user's, with stdin (JOB-04
-  /// to JOB-07). `crontab` validates the whole table before it installs
-  /// it; [HostCommands.commandLine] runs it under `LC_ALL=C`.
-  static List<String> crontabWrite({String? user}) {
-    _checkUser(user);
-    return [
-      'crontab',
-      if (user != null) ...['-u', user],
-      '-',
-    ];
-  }
-
   /// Replaces [user]'s crontab, or the login user's, with stdin while its
   /// current table still hashes to [sha256]; otherwise exits
   /// [EditExit.hashMismatch] and installs nothing (JOB-04 to JOB-07).

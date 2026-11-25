@@ -716,6 +716,74 @@ void main() {
       expect(removal.data['removed'], isTrue);
     });
 
+    test('excluding a server retracts its preferences as a removal another '
+        'device applies', () async {
+      const prefId = 'klabautermann:pref:srv-a';
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      final sync = await enrolled();
+      await sync.setServerPrefs(
+        const SetServerPrefs(
+          requestId: 'r1',
+          serverId: 'srv-a',
+          prefs: ServerPrefs(readOnly: true),
+        ),
+      );
+      expect((await sync.serverPrefs())['srv-a']?.readOnly, isTrue);
+
+      final shown = (await sync.serverDraft('srv-a'))!;
+      final answer = await sync.saveServer(
+        SaveServer(
+          requestId: 'r2',
+          draft: ServerDraft(
+            id: shown.id,
+            label: shown.label,
+            host: shown.host,
+            port: shown.port,
+            username: shown.username,
+            auth: shown.auth,
+            excludeFromSync: true,
+          ),
+        ),
+      );
+      expect(answer, isA<CatalogWritten>());
+      await sync.runRound();
+
+      final removal = await openRecord(server.record(prefId)!);
+      expect(removal.data['removed'], isTrue);
+      expect(removal.updatedAt, greaterThan(1));
+
+      // A second device on the account pulls the sealed removal and drops
+      // the preferences with it.
+      final otherDir = Directory('${support.path}/other')..createSync();
+      addTearDown(() => otherDir.deleteSync(recursive: true));
+      const otherDeviceId = 'other-device';
+      late final EngineSync other;
+      final otherKeystore = MemoryKeystore();
+      final otherVault = EngineVault(
+        otherDir,
+        access: SupportDirectoryAccess.exclusive,
+        keystore: otherKeystore,
+        enrolled: () => other.account != null,
+      );
+      other = await EngineSync.open(
+        supportDirectory: otherDir,
+        access: SupportDirectoryAccess.exclusive,
+        deviceId: otherDeviceId,
+        hostKeys: InMemoryConflictAwareHostKeyStore(),
+        keystore: otherKeystore,
+        vault: otherVault,
+        transport: server.transport,
+      );
+      final status = await other.enroll(_enroll);
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+      final otherStore = await KlabautermannRecordStore.open(
+        otherDir,
+        access: SupportDirectoryAccess.exclusive,
+      );
+      expect(otherStore.isLive(prefId), isFalse);
+      expect(otherStore.prefs(), isEmpty);
+    });
+
     test('an alert rule seals as its rule record', () async {
       final sync = await enrolled();
 
