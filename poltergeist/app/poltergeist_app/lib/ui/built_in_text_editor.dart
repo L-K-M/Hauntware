@@ -16,7 +16,7 @@ import '../services/registered_command.dart';
 import '../services/settings_models.dart';
 import 'menus/app_menu_host.dart';
 import 'menus/app_menu_commands.dart';
-import 'editor_strings.dart';
+import 'poltergeist_editor_strings.dart';
 
 /// The built-in text editor (06 §2): one document per desktop window, or
 /// a full-window route on phones and tablets. The caller wires [onSaved] (the per-copy reconcile) and [onUpload] (the
@@ -403,7 +403,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
           ),
           body: pe.PlanchetteEditor(
             controller: _editor,
-            strings: PoltergeistEditorStrings(l10n),
+            strings: PoltergeistEditorStrings.of(context),
             editingLocked: widget.quitPending,
             // A family that is not installed lands on the injected stack.
             textStyle: TextStyle(

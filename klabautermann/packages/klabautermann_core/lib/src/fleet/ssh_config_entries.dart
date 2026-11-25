@@ -1,7 +1,12 @@
-import 'package:seance_core/seance_core.dart' show ImportedHost;
+import 'package:seance_core/seance_core.dart'
+    show
+        ImportedHost,
+        ResolvedSshSettings,
+        SshConfigResolution,
+        SshConfigSettings,
+        UnresolvedSshSettings;
 
 import 'jump_routes.dart';
-import 'ssh_config_settings.dart';
 
 /// Reads an OpenSSH client config's [text] into the hosts FL-02 imports,
 /// each with the settings ssh would use for it ([SshConfigSettings]), and

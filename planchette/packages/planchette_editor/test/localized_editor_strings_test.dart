@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
-import 'package:poltergeist_app/l10n/app_localizations.dart';
-import 'package:poltergeist_app/l10n/app_localizations_en.dart';
-import 'package:poltergeist_app/ui/editor_strings.dart';
+import 'package:planchette_editor/l10n/editor_localizations_en.dart';
 
 /// Marks the strings the shared find and Go to Line bars take from the
-/// adapter, so the test sees whether the surface shows Poltergeist's copy
+/// catalog, so the test sees whether the surface shows the catalog's copy
 /// rather than the package's English defaults.
-class _Marked extends AppLocalizationsEn {
+class _Marked extends EditorLocalizationsEn {
   @override
   String get editorWholeWordsTooltip => '[whole words]';
   @override
@@ -58,7 +56,7 @@ class _Marked extends AppLocalizationsEn {
   @override
   String get editorStatusSaving => '[saving]';
   @override
-  String get editorStatusUnsaved => '[unsaved]';
+  String get editUnsaved => '[unsaved]';
   @override
   String get editorStatusLargeFile => '[large]';
   @override
@@ -74,14 +72,14 @@ class _Marked extends AppLocalizationsEn {
 /// Answers every lookup with the name of the ARB key it read, so a
 /// string the adapter leaves to the package's English shows up as text
 /// with no key name in it.
-class _KeyNames implements AppLocalizations {
+class _KeyNames implements EditorLocalizations {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       invocation.memberName.toString();
 }
 
 void main() {
-  testWidgets('the shared find and Go to Line bars use the ARB copy', (
+  testWidgets('the shared find and Go to Line bars use the catalog copy', (
     tester,
   ) async {
     final controller = EditorController(
@@ -94,7 +92,7 @@ void main() {
         home: Scaffold(
           body: PlanchetteEditor(
             controller: controller,
-            strings: PoltergeistEditorStrings(_Marked()),
+            strings: LocalizedEditorStrings(_Marked()),
             showStatus: false,
           ),
         ),
@@ -142,7 +140,7 @@ void main() {
     expect(find.text('[not 1..3]'), findsOneWidget);
   });
 
-  testWidgets('the browser, tool bar and notice use the ARB copy', (
+  testWidgets('the browser, tool bar and notice use the catalog copy', (
     tester,
   ) async {
     final controller = EditorController(
@@ -156,7 +154,7 @@ void main() {
         home: Scaffold(
           body: PlanchetteEditor(
             controller: controller,
-            strings: PoltergeistEditorStrings(_Marked()),
+            strings: LocalizedEditorStrings(_Marked()),
             showStatus: false,
           ),
         ),
@@ -181,7 +179,7 @@ void main() {
     expect(find.text('[sort] :: [moved 2/2 [everywhere]]'), findsOneWidget);
   });
 
-  testWidgets('the find bar extras come from the ARB copy', (tester) async {
+  testWidgets('the find bar extras come from the catalog copy', (tester) async {
     final controller = EditorController(
       displayPath: '/srv/notes.txt',
       initialText: 'b\na\n',
@@ -192,7 +190,7 @@ void main() {
         home: Scaffold(
           body: PlanchetteEditor(
             controller: controller,
-            strings: PoltergeistEditorStrings(_Marked()),
+            strings: LocalizedEditorStrings(_Marked()),
             showStatus: false,
           ),
         ),
@@ -204,7 +202,7 @@ void main() {
     expect(find.byTooltip('[line actions]'), findsOneWidget);
   });
 
-  testWidgets('the shared status row uses the ARB copy', (tester) async {
+  testWidgets('the shared status row uses the catalog copy', (tester) async {
     final controller = EditorController(
       displayPath: '/srv/notes.txt',
       initialText: 'one\ntwo\n',
@@ -215,7 +213,7 @@ void main() {
         home: Scaffold(
           body: PlanchetteEditor(
             controller: controller,
-            strings: PoltergeistEditorStrings(_Marked()),
+            strings: LocalizedEditorStrings(_Marked()),
           ),
         ),
       ),
@@ -246,8 +244,8 @@ void main() {
     expect(find.textContaining('[unsaved]'), findsOneWidget);
   });
 
-  test('every status row string routes through the ARB copy', () {
-    final strings = PoltergeistEditorStrings(_Marked());
+  test('every status row string routes through the catalog copy', () {
+    final strings = LocalizedEditorStrings(_Marked());
     expect(strings.documentPosition(1, 2, 3, 8), '[at 1:2 of 3/8]');
     expect(strings.selectionSummary(5, 2), '[5 picked on 2]');
     expect(strings.selectionSummary(2, 1), '[2 picked]');
@@ -261,8 +259,8 @@ void main() {
     expect(strings.languageName(syntaxLanguageFor('/srv/app.py')), 'Python');
   });
 
-  test('every editing command label comes from the ARB catalog', () {
-    final strings = PoltergeistEditorStrings(_KeyNames());
+  test('every editing command label comes from the package catalog', () {
+    final strings = LocalizedEditorStrings(_KeyNames());
     expect(strings.editorCommandsGroup, 'Symbol("editorCommandsGroup")');
     // Exact keys, so a swapped case such as Move Up/Down fails too.
     const keys = {
@@ -301,8 +299,8 @@ void main() {
     }
   });
 
-  test('every problem string comes from the ARB catalog', () {
-    final strings = PoltergeistEditorStrings(_KeyNames());
+  test('every problem string comes from the package catalog', () {
+    final strings = LocalizedEditorStrings(_KeyNames());
     expect(strings.problemCount(2), 'Symbol("editorStatusProblemCount")');
     expect(strings.nextProblemHint, 'Symbol("editorStatusNextProblemHint")');
     // Exact keys, so two kinds sharing one message fails too.
@@ -337,7 +335,7 @@ void main() {
   });
 
   test('problem messages fill in what they name', () {
-    final strings = PoltergeistEditorStrings(AppLocalizationsEn());
+    final strings = LocalizedEditorStrings(EditorLocalizationsEn());
     expect(
       strings.problemMessage(
         const TextProblem(
@@ -369,62 +367,121 @@ void main() {
     expect(strings.problemCount(3), '3 problems');
   });
 
-  test('the ARB catalog covers every shared text tool, option and choice', () {
-    final strings = PoltergeistEditorStrings(AppLocalizationsEn());
+  test(
+    'the package catalog covers every shared text tool, option and choice',
+    () {
+      final strings = LocalizedEditorStrings(EditorLocalizationsEn());
 
-    // A fallback leak means the shared package's own English would render.
-    // The case tools whose display name legitimately is the id itself are
-    // exempt from the not-the-id heuristic. Find-bar tools render their
-    // options as find-row controls, never as labeled options-bar rows, so
-    // their option ids are not label keys either.
-    const selfNamed = {'lowercase', 'camelCase', 'snakeCase', 'kebabCase'};
-    final choiceIds = <String>{};
-    for (final tool in textToolCatalog) {
-      if (!selfNamed.contains(tool.id)) {
-        expect(
-          strings.textToolName(tool.id),
-          isNot(tool.id),
-          reason: '${tool.id} has no ARB name',
-        );
-      }
-      expect(
-        strings.textToolDescription(tool.id),
-        isNotEmpty,
-        reason: '${tool.id} has no ARB description',
-      );
-      expect(
-        strings.textToolKeywords(tool.id),
-        isNotEmpty,
-        reason: '${tool.id} has no ARB keywords',
-      );
-      for (final option in tool.options) {
-        if (!tool.usesFindBar) {
+      // A fallback leak means the shared package's own English would render.
+      // The case tools whose display name legitimately is the id itself are
+      // exempt from the not-the-id heuristic. Find-bar tools render their
+      // options as find-row controls, never as labeled options-bar rows, so
+      // their option ids are not label keys either.
+      const selfNamed = {'lowercase', 'camelCase', 'snakeCase', 'kebabCase'};
+      final choiceIds = <String>{};
+      for (final tool in textToolCatalog) {
+        if (!selfNamed.contains(tool.id)) {
           expect(
-            strings.textToolOptionName(tool.id, option.id),
-            isNot(option.id),
-            reason: '${tool.id}/${option.id} has no ARB label',
+            strings.textToolName(tool.id),
+            isNot(tool.id),
+            reason: '${tool.id} has no ARB name',
           );
         }
-        if (option is ChoiceOption) choiceIds.addAll(option.choices);
+        expect(
+          strings.textToolDescription(tool.id),
+          isNotEmpty,
+          reason: '${tool.id} has no ARB description',
+        );
+        expect(
+          strings.textToolKeywords(tool.id),
+          isNotEmpty,
+          reason: '${tool.id} has no ARB keywords',
+        );
+        for (final option in tool.options) {
+          if (!tool.usesFindBar) {
+            expect(
+              strings.textToolOptionName(tool.id, option.id),
+              isNot(option.id),
+              reason: '${tool.id}/${option.id} has no ARB label',
+            );
+          }
+          if (option is ChoiceOption) choiceIds.addAll(option.choices);
+        }
       }
+      for (final choiceId in choiceIds) {
+        expect(
+          strings.textToolChoiceName(choiceId),
+          isNot(choiceId),
+          reason: '$choiceId has no ARB label',
+        );
+      }
+      for (final group in TextToolGroup.values) {
+        expect(
+          strings.textToolGroupName(group),
+          isNotEmpty,
+          reason: '$group has no ARB label',
+        );
+      }
+    },
+  );
+
+  test('the English catalog says what the shared editor says', () {
+    // Moving the copy to ARB (F7) must not change Planchette's English.
+    final strings = LocalizedEditorStrings(EditorLocalizationsEn());
+    const defaults = EditorStrings();
+    final differences = <String>[];
+    void same(String what, String actual, String expected) {
+      if (actual == expected) return;
+      differences.add('$what: "$actual" vs "$expected"');
     }
-    for (final choiceId in choiceIds) {
-      expect(
-        strings.textToolChoiceName(choiceId),
-        isNot(choiceId),
-        reason: '$choiceId has no ARB label',
+
+    same('findHint', strings.findHint, defaults.findHint);
+    same('noMatches', strings.noMatches, defaults.noMatches);
+    same('replaceAll', strings.replaceAll, defaults.replaceAll);
+    same('goToLine', strings.goToLine, defaults.goToLine);
+    same('goToLineHint', strings.goToLineHint(9), defaults.goToLineHint(9));
+    same('matchCount', strings.matchCount(2, 7), defaults.matchCount(2, 7));
+    same(
+      'documentPosition',
+      strings.documentPosition(3, 4, 10, 200),
+      defaults.documentPosition(3, 4, 10, 200),
+    );
+    same(
+      'selectionSummary',
+      strings.selectionSummary(5, 2),
+      defaults.selectionSummary(5, 2),
+    );
+    same('browseTextTools', strings.browseTextTools, defaults.browseTextTools);
+    same('findInSelection', strings.findInSelection, defaults.findInSelection);
+    for (final tool in textToolCatalog) {
+      same(
+        '${tool.id} name',
+        strings.textToolName(tool.id),
+        defaults.textToolName(tool.id),
+      );
+      same(
+        '${tool.id} menu label',
+        strings.textToolMenuLabel(tool.id),
+        defaults.textToolMenuLabel(tool.id),
+      );
+      same(
+        '${tool.id} description',
+        strings.textToolDescription(tool.id),
+        defaults.textToolDescription(tool.id),
       );
     }
     for (final group in TextToolGroup.values) {
-      expect(
+      same(
+        '$group',
         strings.textToolGroupName(group),
-        isNotEmpty,
-        reason: '$group has no ARB label',
+        defaults.textToolGroupName(group),
       );
     }
+    expect(differences, isEmpty, reason: differences.join('\n'));
   });
+
   test('text tool notices and previews say what the shared editor says', () {
-    final strings = PoltergeistEditorStrings(AppLocalizationsEn());
+    final strings = LocalizedEditorStrings(EditorLocalizationsEn());
     const defaults = EditorStrings();
     final host = TextTool(
       id: 'hostTool',
@@ -472,4 +529,22 @@ void main() {
       );
     }
   });
+
+  test('the catalog keeps the shared dirty marker wording', () {
+    final strings = LocalizedEditorStrings(EditorLocalizationsEn());
+    expect(strings.unsaved, 'Not saved');
+  });
+
+  test('a host can override one getter on the catalog-backed strings', () {
+    final strings = _UnsavedOverride(EditorLocalizationsEn());
+    expect(strings.unsaved, 'Unsaved edits');
+    expect(strings.findHint, 'Find in file');
+  });
+}
+
+class _UnsavedOverride extends LocalizedEditorStrings {
+  _UnsavedOverride(super.l10n);
+
+  @override
+  String get unsaved => 'Unsaved edits';
 }
