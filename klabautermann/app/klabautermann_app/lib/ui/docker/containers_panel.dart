@@ -29,10 +29,7 @@ import 'container_logs.dart';
 import 'container_terminal.dart' show openContainerShellPage;
 import 'containers_view.dart';
 import 'docker_cells.dart' show dockerAgeText;
-
-/// The share of its height the header takes before it scrolls, so large
-/// text never pushes the list out of sight.
-const double _headerShare = 0.4;
+import 'docker_list_state.dart';
 
 /// How old a container's list stats grow before they read as stale: four
 /// rounds of the engine's 5 s stats cadence (CST-01 [E]), since a relay
@@ -87,19 +84,19 @@ class ContainersPanel extends StatefulWidget {
 }
 
 class _ContainersPanelState extends State<ContainersPanel> {
-  /// What the clock's listeners hear instead while nothing ages.
-  static final Listenable _silent = Listenable.merge(const []);
-
-  /// The order, search, toggle and folds, which outlive sub-tab switches:
-  /// the tab keeps a sub-tab built once opened.
-  TableSort _sort = TableSort(
-    ContainerColumn.name.name,
-    TableSortDirection.ascending,
+  /// The order, search and watch, which outlive sub-tab switches: the
+  /// tab keeps a sub-tab built once opened.
+  late final DockerListState _state = DockerListState(
+    initialSort: TableSort(
+      ContainerColumn.name.name,
+      TableSortDirection.ascending,
+    ),
+    watch: (serverId) => _docker.watchContainers(serverId, statsFor: _shown),
+    unwatch: _docker.unwatchContainers,
+    onRelease: _cancelSettle,
+    onServerChanged: _forgetServer,
   );
-  final _search = TextEditingController();
 
-  /// The filter field, which `/` in the table focuses (PLT-06).
-  final _searchFocus = FocusNode();
   bool _runningOnly = false;
 
   /// CST-05's Top view: the running containers in one list, the busiest
@@ -112,9 +109,6 @@ class _ContainersPanelState extends State<ContainersPanel> {
   /// ignored.
   bool _selecting = false;
   final Set<String> _selected = {};
-
-  /// The server whose container watch this panel holds, if any.
-  String? _held;
 
   /// The running containers on screen, last reported, which a watch that
   /// starts again reads stats for at once.
@@ -150,64 +144,47 @@ class _ContainersPanelState extends State<ContainersPanel> {
     }
   }
 
+  /// Drops what another server's selection left behind.
+  void _forgetServer() {
+    _collapsed.clear();
+    _selecting = false;
+    _selected.clear();
+    _shown = const [];
+  }
+
+  void _cancelSettle() {
+    _settle?.cancel();
+    _settle = null;
+  }
+
   @override
   void initState() {
     super.initState();
-    _sync();
+    _state.sync(visible: widget.visible, serverId: widget.serverId);
   }
 
   @override
   void didUpdateWidget(ContainersPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.serverId != oldWidget.serverId) {
-      // Another server's containers.
-      _release();
-      _search.clear();
-      _collapsed.clear();
-      _selecting = false;
-      _selected.clear();
-      _shown = const [];
-    }
-    _sync();
+    _state.sync(visible: widget.visible, serverId: widget.serverId);
   }
 
   @override
   void dispose() {
-    _release();
-    _search.dispose();
-    _searchFocus.dispose();
+    _state.dispose();
     super.dispose();
-  }
-
-  void _sync() {
-    final wanted = widget.visible ? widget.serverId : null;
-    if (_held == wanted) return;
-    _release();
-    if (wanted == null) return;
-
-    _docker.watchContainers(wanted, statsFor: _shown);
-    _held = wanted;
-  }
-
-  void _release() {
-    _settle?.cancel();
-    _settle = null;
-    final held = _held;
-    if (held == null) return;
-
-    _held = null;
-    _docker.unwatchContainers(held);
   }
 
   /// Takes [ids], the running containers on screen, and sends them once
   /// they hold still for [kStatsForSettle].
   void _report(List<String> ids) {
     _shown = ids;
-    if (_held == null) return;
+    final held = _state.held;
+    if (held == null) return;
 
     _settle?.cancel();
     _settle = Timer(kStatsForSettle, () {
-      final held = _held;
+      final held = _state.held;
       if (held != null) _docker.showStatsFor(held, _shown);
     });
   }
@@ -293,7 +270,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
     final failure = list.failure;
     final clock = widget.visible && list.stats.isNotEmpty
         ? widget.monitoring.clock
-        : _silent;
+        : kSilentListenable;
 
     return LayoutBuilder(
       builder: (context, box) {
@@ -365,26 +342,13 @@ class _ContainersPanelState extends State<ContainersPanel> {
 
         return Padding(
           padding: padding,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * _headerShare,
-                  ),
-                  child: SingleChildScrollView(child: header),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  // Only the stats age with the clock.
-                  child: ListenableBuilder(
-                    listenable: clock,
-                    builder: (context, _) =>
-                        _body(context, containers, list.stats, wide: wide),
-                  ),
-                ),
-              ],
+          child: HeadedPanelBody(
+            header: header,
+            // Only the stats age with the clock.
+            body: ListenableBuilder(
+              listenable: clock,
+              builder: (context, _) =>
+                  _body(context, containers, list.stats, wide: wide),
             ),
           ),
         );
@@ -401,7 +365,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
     final l10n = AppLocalizations.of(context);
     final allColumns = _columns(l10n, stats, widget.monitoring.clock.value);
     final columns = _shownColumns(allColumns, _chosen);
-    final terms = searchTerms(_search.text);
+    final terms = searchTerms(_state.search.text);
     final selecting = _selecting && _bulkAllowed(context);
     final shown = _shownContainers(containers);
     final entries = containerListEntries(
@@ -414,7 +378,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
       order: (rows) => sortTableRows<ContainerListEntry>(
         rows,
         _top ? allColumns : columns,
-        _sort,
+        _state.sort,
       ).cast(),
     );
     final empty = Padding(
@@ -433,13 +397,13 @@ class _ContainersPanelState extends State<ContainersPanel> {
 
     return SortableTable<ContainerListEntry>(
       tableId: DockerWatchList.containers.name,
-      filterFocus: _searchFocus,
+      filterFocus: _state.searchFocus,
       keyActions: _keyActions(l10n),
       columns: [if (selecting) _selectColumn(l10n), ...columns],
       rows: entries,
       rowKey: _rowKey,
-      sort: _sort,
-      onSort: (sort) => setState(() => _sort = sort),
+      sort: _state.sort,
+      onSort: (sort) => setState(() => _state.sort = sort),
       rowOrder: TableRowOrder.asGiven,
       // A heading folds; a container opens its details, or while
       // selecting, is checked or unchecked.
@@ -587,24 +551,12 @@ class _ContainersPanelState extends State<ContainersPanel> {
     runSpacing: 8,
     crossAxisAlignment: WrapCrossAlignment.center,
     children: [
-      ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: TextField(
-          controller: _search,
-          focusNode: _searchFocus,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            hintText: l10n.dockerContainersSearchHint,
-            suffixIcon: _search.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: l10n.dockerContainersSearchClear,
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(_search.clear),
-                  ),
-          ),
-        ),
+      DockerListSearchField(
+        controller: _state.search,
+        focusNode: _state.searchFocus,
+        hint: l10n.dockerContainersSearchHint,
+        clearTooltip: l10n.dockerContainersSearchClear,
+        onChanged: () => setState(() {}),
       ),
       FilterChip(
         label: Text(l10n.dockerContainersRunningOnly),
@@ -621,7 +573,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
         onSelected: (top) => setState(() {
           _top = top;
           if (top) {
-            _sort = TableSort(
+            _state.sort = TableSort(
               ContainerColumn.cpu.name,
               TableSortDirection.descending,
             );
@@ -748,11 +700,12 @@ class _ContainersPanelState extends State<ContainersPanel> {
   Widget _sortControls(AppLocalizations l10n) {
     final theme = Theme.of(context);
     final shown = [ContainerColumn.name, ..._chosen];
-    final column = switch (ContainerColumn.values.asNameMap()[_sort.columnId]) {
+    final current = ContainerColumn.values.asNameMap()[_state.sort.columnId];
+    final column = switch (current) {
       final sorted? when shown.contains(sorted) => sorted,
       _ => ContainerColumn.name,
     };
-    final ascending = _sort.direction == TableSortDirection.ascending;
+    final ascending = _state.sort.direction == TableSortDirection.ascending;
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 8,
@@ -776,7 +729,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
           onChanged: (choice) {
             if (choice == null) return;
             setState(
-              () => _sort = TableSort(
+              () => _state.sort = TableSort(
                 choice.name,
                 _firstDirection.contains(choice)
                     ? TableSortDirection.descending
@@ -791,8 +744,8 @@ class _ContainersPanelState extends State<ContainersPanel> {
               : l10n.tableSortedDescending,
           icon: Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward),
           onPressed: () => setState(
-            () => _sort = TableSort(
-              _sort.columnId,
+            () => _state.sort = TableSort(
+              _state.sort.columnId,
               ascending
                   ? TableSortDirection.descending
                   : TableSortDirection.ascending,
@@ -1156,7 +1109,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
       containersShown(
         containers,
         runningOnly: _runningOnly || _top,
-        terms: searchTerms(_search.text),
+        terms: searchTerms(_state.search.text),
       );
 
   /// The columns shown, the name first, then [chosen]'s in order.

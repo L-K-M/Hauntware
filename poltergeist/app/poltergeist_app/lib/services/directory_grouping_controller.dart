@@ -1,6 +1,6 @@
+import 'package:ghost_ui/ghost_ui.dart' show PersistedSetting;
 import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
 
-import 'persisted_value_controller.dart';
 import 'settings_models.dart';
 import 'view_preferences_store.dart';
 
@@ -11,14 +11,20 @@ import 'view_preferences_store.dart';
 /// persists as [ViewPreferencesStore]'s default rather than as a preference of
 /// its own; per-folder overrides do not exist yet.
 ///
-/// Open lists re-sort at once ([PersistedValueController]).
+/// Open lists re-sort at once ([PersistedSetting]).
 final class DirectoryGroupingController
-    extends PersistedValueController<DirectoryGrouping>
+    extends PersistedSetting<DirectoryGrouping>
     implements DirectoryGroupingModel {
   DirectoryGroupingController({
     DirectoryGrouping initial = DirectoryGrouping.first,
     Future<void> Function(DirectoryGrouping grouping)? save,
-  }) : super(initial, save);
+  }) : _persist = save,
+       super(initial);
+
+  final Future<void> Function(DirectoryGrouping grouping)? _persist;
+
+  @override
+  Future<void>? save(DirectoryGrouping value) => _persist?.call(value);
 
   /// The stored default, or [DirectoryGrouping.first] when [store] cannot be
   /// read: a damaged or newer view schema must not stop the app opening.
@@ -44,5 +50,5 @@ final class DirectoryGroupingController
       );
 
   @override
-  Future<void> setGrouping(DirectoryGrouping grouping) => write(grouping);
+  Future<void> setGrouping(DirectoryGrouping grouping) => change(grouping);
 }

@@ -14,6 +14,7 @@ import '../logs/log_search.dart';
 import '../logs/log_view.dart';
 import '../logs/log_view_controller.dart';
 import '../logs/logs_panel.dart' show LogSearchField;
+import '../panel_kit.dart' show kPanelHeaderShare;
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show containerNameOf;
 import 'stacks_view.dart' show stackNamed;
@@ -28,10 +29,6 @@ const kStackLogsWindow = 200;
 
 /// The merged lines a stack's logs keep, oldest dropped first.
 const kStackLogsKept = 10000;
-
-/// The share of its height the header takes before it scrolls, so large
-/// text never pushes the log out of sight.
-const double _headerShare = 0.4;
 
 /// The xterm colours the containers' names take, in order: distinct
 /// hues without red, which reads as an error. The log view holds each to
@@ -585,7 +582,7 @@ class _StackLogsPageState extends State<StackLogsPage> {
               children: [
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * _headerShare,
+                    maxHeight: constraints.maxHeight * kPanelHeaderShare,
                   ),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
