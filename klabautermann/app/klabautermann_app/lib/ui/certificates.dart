@@ -72,7 +72,7 @@ class _CertificatesSectionState extends State<CertificatesSection> {
       return;
     }
     await _latest.run(
-      () => widget.monitoring
+      () => widget.monitoring.hostReads
           .checkTlsEndpoints(endpoints)
           .then(
             (checks) => {

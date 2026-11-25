@@ -285,7 +285,7 @@ class _LogExportSheetState extends State<LogExportSheet> {
     final lines = _named ? widget.namedLines ?? widget.lines : widget.lines;
     final text = _includeSecrets
         ? lines.join('\n')
-        : await widget.monitoring.redactLines(lines);
+        : await widget.monitoring.hostReads.redactLines(lines);
     if (!mounted) return;
     if (text == null) {
       setState(() => _busy = null);

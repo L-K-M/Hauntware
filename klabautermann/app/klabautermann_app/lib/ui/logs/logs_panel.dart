@@ -456,7 +456,10 @@ class _LogsPanelState extends State<LogsPanel> {
     final picked = await _sheet<LogBootChoice>(
       (context) => LogBootPicker(
         serverId: widget.serverId,
-        boots: widget.monitoring.queryHost(widget.serverId, const BootsQuery()),
+        boots: widget.monitoring.hostReads.queryHost(
+          widget.serverId,
+          const BootsQuery(),
+        ),
         query: query,
       ),
     );
@@ -490,7 +493,10 @@ class _LogsPanelState extends State<LogsPanel> {
   Future<String?> _browseFiles() => _sheet<String>(
     (context) => LogFilePicker(
       serverId: widget.serverId,
-      files: widget.monitoring.queryHost(widget.serverId, const VarLogQuery()),
+      files: widget.monitoring.hostReads.queryHost(
+        widget.serverId,
+        const VarLogQuery(),
+      ),
       selected: _panel.query.path,
     ),
   );

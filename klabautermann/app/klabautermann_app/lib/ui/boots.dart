@@ -82,7 +82,10 @@ class _BootsSectionState extends State<BootsSection> {
     if (!_reading) setState(() => _reading = true);
     final serverId = widget.serverId;
     Future<HostPayload?> query(HostQuerySpec spec) async {
-      final result = await widget.monitoring.queryHost(serverId, spec);
+      final result = await widget.monitoring.hostReads.queryHost(
+        serverId,
+        spec,
+      );
       return mounted && ticket == _ticket ? result.payload : null;
     }
 

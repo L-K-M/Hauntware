@@ -759,7 +759,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
     if (ticks == null) return;
 
     await _latest.run(() async {
-      final result = await widget.monitoring.queryHost(
+      final result = await widget.monitoring.hostReads.queryHost(
         widget.serverId,
         ProcessDetailQuery(pid: widget.row.pid, startTicks: ticks),
       );
