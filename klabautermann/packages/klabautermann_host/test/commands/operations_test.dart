@@ -2,8 +2,6 @@
 // launch argv, the directory rules, and the refusals before any argv
 // exists. The real-shell behaviour is in
 // test/integration/command_scripts_shell_test.dart.
-import 'dart:math';
-
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
@@ -206,16 +204,6 @@ void main() {
   });
 
   group('operation ids', () {
-    test('generateOpId makes 16 lowercase hex digits', () {
-      final random = Random(7);
-      for (var i = 0; i < 50; i++) {
-        final id = generateOpId(random);
-        expect(validateOpId(id), isNull, reason: id);
-      }
-      expect(opUnitName(_id), 'klabautermann-op-$_id.service');
-      expect(ArgValidators.unitName(opUnitName(_id)), isNull);
-    });
-
     test('validateOpId refuses other shapes', () {
       for (final id in ['', 'abc', '0123456789ABCDEF', '0123456789abcdeg']) {
         expect(validateOpId(id), isNotNull, reason: id);

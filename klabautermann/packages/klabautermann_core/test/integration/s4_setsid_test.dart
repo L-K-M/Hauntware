@@ -26,13 +26,10 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/operations/detached_runner.dart'
+    show newOpId;
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show
-        DetachedRunner,
-        HostCommands,
-        OpRecordField,
-        OperationCommands,
-        generateOpId;
+    show DetachedRunner, HostCommands, OpRecordField, OperationCommands;
 import 'package:seance_core/seance_core.dart' show SshLink;
 import 'package:test/test.dart';
 
@@ -140,7 +137,7 @@ void main() {
   ) async {
     final dir = (await host.run(userOpsDirLine)).stdout.trim();
     final uid = int.parse((await host.run('id -u')).stdout.trim());
-    final id = generateOpId(Random.secure());
+    final id = newOpId(Random.secure());
 
     final clock = Stopwatch()..start();
     final launch = await host.launch(
@@ -338,7 +335,7 @@ void main() {
           await Future<void>.delayed(Duration(seconds: attempt * 10));
         }
       }
-      final name = 'klabautermann-s4-${generateOpId(Random.secure())}';
+      final name = 'klabautermann-s4-${newOpId(Random.secure())}';
       // No network and nothing published: the cases need neither.
       await docker([
         'run',

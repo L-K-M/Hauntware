@@ -6,7 +6,6 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
@@ -27,6 +26,7 @@ import '../confirmation.dart';
 import '../edit_reader.dart';
 import '../footprint.dart' show manifestWithBackups;
 import '../operation_plan.dart';
+import '../plan_support.dart';
 import '../plan_types.dart';
 import '../stack_edits.dart';
 
@@ -82,9 +82,9 @@ Future<PlanAttempt> planEdit(
       ),
     };
   } on HostCommandError {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   } on RemoteCommandException catch (error) {
-    return _refused(ActionRefusalReason.noLink, detail: error.message);
+    return refused(ActionRefusalReason.noLink, detail: error.message);
   }
 }
 
@@ -98,7 +98,7 @@ Future<PlanAttempt> _planStackFile(
   Random random,
   StackEditLookup? stacks,
 ) async {
-  if (stacks == null) return _refused(ActionRefusalReason.engineUnavailable);
+  if (stacks == null) return refused(ActionRefusalReason.engineUnavailable);
   final source = await stacks(project, path);
   final found = source.project;
   final socketPath = source.socketPath;
@@ -125,7 +125,7 @@ Future<PlanAttempt> _planStackFile(
     );
   } on ArgumentError {
     // Verification built the same invocation, so a label changed since.
-    return _refused(ActionRefusalReason.stackUnverified);
+    return refused(ActionRefusalReason.stackUnverified);
   }
 }
 
@@ -139,7 +139,7 @@ Future<PlanAttempt> _planFile(
   List<String> Function(String temp)? check,
 }) async {
   // Validates the path before anything reads it.
-  final token = _token(random);
+  final token = randomHexToken(random);
   EditCommands.tempPathFor(path, token);
 
   final current = await readEditable(FileTarget(path), c);
@@ -149,13 +149,13 @@ Future<PlanAttempt> _planFile(
   // A link the read resolved to another file, or one that became or
   // stopped being a link, would write a file the editor did not show.
   if (current.resolvedPath != intent.resolvedPath) {
-    return _refused(ActionRefusalReason.targetChanged);
+    return refused(ActionRefusalReason.targetChanged);
   }
   final privileged = current.privileged;
   // Root's backups and manifest are root's alone, so even planning needs
   // admin mode.
   if (privileged && c.admin == null) {
-    return _refused(ActionRefusalReason.adminRequired);
+    return refused(ActionRefusalReason.adminRequired);
   }
   // Every step names the real file, so a link stays a link. Root writes
   // only where root alone can change the directory's entries (03 §7.17),
@@ -164,7 +164,7 @@ Future<PlanAttempt> _planFile(
   var target = current.resolvedPath ?? path;
   if (privileged) {
     final (:resolved, :refusal, :detail) = await _rootOnlyPath(target, c);
-    if (resolved == null) return _refused(refusal, detail: detail);
+    if (resolved == null) return refused(refusal, detail: detail);
     target = resolved;
   }
   final temp = EditCommands.tempPathFor(target, token);
@@ -174,11 +174,11 @@ Future<PlanAttempt> _planFile(
       ? (dir: kRootBackupsDir, failure: null)
       : await _userBackupsDir(c);
   if (backups == null) {
-    return _refused(ActionRefusalReason.noLink, detail: failure);
+    return refused(ActionRefusalReason.noLink, detail: failure);
   }
   final manifest = await _manifestStep(c, root: privileged, backups: backups);
   if (manifest case _ManifestRefused(:final reason, :final detail)) {
-    return _refused(reason, detail: detail);
+    return refused(reason, detail: detail);
   }
   final relabel = await _selinuxEnforcing(c);
   // A unit file is checked as its unit before the rename where the
@@ -199,7 +199,7 @@ Future<PlanAttempt> _planFile(
         exitMeanings: cas ? _targetChanged : const {},
       );
 
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.editFile,
@@ -223,7 +223,7 @@ Future<PlanAttempt> _planFile(
       ],
       cleanup: [step(EditCommands.removeTemp(temp))],
       requiredLevel: privileged ? RequiredLevel.admin : RequiredLevel.login,
-      runner: _runner(c, elevated: privileged),
+      runner: runnerFacts(user: c.profile.user, elevated: privileged),
       hostWrites: [
         HostWriteRow.editTarget,
         HostWriteRow.editTempFile,
@@ -254,16 +254,16 @@ Future<PlanAttempt> _planCrontab(
       ? await _userBackupsDir(c)
       : (dir: kRootBackupsDir, failure: null);
   if (backups == null) {
-    return _refused(ActionRefusalReason.noLink, detail: failure);
+    return refused(ActionRefusalReason.noLink, detail: failure);
   }
   final manifest = await _manifestStep(c, root: !own, backups: backups);
   if (manifest case _ManifestRefused(:final reason, :final detail)) {
-    return _refused(reason, detail: detail);
+    return refused(reason, detail: detail);
   }
   final name = own ? (c.profile.user ?? 'login user') : user;
   final crontabUser = own ? null : user;
 
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.crontabOverwrite,
@@ -286,7 +286,7 @@ Future<PlanAttempt> _planCrontab(
         ),
       ],
       requiredLevel: own ? RequiredLevel.login : RequiredLevel.admin,
-      runner: _runner(c, elevated: !own),
+      runner: runnerFacts(user: c.profile.user, elevated: !own),
       hostWrites: [
         HostWriteRow.editTarget,
         own ? HostWriteRow.userBackups : HostWriteRow.rootBackups,
@@ -300,7 +300,7 @@ Future<PlanAttempt> _planCrontab(
 /// Why a read at planning time means no plan: the target changed since
 /// the editor read it, or the read itself failed, with what the read
 /// said.
-PlanAttempt _readRefusal(EditReadResult current) => _refused(
+PlanAttempt _readRefusal(EditReadResult current) => refused(
   detail: switch (current) {
     EditReadFailed(:final detail) => detail,
     EditContent() => null,
@@ -409,10 +409,7 @@ Future<_Manifest> _manifestStep(
       // not overwritten with rows built from the old one. The check and
       // the rename are two steps, so two runs between them can still
       // drop one's rows; its backup then shows as an orphan.
-      EditCommands.manifestWrite(
-        path,
-        sha256.convert(utf8.encode(read.stdout)).toString(),
-      ),
+      EditCommands.manifestWrite(path, sha256OfText(read.stdout)),
       elevated: root,
       input: utf8.encode(encodeFootprintManifest(rows)),
       exitMeanings: _contentChanged,
@@ -494,21 +491,3 @@ Future<({String? dir, String? failure})> _userBackupsDir(EditContext c) async {
 /// may hold a file's content.
 String _stepFailure(String step, RemoteCommandResult result) =>
     '$step: exit ${result.exitCode}: ${result.stderr}';
-
-String _token(Random random) => [
-  for (var i = 0; i < 8; i++)
-    random.nextInt(256).toRadixString(16).padLeft(2, '0'),
-].join();
-
-RunnerFacts _runner(EditContext c, {required bool elevated}) => RunnerFacts(
-  identity: elevated ? 'root' : (c.profile.user ?? 'login user'),
-  credentials: elevated
-      ? RunnerCredentials.adminPassword
-      : RunnerCredentials.session,
-);
-
-PlanAttempt _planned(OperationPlan plan) =>
-    (plan: plan, refusal: null, detail: null);
-
-PlanAttempt _refused(ActionRefusalReason reason, {String? detail}) =>
-    (plan: null, refusal: reason, detail: detail);

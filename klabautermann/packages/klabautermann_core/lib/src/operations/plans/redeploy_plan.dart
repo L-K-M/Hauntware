@@ -26,6 +26,7 @@ import '../detached_runner.dart';
 import '../impact.dart';
 import '../operation_plan.dart';
 import '../ownership.dart';
+import '../plan_support.dart';
 import '../plan_types.dart';
 import '../protected_targets.dart';
 import 'docker_plans.dart' show stackFingerprint, validImageReference;
@@ -53,7 +54,7 @@ Future<PlanAttempt> planRedeploy(
   RedeployPlanContext c,
 ) async {
   final verified = await _verify(intent.project, c);
-  if (verified case _Refusal(:final reason)) return _refused(reason);
+  if (verified case _Refusal(:final reason)) return refused(reason);
   final stack = verified as _VerifiedStack;
 
   final everyProfile = await c.stacks.serviceNames(
@@ -130,14 +131,14 @@ Future<PlanAttempt> planStackCompose(
   if (down != (service == null) ||
       scale != (replicas != null) ||
       (replicas != null && (replicas < 0 || replicas > kComposeMaxScale))) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
 
   final verified = await _verify(intent.project, c);
-  if (verified case _Refusal(:final reason)) return _refused(reason);
+  if (verified case _Refusal(:final reason)) return refused(reason);
   final stack = verified as _VerifiedStack;
   if (service != null && !stack.named.contains(service)) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
 
   return _composePlan(
@@ -321,7 +322,7 @@ Future<PlanAttempt> planHostPull(
 ) async {
   final reference = intent.reference;
   if (!validImageReference(reference) || intent.via == PullRoute.engine) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
 
   final argv = dockerPull(
@@ -363,7 +364,7 @@ Future<PlanAttempt> planHostPull(
 
   final choice = await _detachedRunner(c, level);
   final runner = choice.runner;
-  if (runner == null) return _refused(_detachedRefusal(choice.refusal!));
+  if (runner == null) return refused(_detachedRefusal(choice.refusal!));
   return (
     plan: OperationPlan(
       intent: intent,
@@ -410,7 +411,7 @@ Future<PlanAttempt> _composePlan(
   final level = _cliLevel(c);
   final choice = await _detachedRunner(c, level);
   final runner = choice.runner;
-  if (runner == null) return _refused(_detachedRefusal(choice.refusal!));
+  if (runner == null) return refused(_detachedRefusal(choice.refusal!));
 
   final project = stack.project;
   final List<String> hashArgv;
@@ -451,7 +452,7 @@ Future<PlanAttempt> _composePlan(
   } on ArgumentError {
     // Verification builds the same invocation, so this is a label that
     // changed in between.
-    return _refused(ActionRefusalReason.stackUnverified);
+    return refused(ActionRefusalReason.stackUnverified);
   }
 
   final containers = stack.containers;
@@ -557,6 +558,3 @@ String _nameOf(ContainerSummary container) {
   final name = container.names.isEmpty ? container.id : container.names.first;
   return name.startsWith('/') ? name.substring(1) : name;
 }
-
-PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason, detail: null);

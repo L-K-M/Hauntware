@@ -16,6 +16,7 @@ import '../confirmation.dart';
 import '../impact.dart';
 import '../operation_plan.dart';
 import '../ownership.dart';
+import '../plan_support.dart';
 import '../plan_types.dart';
 import '../protected_targets.dart';
 
@@ -74,10 +75,10 @@ Future<PlanAttempt> planDockerAction(
       PullImage() => _planPullImage(intent, context),
       StackAction() => await _planStack(intent, context),
       ContainerExec() => await _planExec(intent, context),
-      _ => _refused(ActionRefusalReason.notImplemented),
+      _ => refused(ActionRefusalReason.notImplemented),
     };
   } on DockerNotFoundException {
-    return _refused(ActionRefusalReason.targetChanged);
+    return refused(ActionRefusalReason.targetChanged);
   }
 }
 
@@ -87,10 +88,10 @@ Future<PlanAttempt> _planContainer(
   DockerPlanContext c,
 ) async {
   if (intent.signal != null && intent.verb != ContainerVerb.kill) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   final container = await _container(c.client, intent.containerId);
-  if (container == null) return _refused(ActionRefusalReason.targetChanged);
+  if (container == null) return refused(ActionRefusalReason.targetChanged);
   final name = _nameOf(container);
   final protected = containerProtection(
     name: name,
@@ -101,7 +102,7 @@ Future<PlanAttempt> _planContainer(
     ContainerVerb.start || ContainerVerb.unpause => false,
     _ => true,
   };
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: _containerKinds[intent.verb]!,
@@ -142,7 +143,7 @@ Future<PlanAttempt> _planBulk(
       ids.length > kContainerBulkMax ||
       ids.any((id) => id.isEmpty) ||
       ids.toSet().length != ids.length) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
 
   final listed = (await c.client.listContainers(filters: {'id': ids})).value;
@@ -150,10 +151,10 @@ Future<PlanAttempt> _planBulk(
   final targets = <ContainerSummary>[];
   for (final id in ids) {
     final container = byId[id];
-    if (container == null) return _refused(ActionRefusalReason.targetChanged);
+    if (container == null) return refused(ActionRefusalReason.targetChanged);
     if (intent.verb.appliesTo(container.state)) targets.add(container);
   }
-  if (targets.isEmpty) return _refused(ActionRefusalReason.invalidTarget);
+  if (targets.isEmpty) return refused(ActionRefusalReason.invalidTarget);
 
   ProtectedReason? protected;
   var dropsSession = false;
@@ -172,7 +173,7 @@ Future<PlanAttempt> _planBulk(
     }
   }
   final verb = intent.verb;
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: _bulkKinds[verb]!,
@@ -219,19 +220,19 @@ Future<PlanAttempt> _planBulk(
 /// confirmation, as any action on it does.
 Future<PlanAttempt> _planExec(ContainerExec intent, DockerPlanContext c) async {
   if (intent.argv.isEmpty || intent.argv.first.isEmpty) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   if (intent.user?.isEmpty ?? false) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   final container = await _container(c.client, intent.containerId);
-  if (container == null) return _refused(ActionRefusalReason.targetChanged);
+  if (container == null) return refused(ActionRefusalReason.targetChanged);
   // The daemon refuses an exec in a container that is not running.
   if (container.state != _running) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   final name = _nameOf(container);
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.containerExec,
@@ -267,9 +268,9 @@ Future<PlanAttempt> _planRemoveContainer(
   DockerPlanContext c,
 ) async {
   final container = await _container(c.client, intent.containerId);
-  if (container == null) return _refused(ActionRefusalReason.targetChanged);
+  if (container == null) return refused(ActionRefusalReason.targetChanged);
   final name = _nameOf(container);
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: intent.volumes
@@ -310,17 +311,17 @@ Future<PlanAttempt> _planRemoveImage(
   RemoveImage intent,
   DockerPlanContext c,
 ) async {
-  if (intent.image.isEmpty) return _refused(ActionRefusalReason.invalidTarget);
+  if (intent.image.isEmpty) return refused(ActionRefusalReason.invalidTarget);
   final image = (await c.client.inspectImage(intent.image)).value;
   final inUse = await _imageUsers(c.client, image.id);
   if (inUse > 0 && !intent.force) {
-    return _refused(ActionRefusalReason.imageInUse);
+    return refused(ActionRefusalReason.imageInUse);
   }
   // A tag removes that tag; an id or digest removes the image itself.
   final reference = image.repoTags.contains(intent.image)
       ? intent.image
       : image.id;
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: inUse > 0
@@ -362,15 +363,15 @@ Future<PlanAttempt> _planCreateVolume(
   final driver = intent.driver;
   if (!_volumeName.hasMatch(intent.name) ||
       (driver != null && driver.trim().isEmpty)) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   try {
     await c.client.inspectVolume(intent.name);
-    return _refused(ActionRefusalReason.volumeExists);
+    return refused(ActionRefusalReason.volumeExists);
   } on DockerNotFoundException {
     // The name is free.
   }
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.createVolume,
@@ -404,7 +405,7 @@ Future<PlanAttempt> _planRemoveVolume(
   DockerPlanContext c,
 ) async {
   if (!_volumeName.hasMatch(intent.name)) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   final volume = await c.client.inspectVolume(intent.name);
   final users = (await c.client.listContainers(
@@ -412,8 +413,8 @@ Future<PlanAttempt> _planRemoveVolume(
       'volume': [intent.name],
     },
   )).value;
-  if (users.isNotEmpty) return _refused(ActionRefusalReason.volumeInUse);
-  return _planned(
+  if (users.isNotEmpty) return refused(ActionRefusalReason.volumeInUse);
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.removeVolume,
@@ -447,14 +448,14 @@ Future<PlanAttempt> _planRemoveNetwork(
   DockerPlanContext c,
 ) async {
   if (intent.networkId.isEmpty) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   final network = await c.client.inspectNetwork(intent.networkId);
-  if (network.isBuiltin) return _refused(ActionRefusalReason.builtinNetwork);
+  if (network.isBuiltin) return refused(ActionRefusalReason.builtinNetwork);
   if (network.containers.isNotEmpty) {
-    return _refused(ActionRefusalReason.networkInUse);
+    return refused(ActionRefusalReason.networkInUse);
   }
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.removeNetwork,
@@ -497,16 +498,16 @@ bool validImageReference(String reference) =>
 PlanAttempt _planPullImage(PullImage intent, DockerPlanContext c) {
   final reference = intent.reference;
   if (!validImageReference(reference)) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
   // The host's own `docker pull` is planned with the stack runners
   // ([planHostPull]).
   if (intent.via != PullRoute.engine) {
-    return _refused(ActionRefusalReason.notImplemented);
+    return refused(ActionRefusalReason.notImplemented);
   }
 
   final (:fromImage, :tag) = pullTarget(reference);
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.pullImage,
@@ -649,10 +650,10 @@ Future<int> runPullStep(
 /// exception.
 Future<PlanAttempt> _planPrune(PruneDocker intent, DockerPlanContext c) async {
   final preview = await prunePreview(c.client, intent.kind, all: intent.all);
-  if (preview.count == 0) return _refused(ActionRefusalReason.nothingToPrune);
+  if (preview.count == 0) return refused(ActionRefusalReason.nothingToPrune);
 
   final target = pruneTarget(intent.kind, all: intent.all);
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.prune,
@@ -879,7 +880,7 @@ String volumeFingerprint(VolumeSummary volume) =>
 /// containers are left alone and a dependency cycle refuses.
 Future<PlanAttempt> _planStack(StackAction intent, DockerPlanContext c) async {
   final containers = await _projectContainers(c.client, intent.project);
-  if (containers.isEmpty) return _refused(ActionRefusalReason.invalidTarget);
+  if (containers.isEmpty) return refused(ActionRefusalReason.invalidTarget);
 
   final byService = <String, List<ContainerSummary>>{};
   final dependsOn = <String, Set<String>>{};
@@ -891,12 +892,12 @@ Future<PlanAttempt> _planStack(StackAction intent, DockerPlanContext c) async {
     dependsOn.putIfAbsent(service, () => {}).addAll(labels.dependsOnServices);
   }
   final order = dependencyOrder(dependsOn);
-  if (order == null) return _refused(ActionRefusalReason.dependencyCycle);
+  if (order == null) return refused(ActionRefusalReason.dependencyCycle);
   // One service (STK-23) acts on its own containers alone: compose's
   // per-service restart and stop leave its dependencies running.
   final only = intent.service;
   if (only != null && !byService.containsKey(only)) {
-    return _refused(ActionRefusalReason.invalidTarget);
+    return refused(ActionRefusalReason.invalidTarget);
   }
 
   final ordered = intent.verb == StackVerb.stop ? order.reversed : order;
@@ -922,7 +923,7 @@ Future<PlanAttempt> _planStack(StackAction intent, DockerPlanContext c) async {
     );
   }
   final running = targets.where((t) => t.state == _running).length;
-  return _planned(
+  return planned(
     OperationPlan(
       intent: intent,
       kind: _stackKinds[intent.verb]!,
@@ -1159,9 +1160,3 @@ RunnerFacts _runner(DockerPlanContext c) => RunnerFacts(
       ? RunnerCredentials.adminPassword
       : RunnerCredentials.session,
 );
-
-PlanAttempt _planned(OperationPlan plan) =>
-    (plan: plan, refusal: null, detail: null);
-
-PlanAttempt _refused(ActionRefusalReason reason) =>
-    (plan: null, refusal: reason, detail: null);

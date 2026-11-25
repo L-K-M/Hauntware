@@ -14,6 +14,9 @@ export 'src/access/access_check.dart';
 export 'src/access/external_monitors.dart';
 export 'src/access/panels.dart';
 export 'src/commands/commands.dart';
+// The exit of `klab_ticks` for a PID that names no process, shared by
+// the guarded kill and the engine's operation runner and tracker.
+export 'src/commands/proc_stat.dart' show kStartTicksGone;
 export 'src/commands/edit.dart';
 export 'src/commands/operations.dart';
 export 'src/commands/stack_scan.dart';
