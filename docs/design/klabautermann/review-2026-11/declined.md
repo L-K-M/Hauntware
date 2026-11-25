@@ -854,3 +854,23 @@ Eight low findings appear in the reports but in no PLAN.md row.
   grammar (`[a-zA-Z0-9][a-zA-Z0-9_.-]*`, Compose projects narrower)
   allows no path separator. Worth a guard if a free-form name is ever
   passed; not in a move.
+
+### PR #857 GLM review (UIA-08 splits, UIA-11): 0 in scope, no push
+
+The first round was cancelled; the `glm-review` round reviewed the split
+files as new code. Each flagged major line is on main unchanged in the
+file it moved from (`settings_page.dart`, `jobs_panel.dart`,
+`overview_panel.dart`): the next-run column padding, `_charts` under
+unbounded constraints, `pressure()`'s notice, `choices.first` on a
+re-tapped expiry segment (the segmented button disallows an empty
+selection). Pre-existing behaviour in a pure move; none was rated with a
+reproduction.
+
+- "Unused `ghostIsDesktopPlatform` import": refuted;
+  `processes_panel.dart:328` uses it.
+- Minor and info items (re-export of `job_details.dart` for importers,
+  `cronRuns` twice, `_CoreBars`' widest figure, a double null guard, an
+  empty disk track, `Listenable.merge` per build, settings write
+  failures worded as "not changed", the implicit null "No cap" item, the
+  host-key switch while sync is off, text styles and announcements):
+  moved code, unchanged; follow-ups at most.
