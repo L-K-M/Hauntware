@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/admin_controller.dart';
 import '../controllers/monitoring_controller.dart';
+import 'latest_read.dart';
 
 /// A section that reads one host query of [serverId] through
 /// [monitoring]; its state mixes in [HostReadSectionState].
@@ -18,11 +19,10 @@ abstract interface class HostReadSection implements StatefulWidget {
 /// read's answer lands, so a slow answer for an earlier server never
 /// replaces a later one.
 mixin HostReadSectionState<W extends HostReadSection> on State<W> {
-  HostPayload? _read;
-  bool _reading = false;
-
-  /// Bumped per read, so only the newest answer lands.
-  int _ticket = 0;
+  late final LatestRead<HostPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   /// The query this section shows.
   @protected
@@ -30,11 +30,11 @@ mixin HostReadSectionState<W extends HostReadSection> on State<W> {
 
   /// The newest read's answer; null until it lands.
   @protected
-  HostPayload? get hostRead => _read;
+  HostPayload? get hostRead => _latest.value;
 
   /// Whether a read is out.
   @protected
-  bool get hostReading => _reading;
+  bool get hostReading => _latest.reading;
 
   @override
   void initState() {
@@ -49,24 +49,18 @@ mixin HostReadSectionState<W extends HostReadSection> on State<W> {
         oldWidget.monitoring == widget.monitoring) {
       return;
     }
-    _read = null;
+    _latest.reset();
     unawaited(readHost());
   }
 
   /// Reads [hostQuery] again.
   @protected
   Future<void> readHost() async {
-    final ticket = ++_ticket;
-    if (mounted) setState(() => _reading = true);
-    final result = await widget.monitoring.queryHost(
-      widget.serverId,
-      hostQuery,
+    await _latest.run(
+      () => widget.monitoring
+          .queryHost(widget.serverId, hostQuery)
+          .then((result) => result.payload),
     );
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _read = result.payload;
-      _reading = false;
-    });
   }
 }
 
