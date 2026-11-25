@@ -980,6 +980,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\u2026'",
     r"'[\n\v\f\r\x85\u2028\u2029]'",
   },
+  'lib/ui/logs/log_text_layout.dart': {
+    // Glyph probes that measure the line height (the space above), the
+    // advance and the ellipsis, never shown.
+    "' '",
+    "'W'",
+    r"'\u2026'",
+  },
   'lib/ui/logs/log_view.dart': {
     // A FocusNode debug label.
     "'LogView'",
@@ -989,10 +996,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "' '",
     r"'[\u2028\u2029]'",
-    // Glyph probes that measure the line height (the space above), the
-    // advance and the ellipsis, never shown.
-    "'W'",
-    r"'\u2026'",
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {
