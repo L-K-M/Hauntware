@@ -478,3 +478,8 @@ The shared editor's `unsaved` reads "Not saved" in Klabautermann and Planchette 
 - history_store.dart (blocker) "missing `dart:async` import for `unawaited`": refuted, imported at line 7; `dart analyze --fatal-infos` is clean.
 - serial_queue.dart "result is not the healed tail": the reviewer confirms every call site handles it; no change. Its note that capability_cache's old unhealed tail could poison later writes does not apply: that body caught every error, so the tail could not fail.
 - serial_queue_test double-quoted description: declined as cosmetic; the package's lint set does not include `prefer_single_quotes`, and the analyzer reports nothing.
+
+## #828 GLM round 1 (cba675b): 2 actionable, refuted, no push
+- panel_kit.dart:94 (blocker) "nullable `detail` passed to `Text` won't compile": refuted. `flutter analyze` is clean locally and CI's app job (analyze + test) passed at cba675b; the final local promotes through the final `shown` check.
+- processes_panel.dart:151 (major) "`PanelNotice.state` may be a live region on the ticking freshness line": refuted, the `state` constructor fixes `live = false`; only services passes `live: true`, as its old `_notice` did.
+- Declined: containers_panel's unscoped `panel_kit` import (minor); the Docker panels' `_headerShare` copies (ARC-04, the next app-chain step).
