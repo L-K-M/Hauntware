@@ -6733,7 +6733,7 @@ the engine in `engine_isolate.dart` beside it):
   isolate (CN-19), splitting its lines as `readconf.c` does (below) and
   taking a host for each name a `Host` line gives, as `seance_core`'s
   `SshConfigImporter.hostAliases` does
-  (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
+  (`seance/packages/seance_core/lib/src/ssh_config/ssh_config_import.dart`), replaces
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
   the counts arrive. `skippedCount` counts the hosts left out because

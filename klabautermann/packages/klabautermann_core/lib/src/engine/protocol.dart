@@ -338,8 +338,9 @@ const int kTerminalsPerServerMax = 4;
 const int kTerminalDimensionMax = 1000;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
-/// only: no function-typed fields, no Futures, no `dartssh2` or `seance_core`
-/// types, so values cross `SendPort`s untouched.
+/// only: no function-typed fields, no Futures, no `dartssh2` types; the
+/// `seance_core` value types the barrel shows are plain data too, so values
+/// cross `SendPort`s untouched.
 @immutable
 sealed class EngineRequest {
   const EngineRequest();
