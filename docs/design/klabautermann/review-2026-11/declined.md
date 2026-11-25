@@ -849,5 +849,8 @@ Eight low findings appear in the reports but in no PLAN.md row.
   importer of the moved names imports the service now.
 - Minor: a half-specified sheet header (title without close tooltip) is
   dropped silently: nit, all callers pass both or neither. Unvalidated
-  `fileName` in the staged path: pre-existing, moved code; the name is
-  built by the app, not typed by the user.
+  `fileName` in the staged path: pre-existing, moved code. The name is
+  catalog text around a container or stack name, and Docker's name
+  grammar (`[a-zA-Z0-9][a-zA-Z0-9_.-]*`, Compose projects narrower)
+  allows no path separator. Worth a guard if a free-form name is ever
+  passed; not in a move.
