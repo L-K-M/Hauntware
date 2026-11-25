@@ -13,7 +13,7 @@ import '../logs/log_export.dart' show showLogExport;
 import '../logs/log_search.dart';
 import '../logs/log_view.dart';
 import '../logs/log_view_controller.dart';
-import '../logs/logs_panel.dart' show LogSearchField;
+import '../logs/log_search_field.dart';
 import '../panel_kit.dart' show kPanelHeaderShare;
 import 'docker_notice.dart';
 import 'containers_view.dart' show containerNameOf;

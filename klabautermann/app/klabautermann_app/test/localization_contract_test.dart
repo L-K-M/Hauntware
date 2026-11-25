@@ -873,12 +873,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "', '",
   },
   'lib/ui/interfaces.dart': {"'lo'"},
-  'lib/ui/logs/logs_panel.dart': {
-    // The empty server pattern, which reads the whole journal again.
-    "''",
+  'lib/ui/logs/log_pickers.dart': {
     // The folder LOG-08 browses, a path on the server handed to the
     // siblings (X-10), never shown.
     "'/var/log'",
+  },
+  'lib/ui/logs/logs_panel.dart': {
+    // The empty server pattern, which reads the whole journal again.
+    "''",
   },
   'lib/ui/logs/log_query.dart': {
     // PCRE2's inline flags that pin journalctl's case rule (LOG-06):

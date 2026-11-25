@@ -5,7 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
-import 'logs/logs_panel.dart' show serverTimeText;
+import 'logs/log_pickers.dart' show serverTimeText;
 import 'panel_kit.dart' show PanelSection;
 import 'system_view.dart' show uptimeText;
 
