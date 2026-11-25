@@ -256,7 +256,7 @@ Host typo
     expect(find.text('typo.example.com:22a'), findsOneWidget);
   });
 
-  testWidgets('Host * defaults badge rows', (tester) async {
+  testWidgets('Host * defaults reach a settled row', (tester) async {
     const config = '''
 Host *
   User deploy
@@ -266,16 +266,19 @@ Host web
 ''';
     await _open(tester, _service(_FakeSource({_configPath: config})));
 
+    // The shared resolver applies the wildcard default, so no
+    // "not inherited" chip is owed.
     expect(
       find.text(
         'Won\u2019t behave as in ssh: defaults from a top-level or '
         'Host * block are not inherited',
       ),
-      findsOneWidget,
+      findsNothing,
     );
+    expect(find.text('deploy'), findsOneWidget);
   });
 
-  testWidgets('match blocks badge every row', (tester) async {
+  testWidgets('a non-matching Match block badges no row', (tester) async {
     const config = '''
 Match host *.internal
   Port 2222
@@ -288,14 +291,35 @@ Host second
 ''';
     await _open(tester, _service(_FakeSource({_configPath: config})));
 
-    // A per-row chip on each row — not one dialog-level banner that a
-    // single-row fixture could not distinguish from per-row badges.
     expect(
       find.text(
         'Won\u2019t behave as in ssh: Match blocks are ignored; '
         'settings may differ',
       ),
-      findsNWidgets(2),
+      findsNothing,
+    );
+  });
+
+  testWidgets('an unevaluated Match criterion still badges its row', (
+    tester,
+  ) async {
+    const config = '''
+Match exec "true"
+  Port 2222
+
+Host web
+  HostName web.example.com
+''';
+    await _open(tester, _service(_FakeSource({_configPath: config})));
+
+    // The row keeps its block-local reading because ssh's result depends
+    // on the command, so the chip stays.
+    expect(
+      find.text(
+        'Won\u2019t behave as in ssh: Match blocks are ignored; '
+        'settings may differ',
+      ),
+      findsOneWidget,
     );
   });
 
