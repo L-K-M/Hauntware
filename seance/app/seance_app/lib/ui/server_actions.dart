@@ -176,6 +176,7 @@ Future<void> confirmDeleteServer(
               child: const Text('Cancel'),
             ),
             FilledButton(
+              autofocus: true,
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Delete'),
             ),

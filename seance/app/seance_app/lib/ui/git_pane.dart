@@ -118,6 +118,7 @@ class _GitViewState extends State<_GitView> {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            autofocus: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Discard'),
           ),

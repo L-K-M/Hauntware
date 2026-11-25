@@ -95,6 +95,7 @@ class _RecoverySettingsState extends State<RecoverySettings> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              autofocus: true,
               key: const ValueKey('recovery.replace.confirm'),
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Replace'),

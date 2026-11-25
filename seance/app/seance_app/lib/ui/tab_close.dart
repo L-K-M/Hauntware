@@ -56,6 +56,7 @@ Future<void> confirmAndCloseTab(
             child: const Text('Cancel'),
           ),
           FilledButton(
+            autofocus: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Close and Delete'),
           ),
@@ -93,6 +94,7 @@ Future<bool> confirmEditorClose(BuildContext context, EditorTab tab) async {
           child: const Text('Keep editing'),
         ),
         FilledButton(
+          autofocus: true,
           onPressed: () => Navigator.pop(context, true),
           child: const Text('Discard'),
         ),
@@ -122,6 +124,7 @@ Future<bool> _runningCommandMayEnd(
           child: const Text('Cancel'),
         ),
         FilledButton(
+          autofocus: true,
           onPressed: () => Navigator.pop(context, true),
           child: const Text('Close tab'),
         ),
