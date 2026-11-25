@@ -441,7 +441,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'volumes-${_count++}'",
     r"'networks-${_count++}'",
     r"'events-${_count++}'",
-    r"'stack-file-${_count++}'",
+    r"'one-shot-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
     // The not-saved diagnostic of a purge, which no surface starts; a

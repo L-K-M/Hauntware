@@ -69,7 +69,6 @@ import 'services/sync_environment.dart';
 import 'services/transfer_limits_controller.dart';
 import 'services/transfer_keep_alive.dart';
 import 'services/sync_queue_facade.dart';
-import 'services/sync_transport.dart';
 import 'services/sync_verdict_stores.dart';
 import 'services/third_party_bookmark_import_setup.dart';
 import 'services/transfer_queue_session.dart';

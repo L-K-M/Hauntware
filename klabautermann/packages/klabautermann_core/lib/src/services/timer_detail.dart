@@ -7,6 +7,7 @@ import 'package:seance_core/seance_core.dart'
     show RemoteCommandException, SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
+import '../limits.dart';
 
 /// How many runs of each `OnCalendar=` expression a read lists, as many
 /// as a cron line's (`mergeJobs`' default).
@@ -14,9 +15,6 @@ const kTimerRunsListed = 5;
 
 /// How long each of the read's commands may run.
 const kTimerDetailTimeout = Duration(seconds: 30);
-
-/// The exit status a shell gives a command it cannot find.
-const _commandNotFound = 127;
 
 /// Reads [unit]'s triggers on [serverId], in the login user's own manager
 /// when [user], with [profile]'s user id, runtime directory and systemd
@@ -62,7 +60,9 @@ Future<TimerDetailReport> readTimerDetail(
 
   try {
     final (status, stdout) = await run(argv);
-    if (status == _commandNotFound) return failed(TimerDetailFailure.missing);
+    if (status == kCommandNotFound) {
+      return failed(TimerDetailFailure.missing);
+    }
     if (status != 0) return failed(TimerDetailFailure.unreadable);
     final detail = parseTimerDetail(stdout, ParseContext.standard).value;
 

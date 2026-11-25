@@ -10,6 +10,7 @@ import 'dart:convert';
 
 import 'package:meta/meta.dart';
 
+import 'instant_range.dart';
 import 'parse_result.dart';
 
 /// One journal entry (03 §7.6). [fields] keeps every field decoded
@@ -36,7 +37,7 @@ final class JournalEntry {
   /// instead of throwing.
   DateTime? get timestampUtc {
     final us = realtimeUs;
-    if (us == null || us < -_maxInstantUs || us > _maxInstantUs) return null;
+    if (us == null || us < -kMaxInstantUs || us > kMaxInstantUs) return null;
 
     return DateTime.fromMicrosecondsSinceEpoch(us, isUtc: true);
   }
@@ -67,10 +68,6 @@ final class JournalEntry {
     'message': message,
   };
 }
-
-/// The furthest instant [DateTime] holds either side of the epoch, in
-/// microseconds (100,000,000 days).
-const _maxInstantUs = 8640000000000000000;
 
 /// Parses the lines of a `journalctl -o json` stream; never throws.
 /// Blank lines skip, malformed JSON warns per line.

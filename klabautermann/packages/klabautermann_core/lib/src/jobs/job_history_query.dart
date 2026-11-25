@@ -18,11 +18,9 @@ import 'package:seance_core/seance_core.dart'
 
 import '../admin/admin_mode.dart' show AdminSession;
 import '../engine/protocol.dart';
+import '../limits.dart';
 import '../sampling/argument_masking.dart'
     show ArgumentMaskingBudget, maskCommandLine;
-
-/// The most of a failure's error text a [JobHistoryFailed] carries.
-const int _detailLimit = 500;
 
 /// Runs [query] on [link], through [admin] when admin mode is on; never
 /// throws.
@@ -93,8 +91,8 @@ JobHistoryFailed _failed(RemoteCommandResult result) =>
 
 JobHistoryFailed _failedWith(String detail) => JobHistoryFailed(
   JobHistoryFailure.failed,
-  detail: detail.length > _detailLimit
-      ? detail.substring(0, _detailLimit)
+  detail: detail.length > kDetailLimit
+      ? detail.substring(0, kDetailLimit)
       : detail,
 );
 
