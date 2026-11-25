@@ -827,3 +827,27 @@ Eight low findings appear in the reports but in no PLAN.md row.
   verification request; the integration job runs it in CI.
 - "The protocol bump is breaking; deploy in lockstep": the engine runs
   in the app's own isolate and ships in the same binary.
+
+### PR #859 GLM review (ENG-13): minor only, no push
+
+- Port digits that overflow integer parsing untested in
+  `jump_routes_port_test.dart`: minor; the pre-switch comparison table
+  covered overflow, and `_decimal` plus the 65535 bound reject it.
+
+### PR #862 GLM review (ARC-19, UIB-11): 0 real, no push
+
+- Critical "`savedExportPath` gets a String" and "`mimeType` is not a
+  `saveFile` parameter": refuted; both lines are main's
+  `log_export.dart:109,112`, moved unchanged, and the app analyzes clean.
+  Answered on the PR, as the claim was "does not compile".
+- "A completed review returning null reads as idle": refuted;
+  `reviewContainers` returns `Future<DockerPayload>`, never null.
+- "A swallowed read exception opens an editor": refuted; `LatestRead.run`
+  rethrows through `try/finally`, so `_open` never reaches the identity
+  check after a failed read.
+- "The re-export narrows the UI file's surface": intended; its one
+  importer of the moved names imports the service now.
+- Minor: a half-specified sheet header (title without close tooltip) is
+  dropped silently: nit, all callers pass both or neither. Unvalidated
+  `fileName` in the staged path: pre-existing, moved code; the name is
+  built by the app, not typed by the user.
