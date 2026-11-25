@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'catalog_writes.dart';
+
 /// A rule write the engine refused or never answered (03 §4.8).
 final class AlertRuleNotSavedException implements Exception {
   const AlertRuleNotSavedException(this.failure, [this.detail]);
@@ -23,13 +25,17 @@ final class AlertRuleNotSavedException implements Exception {
 final class AlertRulesController extends ChangeNotifier {
   AlertRulesController(this._engine) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    _writes = CatalogWrites(
+      _engine,
+      (failure, detail) => AlertRuleNotSavedException(failure, detail),
+    );
   }
 
   final EngineClient _engine;
   late final StreamSubscription<EngineEvent> _events;
 
   List<SyncedRule> _rules = const [];
-  final Map<String, Completer<void>> _writes = {};
+  late final CatalogWrites _writes;
   var _count = 0;
   bool _engineStopped = false;
 
@@ -53,22 +59,12 @@ final class AlertRulesController extends ChangeNotifier {
   Future<void> remove(String id) =>
       _send((requestId) => RemoveRule(requestId: requestId, ruleId: id));
 
-  Future<void> _send(EngineRequest Function(String requestId) request) {
+  Future<void> _send(EngineRequest Function(String requestId) request) async {
     // A stopped engine's port may still take a request without an error,
     // and nothing would ever answer it.
-    if (_engineStopped) {
-      return Future.error(const AlertRuleNotSavedException(null));
-    }
+    if (_engineStopped) throw const AlertRuleNotSavedException(null);
     final requestId = 'rule-${_count++}';
-    final written = Completer<void>();
-    _writes[requestId] = written;
-    try {
-      _engine.send(request(requestId));
-    } on StateError {
-      _writes.remove(requestId);
-      return Future.error(const AlertRuleNotSavedException(null));
-    }
-    return written.future;
+    await _writes.write(requestId, request(requestId));
   }
 
   void _onEngineEvent(EngineEvent event) {
@@ -76,28 +72,18 @@ final class AlertRulesController extends ChangeNotifier {
       case AlertRulesChanged(:final rules):
         _rules = List.unmodifiable(rules);
         notifyListeners();
-      case CatalogWritten(:final requestId):
-        _writes.remove(requestId)?.complete();
-      case CatalogWriteRefused(:final requestId, :final failure, :final detail):
-        _writes
-            .remove(requestId)
-            ?.completeError(AlertRuleNotSavedException(failure, detail));
       case _:
     }
   }
 
   void _onEngineDone() {
     _engineStopped = true;
-    for (final written in _writes.values) {
-      written.completeError(const AlertRuleNotSavedException(null));
-    }
-    _writes.clear();
   }
 
   @override
   void dispose() {
     unawaited(_events.cancel());
-    _onEngineDone();
+    _writes.dispose();
     super.dispose();
   }
 }

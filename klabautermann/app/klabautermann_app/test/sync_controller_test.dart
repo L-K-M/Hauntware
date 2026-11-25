@@ -33,6 +33,24 @@ void main() {
     },
   );
 
+  test(
+    'a refused send answers a sync call as a stopped engine would',
+    () async {
+      final engine = FakeEngineClient();
+      final sync = SyncController(engine);
+      addTearDown(() async {
+        sync.dispose();
+        await engine.close();
+      });
+
+      engine.refuseSends = true;
+      final status = await sync.syncNow();
+      expect(status.phase, SyncPhase.failed);
+      expect(status.operation, SyncOperation.round);
+      expect(sync.busy, isFalse);
+    },
+  );
+
   test('disposing during resolution preserves the typed refusal', () async {
     final engine = FakeEngineClient();
     final sync = SyncController(engine);

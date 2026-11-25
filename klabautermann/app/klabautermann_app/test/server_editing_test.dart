@@ -541,14 +541,34 @@ void main() {
         addTearDown(editor.dispose);
 
         final read = editor.read('srv-1');
+        // Attached before the stop, as a surface awaiting the read is.
+        final failed = expectLater(
+          read,
+          throwsA(isA<ServerEditEngineStopped>()),
+        );
         await engine.close();
-        await expectLater(read, throwsA(isA<ServerEditEngineStopped>()));
+        await failed;
         await expectLater(
           editor.delete('srv-1'),
           throwsA(isA<ServerEditEngineStopped>()),
         );
       },
     );
+
+    test('a refused send fails a save as the engine stopping would', () async {
+      final engine = FakeEngineClient();
+      final editor = ServerEditorController(engine);
+      addTearDown(() async {
+        editor.dispose();
+        await engine.close();
+      });
+
+      engine.refuseSends = true;
+      await expectLater(
+        editor.save(_stored, null),
+        throwsA(isA<ServerEditEngineStopped>()),
+      );
+    });
 
     test('a connection test completes with its answer, and a rejection '
         'fails it', () async {

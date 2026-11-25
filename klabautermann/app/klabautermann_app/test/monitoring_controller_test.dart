@@ -1340,4 +1340,118 @@ void main() {
       expect(await monitoring.redactLines(['token=abc']), isNull);
     });
   });
+
+  group('unit reads (SVC-07 to SVC-10) and TLS checks (CRT-01)', () {
+    test('a stopped engine answers no link and nothing to check', () async {
+      final unit = monitoring.queryUnit('srv-1', const SocketsQuery());
+      final tls = monitoring.checkTlsEndpoints(const [
+        TlsEndpoint('srv-1.example', 443),
+      ]);
+      await engine.close();
+      await settle();
+
+      expect(
+        ((await unit).payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+      expect(await tls, isNull);
+
+      expect(
+        ((await monitoring.queryUnit('srv-1', const SocketsQuery())).payload
+                as UnitQueryFailed)
+            .failure,
+        UnitQueryFailure.noLink,
+      );
+      expect(
+        await monitoring.checkTlsEndpoints(const [
+          TlsEndpoint('srv-1.example', 443),
+        ]),
+        isNull,
+      );
+    });
+
+    test('a refused send answers every pending read', () async {
+      final waitingHost = monitoring.queryHost('srv-1', const BootsQuery());
+      final waitingUnit = monitoring.queryUnit('srv-1', const SocketsQuery());
+      engine.refuseSends = true;
+      final refusedRedaction = monitoring.redactLines(['token=abc']);
+      final refusedTls = monitoring.checkTlsEndpoints(const [
+        TlsEndpoint('srv-1.example', 443),
+      ]);
+      engine.refuseSends = false;
+
+      expect(await refusedRedaction, isNull);
+      expect(await refusedTls, isNull);
+      expect(
+        ((await waitingHost).payload as HostQueryFailed).failure,
+        HostQueryFailure.noLink,
+      );
+      expect(
+        ((await waitingUnit).payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+    });
+  });
+
+  group('rejections naming a read (CTL-05)', () {
+    test('each rejection settles only the read it names', () async {
+      final host = monitoring.queryHost('srv-1', const BootsQuery());
+      final unit = monitoring.queryUnit('srv-1', const SocketsQuery());
+      final redaction = monitoring.redactLines(['token=abc']);
+      final tls = monitoring.checkTlsEndpoints(const [
+        TlsEndpoint('srv-1.example', 443),
+      ]);
+      final sentHost = engine.sentOfType<HostQuery>().cast<HostQuery>().single;
+      final sentUnit = engine.sentOfType<UnitQuery>().cast<UnitQuery>().single;
+      final sentRedaction = engine
+          .sentOfType<RedactLines>()
+          .cast<RedactLines>()
+          .single;
+      final sentTls = engine
+          .sentOfType<CheckTlsEndpoints>()
+          .cast<CheckTlsEndpoints>()
+          .single;
+
+      engine
+        ..emit(
+          RequestRejected(
+            'HostQuery',
+            'no fleet server srv-1',
+            requestId: sentHost.queryId,
+          ),
+        )
+        ..emit(
+          RequestRejected(
+            'UnitQuery',
+            'no fleet server srv-1',
+            requestId: sentUnit.requestId,
+          ),
+        )
+        ..emit(
+          RequestRejected(
+            'RedactLines',
+            'engine error',
+            requestId: sentRedaction.requestId,
+          ),
+        )
+        ..emit(
+          RequestRejected(
+            'CheckTlsEndpoints',
+            'engine error',
+            requestId: sentTls.requestId,
+          ),
+        );
+
+      expect(
+        ((await host).payload as HostQueryFailed).failure,
+        HostQueryFailure.noLink,
+      );
+      expect(
+        ((await unit).payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+      expect(await redaction, isNull);
+      expect(await tls, isNull);
+    });
+  });
 }

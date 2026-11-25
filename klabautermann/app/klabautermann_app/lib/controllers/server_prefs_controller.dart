@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'catalog_writes.dart';
 import 'safety_controller.dart' show ServerPrefsSource;
 
 /// A preferences write the engine refused or never answered (03 §4.8).
@@ -26,6 +27,10 @@ final class ServerPrefsController extends ChangeNotifier
     implements ServerPrefsSource {
   ServerPrefsController(this._engine) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    _writes = CatalogWrites(
+      _engine,
+      (failure, detail) => ServerPrefsNotSavedException(failure, detail),
+    );
   }
 
   final EngineClient _engine;
@@ -33,7 +38,7 @@ final class ServerPrefsController extends ChangeNotifier
 
   final Map<String, ServerPrefs> _prefs = {};
   Set<String> _syncing = const {};
-  final Map<String, Completer<void>> _writes = {};
+  late final CatalogWrites _writes;
   var _count = 0;
   bool _engineStopped = false;
 
@@ -48,24 +53,15 @@ final class ServerPrefsController extends ChangeNotifier
   /// [ServerPrefsChanged] that shows it, and throws
   /// [ServerPrefsNotSavedException] when it was refused.
   @override
-  Future<void> write(String serverId, ServerPrefs? prefs) {
+  Future<void> write(String serverId, ServerPrefs? prefs) async {
     // A stopped engine's port may still take a request without an error,
     // and nothing would ever answer it.
-    if (_engineStopped) {
-      return Future.error(const ServerPrefsNotSavedException(null));
-    }
+    if (_engineStopped) throw const ServerPrefsNotSavedException(null);
     final requestId = 'prefs-${_count++}';
-    final written = Completer<void>();
-    _writes[requestId] = written;
-    try {
-      _engine.send(
-        SetServerPrefs(requestId: requestId, serverId: serverId, prefs: prefs),
-      );
-    } on StateError {
-      _writes.remove(requestId);
-      return Future.error(const ServerPrefsNotSavedException(null));
-    }
-    return written.future;
+    await _writes.write(
+      requestId,
+      SetServerPrefs(requestId: requestId, serverId: serverId, prefs: prefs),
+    );
   }
 
   void _onEngineEvent(EngineEvent event) {
@@ -87,28 +83,18 @@ final class ServerPrefsController extends ChangeNotifier
           _prefs[serverId] = prefs;
         }
         notifyListeners();
-      case CatalogWritten(:final requestId):
-        _writes.remove(requestId)?.complete();
-      case CatalogWriteRefused(:final requestId, :final failure, :final detail):
-        _writes
-            .remove(requestId)
-            ?.completeError(ServerPrefsNotSavedException(failure, detail));
       case _:
     }
   }
 
   void _onEngineDone() {
     _engineStopped = true;
-    for (final written in _writes.values) {
-      written.completeError(const ServerPrefsNotSavedException(null));
-    }
-    _writes.clear();
   }
 
   @override
   void dispose() {
     unawaited(_events.cancel());
-    _onEngineDone();
+    _writes.dispose();
     super.dispose();
   }
 }
