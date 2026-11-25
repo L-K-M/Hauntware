@@ -782,3 +782,36 @@ missing.
 The four files hold exactly the original lines. Raw JSON built while its
 tile is closed, focus not retaken on a container switch: pre-existing
 behaviour of moved code. The `part` note is the intended design.
+
+## Findings PLAN.md did not schedule (triage 2026-11-25)
+
+Eight low findings appear in the reports but in no PLAN.md row.
+
+- ARC-12: FIXED by earlier PRs. `PanelSection` and `PanelNotice` moved
+  to `panel_kit.dart` in #828; `DockerNotice`, the container badges and
+  `containerStateText` moved to `docker_notice.dart` and
+  `container_badges.dart` in #853.
+- ARC-19, UIB-11 (monospace style, latest-read holder, output sheet
+  shell), ENG-13: taken up in small refactor PRs. UIB-11's
+  `LogScreenScaffold` is deferred: the three screens' headers differ
+  (stack and container scopes, the panel's pickers), so one scaffold
+  needs UIB-5's log sheet merge first.
+- OPS-7: DEFERRED. The elevated form depends on the elevation strategy
+  `selectElevationStrategy` picks at run time from the probe (`sudo -n`,
+  the `-S` prelude), so a plan-time preview cannot name it exactly.
+  Running elevated steps through the `sh -c` export wrapper would make
+  the preview true but break sudoers rules that allow only named
+  commands. Needs a decision on what 03 §8.5 and §8.8 promise for
+  elevated steps; the effect today is the text mismatch only (no
+  elevated step parses zone-dependent output).
+- HST-12: DEFERRED. Memory cost only; the reviewer found limits and
+  resynchronisation correct. A `BytesBuilder` rewrite of the frame parser
+  is size M on the path every sample takes; worth doing with a
+  benchmark, not as a cleanup.
+- HST-13: DEFERRED. Folding the duplicated shell fragments changes the
+  remote collector program, which needs a collector-set version bump and
+  a real-shell run on every supported shell (mksh, BusyBox ash, dash,
+  bash); not a low-risk cleanup.
+- ARC-18: DEFERRED. A generic `RemoteValue<T>` in `ghost_desktop` touches
+  Poltergeist's settings window too; the reviewer rated it size L, risk
+  medium, lowest priority, and did not read the file in full.
