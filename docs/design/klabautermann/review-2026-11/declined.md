@@ -512,3 +512,7 @@ ENG-11 names `engine_state.dart`, `engine_fleet.dart`, `engine_sync_chain.dart`,
 ## #834 GLM round 1 (510f13e): 1 real (test only) fixed, 1 deferred
 - ghost_ui persisted_setting_test: the apply-before-save `expect` ran inside a ChangeNotifier listener, which reports rather than throws, so it could not fail. Fixed: the count is recorded at notification and asserted after.
 - A shared `dockerRetryDelay` helper beside the moved constants: deferred to DKR-11, which replaces the three backoffs with one `Backoff` type; this PR only shares the constants.
+
+## #836 GLM round 1 (1b489bd): 0 actionable, no push
+- engine_isolate.dart "`late final reads` is read before startup assigns it; make it nullable and answer failures": refuted. `queue` starts as the startup chain (`SshConfigImportStore.open(...).then(...)`) and every request is chained after it; the chain's last step assigns `reads`, and a startup that throws sets `startupFailure`, which rejects every non-Shutdown request before `handle` (`commands.listen`), and Shutdown reads no `reads`.
+- engine_reads_test `supervisor.connect` not wrapped in `unawaited`: declined as minor; the package does not enable `unawaited_futures` and `dart analyze --fatal-infos` is clean.
