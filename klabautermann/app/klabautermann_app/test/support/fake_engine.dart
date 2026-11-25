@@ -24,12 +24,16 @@ final class FakeEngineClient implements EngineClient {
   List<EngineEvent>? _held = [];
   bool _closed = false;
 
+  /// Refuses [send] while the events stream stays open, as a client whose
+  /// port closed without its stream ending yet.
+  bool refuseSends = false;
+
   @override
   Stream<EngineEvent> get events => _events.stream;
 
   @override
   void send(EngineRequest request) {
-    if (_closed) {
+    if (_closed || refuseSends) {
       throw StateError('the engine client is shut down');
     }
     sent.add(request);

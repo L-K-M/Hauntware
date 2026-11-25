@@ -12,6 +12,7 @@ import 'container_terminals.dart';
 import 'disk_usage_reads.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
+import 'engine_reads.dart';
 import 'history_reads.dart';
 import 'job_history_reads.dart';
 import 'log_reads.dart';
@@ -170,6 +171,33 @@ final class MonitoringController extends ChangeNotifier {
        attentionAcks = attentionAcks ?? AttentionAcks(),
        containerColumns = containerColumns ?? ContainerColumnChoice() {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    _hostQueries = _reads(
+      (event) => switch (event) {
+        HostResult(:final queryId) => (queryId, event),
+        _ => null,
+      },
+    );
+    _unitQueries = _reads(
+      (event) => switch (event) {
+        UnitQueryResult(:final requestId) => (requestId, event),
+        _ => null,
+      },
+    );
+    _redactions = _reads(
+      (event) => switch (event) {
+        RedactedLines(:final requestId, :final text) => (requestId, text),
+        _ => null,
+      },
+    );
+    _tlsChecks = _reads(
+      (event) => switch (event) {
+        TlsEndpointsChecked(:final requestId, :final checks) => (
+          requestId,
+          checks,
+        ),
+        _ => null,
+      },
+    );
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
     jobHistory = JobHistoryReads(_engine);
@@ -252,19 +280,32 @@ final class MonitoringController extends ChangeNotifier {
 
   final Map<String, _ServerReadings> _readings = {};
 
-  /// The host queries waiting for their answers, by query id.
-  final Map<String, (String, Completer<HostResult>)> _hostQueries = {};
+  /// The host queries waiting for their answers, one concern of their
+  /// own like the report reads; a stopped engine answers no link.
+  late final EngineReads<HostResult> _hostQueries;
   int _nextHostQuery = 0;
 
-  /// Unit reads waiting on the engine, by request id.
-  final Map<String, (String, Completer<UnitQueryResult>)> _unitQueries = {};
+  /// Unit reads waiting on the engine, likewise.
+  late final EngineReads<UnitQueryResult> _unitQueries;
   int _nextUnitQuery = 0;
 
-  /// The [redactLines] requests waiting for the engine, by request id.
-  final Map<String, Completer<String?>> _redactions = {};
-  final Map<String, Completer<List<TlsEndpointCheck>?>> _tlsChecks = {};
+  /// The [redactLines] requests waiting for the engine, likewise: null
+  /// when the engine has stopped.
+  late final EngineReads<String?> _redactions;
+  late final EngineReads<List<TlsEndpointCheck>?> _tlsChecks;
   var _nextTlsCheck = 0;
   int _nextRedaction = 0;
+
+  /// One [EngineReads] per read concern: this controller's sends treat a
+  /// refused port as a stopped engine for everything, so each read does
+  /// too and tells [_onEngineDone] when it learns so.
+  EngineReads<A> _reads<A>((String, A)? Function(EngineEvent) answerOf) =>
+      EngineReads(
+        _engine,
+        answerOf,
+        sendFailure: SendFailure.engineStopped,
+        onEngineStopped: _onEngineDone,
+      );
 
   /// The refreshes waiting for their readings.
   final Set<_PendingRefresh> _refreshes = {};
@@ -461,23 +502,23 @@ final class MonitoringController extends ChangeNotifier {
   /// journal's boots (LOG-08, LOG-09). A stopped engine answers no link.
   Future<HostResult> queryHost(String serverId, HostQuerySpec query) {
     final queryId = 'host-${_nextHostQuery++}';
-    if (_engineStopped) return Future.value(_noHostLink(serverId, queryId));
-    final answer = Completer<HostResult>();
-    _hostQueries[queryId] = (serverId, answer);
-    _send(HostQuery(serverId: serverId, queryId: queryId, query: query));
-    return answer.future;
+    return _hostQueries.read(
+      queryId,
+      HostQuery(serverId: serverId, queryId: queryId, query: query),
+      () => _noHostLink(serverId, queryId),
+    );
   }
 
   /// [lines] joined by newlines, through the engine's secret redactor
   /// (LOG-10, 03 §8.9), which the app cannot import; null when the engine
   /// has stopped, so nothing is exported unredacted by accident.
   Future<String?> redactLines(List<String> lines) {
-    if (_engineStopped) return Future.value();
     final requestId = 'redact-${_nextRedaction++}';
-    final answer = Completer<String?>();
-    _redactions[requestId] = answer;
-    _send(RedactLines(requestId, lines));
-    return answer.future;
+    return _redactions.read(
+      requestId,
+      RedactLines(requestId, lines),
+      () => null,
+    );
   }
 
   /// Checks [endpoints]' certificates from this device through the engine
@@ -485,12 +526,12 @@ final class MonitoringController extends ChangeNotifier {
   Future<List<TlsEndpointCheck>?> checkTlsEndpoints(
     List<TlsEndpoint> endpoints,
   ) {
-    if (_engineStopped) return Future.value();
     final requestId = 'tls-${_nextTlsCheck++}';
-    final answer = Completer<List<TlsEndpointCheck>?>();
-    _tlsChecks[requestId] = answer;
-    _send(CheckTlsEndpoints(requestId, endpoints));
-    return answer.future;
+    return _tlsChecks.read(
+      requestId,
+      CheckTlsEndpoints(requestId, endpoints),
+      () => null,
+    );
   }
 
   static HostResult _noHostLink(String serverId, String queryId) => HostResult(
@@ -572,11 +613,11 @@ final class MonitoringController extends ChangeNotifier {
   /// no link.
   Future<UnitQueryResult> queryUnit(String serverId, UnitQuerySpec query) {
     final requestId = 'unit-${_nextUnitQuery++}';
-    if (_engineStopped) return Future.value(_noUnitLink(serverId, requestId));
-    final answer = Completer<UnitQueryResult>();
-    _unitQueries[requestId] = (serverId, answer);
-    _send(UnitQuery(serverId: serverId, requestId: requestId, query: query));
-    return answer.future;
+    return _unitQueries.read(
+      requestId,
+      UnitQuery(serverId: serverId, requestId: requestId, query: query),
+      () => _noUnitLink(serverId, requestId),
+    );
   }
 
   static UnitQueryResult _noUnitLink(String serverId, String requestId) =>
@@ -753,12 +794,8 @@ final class MonitoringController extends ChangeNotifier {
 
   void _onEngineEvent(EngineEvent event) {
     switch (event) {
-      case HostResult(:final queryId):
-        _hostQueries.remove(queryId)?.$2.complete(event);
-      case RedactedLines(:final requestId, :final text):
-        _redactions.remove(requestId)?.complete(text);
-      case TlsEndpointsChecked(:final requestId, :final checks):
-        _tlsChecks.remove(requestId)?.complete(checks);
+      // The host, unit, redaction and TLS reads are matched inside
+      // their own EngineReads, a rejection of theirs included.
       case Sample(:final serverId):
         // One still in flight when its server left the fleet would bring
         // back what the purge dropped.
@@ -822,34 +859,8 @@ final class MonitoringController extends ChangeNotifier {
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).gap(event);
-      case UnitQueryResult(:final requestId):
-        _unitQueries.remove(requestId)?.$2.complete(event);
-      case RequestRejected(:final requestName, :final requestId?):
-        _rejected(requestName, requestId);
       case EngineEvent():
         break;
-    }
-  }
-
-  /// The engine refused the request [requestName] with [requestId], for a
-  /// server that left its fleet say, so no answer follows: the read
-  /// waiting on it settles as one without a link would, rather than
-  /// staying pending.
-  /// Each id is checked against its own request's name, since the four
-  /// reads count their ids apart.
-  void _rejected(String requestName, String requestId) {
-    if (requestName == '$HostQuery') {
-      if (_hostQueries.remove(requestId) case (final serverId, final answer)) {
-        answer.complete(_noHostLink(serverId, requestId));
-      }
-    } else if (requestName == '$UnitQuery') {
-      if (_unitQueries.remove(requestId) case (final serverId, final answer)) {
-        answer.complete(_noUnitLink(serverId, requestId));
-      }
-    } else if (requestName == '$RedactLines') {
-      _redactions.remove(requestId)?.complete(null);
-    } else if (requestName == '$CheckTlsEndpoints') {
-      _tlsChecks.remove(requestId)?.complete(null);
     }
   }
 
@@ -896,25 +907,14 @@ final class MonitoringController extends ChangeNotifier {
   }
 
   void _onEngineDone() {
+    if (_engineStopped) return;
     _engineStopped = true;
-    for (final MapEntry(key: queryId, value: (serverId, answer))
-        in _hostQueries.entries) {
-      answer.complete(_noHostLink(serverId, queryId));
-    }
-    _hostQueries.clear();
-    for (final MapEntry(key: requestId, value: (serverId, answer))
-        in _unitQueries.entries) {
-      answer.complete(_noUnitLink(serverId, requestId));
-    }
-    _unitQueries.clear();
-    for (final answer in _redactions.values) {
-      answer.complete(null);
-    }
-    _redactions.clear();
-    for (final answer in _tlsChecks.values) {
-      answer.complete(null);
-    }
-    _tlsChecks.clear();
+    // Each helper answers its own no-link or null value, as the loops
+    // here did; a helper that already stopped does nothing again.
+    _hostQueries.dispose();
+    _unitQueries.dispose();
+    _redactions.dispose();
+    _tlsChecks.dispose();
     for (final timer in _leaving.values) {
       timer.cancel();
     }
