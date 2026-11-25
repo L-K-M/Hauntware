@@ -15,7 +15,7 @@ final class _Setting extends PersistedSetting<int> {
   _Setting(
     super.value,
     this.saves, {
-    super.retryFailedSaves = false,
+    super.failedSaves = FailedSaves.surfaceOnce,
     List<bool>? failures,
   }) : failures = failures ?? [];
 
@@ -95,7 +95,7 @@ void main() {
     final setting = _Setting(
       1,
       saves,
-      retryFailedSaves: true,
+      failedSaves: FailedSaves.retry,
       failures: [true],
     );
     addTearDown(setting.dispose);

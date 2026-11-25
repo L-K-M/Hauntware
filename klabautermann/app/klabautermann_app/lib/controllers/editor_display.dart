@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:ghost_ui/ghost_ui.dart' show PersistedSetting;
+import 'package:ghost_ui/ghost_ui.dart' show FailedSaves, PersistedSetting;
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize;
 
@@ -82,7 +82,7 @@ final class EditorDisplayNotSavedException implements Exception {
 final class EditorDisplayController extends PersistedSetting<EditorDisplay>
     implements EditorDisplaySettings {
   EditorDisplayController({EditorDisplay? display, this._save})
-    : super(display ?? EditorDisplay(), retryFailedSaves: true);
+    : super(display ?? EditorDisplay(), failedSaves: FailedSaves.retry);
 
   final Future<void> Function(
     String? family,

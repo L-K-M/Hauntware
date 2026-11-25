@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:ghost_ui/ghost_ui.dart' show PersistedSetting;
+import 'package:ghost_ui/ghost_ui.dart' show FailedSaves, PersistedSetting;
 
 /// Which zone the app shows a server's times in (A11Y-07).
 enum TimeDisplay {
@@ -44,7 +44,7 @@ final class TimeDisplayNotSavedException implements Exception {
 final class TimeDisplayController extends PersistedSetting<TimeDisplay>
     implements TimeDisplaySettings {
   TimeDisplayController({TimeDisplay display = TimeDisplay.device, this._save})
-    : super(display, retryFailedSaves: true);
+    : super(display, failedSaves: FailedSaves.retry);
 
   final Future<void> Function(bool serverTimes)? _save;
 

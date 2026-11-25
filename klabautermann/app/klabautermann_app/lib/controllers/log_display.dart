@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:ghost_ui/ghost_ui.dart' show PersistedSetting;
+import 'package:ghost_ui/ghost_ui.dart' show FailedSaves, PersistedSetting;
 
 /// A11Y-12's log text sizes, in logical pixels before the system's text
 /// scale.
@@ -71,7 +71,7 @@ final class LogDisplayNotSavedException implements Exception {
 final class LogDisplayController extends PersistedSetting<LogDisplay>
     implements LogDisplaySettings {
   LogDisplayController({LogDisplay? display, this._save})
-    : super(display ?? LogDisplay(), retryFailedSaves: true);
+    : super(display ?? LogDisplay(), failedSaves: FailedSaves.retry);
 
   final Future<void> Function(int textSize, bool wrap)? _save;
 

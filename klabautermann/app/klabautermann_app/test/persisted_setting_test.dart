@@ -11,7 +11,7 @@ final class _NotSaved implements Exception {
 }
 
 final class _Setting extends PersistedSetting<int> {
-  _Setting(super.value, this.saves) : super(retryFailedSaves: true);
+  _Setting(super.value, this.saves) : super(failedSaves: FailedSaves.retry);
 
   /// The values saved; each true entry in [failures] fails a save.
   final List<int> saves;
@@ -91,7 +91,7 @@ void main() {
 }
 
 final class _Unsaved extends PersistedSetting<int> {
-  _Unsaved(super.value) : super(retryFailedSaves: true);
+  _Unsaved(super.value) : super(failedSaves: FailedSaves.retry);
 
   Future<void> set(int next) => change(next);
 

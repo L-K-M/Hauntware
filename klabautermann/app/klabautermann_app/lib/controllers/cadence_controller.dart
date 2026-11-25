@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:ghost_ui/ghost_ui.dart' show PersistedSetting;
+import 'package:ghost_ui/ghost_ui.dart' show FailedSaves, PersistedSetting;
 import 'package:klabautermann_core/klabautermann_core.dart' show CadenceProfile;
 
 /// The polling budget's presets (SAF-19): [automatic] samples at the
@@ -68,7 +68,7 @@ final class CadenceController extends PersistedSetting<CadencePreset>
   CadenceController({
     CadencePreset preset = CadencePreset.automatic,
     this._save,
-  }) : super(preset, retryFailedSaves: true);
+  }) : super(preset, failedSaves: FailedSaves.retry);
 
   final Future<void> Function(String name)? _save;
 

@@ -1,5 +1,19 @@
 import 'package:flutter/foundation.dart';
 
+/// What a [PersistedSetting] does when the value already in force is
+/// written again after its save failed.
+enum FailedSaves {
+  /// The repeated write is a no-op: a failed save surfaces once, with the
+  /// save's own error, and only a different value writes again
+  /// (Poltergeist's settings).
+  surfaceOnce,
+
+  /// The setting remembers the last saved value and tries the save again;
+  /// a failed save throws the setting's own [PersistedSetting.notSaved]
+  /// error (Klabautermann's settings).
+  retry,
+}
+
 /// A value the composition root restores from the device's settings and
 /// saves there on every change. A change applies before it is saved: lists
 /// re-sort, editors redraw and themes repaint at once, and a section that
@@ -7,26 +21,22 @@ import 'package:flutter/foundation.dart';
 /// save keeps the change on screen and throws, so the section can say it
 /// was not saved; the next write carries it.
 ///
-/// [retryFailedSaves] picks what a later write of the value already in
-/// force does after a failed save. With it, the base remembers the last
-/// saved value and tries the save again when the same value is picked;
-/// this is Klabautermann's behaviour, where the setting's own exception
-/// says what failed. Without it, a repeated write is a no-op, which is
-/// Poltergeist's behaviour: a failed save surfaces once and only a
-/// different value writes again. The save's own error propagates.
+/// [failedSaves] picks what a later write of the value already in force
+/// does after a failed save; see [FailedSaves].
 abstract class PersistedSetting<T> extends ChangeNotifier
     implements ValueListenable<T> {
-  PersistedSetting(T value, {bool retryFailedSaves = false})
+  PersistedSetting(T value, {this.failedSaves = FailedSaves.surfaceOnce})
     : _value = value,
-      _saved = value,
-      _retriesFailedSaves = retryFailedSaves;
+      _saved = value;
 
   T _value;
 
   /// The value last known to be saved: after a failed save, picking the
   /// same value again tries the save again.
   T _saved;
-  final bool _retriesFailedSaves;
+
+  /// What a repeated write does after a failed save.
+  final FailedSaves failedSaves;
 
   @override
   T get value => _value;
@@ -35,8 +45,8 @@ abstract class PersistedSetting<T> extends ChangeNotifier
   @protected
   Future<void>? save(T value);
 
-  /// The error a failed save throws when [retryFailedSaves] is on;
-  /// defaults to the save's own error.
+  /// The error a failed save throws under [FailedSaves.retry]; defaults
+  /// to the save's own error.
   @protected
   Object notSaved(Object error) => error;
 
@@ -44,7 +54,7 @@ abstract class PersistedSetting<T> extends ChangeNotifier
   /// already saved.
   @protected
   Future<void> change(T next) async {
-    if (!_retriesFailedSaves) {
+    if (failedSaves == FailedSaves.surfaceOnce) {
       if (next == _value) return;
       _value = next;
       notifyListeners();
