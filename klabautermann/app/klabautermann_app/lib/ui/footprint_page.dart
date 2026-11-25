@@ -11,7 +11,7 @@ import 'time_display.dart';
 import 'actions/action_preview.dart' show startAction;
 import 'admin_mode_chip.dart' show TurnOnAdminModeButton;
 import 'edit/remote_editor.dart' show openRemoteEditor;
-import 'system_panel.dart' show PanelNotice;
+import 'panel_kit.dart' show PanelNotice;
 
 /// The prefix a crontab backup's source carries before its account
 /// (03 §8.11).

@@ -7,7 +7,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'docker/containers_view.dart' show containerIsUp, containerNameOf;
 import 'server_surfaces.dart';
-import 'system_panel.dart' show PanelSection;
+import 'panel_kit.dart' show PanelSection;
 
 /// How many rows each of the Overview's top lists shows.
 const int kTopListLength = 5;

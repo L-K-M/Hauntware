@@ -9,7 +9,7 @@ import 'chart_strings.dart';
 import 'charts/charts.dart';
 import 'threshold_scope.dart';
 import 'time_display.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection;
+import 'panel_kit.dart' show PanelNotice, PanelSection;
 
 /// The metrics the History card offers: the percentages it charts on one
 /// scale from zero to 100. Load per core has no such ceiling, so the card

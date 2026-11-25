@@ -7,7 +7,7 @@ import '../controllers/admin_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'admin_mode_chip.dart' show AdminScope;
 import 'read_section.dart';
-import 'system_panel.dart' show PanelNotice, PanelSection;
+import 'panel_kit.dart' show PanelNotice, PanelSection;
 
 /// NET-06's section of the System tab: the firewall rules of whichever of
 /// ufw, firewalld, nftables and iptables the server has, read on request

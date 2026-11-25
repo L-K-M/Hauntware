@@ -19,7 +19,7 @@ import 'package:klabautermann_app/ui/overview_cards.dart';
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_app/ui/threshold_scope.dart';
-import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
+import 'package:klabautermann_app/ui/panel_kit.dart' show PanelSection;
 import 'package:klabautermann_app/ui/threshold_announcer.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 

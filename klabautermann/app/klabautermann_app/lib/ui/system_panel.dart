@@ -23,6 +23,7 @@ import 'interfaces.dart';
 import 'listening_ports.dart';
 import 'mounts.dart';
 import 'oom_kills.dart';
+import 'panel_kit.dart';
 import 'power.dart';
 import 'processor.dart';
 import 'sortable_table.dart';
@@ -57,14 +58,6 @@ enum SystemSection {
   certificates,
   power,
 }
-
-/// The panel width from which the fact sections sit side by side and the
-/// mounts table adds its type and bytes columns and usage bars. The desktop
-/// workspace passes it at a 1280 px window; at the desktop shell's
-/// narrowest, 960 px, it has about 400 px and lays out as on a phone. It
-/// grows with the text scale, as the table's columns do, so larger text
-/// takes the narrow layout before the wide table would scroll sideways.
-const double _wideWidth = 600;
 
 const double _gap = 16;
 
@@ -185,9 +178,7 @@ class _SystemPanelState extends State<SystemPanel> {
     final profile = _profile.value;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide =
-            constraints.maxWidth >=
-            MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, constraints);
         final identity = _identitySection(l10n, profile);
         final processor = ProcessorSection(
           key: const ValueKey(SystemSection.processor),
@@ -832,39 +823,6 @@ PanelNotice _unavailable(
   );
 }
 
-/// A titled group of facts on its own surface, here and in the Overview
-/// tab. Its title is a heading for screen readers, and its children may
-/// hold ink (the pseudo filter).
-class PanelSection extends StatelessWidget {
-  const PanelSection({super.key, required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: theme.colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 12,
-          children: [
-            Semantics(
-              header: true,
-              child: Text(title, style: theme.textTheme.titleSmall),
-            ),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// A label over its value, read as one node. Text wraps rather than
 /// clips at any text scale.
 class _Fact extends StatelessWidget {
@@ -911,56 +869,6 @@ class _Fact extends StatelessWidget {
                 ),
               ],
             ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A section's state in words beside an icon, read as one node, here and
-/// in the Overview tab; the icon adds a shape, the text carries the
-/// meaning (A11Y-01).
-class PanelNotice extends StatelessWidget {
-  const PanelNotice({
-    super.key,
-    required this.icon,
-    required this.text,
-    this.detail,
-  });
-
-  final IconData icon;
-  final String text;
-
-  /// The host's error output, cut to a few lines.
-  final String? detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final detail = this.detail;
-    return MergeSemantics(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 8,
-        children: [
-          Icon(icon, size: 18, color: muted),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Text(text, style: theme.textTheme.bodyMedium),
-                if (detail != null)
-                  Text(
-                    detail,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                  ),
-              ],
-            ),
-          ),
         ],
       ),
     );

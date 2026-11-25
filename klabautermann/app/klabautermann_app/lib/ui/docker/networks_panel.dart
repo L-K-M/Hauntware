@@ -8,16 +8,12 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show NetworkActionsButton, PruneButton, networkActionEntries;
+import '../panel_kit.dart' show panelIsWide;
 import '../sortable_table.dart';
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
 import 'docker_cells.dart';
 import 'networks_view.dart';
-
-/// The panel width from which the networks show as the sortable table;
-/// narrower, as on a phone, they show as two-line rows. It grows with the
-/// text scale, as the Images sub-tab's does.
-const double _wideWidth = 600;
 
 /// The share of its height the header takes before it scrolls, so large
 /// text never pushes the list out of sight.
@@ -144,8 +140,7 @@ class _NetworksPanelState extends State<NetworksPanel> {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final wide =
-            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        final wide = panelIsWide(context, box);
         final header = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 12,
