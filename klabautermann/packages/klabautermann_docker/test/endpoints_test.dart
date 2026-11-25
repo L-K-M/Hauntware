@@ -311,33 +311,6 @@ void main() {
         'distribution inspect has no Descriptor',
       ]);
     });
-
-    test('pullImage streams parsed progress values', () async {
-      final daemon = FakeDaemon();
-      final client = clientFor(daemon, const ApiVersion(1, 44));
-      final collected = client
-          .pullImage('alpine', tag: '3.21')
-          .map((r) => r.value)
-          .toList();
-      await daemon.gotBytes(1);
-      final body = fixtureBytes('pull-progress-1.44.json');
-      daemon.feed(
-        wireResponse(
-          '200 OK',
-          headers: {'Content-Length': '${body.length}'},
-          body: body,
-        ),
-      );
-      final progress = await collected;
-      expect(
-        daemon.text,
-        startsWith('POST /v1.44/images/create?fromImage=alpine&tag=3.21'),
-      );
-      expect(progress, hasLength(4));
-      expect(progress[1].status, 'Downloading');
-      expect(progress[1].progressDetail!.ratio, closeTo(0.00399, 0.001));
-      expect(progress[3].status, startsWith('Digest:'));
-    });
   });
 
   group('network, volume and engine endpoints', () {
@@ -412,33 +385,6 @@ void main() {
         type: SystemDfType.buildCache,
       );
       expect(text, startsWith('GET /v1.53/system/df?type=build-cache '));
-    });
-  });
-
-  group('events endpoint', () {
-    test('streams parsed events and resumes with since', () async {
-      final daemon = FakeDaemon();
-      final client = clientFor(daemon, const ApiVersion(1, 52));
-      final collected = client
-          .events(since: const LogTimestamp(1780000000, 0))
-          .map((r) => r.value)
-          .toList();
-      await daemon.gotBytes(1);
-      final body = fixtureBytes('events-1.52.ndjson');
-      daemon.feed(
-        wireResponse(
-          '200 OK',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': '${body.length}',
-          },
-          body: body,
-        ),
-      );
-      final events = await collected;
-      expect(daemon.text, startsWith('GET /v1.52/events?since=1780000000'));
-      expect(events, hasLength(7));
-      expect(events.first.action, 'create');
     });
   });
 

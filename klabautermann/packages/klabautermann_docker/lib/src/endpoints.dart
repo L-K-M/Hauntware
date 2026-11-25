@@ -13,12 +13,10 @@ import 'log_time.dart';
 import 'models/container.dart';
 import 'models/container_top.dart';
 import 'models/engine_info.dart';
-import 'models/events.dart';
 import 'models/exec.dart';
 import 'models/image.dart';
 import 'models/image_history.dart';
 import 'models/network.dart';
-import 'models/pull.dart';
 import 'models/stats.dart';
 import 'models/system_df.dart';
 import 'models/volume.dart';
@@ -189,25 +187,6 @@ extension DockerEndpoints on DockerClient {
       cancelToken: cancelToken,
     );
     return parseContainerStats(_decodeBuffered(res.body, 'stats').value);
-  }
-
-  /// `GET /containers/{id}/stats?stream=1` (03 §5.6, §7.12 CST-03): one
-  /// [ContainerStats] per JSON line.
-  Stream<DockerParseResult<ContainerStats>> containerStatsStream(
-    String id, {
-    Duration? timeout,
-    DockerCancelToken? cancelToken,
-  }) async* {
-    final res = await requestLines(
-      'GET',
-      '/containers/${_seg(id)}/stats',
-      query: {'stream': '1'},
-      timeout: timeout,
-      cancelToken: cancelToken,
-    );
-    await for (final line in res.body) {
-      yield parseContainerStats(_decodeLine(line, 'stats').value);
-    }
   }
 
   /// `GET /containers/{id}/logs` as raw bytes (03 §5.6, §7.12 CTX-01).
@@ -525,30 +504,6 @@ extension DockerEndpoints on DockerClient {
     return parseImageHistory(_decodeBuffered(res.body, 'image history').value);
   }
 
-  /// `POST /images/create?fromImage=&tag=` (03 §5.6, §7.14 IMG-03):
-  /// concatenated JSON progress values keyed by layer id. Closing the
-  /// stream cancels the pull on the daemon.
-  Stream<DockerParseResult<PullProgress>> pullImage(
-    String fromImage, {
-    String? tag,
-    String? platform,
-    Map<String, String>? headers,
-    Duration? timeout,
-    DockerCancelToken? cancelToken,
-  }) async* {
-    final res = await requestJsonValues(
-      'POST',
-      '/images/create',
-      query: {'fromImage': fromImage, 'tag': ?tag, 'platform': ?platform},
-      headers: headers,
-      timeout: timeout,
-      cancelToken: cancelToken,
-    );
-    await for (final value in res.body) {
-      yield parsePullProgress(value);
-    }
-  }
-
   // --- networks and volumes -------------------------------------------
 
   /// `GET /networks` (03 §7.15 DNW-01).
@@ -662,36 +617,6 @@ extension DockerEndpoints on DockerClient {
     ]);
   }
 
-  /// `GET /events` (03 §5.6, §7.12 DKE-02): one parsed event per line,
-  /// each with its own warnings. [since] resumes after a reconnect; the
-  /// caller re-lists everything when the gap exceeds
-  /// [eventGapThreshold].
-  Stream<DockerParseResult<DockerEvent>> events({
-    LogTimestamp? since,
-    LogTimestamp? until,
-    Map<String, Object?>? filters,
-    Duration? timeout,
-    DockerCancelToken? cancelToken,
-  }) async* {
-    final res = await requestLines(
-      'GET',
-      '/events',
-      query: {
-        if (since != null) 'since': '${since.seconds}',
-        if (until != null) 'until': '${until.seconds}',
-      },
-      filters: filters,
-      timeout: timeout,
-      cancelToken: cancelToken,
-    );
-    await for (final line in res.body) {
-      yield parseDockerEvent(
-        _decodeLine(line, 'event').value,
-        expectEventV2: gates.usesEventV2,
-      );
-    }
-  }
-
   /// Sends [spec] as the versioned request it names.
   Future<void> _send(
     DockerRequestSpec spec, {
@@ -729,13 +654,5 @@ DockerParseResult<Object?> _decodeBuffered(Uint8List body, String what) {
     );
   } catch (e) {
     return DockerParseResult(null, ['malformed JSON from $what: $e']);
-  }
-}
-
-DockerParseResult<Object?> _decodeLine(String line, String what) {
-  try {
-    return DockerParseResult(jsonDecode(line));
-  } catch (e) {
-    return DockerParseResult(null, ['malformed JSON $what line: $e']);
   }
 }

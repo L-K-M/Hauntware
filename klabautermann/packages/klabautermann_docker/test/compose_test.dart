@@ -98,35 +98,6 @@ void main() {
   });
 
   group('compose command builders (03 §7.16 STK-06)', () {
-    test('ps builds the documented argv with the socket', () {
-      final inv = composePs(
-        socketPath: '/var/run/docker.sock',
-        project: 'web',
-        projectDirectory: '/opt/web',
-        configFiles: const ['/opt/web/compose.yaml'],
-        envFile: '/opt/web/.env',
-        all: true,
-      );
-      expect(inv.argv, [
-        'docker',
-        '--host',
-        'unix:///var/run/docker.sock',
-        'compose',
-        '-p',
-        'web',
-        '--project-directory',
-        '/opt/web',
-        '-f',
-        '/opt/web/compose.yaml',
-        '--env-file',
-        '/opt/web/.env',
-        'ps',
-        '--all',
-        '--format',
-        'json',
-      ]);
-    });
-
     test('config supports quiet and hash modes', () {
       final quiet = composeConfig(
         socketPath: '/run/docker.sock',
@@ -320,14 +291,6 @@ void main() {
       expect(() => validateComposeServiceName('web.replica'), returnsNormally);
       expect(() => validateAbsolutePath('relative'), throwsArgumentError);
       expect(() => validateSocketPath('/run/docker.sock'), returnsNormally);
-      expect(
-        () => composeRestart(
-          socketPath: '/run/docker.sock',
-          project: 'web',
-          services: const ['bad service'],
-        ),
-        throwsArgumentError,
-      );
     });
 
     test('docker pull names the endpoint and never takes an option as the '
@@ -361,14 +324,7 @@ void main() {
       expect(r.value.single.id, 'a');
     });
 
-    test('parses compose config and its hash output', () {
-      final r = parseComposeConfig(fixtureJson('compose-config-1.55.json'));
-      expect(r.warnings, isEmpty);
-      expect(r.value.name, 'web');
-      expect(r.value.services['web']!.dependsOn, ['db']);
-      expect(r.value.services['db']!.profiles, ['debug']);
-      expect(r.value.volumes, ['web_data']);
-      expect(r.value.networks, ['default']);
+    test('reads each service config hash', () {
       expect(parseComposeServiceHashes('db 0a1b\nweb.replica 2c3d\n'), {
         'db': '0a1b',
         'web.replica': '2c3d',
@@ -379,16 +335,8 @@ void main() {
       expect(parseComposeServiceHashes('Usage: docker compose config'), isNull);
     });
 
-    test('parses compose version', () {
-      final r = parseComposeVersion(fixtureJson('compose-version-1.55.json'));
-      expect(r.value.version, 'v2.39.1');
-      expect(r.value.gitCommit, 'abcdef1');
-    });
-
     test('never throws on malformed parser input', () {
       expect(parseComposePsJson('not json').warnings, isNotEmpty);
-      expect(parseComposeConfig(null).warnings, isNotEmpty);
-      expect(parseComposeVersion(null).warnings, isNotEmpty);
     });
   });
 }

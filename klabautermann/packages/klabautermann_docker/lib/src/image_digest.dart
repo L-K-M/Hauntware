@@ -1,8 +1,5 @@
 import 'package:meta/meta.dart';
 
-import 'docker_parse_result.dart';
-import 'http_types.dart';
-
 /// A registry `HEAD /v2/<repo>/manifests/<tag>` result (03 §7.14
 /// IMG-05). The digest comes from the `Docker-Content-Digest` header; the
 /// request is run on the host (`curl -sI`) after the anonymous token flow
@@ -24,28 +21,6 @@ final class RegistryManifestHead {
   final String? mediaType;
 
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
-}
-
-/// Parses a registry `HEAD` response into [RegistryManifestHead]; never
-/// throws. A missing `Docker-Content-Digest` is a warning, not an error.
-DockerParseResult<RegistryManifestHead> parseRegistryHead({
-  required int statusCode,
-  required HttpHeaders headers,
-}) {
-  final warnings = <String>[];
-  final digest = headers.value('Docker-Content-Digest');
-  if (digest == null && statusCode >= 200 && statusCode < 300) {
-    warnings.add('registry HEAD returned no Docker-Content-Digest header');
-  }
-  final mediaType = headers.value('Content-Type');
-  return DockerParseResult(
-    RegistryManifestHead(
-      statusCode: statusCode,
-      digest: digest?.trim(),
-      mediaType: mediaType,
-    ),
-    warnings,
-  );
 }
 
 /// The verdict of an update check (03 §7.14 IMG-05).

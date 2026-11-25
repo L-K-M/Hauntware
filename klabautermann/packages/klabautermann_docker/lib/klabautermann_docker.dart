@@ -38,9 +38,7 @@ export 'src/compose/commands.dart'
         composeConfig,
         composeDown,
         composeNamePattern,
-        composePs,
         composePull,
-        composeRestart,
         composeUp,
         composeVersion,
         dockerPull,
@@ -59,17 +57,12 @@ export 'src/compose/ownership.dart'
     show ExternalManager, Ownership, OwnershipMarker, detectOwnership;
 export 'src/compose/parsers.dart'
     show
-        ComposeConfig,
         ComposePsEntry,
         ComposePublisher,
-        ComposeServiceConfig,
-        ComposeVersionInfo,
-        parseComposeConfig,
         parseComposePsEntries,
         parseComposePsJson,
         parseComposeServiceHashes,
-        parseComposeServiceNames,
-        parseComposeVersion;
+        parseComposeServiceNames;
 export 'src/docker_client.dart' show DockerClient, negotiateDockerClient;
 export 'src/docker_parse_result.dart' show DockerParseResult;
 export 'src/docker_summary.dart'
@@ -128,17 +121,14 @@ export 'src/image_digest.dart'
         ImageUpdateStatus,
         RegistryManifestHead,
         RepoDigest,
-        compareImageDigest,
-        parseRegistryHead;
+        compareImageDigest;
 export 'src/json_streams.dart' show byteStreamToJsonValues, byteStreamToLines;
 export 'src/log_resume.dart'
     show
         TimestampedLogLine,
         dropInclusiveSince,
         joinTimestampedLogLines,
-        lastDeliveredTimestamp,
-        parseTimestampedLogLine,
-        parseTimestampedLogLines;
+        parseTimestampedLogLine;
 export 'src/log_time.dart' show LogTimestamp;
 export 'src/masking.dart'
     show
@@ -216,15 +206,9 @@ export 'src/models/system_df.dart'
     show DiskUsageTotals, SystemDf, SystemDfType, parseSystemDf;
 export 'src/models/volume.dart' show VolumeSummary, parseVolumeSummaries;
 export 'src/registry_reference.dart'
-    show
-        RegistryAuthScheme,
-        RegistryChallenge,
-        RegistryRateLimit,
-        RegistryReference,
-        dockerHubRegistry;
+    show RegistryRateLimit, RegistryReference, dockerHubRegistry;
 export 'src/stdcopy.dart'
     show
-        BoundedLogRing,
         LogFraming,
         LogFramingChoice,
         LogLine,
@@ -232,8 +216,6 @@ export 'src/stdcopy.dart'
         StdcopyKind,
         contentTypeMultiplexed,
         contentTypeRawStream,
-        defaultLogRingChars,
-        defaultLogRingLines,
         defaultMaxLogLineChars,
         defaultMaxStdcopyFrameBytes,
         demuxStdcopy,
