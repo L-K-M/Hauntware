@@ -31,6 +31,7 @@ export 'src/ghost_recovery.dart';
 export 'src/ghost_resize_handle.dart';
 export 'src/ghost_undo_history.dart';
 export 'src/middle_ellipsis_text.dart';
+export 'src/persisted_setting.dart';
 export 'src/selected_tab_view.dart';
 export 'src/sidebar_kit.dart';
 export 'src/sidebar_theme_tokens.dart';

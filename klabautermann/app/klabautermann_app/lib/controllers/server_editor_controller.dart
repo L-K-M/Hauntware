@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'catalog_writes.dart';
+
 /// A catalog write the engine refused (03 §4.4): why, and the engine's
 /// words for [CatalogWriteFailure.other].
 final class ServerEditRefused implements Exception {
@@ -28,6 +30,15 @@ final class ServerEditEngineStopped implements Exception {
 final class ServerEditorController {
   ServerEditorController(this._engine) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    // A rejection names this controller's own id, so its writes settle
+    // on one like the reads and tests always did.
+    _writes = CatalogWrites(
+      _engine,
+      (failure, detail) => failure == null
+          ? const ServerEditEngineStopped()
+          : ServerEditRefused(failure, detail),
+      rejection: WriteRejection.failsWrite,
+    );
   }
 
   final EngineClient _engine;
@@ -35,7 +46,7 @@ final class ServerEditorController {
 
   int _count = 0;
   final Map<String, Completer<ServerDraft?>> _reads = {};
-  final Map<String, Completer<CatalogWritten>> _writes = {};
+  late final CatalogWrites _writes;
   final Map<String, Completer<ServerConnectionTested>> _tests = {};
   bool _stopped = false;
 
@@ -53,12 +64,16 @@ final class ServerEditorController {
   /// engine refuses it.
   Future<bool> save(ServerDraft draft, ServerCredentialEntry? credential) {
     final requestId = _nextId();
-    final answer = _writes[requestId] = Completer<CatalogWritten>();
-    _send(
-      SaveServer(requestId: requestId, draft: draft, credential: credential),
-      requestId,
-    );
-    return answer.future.then((written) => written.credentialWritten);
+    return _writes
+        .write(
+          requestId,
+          SaveServer(
+            requestId: requestId,
+            draft: draft,
+            credential: credential,
+          ),
+        )
+        .then((written) => written.credentialWritten);
   }
 
   /// Copies the synced server [serverId] as a new one with a credential of
@@ -66,18 +81,22 @@ final class ServerEditorController {
   /// when the engine refuses it.
   Future<String?> duplicate(String serverId) {
     final requestId = _nextId();
-    final answer = _writes[requestId] = Completer<CatalogWritten>();
-    _send(DuplicateServer(requestId: requestId, serverId: serverId), requestId);
-    return answer.future.then((written) => written.serverId);
+    return _writes
+        .write(
+          requestId,
+          DuplicateServer(requestId: requestId, serverId: serverId),
+        )
+        .then((written) => written.serverId);
   }
 
   /// Deletes the synced server [serverId] from the account. Throws
   /// [ServerEditRefused] when the engine refuses it.
   Future<void> delete(String serverId) {
     final requestId = _nextId();
-    final answer = _writes[requestId] = Completer<CatalogWritten>();
-    _send(DeleteServer(requestId: requestId, serverId: serverId), requestId);
-    return answer.future;
+    return _writes.write(
+      requestId,
+      DeleteServer(requestId: requestId, serverId: serverId),
+    );
   }
 
   /// Tries [draft] with [credential]'s boxes, saving neither. Throws
@@ -116,7 +135,6 @@ final class ServerEditorController {
 
   void _fail(String requestId, Object error) {
     _reads.remove(requestId)?.completeError(error);
-    _writes.remove(requestId)?.completeError(error);
     _tests.remove(requestId)?.completeError(error);
   }
 
@@ -124,12 +142,7 @@ final class ServerEditorController {
     switch (event) {
       case ServerDraftRead(:final requestId, :final draft):
         _reads.remove(requestId)?.complete(draft);
-      case CatalogWritten(:final requestId):
-        _writes.remove(requestId)?.complete(event);
-      case CatalogWriteRefused(:final requestId, :final failure, :final detail):
-        _writes
-            .remove(requestId)
-            ?.completeError(ServerEditRefused(failure, detail));
+      // The catalog writes are matched inside their own CatalogWrites.
       case ServerConnectionTested(:final requestId):
         _tests.remove(requestId)?.complete(event);
       // A rejection carries the id of the one request the engine refused:
@@ -148,12 +161,13 @@ final class ServerEditorController {
   /// engine stops.
   void _onEngineDone() {
     _stopped = true;
-    for (final id in [..._reads.keys, ..._writes.keys, ..._tests.keys]) {
+    for (final id in [..._reads.keys, ..._tests.keys]) {
       _fail(id, const ServerEditEngineStopped());
     }
   }
 
   void dispose() {
+    _writes.dispose();
     _onEngineDone();
     unawaited(_events.cancel());
   }
