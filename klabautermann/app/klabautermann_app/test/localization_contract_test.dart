@@ -138,16 +138,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'forward-${_count++}'",
     r"'$OpenPortForward'",
   },
-  // The rejected requests' class names, which RequestRejected carries;
+  // The rejected request's class name, which RequestRejected carries;
   // never shown.
   'lib/controllers/engine_reads.dart': {r"'${request.runtimeType}'"},
-  'lib/controllers/admin_controller.dart': {
-    r"'$ReadUserCrontabs'",
-    r"'$ReadSmart'",
-    r"'$ReadRestarts'",
-    r"'$ReadFirewall'",
-    r"'$ReadSshdPosture'",
-  },
   // The Apps sub-tab's Docker list values (state, network mode, port
   // type, bound addresses), the loopback address and scheme a forward
   // opens at, and host:port notation, none of them prose (DKE-08).
@@ -471,20 +464,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
-    // The rejected requests' class names, which RequestRejected carries.
-    r"'$HostQuery'",
-    r"'$UnitQuery'",
-    r"'$RedactLines'",
-    r"'$CheckTlsEndpoints'",
-    // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
+    // The read ids this controller mints for its EngineReads, matched in
+    // their answers.
     r"'host-${_nextHostQuery++}'",
-    // A TLS check's id, which its TlsEndpointsChecked answers by (CRT-01).
-    r"'tls-${_nextTlsCheck++}'",
-    // A unit read's request id, never shown.
     r"'unit-${_nextUnitQuery++}'",
-    // An export redaction's id, which its RedactedLines answers by
-    // (LOG-10).
     r"'redact-${_nextRedaction++}'",
+    r"'tls-${_nextTlsCheck++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {

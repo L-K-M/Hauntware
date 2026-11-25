@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'account_size.dart';
+import 'engine_reads.dart';
 import 'pin_publication_controller.dart' show PinPublicationSettings;
 
 /// What Settings reads and resolves of the host-key quarantine diff, apart
@@ -48,6 +49,13 @@ final class SyncController extends ChangeNotifier
   /// offers to assert, when a release is named (M5 plan M07).
   SyncController(this._engine, {this._account, this.pinPublication}) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    _waiting = EngineReads(
+      _engine,
+      (event) => switch (event) {
+        SyncStatus(:final requestId?) => (requestId, event),
+        _ => null,
+      },
+    );
   }
 
   final EngineClient _engine;
@@ -64,11 +72,11 @@ final class SyncController extends ChangeNotifier
   bool _engineStopped = false;
   bool _disposed = false;
 
-  /// The answers still to come, by request id. The engine ends each
-  /// operation with one final [SyncStatus] that echoes its request's id;
-  /// the rounds it starts itself after a catalog write carry none, so
-  /// they answer nobody here.
-  final Map<String, (SyncOperation, Completer<SyncStatus>)> _waiting = {};
+  /// The answers still to come. The engine ends each operation with one
+  /// final [SyncStatus] that echoes its request's id; the rounds it
+  /// starts itself after a catalog write carry none, so they answer
+  /// nobody here.
+  late final EngineReads<SyncStatus> _waiting;
   var _count = 0;
 
   /// Whether an operation is running, whether or not it was asked for
@@ -120,7 +128,7 @@ final class SyncController extends ChangeNotifier
 
   /// Whether a sign-in or round is under way, including one the engine
   /// started itself.
-  bool get busy => _waiting.isNotEmpty || _running;
+  bool get busy => _waiting.hasWaiting || _running;
 
   /// Whether the next sync action should be a sign-in rather than a round:
   /// no account yet, no record has confirmed the encryption passphrase
@@ -226,15 +234,13 @@ final class SyncController extends ChangeNotifier
       return Future.value(_stopped(operation));
     }
     final requestId = 'sync-${_count++}';
-    final answer = Completer<SyncStatus>();
-    try {
-      _engine.send(request(requestId));
-    } on StateError {
-      return Future.value(_stopped(operation));
-    }
-    _waiting[requestId] = (operation, answer);
+    final answer = _waiting.read(
+      requestId,
+      request(requestId),
+      () => _stopped(operation),
+    );
     notifyListeners();
-    return answer.future;
+    return answer;
   }
 
   void _onEngineEvent(EngineEvent event) {
@@ -288,7 +294,7 @@ final class SyncController extends ChangeNotifier
     if (event.phase == SyncPhase.succeeded) {
       _passphraseUnverified = event.passphraseUnverified;
     }
-    if (event.requestId case final id?) _waiting.remove(id)?.$2.complete(event);
+    // An answer naming a request completes it inside the helper.
     notifyListeners();
   }
 
@@ -301,10 +307,7 @@ final class SyncController extends ChangeNotifier
   void _onEngineDone() {
     _engineStopped = true;
     _running = false;
-    for (final (operation, answer) in _waiting.values) {
-      answer.complete(_stopped(operation));
-    }
-    _waiting.clear();
+    _waiting.dispose();
     for (final (_, answer) in _pinRequests) {
       answer.completeError(
         const PinConflictNotResolvedException('The engine stopped'),
@@ -329,10 +332,7 @@ final class SyncController extends ChangeNotifier
     _disposed = true;
     _engineStopped = true;
     _running = false;
-    for (final (operation, answer) in _waiting.values) {
-      answer.complete(_stopped(operation));
-    }
-    _waiting.clear();
+    _waiting.dispose();
     for (final (_, answer) in _pinRequests) {
       answer.completeError(
         const PinConflictNotResolvedException('The engine stopped'),

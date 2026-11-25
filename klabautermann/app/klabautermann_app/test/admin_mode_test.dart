@@ -199,4 +199,56 @@ void main() {
       UserCrontabsFailure.noLink,
     );
   });
+
+  test('each report read answers by its own request id, and a stopped '
+      'engine answers no link', () async {
+    final engine = FakeEngineClient();
+    final admin = AdminController(engine);
+    addTearDown(admin.dispose);
+
+    final smart = admin.readSmart('srv-1');
+    final restarts = admin.readRestarts('srv-1');
+    final firewall = admin.readFirewall('srv-1');
+    final sshd = admin.readSshdPosture('srv-1');
+    String idOf(EngineRequest request) => switch (request) {
+      ReadSmart(:final requestId) => requestId,
+      ReadRestarts(:final requestId) => requestId,
+      ReadFirewall(:final requestId) => requestId,
+      ReadSshdPosture(:final requestId) => requestId,
+      _ => throw StateError('unexpected admin read'),
+    };
+    final ids = engine.sent.map(idOf).toList();
+    expect(ids.toSet(), hasLength(4));
+
+    // Answered out of order.
+    engine.emit(SmartReport(serverId: 'srv-1', requestId: ids[0]));
+    engine.emit(FirewallReport(serverId: 'srv-1', requestId: ids[2]));
+    expect((await smart).failure, isNull);
+    expect((await firewall).failure, isNull);
+
+    await engine.close();
+    expect((await restarts).failure, RestartReportFailure.noLink);
+    expect((await sshd).failure, SshdPostureFailure.noLink);
+  });
+
+  test('a refused send answers each report read no link', () async {
+    final engine = FakeEngineClient();
+    final admin = AdminController(engine);
+    addTearDown(admin.dispose);
+    engine.refuseSends = true;
+
+    expect((await admin.readSmart('srv-1')).failure, SmartReportFailure.noLink);
+    expect(
+      (await admin.readRestarts('srv-1')).failure,
+      RestartReportFailure.noLink,
+    );
+    expect(
+      (await admin.readFirewall('srv-1')).failure,
+      FirewallReportFailure.noLink,
+    );
+    expect(
+      (await admin.readSshdPosture('srv-1')).failure,
+      SshdPostureFailure.noLink,
+    );
+  });
 }
