@@ -693,3 +693,28 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
   re-indented here; nit.
 - `discarded_futures` and other strict modes: beyond QA-10, which names
   the three lints the engine packages use.
+
+### PR #854 GLM review (ENG-11 slice 4, EngineActions): 0 real, no push
+
+- "Generation and protection must be sampled when the message arrives":
+  they are; `planAction` reads `_linkGenerations` before any async work
+  (`engine_actions.dart:346`), as the deleted inline case did.
+- "Read the generation at hold time instead" (contradicts the item
+  above): refuted; the early read is what makes a reconnect during
+  planning produce `stalePlan` at run time. No change.
+- "Planning and acknowledgement must stay off the queue": they do;
+  `planAction`, `runAction` and `acknowledgeOperation` are `void`, with
+  their link work detached as before.
+- "One shared PullCancels": there is one instance, used by the runner's
+  start/finish (in a `try/finally`) and by `cancelAction`.
+- "`_links` passed by value goes stale": refuted; the engine's `links`
+  is a `final` local, never replaced.
+- `.then` typing in the planning chain: analyzer-clean and moved
+  unchanged.
+- `verifyFootprint` guard and error answer: both kept.
+- `runAction`'s detach without `onError`, `DockerQueryFailure.cancelled`
+  for an absent router, no admin-level recheck at run: pre-existing,
+  unchanged by the move.
+- Test nits (`detachErrors`, unused `fleetIds` parameter, `List<dynamic>`,
+  wildcard `_` needing Dart 3.7 while the SDK floor is 3.12): minor; not
+  worth a CI cycle on a pure move.
