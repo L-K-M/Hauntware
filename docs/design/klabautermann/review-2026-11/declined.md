@@ -617,3 +617,23 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
   planned v1.x alert protocol (03), and `engine_isolate_test`
   "unimplemented requests get RequestRejected" pins the engine's answer;
   ENG-11 slice 5 names `HandleAlert` explicitly in the dispatch.
+
+### PR #848 GLM review (monitoring controller split): 1 applied
+
+- Applied (22b21c2bd): the engine-event subscription moves below the
+  `hostReads` and `_backgroundPause` assignments. Not a live bug (a
+  stream never delivers during `listen`), but the old field initializers
+  guaranteed the order and the change restores it.
+- "HostReads must keep the engine-stopped contract": verified, no
+  change. `host_reads.dart` wires every `EngineReads` with
+  `SendFailure.engineStopped` and the same stop answers (`noLink` for
+  host and unit queries, null for redaction and TLS checks).
+- "BackgroundPauseNotifier must match the removed bookkeeping": verified
+  line by line in review (start/end from the clock, sampling snapshot,
+  open-view filter, `pausedInBackground` only while away, `forget`
+  trimming); `_set` skips identical values as `ValueNotifier` skipped
+  equal ones.
+- `dispose` coverage: `_backgroundPause.dispose()` and `hostReads.dispose()`
+  are both called; nothing leaked.
+- `ringStreams` not re-exported: nit; no consumer outside the controller
+  files needs it.
