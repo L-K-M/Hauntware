@@ -82,7 +82,7 @@ import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
-import 'engine_reads.dart';
+import '../runtime/engine_reads.dart';
 import 'protocol.dart';
 import 'request_ids.dart';
 import 'serial_chain.dart';

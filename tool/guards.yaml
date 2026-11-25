@@ -119,8 +119,4 @@ products:
       - packages/klabautermann_host/lib
       - packages/klabautermann_docker/lib
     engine_protocol: packages/klabautermann_core/lib/src/engine
-    # EngineReads lends sessions, sends events and reads the fleet through
-    # functions (ENG-11 step 5); the guard allows it by name.
-    engine_protocol_callback_owners:
-      packages/klabautermann_core/lib/src/engine/engine_reads.dart:
-        - EngineReads
+    engine_protocol_callback_owners: {}

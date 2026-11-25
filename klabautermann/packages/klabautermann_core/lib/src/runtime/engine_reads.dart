@@ -20,7 +20,7 @@ import '../services/disk_usage.dart';
 import '../services/packages.dart';
 import '../services/timer_detail.dart';
 import '../services/unit_queries.dart';
-import 'protocol.dart';
+import '../engine/protocol.dart';
 
 /// The engine's read handlers (ENG-11 step 5, ARC-05), moved out of
 /// `engineMain`'s `handle` switch so one isolate turn still answers each
