@@ -41,6 +41,7 @@ export 'src/parse/firewall.dart';
 export 'src/parse/fs.dart';
 export 'src/parse/gpu.dart';
 export 'src/parse/identity.dart';
+export 'src/parse/instant_range.dart';
 export 'src/parse/interfaces.dart';
 export 'src/parse/journal.dart';
 export 'src/parse/log_sources.dart';
