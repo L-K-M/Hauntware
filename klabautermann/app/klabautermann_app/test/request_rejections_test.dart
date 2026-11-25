@@ -32,8 +32,11 @@ void main() {
     final monitoring = MonitoringController(engine);
     addTearDown(monitoring.dispose);
 
-    final refused = monitoring.queryHost(_server, const VarLogQuery());
-    final kept = monitoring.queryHost(_server, const BootsQuery());
+    final refused = monitoring.hostReads.queryHost(
+      _server,
+      const VarLogQuery(),
+    );
+    final kept = monitoring.hostReads.queryHost(_server, const BootsQuery());
     final [first, second] = engine.sentOfType<HostQuery>().cast<HostQuery>();
     engine.emit(rejection(first, first.queryId));
 
@@ -56,9 +59,9 @@ void main() {
     final monitoring = MonitoringController(engine);
     addTearDown(monitoring.dispose);
 
-    final unit = monitoring.queryUnit(_server, const SocketsQuery());
-    final redaction = monitoring.redactLines(const ['token=abc']);
-    final tls = monitoring.checkTlsEndpoints(const []);
+    final unit = monitoring.hostReads.queryUnit(_server, const SocketsQuery());
+    final redaction = monitoring.hostReads.redactLines(const ['token=abc']);
+    final tls = monitoring.hostReads.checkTlsEndpoints(const []);
     for (final request in engine.sent.toList()) {
       final id = switch (request) {
         UnitQuery(:final requestId) => requestId,

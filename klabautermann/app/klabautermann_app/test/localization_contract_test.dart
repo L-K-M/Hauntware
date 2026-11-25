@@ -457,6 +457,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'log-${_count++}'",
     r"'$OpenLogStream'",
   },
+  'lib/controllers/host_reads.dart': {
+    // The read ids HostReads mints for its EngineReads, matched in their
+    // answers.
+    r"'host-${_nextHostQuery++}'",
+    r"'unit-${_nextUnitQuery++}'",
+    r"'redact-${_nextRedaction++}'",
+    r"'tls-${_nextTlsCheck++}'",
+  },
   'lib/controllers/monitoring_controller.dart': {
     // Assert messages; programmer diagnostics, never rendered.
     r"'$stream carries no metrics'",
@@ -464,12 +472,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
-    // The read ids this controller mints for its EngineReads, matched in
-    // their answers.
-    r"'host-${_nextHostQuery++}'",
-    r"'unit-${_nextUnitQuery++}'",
-    r"'redact-${_nextRedaction++}'",
-    r"'tls-${_nextTlsCheck++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {

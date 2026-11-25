@@ -47,7 +47,7 @@ class _MountOptionsState extends State<MountOptions> {
 
   Future<void> _load() async {
     await _latest.run(
-      () => widget.monitoring
+      () => widget.monitoring.hostReads
           .queryHost(widget.serverId, const MountsQuery())
           .then((result) => result.payload),
     );
