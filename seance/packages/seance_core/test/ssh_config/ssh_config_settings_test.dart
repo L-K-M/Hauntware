@@ -1,4 +1,4 @@
-import 'package:klabautermann_core/src/fleet/ssh_config_settings.dart';
+import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
 /// [name]'s settings in [config] as `(hostName, port, user, identityFile,
