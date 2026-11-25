@@ -525,3 +525,8 @@ Every comment targets code the PR moved byte-identically (verified by a sorted l
 
 ## UIA-09 last bullet (no error path in `readAdmin`, restarts, disk explorer): declined
 Unreachable: `AdminController`'s report reads (after #838) and `DiskUsageReads` go through `EngineReads.read`, which never throws; it answers the read's no-link value on an engine stop, a refused send or a matching rejection. The converted sections got `try/finally` through `LatestRead` (#839).
+
+## #838 GLM round 1 (8677a0e): 0 actionable, no push
+- server_prefs_controller dispose "no longer sets the stopped flag": refuted as an observable change; `_writes.dispose()` stops the `CatalogWrites`, so a later `write` still fails with `ServerPrefsNotSavedException(null)` through the async method, as before.
+- `CatalogWrites.write` returning `Future.error` instead of throwing in an async body: declined as minor; callers await it and see the same exception (only the stack trace differs).
+- Doc wording on `EngineReads._onStop`, a comment on `cancel()` in AdminController, separate StateError messages in the test fake: declined as nits.
