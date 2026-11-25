@@ -23,7 +23,6 @@ import 'package:seance_core/catalog.dart'
         SyncAccount,
         SyncAccountMode,
         SyncEnrollment,
-        SyncEnrollmentApi,
         SyncTuple,
         WriteOutcome;
 import 'package:seance_core/seance_core.dart'
@@ -32,7 +31,6 @@ import 'package:seance_core/seance_core.dart'
         DecryptedRecord,
         HostKey,
         hostKeyLocator,
-        HttpSyncClient,
         RecordCodec,
         RecordKind,
         Secret,
@@ -40,6 +38,9 @@ import 'package:seance_core/seance_core.dart'
         ServerConfig,
         Snippet,
         SyncRecordsRefused,
+        SyncTransport,
+        SyncTransportFactory,
+        HttpSyncTransport,
         duplicateServerConfig,
         duplicateServerLabel,
         isReservedVaultId,
@@ -74,35 +75,6 @@ const PushPolicy engineSyncPushPolicy = PushPolicy.normal;
 /// `vault.json` is [EngineVault]'s.
 const String _syncRecordsFileName = 'sync_records.json';
 const String _serversFileName = 'servers.json';
-
-/// The sync server as enrollment and rounds reach it: the shared
-/// `SyncEnrollmentApi` seam, which the app owns (catalog-library.md
-/// section 10), plus releasing its connections.
-abstract interface class SyncTransport implements SyncEnrollmentApi {
-  void close();
-}
-
-/// Builds the transport for [baseUrl]; [token] restores a session for a
-/// round, and enrollment passes none.
-typedef SyncTransportFactory =
-    SyncTransport Function(String baseUrl, {String? token});
-
-/// Séance's HTTP sync client, which already has every member
-/// [SyncTransport] names.
-final class HttpSyncTransport extends HttpSyncClient implements SyncTransport {
-  HttpSyncTransport(
-    String baseUrl, {
-    String? token,
-    super.deviceId,
-    super.deviceName,
-  }) : super(baseUrl: baseUrl) {
-    this.token = token;
-  }
-}
-
-/// The production [SyncTransportFactory].
-SyncTransport httpSyncTransport(String baseUrl, {String? token}) =>
-    HttpSyncTransport(baseUrl, token: token);
 
 /// Enrollment and rounds for one engine. Every operation returns its final
 /// [SyncStatus] and never throws; the engine runs them one at a time.
