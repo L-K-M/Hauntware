@@ -996,6 +996,48 @@ void main() {
     expect(loadColor(), muted);
   });
 
+  testWidgets(
+    'UIA-11: clock ticks rebuild no card until a reading goes stale',
+    (tester) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester, _core());
+      expect(find.text('Updated 0 s ago'), findsOneWidget);
+
+      // The cards as they are before the ticks.
+      final cpu = tester.widget<PanelSection>(_card('CPU'));
+      final load = tester.widget<PanelSection>(_card('Load'));
+      final bars = _bars(tester).toList();
+      final gauges = _gauges(tester).toList();
+
+      for (var tick = 1; tick <= 5; tick++) {
+        panel.now = _start.add(Duration(seconds: tick));
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      // The age counted on, but no card was rebuilt to show it.
+      expect(find.text('Updated 5 s ago'), findsOneWidget);
+      expect(tester.widget<PanelSection>(_card('CPU')), same(cpu));
+      expect(tester.widget<PanelSection>(_card('Load')), same(load));
+      final barsAfter = _bars(tester).toList();
+      final gaugesAfter = _gauges(tester).toList();
+      expect(barsAfter.length, bars.length);
+      expect(gaugesAfter.length, gauges.length);
+      for (var i = 0; i < bars.length; i++) {
+        expect(barsAfter[i], same(bars[i]));
+      }
+      for (var i = 0; i < gauges.length; i++) {
+        expect(gaugesAfter[i], same(gauges[i]));
+      }
+
+      // Past the limit the grey and the words change, so the cards do.
+      panel.now = _start.add(const Duration(seconds: 25));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Stale: updated 25 s ago'), findsOneWidget);
+      expect(_bars(tester).every((bar) => bar.stale), isTrue);
+      expect(_gauges(tester).every((gauge) => gauge.stale), isTrue);
+    },
+  );
+
   testWidgets('a failed reading says why and keeps the last values', (
     tester,
   ) async {
