@@ -590,8 +590,10 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
   Deferred to the core cleanup follow-up (assert identity instead), with
   a one-line re-entrancy contract on `_OwedRead.send`, rather than
   restarting this PR's CI.
-- Dangling `[E]` in `kAuditLinePartMax`'s doc: pre-existing on main
-  (commands.dart:19), moved verbatim; deferred to the same follow-up.
+- Dangling `[E]` in `kAuditLinePartMax`'s doc: refuted. `[E]` is the
+  design docs' marker for an estimate or design value
+  (docs/design/klabautermann/README.md "Markers"), used throughout the
+  packages; it stays. (Briefly removed in #850, restored there.)
 - `==` tool marker prefixes `== cgroup`, `.zst` rotated logs: pre-existing
   wire format and behavior, out of scope for a pure move.
 - "Gate the merge on the analyzer": CI's `dart analyze --fatal-infos`
