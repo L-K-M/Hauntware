@@ -483,6 +483,11 @@
   moves through a snippet's placeholders, inserting from the last.
 - Return in the last field of the sync sign-in or registration form
   logs in or registers, as its button does.
+- Importing an SSH config now reads it as ssh does (`Host *` and
+  top-level defaults, later matching blocks, known `Match` criteria, ssh
+  quoting) for every host ssh's result is certain for; hosts that depend
+  on something the importer cannot evaluate (`Include`, `Match exec`,
+  tokens) are imported as before.
 
 ## 1.9.0 (2026-10-04)
 
