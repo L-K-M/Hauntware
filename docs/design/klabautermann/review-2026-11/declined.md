@@ -752,3 +752,33 @@ missing.
   threshold; empty-buffer `indexAtRow`. `test/log_row_counts_test.dart`
   belongs in `test/logs/`: moved in the `container_details.dart` split
   PR.
+
+### PR #855 GLM review (ENG-11 slice 5, EngineState; ENG-12; ARC-11): 0 real, no push
+
+- "Keystore answers bypass the crash protection": refuted;
+  `ChannelSyncKeystore.answer` is `_waiting.remove(id)?.complete(...)`,
+  so an answer for a stale or unknown ask is a no-op and cannot throw.
+  The listener path is pre-existing; this PR only stops the unreachable
+  `handle` case from claiming the request is unimplemented.
+- "linksEnabled doc claims the opposite default": refuted; that is the
+  ENG-12 correction, and `main.dart` passes `linksEnabled: true`.
+- Shutdown aborting when a flush or dispose future rejects (two
+  findings): pre-existing and moved verbatim; `Future.wait` over the
+  timed-out futures would still throw on an error before
+  `Isolate.exit()`. Plausible, out of scope for a move; follow-up.
+- Unguarded awaits in the request loop, unawaited read dispatches,
+  fire-and-forget `logs`/`docker` close, unawaited forwards dispose:
+  pre-existing behaviour, unchanged; the queue's `catchError` answers a
+  handler that throws.
+- Minor and info items (log stream id kept on a failed open, swallowed
+  pin publication save, empty operations path fallback, SetSyncSecrets
+  errors, TLS endpoint cap, startup failure stack, duplicated CachePurge
+  switch, request name/id pair, `reportEngineFault` visibility, exact
+  reason text in the test): pre-existing or by design; no import cycle
+  (analyzer clean). The test pins the reason deliberately (ARC-11).
+
+### PR #856 GLM review (UIB-7 container details parts): 0 in scope, no push
+
+The four files hold exactly the original lines. Raw JSON built while its
+tile is closed, focus not retaken on a container switch: pre-existing
+behaviour of moved code. The `part` note is the intended design.
