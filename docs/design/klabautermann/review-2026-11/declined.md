@@ -658,3 +658,15 @@ The typed key table shrank `device_settings_store.dart` only from 1,204 to 1,200
 - Word-boundary match counts comments as uses: accepted limitation of a
   cheap check; a name only a comment mentions is rare and visible in
   review. No change.
+
+### PR #851 GLM review (docs): 1 applied
+
+- Applied (bfa4f03c0): the app pubspec keeps why file_picker and
+  share_plus cannot go older (win32 5, ruled out by package_info_plus
+  10.2.2), which the QA-11 rewrite had dropped.
+- `check-shared-rules.py` prints a traceback when root AGENTS.md loses
+  its markers: a CI failure either way, and the traceback names the
+  cause; no change.
+- "The reviewer-failure policy now permits merging without review":
+  the subtree blocks copy root AGENTS.md's current rule verbatim (QA-12);
+  changing the policy itself is the owner's call and out of scope.
