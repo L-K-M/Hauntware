@@ -504,7 +504,7 @@ class _SystemPanelState extends State<SystemPanel> {
     required bool wide,
   }) {
     final children = switch (_fs.value?.result) {
-      null => [_waiting(l10n)],
+      null => [waitingNotice(l10n)],
       CollectorUnavailable(reason: CollectorUnavailableReason.timeout) => [
         PanelNotice(
           icon: Icons.timer_off_outlined,
@@ -523,7 +523,7 @@ class _SystemPanelState extends State<SystemPanel> {
         ],
       ],
       final CollectorUnavailable unavailable => [
-        _unavailable(l10n, unavailable),
+        unavailableNotice(l10n, unavailable),
       ],
       FsResult(:final fs) => [
         if (fs.timeoutAbsent)
@@ -599,8 +599,10 @@ class _SystemPanelState extends State<SystemPanel> {
     Sample? sample,
     List<Widget> Function(R result) facts,
   ) => switch (sample?.result) {
-    null => [_waiting(l10n)],
-    final CollectorUnavailable unavailable => [_unavailable(l10n, unavailable)],
+    null => [waitingNotice(l10n)],
+    final CollectorUnavailable unavailable => [
+      unavailableNotice(l10n, unavailable),
+    ],
     final R result => facts(result),
     // Sample's assert admits only the stream's own variant.
     _ => const <Widget>[],
@@ -798,30 +800,6 @@ _Fact _hostFact(
 }) => withheld
     ? _Fact(label: label, value: null, note: l10n.systemUnknownContainer)
     : _Fact(label: label, value: value);
-
-PanelNotice _waiting(AppLocalizations l10n) =>
-    PanelNotice(icon: Icons.hourglass_empty, text: l10n.systemWaiting);
-
-/// Why a stream has no reading, with the host's error output, which is
-/// server data and never translated.
-PanelNotice _unavailable(
-  AppLocalizations l10n,
-  CollectorUnavailable unavailable,
-) {
-  final reason = unavailable.reason;
-  return PanelNotice(
-    icon: reason == CollectorUnavailableReason.timeout
-        ? Icons.timer_off_outlined
-        : Icons.error_outline,
-    text: switch (reason) {
-      CollectorUnavailableReason.missing => l10n.systemUnavailableMissing,
-      CollectorUnavailableReason.denied => l10n.systemUnavailableDenied,
-      CollectorUnavailableReason.timeout => l10n.systemUnavailableTimeout,
-      CollectorUnavailableReason.error => l10n.systemUnavailableError,
-    },
-    detail: unavailable.detail,
-  );
-}
 
 /// A label over its value, read as one node. Text wraps rather than
 /// clips at any text scale.

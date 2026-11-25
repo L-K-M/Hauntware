@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show CollectorUnavailable, CollectorUnavailableReason;
+
+import '../l10n/app_localizations.dart';
 
 /// A heading over its [children], stretched to the width: the heading
 /// is a node of its own that screen readers announce as a heading.
@@ -107,6 +111,31 @@ class PanelNotice extends StatelessWidget {
         ? Semantics(liveRegion: true, child: row)
         : MergeSemantics(child: row);
   }
+}
+
+/// A section's notice that its first reading is on its way.
+PanelNotice waitingNotice(AppLocalizations l10n) =>
+    PanelNotice(icon: Icons.hourglass_empty, text: l10n.systemWaiting);
+
+/// Why a stream has no reading, with the host's error output, which is
+/// server data and never translated.
+PanelNotice unavailableNotice(
+  AppLocalizations l10n,
+  CollectorUnavailable unavailable,
+) {
+  final reason = unavailable.reason;
+  return PanelNotice(
+    icon: reason == CollectorUnavailableReason.timeout
+        ? Icons.timer_off_outlined
+        : Icons.error_outline,
+    text: switch (reason) {
+      CollectorUnavailableReason.missing => l10n.systemUnavailableMissing,
+      CollectorUnavailableReason.denied => l10n.systemUnavailableDenied,
+      CollectorUnavailableReason.timeout => l10n.systemUnavailableTimeout,
+      CollectorUnavailableReason.error => l10n.systemUnavailableError,
+    },
+    detail: unavailable.detail,
+  );
 }
 
 /// A titled group of facts on its own surface, here and in the Overview
