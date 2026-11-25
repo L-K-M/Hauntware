@@ -885,9 +885,7 @@ final class DockerRouter {
     if (routeDropped) {
       _drop(session);
       _pump(session);
-      return;
     }
-    _idleCheck(session, endpoint);
   }
 
   /// Runs [action] on [link] once a short-action slot of [session]'s
