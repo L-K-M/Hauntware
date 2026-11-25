@@ -486,3 +486,7 @@ The shared editor's `unsaved` reads "Not saved" in Klabautermann and Planchette 
 
 ## ARC-15 implementation choice (agent, 2026-11-25; not an owner decision)
 The stage-1 analysis found Klabautermann's resolver skips hosts it cannot fully resolve (an `Include`, `Match exec`/`user`/`localuser`, %-tokens, `CanonicalizeHostname`, a later wildcard block ssh's final pass may apply), where Séance and Poltergeist import them today with best-effort values. A follow-up question to the owner was declined, so the work proceeds with the least disruptive reading of "move the resolver": slice 1 moves it into seance_core with no behaviour change; slice 2 has Séance and Poltergeist use it leniently (no host that imports today disappears; best first-pass values, marked uncertain where the UI can show it), while Klabautermann stays strict. Report this to the owner; strict mode is a small follow-up if wanted.
+
+## #832 GLM round 1 (02994b1): 0 actionable, no push
+- ssh_config_settings.dart:8 default port defined twice (seance_core's private `_kSshDefaultPort`, Klabautermann's `kSshDefaultPort`): declined as minor; 22 is ssh's fixed default and seance_core must not import Klabautermann.
+- Narrowed `show` lists: every package and app in the suite analyzes clean with them (checked before the PR).
