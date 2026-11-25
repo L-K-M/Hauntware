@@ -477,4 +477,4 @@ The shared editor's `unsaved` reads "Not saved" in Klabautermann and Planchette 
 ## #829 GLM round 1 (1443073): 1 actionable, refuted, no push
 - history_store.dart (blocker) "missing `dart:async` import for `unawaited`": refuted, imported at line 7; `dart analyze --fatal-infos` is clean.
 - serial_queue.dart "result is not the healed tail": the reviewer confirms every call site handles it; no change. Its note that capability_cache's old unhealed tail could poison later writes does not apply: that body caught every error, so the tail could not fail.
-- serial_queue_test double-quoted description: declined, it holds an apostrophe-free sentence but the analyzer's lint set does not include `prefer_single_quotes` and reports nothing.
+- serial_queue_test double-quoted description: declined as cosmetic; the package's lint set does not include `prefer_single_quotes`, and the analyzer reports nothing.
