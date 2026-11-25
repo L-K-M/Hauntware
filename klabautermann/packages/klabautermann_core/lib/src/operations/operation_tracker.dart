@@ -35,9 +35,6 @@ const kRunningOperationsReread = Duration(seconds: 15);
 /// never shows, and the re-reads stop after this.
 const kLaunchListingGrace = Duration(minutes: 1);
 
-/// The exit of `HostCommands.startTicks` for a PID that names no process.
-const _kProcessGone = 3;
-
 /// One server's latest list and its link bookkeeping.
 final class _Server {
   /// The latest `ops` listing, and the operations made of it by id.
@@ -362,7 +359,7 @@ final class OperationTracker {
               when record.startTicks == null ||
                   int.tryParse(result.stdout.trim()) == record.startTicks =>
             DetachedOperationState.running,
-          0 || _kProcessGone => DetachedOperationState.lost,
+          0 || kStartTicksGone => DetachedOperationState.lost,
           _ => DetachedOperationState.unknown,
         };
         wrapperGone = state == DetachedOperationState.lost;

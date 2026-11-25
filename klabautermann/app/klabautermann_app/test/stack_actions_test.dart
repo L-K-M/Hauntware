@@ -6,6 +6,7 @@ import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/docker/stacks_panel.dart';
+import 'package:klabautermann_app/ui/docker/stack_overview.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 

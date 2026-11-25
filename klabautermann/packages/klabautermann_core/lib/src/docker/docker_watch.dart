@@ -426,10 +426,10 @@ final class DockerWatcher {
     _stream = null;
     unawaited(stream?.close());
 
-    final delay = kDockerRetryBase * math.pow(2, math.min(_retries, 5)).toInt();
+    final delay = kDockerStreamBackoff.delay(_retries);
     _retries++;
     _retry?.cancel();
-    _retry = _startTimer(delay < kDockerRetryCap ? delay : kDockerRetryCap, () {
+    _retry = _startTimer(delay, () {
       _retry = null;
       if (_target case final target? when epoch == _epoch) {
         unawaited(_open(target, epoch));
@@ -487,7 +487,7 @@ final class DockerWatcher {
       if (_lists.contains(DockerWatchList.events)) _timelineDue = true;
     }
 
-    final plan = planEventRefresh(event: event, now: _now());
+    final plan = planEventRefresh(event: event);
     for (final list in plan.lists) {
       switch (list) {
         case DockerList.containers when _wantsContainers:

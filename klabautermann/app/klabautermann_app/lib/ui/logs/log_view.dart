@@ -1,26 +1,19 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart' show nearEqual;
-import 'package:flutter/rendering.dart'
-    show
-        ItemExtentBuilder,
-        RenderSliverFixedExtentBoxAdaptor,
-        SliverConstraints,
-        SliverGeometry,
-        SliverLayoutDimensions;
 import 'package:flutter/services.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/log_display.dart';
 import '../../l10n/app_localizations.dart';
-import '../../theme/app_theme.dart';
 import '../time_display.dart' show TimeDisplayScope;
 import 'log_level.dart';
+import 'log_row_counts.dart';
+import 'log_rows_sliver.dart';
 import 'log_search.dart';
+import 'log_tail_scroll.dart';
 import 'log_text.dart';
+import 'log_text_layout.dart';
 import 'log_view_controller.dart';
 
 export '../../controllers/log_display.dart' show LogWrap;
@@ -43,22 +36,13 @@ class LogDisplayScope extends InheritedNotifier<LogDisplaySettings> {
       ?.value;
 }
 
-/// Line height as a multiple of the font size.
-const double _lineHeightFactor = 1.35;
-
 /// The space left and right of every row.
 const double _rowPadding = 8;
-
-/// How far from the newest line still counts as at it, in logical pixels.
-const double _endTolerance = 1;
 
 /// Single precision's unit roundoff: the engine adds a line's glyph
 /// advances in it, so n advances can sum to n times one advance plus up
 /// to n of these of the total.
 const double _singlePrecisionRoundoff = 1 / (1 << 24);
-
-/// How many glyph advances a journal row's fields are indented by.
-const int _fieldIndent = 2;
 
 /// The rows kept above a search match the view scrolls to.
 const int _revealContext = 2;
@@ -136,7 +120,7 @@ class LogView extends StatefulWidget {
 }
 
 class _LogViewState extends State<LogView> {
-  late final _vertical = _TailScrollController(
+  late final _vertical = TailScrollController(
     () => widget.controller.following.value,
   );
   final _focusNode = FocusNode(debugLabel: 'LogView');
@@ -146,18 +130,18 @@ class _LogViewState extends State<LogView> {
   var _wrap = LogWrap.off;
 
   late AppLocalizations _l10n;
-  _TextLayout? _text;
+  TextLayout? _text;
 
   /// The row count of each held entry without wrap, one a line plus its
   /// fields' rows, and with it, wrapped rows, both kept in step with the
   /// controller and the fields shown, so a wrap toggle keeps the counts
   /// measured before it.
-  late _RowCounts _lineRows;
-  late _RowCounts _wrappedRows;
+  late RowCounts _lineRows;
+  late RowCounts _wrappedRows;
 
   /// The counts [LogView.wrap] lays out with, and the other mode's.
-  _RowCounts get _rows => _wrap == LogWrap.on ? _wrappedRows : _lineRows;
-  _RowCounts get _otherRows => _wrap == LogWrap.on ? _lineRows : _wrappedRows;
+  RowCounts get _rows => _wrap == LogWrap.on ? _wrappedRows : _lineRows;
+  RowCounts get _otherRows => _wrap == LogWrap.on ? _lineRows : _wrappedRows;
 
   /// The fields of each journal row that shows them, by seq.
   final _expanded = <int, List<(String, String?)>>{};
@@ -177,7 +161,11 @@ class _LogViewState extends State<LogView> {
     super.didChangeDependencies();
     _l10n = AppLocalizations.of(context);
     final previous = _text;
-    _text = _TextLayout.of(context, previous);
+    _text = TextLayout.of(
+      context,
+      previous,
+      LogDisplayScope.maybeOf(context)?.textSize,
+    );
     if (previous == null) {
       _wrap = _wrapFor(widget);
       _resetRows();
@@ -252,7 +240,7 @@ class _LogViewState extends State<LogView> {
   }
 
   void _resetRows() {
-    _RowCounts counts(LogWrap wrap) => _RowCounts(
+    RowCounts counts(LogWrap wrap) => RowCounts(
       (index, crossAxisExtent) => _measureRows(wrap, index, crossAxisExtent),
       (index, crossAxisExtent) => _estimateRows(wrap, index, crossAxisExtent),
     )..sync(widget.controller);
@@ -276,7 +264,7 @@ class _LogViewState extends State<LogView> {
     // line it was aimed at.
     if (removed.entries > 0 && !widget.controller.following.value) {
       final position = _vertical.hasClients ? _vertical.position : null;
-      if (position is _TailScrollPosition && position.hasPixels) {
+      if (position is TailScrollPosition && position.hasPixels) {
         final extent = removed.rows * _text!.lineHeight;
         position.shiftBy(-math.min(extent, position.pixels), path: -extent);
       }
@@ -344,7 +332,7 @@ class _LogViewState extends State<LogView> {
     if (widget.controller.following.value || !_vertical.hasClients) return;
 
     final position = _vertical.position;
-    if (position is! _TailScrollPosition || !position.hasPixels) return;
+    if (position is! TailScrollPosition || !position.hasPixels) return;
     position.shiftBy(convert(position.pixels) - position.pixels);
   }
 
@@ -352,12 +340,12 @@ class _LogViewState extends State<LogView> {
   /// [_rows] on the same entry and as far into its rows, for when what the
   /// rows count changes: lines and fields without wrap, wrapped rows with
   /// it.
-  double _offsetIn(_RowCounts previous, double pixels) {
+  double _offsetIn(RowCounts previous, double pixels) {
     if (previous.length == 0 || _rows.length == 0) return pixels;
 
     final line = _text!.lineHeight;
     final at = math.max(0.0, pixels / line);
-    final index = previous.indexAtRow((at + _rowTolerance).floor());
+    final index = previous.indexAtRow((at + rowTolerance).floor());
     final into = (at - previous.rowsBefore(index)) / previous.rowsOf(index);
     return (_rows.rowsBefore(index) +
             into.clamp(0.0, 1.0) * _rows.rowsOf(index)) *
@@ -374,11 +362,11 @@ class _LogViewState extends State<LogView> {
   /// its row.
   static double _fieldsMoved(double at, int start, int rows, int change) {
     final end = start + rows;
-    if (at + _rowTolerance >= end) return at + change;
+    if (at + rowTolerance >= end) return at + change;
 
     final kept = end + change;
-    if (at + _rowTolerance < kept) return at;
-    return kept - 1 + math.max(0.0, at - (at + _rowTolerance).floor());
+    if (at + rowTolerance < kept) return at;
+    return kept - 1 + math.max(0.0, at - (at + rowTolerance).floor());
   }
 
   void _onFollowing() {
@@ -387,7 +375,7 @@ class _LogViewState extends State<LogView> {
 
     final position = _vertical.position;
     if (!position.hasContentDimensions) return;
-    if (position.pixels < position.maxScrollExtent - _endTolerance) {
+    if (position.pixels < position.maxScrollExtent - endTolerance) {
       position.jumpTo(position.maxScrollExtent);
     }
   }
@@ -398,7 +386,7 @@ class _LogViewState extends State<LogView> {
   bool _onScrollUpdate(ScrollUpdateNotification notification) {
     if (notification.depth != 0) return false;
 
-    final atEnd = notification.metrics.extentAfter < _endTolerance;
+    final atEnd = notification.metrics.extentAfter < endTolerance;
     if (atEnd != widget.controller.following.value) {
       atEnd ? widget.controller.follow() : widget.controller.pause();
     }
@@ -431,7 +419,7 @@ class _LogViewState extends State<LogView> {
 
   bool get _hasGutter => widget.levelOf != null;
 
-  double _textWidth(double rowWidth, _TextLayout text) =>
+  double _textWidth(double rowWidth, TextLayout text) =>
       rowWidth - 2 * _rowPadding - (_hasGutter ? text.gutter : 0);
 
   /// The rows entry [index] takes in [wrap] mode in a row [crossAxisExtent]
@@ -479,7 +467,7 @@ class _LogViewState extends State<LogView> {
   }
 
   /// The rows [span] wraps to at [width].
-  int _layoutRows(TextSpan span, double width, _TextLayout text) {
+  int _layoutRows(TextSpan span, double width, TextLayout text) {
     final painter = TextPainter(
       text: span,
       textDirection: TextDirection.ltr,
@@ -517,7 +505,7 @@ class _LogViewState extends State<LogView> {
     return (units * text.advance / width).ceil().clamp(1, units) + fields;
   }
 
-  TextSpan _lineSpan(LogLine line, _TextLayout text, {int windowStart = 0}) {
+  TextSpan _lineSpan(LogLine line, TextLayout text, {int windowStart = 0}) {
     final search = widget.search;
     final container = widget.controller.containerOf(line);
     return logLineSpan(
@@ -542,7 +530,7 @@ class _LogViewState extends State<LogView> {
   /// start, as it does when the match's glyphs lie on its first line and
   /// end before the row's width, less the ellipsis when the line is wider.
   /// Laid out as drawn, so any glyph's width counts.
-  int _windowStart(LogLine line, _TextLayout text, double width) {
+  int _windowStart(LogLine line, TextLayout text, double width) {
     final search = widget.search!;
     final matches = search.matchesIn(line);
     final index = search.currentIndexIn(line);
@@ -654,7 +642,7 @@ class _LogViewState extends State<LogView> {
         // One sliver in both modes: a row whose fields open or close keeps
         // its element, and with it keyboard and accessibility focus.
         slivers: [
-          _LogRows(
+          LogRows(
             rows: _rows,
             revision: _rows.revision,
             lineHeight: text.lineHeight,
@@ -716,7 +704,7 @@ class _LogViewState extends State<LogView> {
 
   // RichText, not Text: Text would merge the ambient DefaultTextStyle in,
   // which the measured extents do not see.
-  Widget _richText(TextSpan span, _TextLayout text) => RichText(
+  Widget _richText(TextSpan span, TextLayout text) => RichText(
     text: span,
     textDirection: TextDirection.ltr,
     strutStyle: text.strut,
@@ -726,7 +714,7 @@ class _LogViewState extends State<LogView> {
     overflow: _wrap == LogWrap.off ? TextOverflow.ellipsis : TextOverflow.clip,
   );
 
-  Widget _row(int index, _TextLayout text) {
+  Widget _row(int index, TextLayout text) {
     final entry = widget.controller[index];
     final level = entry is LogLine ? widget.levelOf?.call(entry) : null;
     final fields = _expanded[entry.seq];
@@ -806,7 +794,7 @@ class _LogViewState extends State<LogView> {
   /// [line]'s own row, without its fields. Without wrap, the row of the
   /// current match lays out for its width, to window the row around the
   /// match when it would not show ([_windowStart]); it stays one line.
-  Widget _line(LogLine line, _TextLayout text) {
+  Widget _line(LogLine line, TextLayout text) {
     if (_wrap == LogWrap.on || widget.search?.currentIndexIn(line) == null) {
       return _richText(_lineSpan(line, text), text);
     }
@@ -823,7 +811,7 @@ class _LogViewState extends State<LogView> {
     );
   }
 
-  Widget? _levelIcon(LogLevel? level, _TextLayout text) {
+  Widget? _levelIcon(LogLevel? level, TextLayout text) {
     final (icon, label) = switch (level) {
       LogLevel.error => (Icons.error_outline, _l10n.logLevelError),
       LogLevel.warning => (Icons.warning_amber, _l10n.logLevelWarning),
@@ -838,504 +826,6 @@ class _LogViewState extends State<LogView> {
       color: text.palette.levelColor(level),
       semanticLabel: label,
     );
-  }
-}
-
-/// What every row's layout depends on: the theme, the text scale and the
-/// locale (a cut line's note), the monospace style and its strut, and the
-/// line height and glyph advance measured from them. A new instance means
-/// every measured row is stale.
-final class _TextLayout {
-  _TextLayout._({
-    required this.theme,
-    required this.scaler,
-    required this.locale,
-    required this.fontSize,
-    required this.base,
-    required this.strut,
-    required this.lineHeight,
-    required this.advance,
-    required this.ellipsis,
-  }) : palette = LogPalette.fromTheme(theme);
-
-  /// The layout for [context], or [previous] when nothing it depends on
-  /// changed.
-  static _TextLayout of(BuildContext context, _TextLayout? previous) {
-    final theme = Theme.of(context);
-    final scaler = MediaQuery.textScalerOf(context);
-    final locale = Localizations.localeOf(context);
-    final fontSize =
-        (LogDisplayScope.maybeOf(context)?.textSize ?? kLogTextSizeDefault)
-            .toDouble();
-    if (previous != null &&
-        previous.theme == theme &&
-        previous.scaler == scaler &&
-        previous.locale == locale &&
-        previous.fontSize == fontSize) {
-      return previous;
-    }
-
-    final families = klabautermannThemeStyle.monoFontFamilies;
-    final base = TextStyle(
-      fontFamily: families.first,
-      fontFamilyFallback: families.skip(1).toList(growable: false),
-      fontSize: fontSize,
-      height: _lineHeightFactor,
-    );
-    // Every row is a whole number of these lines, whatever glyphs or
-    // fallback fonts it holds, so extents can be computed.
-    final strut = StrutStyle.fromTextStyle(base, forceStrutHeight: true);
-    double measure(String sample, {TextStyle? style, bool height = false}) {
-      final painter = TextPainter(
-        text: TextSpan(text: sample, style: style ?? base),
-        textDirection: TextDirection.ltr,
-        strutStyle: strut,
-        textScaler: scaler,
-      )..layout();
-      final value = height ? painter.height : painter.width;
-      painter.dispose();
-      return value;
-    }
-
-    return _TextLayout._(
-      theme: theme,
-      scaler: scaler,
-      locale: locale,
-      fontSize: fontSize,
-      base: base,
-      strut: strut,
-      lineHeight: measure(' ', height: true),
-      // The advance of a Latin-1 glyph in a monospace font, regular or
-      // bold; for a proportional fallback, one of its widest.
-      advance: math.max(
-        measure('W'),
-        measure('W', style: base.copyWith(fontWeight: FontWeight.bold)),
-      ),
-      ellipsis: measure('\u2026'),
-    );
-  }
-
-  final ThemeData theme;
-  final TextScaler scaler;
-  final Locale locale;
-
-  /// The log text size before the text scale.
-  final double fontSize;
-  final LogPalette palette;
-  final TextStyle base;
-  final StrutStyle strut;
-  final double lineHeight;
-  final double advance;
-
-  /// The width of the ellipsis that ends a row too wide for the view.
-  final double ellipsis;
-
-  double get iconSize => scaler.scale(fontSize);
-
-  /// The level icon's column.
-  double get gutter => iconSize + 6;
-
-  /// How far a journal row's fields are indented.
-  double get fieldIndent => _fieldIndent * advance;
-}
-
-/// The slots a [_RowCounts] starts with.
-const int _minRowSlots = 1024;
-
-/// The row count of every entry a [LogView] holds, with the rows before
-/// any entry found in O(log n) through a Fenwick tree, so a frame costs
-/// the same however many lines are held (03 §11.4).
-///
-/// Only the entries a layout shows, and as many rows above its offset, are
-/// measured, once per width, font and locale ([measure]); the others keep
-/// the count of their last measurement or, before one, an estimate. A
-/// width change therefore lays out only the lines near the view. When
-/// measuring an entry above the scroll offset changes its count, the
-/// layout moves the offset by the difference, and the offset keeps its
-/// share of the entry it is in to within a row ([_keepShare]), so the
-/// lines in sight hold still.
-final class _RowCounts {
-  _RowCounts(this._measure, this._estimate);
-
-  /// The exact rows of the entry at an index in a row of a cross-axis
-  /// extent.
-  final int Function(int index, double crossAxisExtent) _measure;
-
-  /// A guess at the rows of the entry at an index until a layout measures
-  /// it, from the cross-axis extent last measured at, if any.
-  final int Function(int index, double? crossAxisExtent) _estimate;
-
-  // Entry i lives in slot _front + i; the slots before _front belong to
-  // evicted entries, whose rows _frontRows cancels. _tree is the Fenwick
-  // tree over _counts, 1-based.
-  var _counts = Int32List(_minRowSlots);
-  var _measuredIn = Int32List(_minRowSlots);
-  var _tree = Int32List(_minRowSlots + 1);
-  int _front = 0;
-  int _frontRows = 0;
-  int _length = 0;
-  int _total = 0;
-  int _firstSeq = 0;
-
-  /// Counts measured in an older generation are estimates; 0 is never.
-  int _generation = 1;
-
-  /// The cross-axis extent last measured at, or null before a layout.
-  double? _crossAxisExtent;
-
-  /// Changes whenever the rows would lay out differently, so the sliver
-  /// lays out again even when the entry count stays the same.
-  int get revision => _revision;
-  int _revision = 0;
-
-  int get length => _length;
-
-  /// The rows of every held entry.
-  int get total => _total;
-
-  int rowsOf(int index) => _counts[_front + index];
-
-  int rowsBefore(int index) => _prefix(_front + index) - _frontRows;
-
-  /// The entry holding [row], clamped to the held entries.
-  int indexAtRow(int row) {
-    if (_length == 0 || row <= 0) return 0;
-
-    // The most slots whose rows end at or before row: the next one holds
-    // it.
-    var rest = row + _frontRows;
-    var slots = 0;
-    for (var step = 1 << (_counts.length.bitLength - 1); step > 0; step >>= 1) {
-      final next = slots + step;
-      if (next <= _counts.length && _tree[next] <= rest) {
-        slots = next;
-        rest -= _tree[next];
-      }
-    }
-    return (slots - _front).clamp(0, _length - 1);
-  }
-
-  /// Brings the counts in step with [controller], guessing new entries'
-  /// rows, and returns the entries that left from the front and their
-  /// rows.
-  ({int entries, int rows}) sync(LogViewController controller) {
-    var entries = 0;
-    var rows = 0;
-    while (_length > 0 && _firstSeq < controller.firstSeq) {
-      final gone = _counts[_front++];
-      _frontRows += gone;
-      _total -= gone;
-      _length--;
-      _firstSeq++;
-      entries++;
-      rows += gone;
-    }
-    if (_length == 0) _firstSeq = controller.firstSeq;
-
-    final end = controller.firstSeq + controller.length;
-    for (var seq = _firstSeq + _length; seq < end; seq++) {
-      _append(_estimate(seq - controller.firstSeq, _crossAxisExtent));
-    }
-    _revision++;
-    return (entries: entries, rows: rows);
-  }
-
-  /// Measures the entry at [index] again at once, for a change only it
-  /// sees, such as its fields showing, and returns how its count changed.
-  /// Before a layout gives the counts a width, it estimates the entry.
-  int remeasure(int index) {
-    final slot = _front + index;
-    _measuredIn[slot] = 0;
-    final change = _crossAxisExtent == null
-        ? _recount(slot, _estimate(index, null))
-        : _measureAt(index);
-    _revision++;
-    return change;
-  }
-
-  /// Makes every count an estimate, for a new font, scale, locale or
-  /// gutter.
-  void invalidate() {
-    _generation++;
-    _revision++;
-  }
-
-  /// Measures the entries a layout of rows [top] to [bottom] shows, with
-  /// its scroll offset at row [anchor], and as many rows above that
-  /// offset, and returns the rows to move the offset by so the entry at it
-  /// stays there and the offset keeps its share of it to within a row.
-  int measure(
-    double top,
-    double anchor,
-    double bottom,
-    double crossAxisExtent,
-  ) {
-    if (crossAxisExtent != _crossAxisExtent) {
-      _crossAxisExtent = crossAxisExtent;
-      _generation++;
-    }
-    if (_length == 0) return 0;
-
-    // A layout that reaches the newest entry may be a following view's,
-    // which then moves to the new end. Measuring the rows the end shows
-    // now keeps that to one more pass; otherwise every screenful the
-    // counts grew by would cost one, past the viewport's limit of ten.
-    final reachesEnd = bottom >= _total;
-
-    // Below the entry at the offset, a new count moves nothing above; above
-    // it, every change moves the offset by as much, and the offset keeps
-    // its share of that entry's own rows to within a row.
-    final first = indexAtRow((anchor + _rowTolerance).floor());
-    final firstRow = rowsBefore(first);
-    var end = firstRow;
-    var firstChange = 0;
-    for (var i = first; i < _length && end < bottom; i++) {
-      final change = _measureAt(i);
-      if (i == first) firstChange = change;
-      end += rowsOf(i);
-    }
-
-    var correction = _keepShare(anchor - firstRow, rowsOf(first), firstChange);
-    if (reachesEnd) {
-      var tail = 0;
-      for (var i = _length - 1; i >= 0 && tail < bottom - top; i--) {
-        final change = _measureAt(i);
-        if (i < first) correction += change;
-        tail += rowsOf(i);
-      }
-    }
-    // Above the offset, as many rows as the layout spans, though its cache
-    // reaches less far: a page up from here then lands on measured rows,
-    // and their counts below the new offset cannot push lines not yet seen
-    // out past the view.
-    var above = anchor - firstRow;
-    for (var i = first - 1; i >= 0 && above < bottom - top; i--) {
-      correction += _measureAt(i);
-      above += rowsOf(i);
-    }
-    return correction;
-  }
-
-  /// The whole rows to move an offset [into] rows into an entry by when
-  /// the entry's count changed by [change] to [rows], so the offset keeps
-  /// its share of the entry to within a row: it keeps its place in its
-  /// row and moves to the row of the entry nearest its old share, so an
-  /// offset at the entry's start stays there. Kept as many rows in, the
-  /// offset would land past the end of an entry that a wider row shrank,
-  /// and the lines in sight below would scroll away unseen; an entry that
-  /// grew would push them out of the view instead.
-  static int _keepShare(double into, int rows, int change) {
-    final before = rows - change;
-    final row = (into + _rowTolerance).floor();
-    // An offset past the last entry, as in an overscroll, has no share.
-    if (change == 0 || row < 0 || row >= before) return 0;
-    final target = (into * rows / before - (into - row)).round();
-    return target.clamp(0, rows - 1) - row;
-  }
-
-  /// Measures the entry at [index] unless this generation did, and returns
-  /// how its count changed.
-  int _measureAt(int index) {
-    final slot = _front + index;
-    if (_measuredIn[slot] == _generation) return 0;
-
-    _measuredIn[slot] = _generation;
-    return _recount(slot, _measure(index, _crossAxisExtent!));
-  }
-
-  /// Sets the count in [slot] to [rows] and returns how it changed.
-  int _recount(int slot, int rows) {
-    final change = rows - _counts[slot];
-    if (change != 0) {
-      _counts[slot] = rows;
-      _total += change;
-      _add(slot, change);
-    }
-    return change;
-  }
-
-  void _append(int rows) {
-    if (_front + _length == _counts.length) _compact();
-    final slot = _front + _length++;
-    _counts[slot] = rows;
-    _measuredIn[slot] = 0;
-    _total += rows;
-    _add(slot, rows);
-  }
-
-  /// Moves the held entries to the start of new slots, twice as many as
-  /// they need, so moving costs O(1) a line over time.
-  void _compact() {
-    final size = math.max(_minRowSlots, 2 * (_length + 1));
-    _counts = Int32List(size)..setRange(0, _length, _counts, _front);
-    _measuredIn = Int32List(size)..setRange(0, _length, _measuredIn, _front);
-    _tree = Int32List(size + 1);
-    for (var k = 1; k <= size; k++) {
-      _tree[k] += _counts[k - 1];
-      final parent = k + (k & -k);
-      if (parent <= size) _tree[parent] += _tree[k];
-    }
-    _front = 0;
-    _frontRows = 0;
-  }
-
-  void _add(int slot, int change) {
-    for (var k = slot + 1; k < _tree.length; k += k & -k) {
-      _tree[k] += change;
-    }
-  }
-
-  /// The rows of slots 0 to [slots] - 1.
-  int _prefix(int slots) {
-    var sum = 0;
-    for (var k = slots; k > 0; k -= k & -k) {
-      sum += _tree[k];
-    }
-    return sum;
-  }
-}
-
-/// How close to a row boundary a scroll offset counts as on it, in rows.
-const double _rowTolerance = 1e-6;
-
-/// The rows of a [LogView]: a sliver like `SliverVariedExtentList` whose
-/// offsets and indexes come from [_RowCounts] in O(log n), where that
-/// list sums every extent before an index, and which measures the entries
-/// a layout shows before laying them out.
-final class _LogRows extends SliverMultiBoxAdaptorWidget {
-  const _LogRows({
-    required super.delegate,
-    required this.rows,
-    required this.revision,
-    required this.lineHeight,
-  });
-
-  final _RowCounts rows;
-
-  /// [rows]' revision when built: a new one lays the sliver out again.
-  final int revision;
-  final double lineHeight;
-
-  @override
-  _RenderLogRows createRenderObject(BuildContext context) => _RenderLogRows(
-    childManager: context as SliverMultiBoxAdaptorElement,
-    rows: rows,
-    revision: revision,
-    lineHeight: lineHeight,
-  );
-
-  @override
-  void updateRenderObject(BuildContext context, _RenderLogRows renderObject) {
-    renderObject
-      ..rows = rows
-      ..revision = revision
-      ..lineHeight = lineHeight;
-  }
-}
-
-final class _RenderLogRows extends RenderSliverFixedExtentBoxAdaptor {
-  _RenderLogRows({
-    required super.childManager,
-    required this._rows,
-    required this._revision,
-    required this._lineHeight,
-  });
-
-  _RowCounts _rows;
-  set rows(_RowCounts value) {
-    if (identical(value, _rows)) return;
-    _rows = value;
-    markNeedsLayout();
-  }
-
-  int _revision;
-  set revision(int value) {
-    if (value == _revision) return;
-    _revision = value;
-    markNeedsLayout();
-  }
-
-  double _lineHeight;
-  set lineHeight(double value) {
-    if (value == _lineHeight) return;
-    _lineHeight = value;
-    markNeedsLayout();
-  }
-
-  @override
-  double? get itemExtent => null;
-
-  @override
-  ItemExtentBuilder get itemExtentBuilder => _extentOf;
-
-  double? _extentOf(int index, SliverLayoutDimensions dimensions) =>
-      index < _rows.length ? _rows.rowsOf(index) * _lineHeight : null;
-
-  /// The row [offset] falls in, an offset on a boundary taking the row
-  /// after it, as the fixed-extent list rounds.
-  int _rowAt(double offset) {
-    final rows = offset / _lineHeight;
-    final nearest = rows.round();
-    if ((rows - nearest).abs() * _lineHeight < precisionErrorTolerance) {
-      return nearest;
-    }
-    return rows.floor();
-  }
-
-  /// The last row before [offset].
-  int _rowBefore(double offset) {
-    final rows = offset / _lineHeight - 1;
-    final nearest = rows.round();
-    if ((rows - nearest).abs() * _lineHeight < precisionErrorTolerance) {
-      return math.max(0, nearest);
-    }
-    return math.max(0, rows.ceil());
-  }
-
-  @override
-  double indexToLayoutOffset(double itemExtent, int index) =>
-      _rows.rowsBefore(math.min(index, _rows.length)) * _lineHeight;
-
-  @override
-  int getMinChildIndexForScrollOffset(double scrollOffset, double itemExtent) =>
-      _rows.indexAtRow(_rowAt(scrollOffset));
-
-  @override
-  int getMaxChildIndexForScrollOffset(double scrollOffset, double itemExtent) =>
-      _rows.indexAtRow(_rowBefore(scrollOffset));
-
-  @override
-  double computeMaxScrollOffset(
-    SliverConstraints constraints,
-    double itemExtent,
-  ) => _rows.total * _lineHeight;
-
-  @override
-  double estimateMaxScrollOffset(
-    SliverConstraints constraints, {
-    int? firstIndex,
-    int? lastIndex,
-    double? leadingScrollOffset,
-    double? trailingScrollOffset,
-  }) => _rows.total * _lineHeight;
-
-  @override
-  void performLayout() {
-    final constraints = this.constraints;
-    final top = constraints.scrollOffset + constraints.cacheOrigin;
-    final correction = _rows.measure(
-      top / _lineHeight,
-      constraints.scrollOffset / _lineHeight,
-      (top + constraints.remainingCacheExtent) / _lineHeight,
-      constraints.crossAxisExtent,
-    );
-    if (correction != 0) {
-      geometry = SliverGeometry(
-        scrollOffsetCorrection: correction * _lineHeight,
-      );
-      return;
-    }
-    super.performLayout();
   }
 }
 
@@ -1363,190 +853,3 @@ final _shortcuts = <ShortcutActivator, Intent>{
   for (final scroll in _LogScroll.values)
     SingleActivator(scroll.key): _LogScrollIntent(scroll),
 };
-
-/// A scroll controller whose position stays on the newest line while
-/// [_following] says so: when the content or the viewport changes, the
-/// position moves to the end during layout, in the same frame, without a
-/// scroll notification.
-final class _TailScrollController extends ScrollController {
-  _TailScrollController(this._following) : super(keepScrollOffset: false);
-
-  final bool Function() _following;
-
-  @override
-  ScrollPosition createScrollPosition(
-    ScrollPhysics physics,
-    ScrollContext context,
-    ScrollPosition? oldPosition,
-  ) => _TailScrollPosition(
-    _following,
-    physics: physics,
-    context: context,
-    initialPixels: initialScrollOffset,
-    keepScrollOffset: keepScrollOffset,
-    oldPosition: oldPosition,
-    debugLabel: debugLabel,
-  );
-}
-
-final class _TailScrollPosition extends ScrollPositionWithSingleContext {
-  _TailScrollPosition(
-    this._following, {
-    required super.physics,
-    required super.context,
-    super.initialPixels,
-    super.keepScrollOffset,
-    super.oldPosition,
-    super.debugLabel,
-  });
-
-  final bool Function() _following;
-
-  /// Moves the offset by [delta] as a layout correction does and lays out
-  /// again. A drag carries on from the new offset; a fling, whose
-  /// simulation sets absolute offsets, starts again from it at its current
-  /// velocity; an animation, which also sets absolute offsets, moves the
-  /// rest of its path with the lines ([_ShiftableScrollAnimation]) by
-  /// [path], or by [delta] when it is null. [path] differs from [delta]
-  /// when the offset cannot move as far as the lines did. Sends no scroll
-  /// notification: the user did not scroll.
-  void shiftBy(double delta, {double? path}) {
-    correctBy(delta);
-    final current = activity;
-    if (current is BallisticScrollActivity) goBallistic(current.velocity);
-    if (current is _ShiftableScrollAnimation) {
-      current.shiftBy(delta, path: path ?? delta);
-    }
-    notifyListeners();
-  }
-
-  /// Animates as the inherited animateTo does, but with an animation that
-  /// [shiftBy] can move. The desktop scrollbar's track click animates this
-  /// way.
-  @override
-  Future<void> animateTo(
-    double to, {
-    required Duration duration,
-    required Curve curve,
-  }) {
-    if (nearEqual(to, pixels, physics.toleranceFor(this).distance)) {
-      jumpTo(to);
-      return Future<void>.value();
-    }
-
-    final animation = _ShiftableScrollAnimation(
-      this,
-      from: pixels,
-      to: to,
-      toEnd: hasContentDimensions && to > maxScrollExtent - _endTolerance,
-      duration: duration,
-      curve: curve,
-      vsync: context.vsync,
-    );
-    beginActivity(animation);
-    return animation.done;
-  }
-
-  @override
-  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
-    // Content that shrank under an idle offset (wrapped rows after a wider
-    // layout, a long line leaving) moves the offset to the new end at once,
-    // following or not. The physics would leave an offset that a layout
-    // correction moved past the end and then spring back, and the scroll
-    // updates of that spring would resume following. Past the end during a
-    // gesture or fling is a bounce, left to the physics.
-    final shrank =
-        pixels > maxScrollExtent && !(activity?.isScrolling ?? false);
-    if (shrank) correctPixels(maxScrollExtent);
-    final accepted = super.applyContentDimensions(
-      minScrollExtent,
-      maxScrollExtent,
-    );
-    if (!shrank && (!_following() || pixels >= maxScrollExtent)) {
-      return accepted;
-    }
-
-    correctPixels(maxScrollExtent);
-    // The viewport laid out its children for the old offset: lay out again.
-    return false;
-  }
-}
-
-/// A scroll animation whose path moves with the lines when old lines leave
-/// the buffer during it, so it ends on the line it was aimed at (the
-/// oldest line left, if that one left too), or on the newest line when it
-/// was aimed at the end, without a jump on the way.
-///
-/// A plain [DrivenScrollActivity] sets the offsets of its own path each
-/// frame, which would undo the shift and land the view off its target by
-/// as many lines as left. Restarting the animation instead would start its
-/// curve and duration again on every batch.
-final class _ShiftableScrollAnimation extends DrivenScrollActivity {
-  _ShiftableScrollAnimation(
-    super.delegate, {
-    required super.from,
-    required super.to,
-    required this._toEnd,
-    required super.duration,
-    required super.curve,
-    required super.vsync,
-  }) : _to = to,
-       _value = from;
-
-  /// The animation's target, in the offsets it started with.
-  final double _to;
-
-  /// Whether it was aimed at the newest line, which stays at the end as
-  /// lines leave instead of moving with them.
-  final bool _toEnd;
-
-  /// The animation's latest value, in the offsets it started with.
-  double _value;
-
-  /// How far the whole path is moved when it ends on a line.
-  double _targetShift = 0;
-
-  /// The shifts of a path that ends at the newest line, each with how far
-  /// the value was from [_to] when it came.
-  final _endShifts = <({double left, double delta})>[];
-
-  /// Moves the rest of the path with the lines. When it ends on a line,
-  /// all of it moves by [path], how far the lines moved, even where the
-  /// offset could not follow them all the way ([delta]). When it ends at
-  /// the newest line, it moves by [delta] where it is now, the shift the
-  /// offset just took, and less on the way to none at the end.
-  void shiftBy(double delta, {required double path}) {
-    if (!_toEnd) {
-      _targetShift += path;
-      return;
-    }
-
-    final left = _to - _value;
-    // At its end already: the next frame sets the end, as it should.
-    if (left.abs() < precisionErrorTolerance) return;
-    _endShifts.add((left: left, delta: delta));
-  }
-
-  @override
-  bool applyMoveTo(double value) {
-    _value = value;
-    // An end shift fades in proportion to the distance left. A curve that
-    // turns back from the end or runs past it would scale the shift up or
-    // reverse it, so it never takes more than all of it, nor any past the
-    // end.
-    var shift = _targetShift;
-    for (final (:left, :delta) in _endShifts) {
-      shift += delta * ((_to - value) / left).clamp(0.0, 1.0);
-    }
-    // When the lines in sight left, the moved path runs above the oldest
-    // line left, and when the line aimed at left too, so does its end.
-    // Bouncing physics would show the blank space there, and clamping
-    // physics would report overscroll, which ends the animation on the
-    // oldest line, so the path goes no further above the oldest line than
-    // its curve does.
-    final minExtent = (delegate as ScrollPosition).minScrollExtent;
-    return super.applyMoveTo(
-      math.max(value + shift, math.min(value, minExtent)),
-    );
-  }
-}

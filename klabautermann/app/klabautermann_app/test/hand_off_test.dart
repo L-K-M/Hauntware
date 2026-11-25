@@ -6,10 +6,10 @@ import 'package:klabautermann_app/controllers/fleet_controller.dart'
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/services/hand_off.dart';
-import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
+import 'package:klabautermann_app/ui/docker/stack_overview.dart'
     show StackOverview;
 import 'package:klabautermann_app/ui/hand_off_actions.dart';
-import 'package:klabautermann_app/ui/logs/logs_panel.dart' show LogFilePicker;
+import 'package:klabautermann_app/ui/logs/log_pickers.dart' show LogFilePicker;
 import 'package:klabautermann_app/ui/server_header.dart' show ServerHeader;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show HostResult, VarLogFiles;

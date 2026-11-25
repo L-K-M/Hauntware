@@ -173,7 +173,8 @@ void main() {
         .join('\n');
 
     List<DockerQuery> composeQueries(AppHarness harness) => [
-      for (final query in harness.engine.sentOfType<DockerQuery>().cast())
+      for (final query
+          in harness.engine.sentOfType<DockerQuery>().cast<DockerQuery>())
         if (query.query is DockerComposeQuery) query,
     ];
 

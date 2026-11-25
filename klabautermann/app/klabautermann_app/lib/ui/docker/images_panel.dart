@@ -17,7 +17,7 @@ import '../sortable_table.dart';
 import '../time_display.dart';
 import 'image_history.dart';
 import 'image_pull.dart' show ImagePullButton;
-import 'containers_panel.dart' show DockerNotice;
+import 'docker_notice.dart';
 import 'containers_view.dart' show searchTerms;
 import 'docker_cells.dart';
 import 'docker_list_state.dart';

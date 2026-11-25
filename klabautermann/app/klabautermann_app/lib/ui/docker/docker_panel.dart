@@ -16,6 +16,7 @@ import 'container_logs.dart';
 import 'containers_panel.dart';
 import 'docker_endpoint.dart';
 import 'docker_endpoint_picker.dart';
+import 'docker_notice.dart';
 import 'images_panel.dart';
 import 'events_panel.dart';
 import 'networks_panel.dart';

@@ -29,7 +29,6 @@ export 'src/certificates/tls_check.dart'
         TlsCheckFailure,
         TlsEndpoint,
         TlsEndpointCheck,
-        kTlsDefaultPort,
         kTlsEndpointsMax;
 export 'src/engine/engine_client.dart';
 // What a substitute engine for IsolateEngineClient.spawn's entryPoint is
@@ -46,13 +45,7 @@ export 'package:seance_core/seance_core.dart'
 // The signal, unit verb and power verb an ActionIntent names (PRC-02,
 // SVC-03, SYS-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show
-        KillSignal,
-        PowerVerb,
-        SystemctlVerb,
-        OnCalendarElapse,
-        OnCalendarResult,
-        TimerDetail;
+    show KillSignal, PowerVerb, SystemctlVerb, OnCalendarElapse;
 
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).
@@ -70,7 +63,6 @@ export 'src/settings/device_settings_store.dart'
         DeviceSettingsIssueKind,
         DeviceSettingsReadOnlyException,
         DeviceSettingsStore,
-        DeviceSettingsWriter,
         DockerEndpointOverride,
         deviceSettingsFileName,
         deviceSettingsSchemaVersion,
@@ -154,12 +146,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // The System tab's SSH server section (SEC-01): what an
 // SshdPostureReport read.
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show
-        SshdForwarding,
-        SshdForwardingBlock,
-        SshdMatchContext,
-        SshdPosture,
-        SshdRootLogin;
+    show SshdForwarding, SshdMatchContext, SshdPosture, SshdRootLogin;
 
 // A process's details and owner (PRC-04, PRC-05), as a HostResult's
 // ProcessDetails carry them.
@@ -306,8 +293,7 @@ export 'package:seance_core/seance_core.dart'
 // The update check (c3 §shells): the suite's checker and its result
 // types drive ghost_update's session controller; the app's repository,
 // user agent and Android release asset are Klabautermann's own.
-export 'package:seance_core/seance_core.dart'
-    show ReleaseAsset, UpdateChecker, UpdateInfo;
+export 'package:seance_core/seance_core.dart' show UpdateChecker, UpdateInfo;
 export 'src/update/update_check.dart'
     show
         klabautermannAndroidReleaseAsset,
@@ -319,12 +305,11 @@ export 'src/update/update_check.dart'
 export 'src/operations/command_words.dart' show splitCommandWords;
 
 // The sync sign-in form (03 §4.3 step 1) checks its fields with the
-// suite's enrollment rule before the engine is asked, and the pull-only
-// test names the push policy. CRED-05's recovery service reads the
-// shared export's size bound and reports its restore summary, and the
-// desktop export file writer applies owner-only privacy.
+// suite's enrollment rule before the engine is asked. CRED-05's recovery
+// service reads the shared export's size bound and reports its restore
+// summary, and the desktop export file writer applies owner-only privacy.
 export 'package:seance_core/catalog.dart'
-    show AtomicFilePrivacy, AtomicFileWriter, PushPolicy, SecretsRestoreSummary;
+    show AtomicFilePrivacy, AtomicFileWriter, SecretsRestoreSummary;
 // The secrets export's size bound, checked before a picked file is
 // loaded (CRED-05).
 export 'package:seance_core/seance_core.dart' show SecretsExport;
@@ -367,8 +352,7 @@ export 'src/docker/docker_access.dart' show dockerAccessFacts;
 // exposes forwarded connections' peer credentials.
 export 'src/docker/dropbear.dart' show DropbearRelease;
 // When an update check reads a registry again (IMG-05, D68).
-export 'src/docker/image_updates.dart'
-    show kImageUpdateBackoff, kImageUpdateFresh;
+export 'src/docker/image_updates.dart' show kImageUpdateBackoff;
 
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ComposeFacts, DockerAccessFacts;
@@ -389,7 +373,6 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         DiskUsageTotals,
         DockerServerVersion,
         DockerSummary,
-        EngineComponent,
         EngineInfo,
         EnvVar,
         ExternalManager,
@@ -417,12 +400,9 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
     show detectOwnership;
 // A container's label links (CTR-11): the pages its labels point at.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
-    show LabelLink, LabelLinkSource, labelLinks;
+    show LabelLink, labelLinks;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
 // rule over a `units` reading, and what it reports.
-export 'package:klabautermann_host/klabautermann_host.dart'
-    show ExternalMonitorReport, ExternalMonitorUnit;
-
 export 'src/sampling/sample_results.dart' show externalMonitorsIn;
 
 // The Overview's threshold-band announcements (A11Y-15, D60): the rule

@@ -311,6 +311,128 @@ Host y
       ).hosts.single.toServerConfig(id: 'id2', now: 5);
       expect(keylessCfg.authMethod, AuthMethod.agent);
     });
+
+    test('applies Host * defaults to a host, as ssh does', () {
+      final result = SshConfigImporter.parse('''
+Host *
+  User deploy
+  Port 2222
+
+Host web
+  HostName web.example.com
+''');
+      expect(result.approximate, isEmpty);
+      final h = result.hosts.single;
+      expect(h.alias, 'web');
+      expect(h.hostName, 'web.example.com');
+      expect(h.user, 'deploy');
+      expect(h.port, 2222);
+    });
+
+    test('applies top-level defaults to a host, as ssh does', () {
+      final result = SshConfigImporter.parse('''
+User deploy
+Port 2222
+
+Host web
+  HostName web.example.com
+''');
+      expect(result.approximate, isEmpty);
+      final h = result.hosts.single;
+      expect(h.user, 'deploy');
+      expect(h.port, 2222);
+    });
+
+    test('a later block adds a value an earlier block left unset', () {
+      final result = SshConfigImporter.parse('''
+Host web
+  HostName web.example.com
+
+Host web
+  Port 2222
+''');
+      expect(result.approximate, isEmpty);
+      final h = result.hosts.single;
+      expect(h.hostName, 'web.example.com');
+      expect(h.port, 2222);
+    });
+
+    test('a repeated alias imports once, at its first appearance', () {
+      final result = SshConfigImporter.parse('''
+Host web
+  HostName web.example.com
+
+Host other
+  HostName other.example.com
+
+Host web
+  Port 2222
+''');
+      expect(result.approximate, isEmpty);
+      expect(result.hosts.map((h) => h.alias), ['web', 'other']);
+      expect(result.hosts.first.hostName, 'web.example.com');
+      expect(result.hosts.first.port, 2222);
+    });
+
+    test('a known Match criterion sets values ssh would use', () {
+      final result = SshConfigImporter.parse('''
+Host web
+  HostName %h.example.com
+
+Match host web.example.com
+  Port 2222
+''');
+      expect(result.approximate, isEmpty);
+      final h = result.hosts.single;
+      expect(h.hostName, 'web.example.com');
+      expect(h.port, 2222);
+    });
+
+    test(
+      'a Match ssh cannot evaluate keeps the legacy import, approximate',
+      () {
+        final result = SshConfigImporter.parse('''
+Match exec "true"
+  Port 2222
+
+Host web
+  HostName web.example.com
+''');
+        expect(result.skipped, isEmpty);
+        expect(result.approximate, {'web'});
+        final h = result.hosts.single;
+        expect(h.alias, 'web');
+        expect(h.hostName, 'web.example.com');
+        // The block-local reading had no port; ssh's own result is unknown.
+        expect(h.port, isNull);
+      },
+    );
+
+    test('a Port ssh may resolve keeps the legacy invalidPort skip', () {
+      final result = SshConfigImporter.parse(
+        'Host w\n  HostName w.example.com\n  Port www\n',
+      );
+      expect(result.hosts, isEmpty);
+      expect(result.approximate, isEmpty);
+      final skipped = result.skipped.single;
+      expect(skipped.reason, SkippedHostReason.invalidPort);
+      expect(skipped.value, 'www');
+      expect(skipped.line, 3);
+      expect(skipped.host.alias, 'w');
+    });
+
+    test('an Include in a host block keeps the legacy import, approximate', () {
+      final result = SshConfigImporter.parse('''
+Host web
+  HostName web.example.com
+  Include extra.conf
+''');
+      expect(result.skipped, isEmpty);
+      expect(result.approximate, {'web'});
+      final h = result.hosts.single;
+      expect(h.alias, 'web');
+      expect(h.hostName, 'web.example.com');
+    });
   });
 
   group('TofuVerifier', () {

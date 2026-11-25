@@ -8,6 +8,8 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../logs/container_lines.dart';
 import '../logs/log_export.dart' show showLogExport;
+import '../logs/log_notices.dart';
+import '../logs/log_search_field.dart';
 import '../logs/log_view.dart';
 import '../logs/logs_panel.dart';
 import '../logs/logs_panel_controller.dart';

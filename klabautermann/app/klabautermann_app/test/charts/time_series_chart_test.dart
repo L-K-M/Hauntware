@@ -11,7 +11,7 @@ import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/ui/charts/charts.dart';
 import 'package:klabautermann_app/ui/charts/chart_marks.dart'
     show ThresholdBand, thresholdBandAlpha;
-import 'package:klabautermann_app/ui/charts/time_series_chart.dart'
+import 'package:klabautermann_app/ui/charts/time_series_painter.dart'
     show TimeSeriesCrosshairPainter, TimeSeriesPainter, firstTimeSeriesTick;
 import 'package:klabautermann_app/ui/charts/time_series_crosshair.dart'
     show TimeSeriesGapHit, TimeSeriesSampleHit;
