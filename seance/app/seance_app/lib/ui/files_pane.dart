@@ -1680,6 +1680,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              autofocus: true,
               onPressed: () => Navigator.pop(context, true),
               child: Text(confirmLabel),
             ),
@@ -2679,6 +2680,7 @@ Future<bool> _uploadManagedLocalCopy(
                 child: const Text('Cancel'),
               ),
               FilledButton(
+                autofocus: true,
                 onPressed: () => Navigator.pop(context, true),
                 child: const Text('Overwrite'),
               ),
@@ -2935,6 +2937,7 @@ class _RecoveredLocalEdits extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            autofocus: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Discard'),
           ),

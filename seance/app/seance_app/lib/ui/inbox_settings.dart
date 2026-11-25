@@ -109,6 +109,7 @@ class _InboxSettingsState extends State<InboxSettings> {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            autofocus: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Remove'),
           ),
@@ -441,6 +442,7 @@ class _PairingDialogState extends State<_PairingDialog> {
       ),
       actions: [
         FilledButton(
+          autofocus: true,
           key: const ValueKey('inbox.pairing.done'),
           onPressed: () => Navigator.pop(context),
           child: const Text('Done'),

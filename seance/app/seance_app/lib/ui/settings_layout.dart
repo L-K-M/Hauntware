@@ -66,6 +66,7 @@ class SettingsSectionHeader extends StatelessWidget {
                   content: SingleChildScrollView(child: Text(help)),
                   actions: [
                     TextButton(
+                      autofocus: true,
                       onPressed: () => Navigator.pop(context),
                       child: const Text('Close'),
                     ),

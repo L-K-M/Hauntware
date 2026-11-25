@@ -45,6 +45,7 @@ Future<void> offerRecoveryCode(BuildContext context, AppState state) async {
           child: const Text('Not now'),
         ),
         FilledButton(
+          autofocus: true,
           key: const ValueKey('recovery.prompt.setUp'),
           onPressed: () => Navigator.pop(context, true),
           child: const Text('Set up…'),

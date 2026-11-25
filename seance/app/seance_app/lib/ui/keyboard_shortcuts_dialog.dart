@@ -205,6 +205,7 @@ Future<void> showKeyboardShortcuts(BuildContext context) {
       ),
       actions: [
         TextButton(
+          autofocus: true,
           onPressed: () => Navigator.pop(context),
           child: const Text('Close'),
         ),
