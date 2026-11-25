@@ -8,6 +8,8 @@ import 'package:klabautermann_app/ui/docker/networks_panel.dart';
 import 'package:klabautermann_app/ui/docker/networks_view.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'support/charts.dart'
+    show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
 import 'support/docker.dart';
 import 'support/fake_engine.dart';
 
@@ -64,7 +66,13 @@ final class _Panel {
   }
 }
 
-Future<_Panel> _pump(WidgetTester tester, {Size size = _wide}) async {
+/// [golden] draws in that brightness with the goldens' font and no debug
+/// banner; without it the panel uses the light theme as before.
+Future<_Panel> _pump(
+  WidgetTester tester, {
+  Size size = _wide,
+  Brightness? golden,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -80,7 +88,11 @@ Future<_Panel> _pump(WidgetTester tester, {Size size = _wide}) async {
 
   await tester.pumpWidget(
     MaterialApp(
-      theme: GhostTheme.light(klabautermannThemeStyle),
+      debugShowCheckedModeBanner: golden == null,
+      theme: switch (golden) {
+        null => GhostTheme.light(klabautermannThemeStyle),
+        final brightness => _goldenTheme(brightness),
+      },
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -119,7 +131,20 @@ String _label(WidgetTester tester, String id) =>
     tester.getSemantics(find.byKey(ValueKey('$_prefix$id'))).label;
 
 /// 03 §10.4's Networks sub-tab (DNW-01) over the network watch.
+ThemeData _goldenTheme(Brightness brightness) {
+  final base = brightness == Brightness.light
+      ? GhostTheme.light(klabautermannThemeStyle)
+      : GhostTheme.dark(klabautermannThemeStyle);
+  return base.copyWith(
+    textTheme: base.textTheme.apply(fontFamily: goldenFontFamily),
+  );
+}
+
 void main() {
+  setUpAll(() async {
+    if (goldensCompareHere) await loadGoldenFonts();
+  });
+
   test('counts the containers on each network by name', () {
     expect(containersByNetwork(_containers), {'shop_default': 2, 'bridge': 1});
   });
@@ -222,5 +247,24 @@ void main() {
 
     expect(find.byType(DropdownButton<NetworkColumn>), findsOneWidget);
     expect(_label(tester, 'n-shop'), contains('Scope: local'));
+  });
+
+  group('golden', () {
+    // The list on desktop and as a phone's two-line rows, in both
+    // brightnesses (03 §11.1).
+    for (final (layout, size) in [('desktop', _wide), ('phone', _phone)]) {
+      for (final brightness in Brightness.values) {
+        testWidgets('$layout, ${brightness.name}', (tester) async {
+          final panel = await _pump(tester, size: size, golden: brightness);
+          await panel.list(tester);
+          await expectLater(
+            find.byType(NetworksPanel),
+            matchesGoldenFile(
+              'goldens/networks_panel_${layout}_${brightness.name}.png',
+            ),
+          );
+        }, skip: !goldensCompareHere);
+      }
+    }
   });
 }

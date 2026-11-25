@@ -3,8 +3,7 @@
 // Docker tab's notice adding an action under that.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:klabautermann_app/ui/docker/containers_panel.dart'
-    show DockerNotice;
+import 'package:klabautermann_app/ui/docker/docker_notice.dart';
 import 'package:klabautermann_app/ui/panel_kit.dart' show PanelNotice;
 
 void main() {

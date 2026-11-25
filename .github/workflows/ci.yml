@@ -92,6 +92,15 @@ jobs:
       # exactly (docs/history/source-refs.json is the contract).
       - name: Verify preserved history
         run: python3 scripts/check-history.py
+      # Each product AGENTS.md repeats the root shared-rules block; an
+      # agent started in a subtree must read the same working rules.
+      - name: Check shared agent rules
+        run: python3 scripts/check-shared-rules.py
+      # Pin each ledgered native copy against its renamed sibling source.
+      - name: Check copied native ledger
+        run: |
+          python3 scripts/test_check_shared_ledger.py
+          python3 scripts/check-shared-ledger.py
       # License statements agree with LICENSE (the Unlicense): the README
       # scopes it to the suite's own code and names where the bundled
       # code's notices ship, and every macOS About string and Windows
@@ -2302,7 +2311,8 @@ jobs:
             build: macos --release
           - os: macos-latest
             target: ios
-            # The unsigned .xcarchive the M4 release leg will zip, as
+            # The unsigned .xcarchive that release.yml's client_klabautermann
+            # job zips into klabautermann-preview-ios-unsigned.ipa, as
             # Poltergeist's does.
             build: ipa --release --no-codesign
           - os: windows-latest
@@ -2372,9 +2382,10 @@ jobs:
       # A release-only startup failure leaves a running app without its UI;
       # unit tests run with asserts on and never see one. The window shows
       # after Dart places it (macOS, where File is a Dart menu) or on the
-      # first frame (Linux, Windows). Nothing reads the keychain yet, so
-      # every launch gets the script's throwaway home, whose HOME also
-      # gives File its ssh_config import entry.
+      # first frame (Linux, Windows). A fresh runner has no stored vault
+      # or synced account, so this launch never asks the OS keystore; every
+      # launch gets the script's throwaway home, whose HOME also gives
+      # File its ssh_config import entry.
       - name: Release app launch (macOS)
         if: matrix.target == 'macos'
         working-directory: klabautermann/app/klabautermann_app
@@ -2394,8 +2405,9 @@ jobs:
         working-directory: klabautermann/app/klabautermann_app
         shell: bash
         run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
-      # The packaging the M4 release leg will ship. No upload: ordinary CI
-      # does not publish binaries (see poltergeist_client).
+      # The packaging release.yml's client_klabautermann job ships. No
+      # upload: ordinary CI does not publish binaries (see
+      # poltergeist_client).
       - name: Package Linux artifacts (.deb + AppImage)
         if: startsWith(matrix.target, 'linux')
         working-directory: klabautermann

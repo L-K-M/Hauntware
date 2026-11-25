@@ -1264,8 +1264,11 @@ void main() {
 
   group('host queries (LOG-08, LOG-09)', () {
     test('each query is answered by its own result', () async {
-      final boots = monitoring.queryHost('srv-1', const BootsQuery());
-      final files = monitoring.queryHost('srv-1', const VarLogQuery());
+      final boots = monitoring.hostReads.queryHost('srv-1', const BootsQuery());
+      final files = monitoring.hostReads.queryHost(
+        'srv-1',
+        const VarLogQuery(),
+      );
       final sent = engine.sentOfType<HostQuery>().cast<HostQuery>().toList();
       expect(sent.map((query) => query.query.runtimeType), [
         BootsQuery,
@@ -1294,7 +1297,10 @@ void main() {
 
     test('a stopped engine answers no link, and so does one that stops '
         'before answering', () async {
-      final waiting = monitoring.queryHost('srv-1', const BootsQuery());
+      final waiting = monitoring.hostReads.queryHost(
+        'srv-1',
+        const BootsQuery(),
+      );
       await engine.close();
       await settle();
       expect(
@@ -1302,7 +1308,10 @@ void main() {
         HostQueryFailure.noLink,
       );
 
-      final later = await monitoring.queryHost('srv-1', const BootsQuery());
+      final later = await monitoring.hostReads.queryHost(
+        'srv-1',
+        const BootsQuery(),
+      );
       expect(
         (later.payload as HostQueryFailed).failure,
         HostQueryFailure.noLink,
@@ -1312,8 +1321,8 @@ void main() {
 
   group('export redaction (LOG-10)', () {
     test('each request is answered by its own redacted text', () async {
-      final first = monitoring.redactLines(['a', 'b']);
-      final second = monitoring.redactLines(['c']);
+      final first = monitoring.hostReads.redactLines(['a', 'b']);
+      final second = monitoring.hostReads.redactLines(['c']);
       final sent = engine
           .sentOfType<RedactLines>()
           .cast<RedactLines>()
@@ -1333,11 +1342,140 @@ void main() {
 
     test('a stopped engine redacts nothing, and so does one that stops '
         'before answering', () async {
-      final waiting = monitoring.redactLines(['token=abc']);
+      final waiting = monitoring.hostReads.redactLines(['token=abc']);
       await engine.close();
       await settle();
       expect(await waiting, isNull);
-      expect(await monitoring.redactLines(['token=abc']), isNull);
+      expect(await monitoring.hostReads.redactLines(['token=abc']), isNull);
+    });
+  });
+
+  group('unit reads (SVC-07 to SVC-10) and TLS checks (CRT-01)', () {
+    test('a stopped engine answers no link and nothing to check', () async {
+      final unit = monitoring.hostReads.queryUnit(
+        'srv-1',
+        const SocketsQuery(),
+      );
+      final tls = monitoring.hostReads.checkTlsEndpoints(const [
+        TlsEndpoint('srv-1.example', 443),
+      ]);
+      await engine.close();
+      await settle();
+
+      expect(
+        ((await unit).payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+      expect(await tls, isNull);
+
+      expect(
+        ((await monitoring.hostReads.queryUnit(
+                  'srv-1',
+                  const SocketsQuery(),
+                )).payload
+                as UnitQueryFailed)
+            .failure,
+        UnitQueryFailure.noLink,
+      );
+      expect(
+        await monitoring.hostReads.checkTlsEndpoints(const [
+          TlsEndpoint('srv-1.example', 443),
+        ]),
+        isNull,
+      );
+    });
+
+    test('a refused send answers every pending read', () async {
+      final waitingHost = monitoring.hostReads.queryHost(
+        'srv-1',
+        const BootsQuery(),
+      );
+      final waitingUnit = monitoring.hostReads.queryUnit(
+        'srv-1',
+        const SocketsQuery(),
+      );
+      engine.refuseSends = true;
+      final refusedRedaction = monitoring.hostReads.redactLines(['token=abc']);
+      final refusedTls = monitoring.hostReads.checkTlsEndpoints(const [
+        TlsEndpoint('srv-1.example', 443),
+      ]);
+      engine.refuseSends = false;
+
+      expect(await refusedRedaction, isNull);
+      expect(await refusedTls, isNull);
+      expect(
+        ((await waitingHost).payload as HostQueryFailed).failure,
+        HostQueryFailure.noLink,
+      );
+      expect(
+        ((await waitingUnit).payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+    });
+  });
+
+  group('rejections naming a read (CTL-05)', () {
+    test('each rejection settles only the read it names', () async {
+      final host = monitoring.hostReads.queryHost('srv-1', const BootsQuery());
+      final unit = monitoring.hostReads.queryUnit(
+        'srv-1',
+        const SocketsQuery(),
+      );
+      final redaction = monitoring.hostReads.redactLines(['token=abc']);
+      final tls = monitoring.hostReads.checkTlsEndpoints(const [
+        TlsEndpoint('srv-1.example', 443),
+      ]);
+      final sentHost = engine.sentOfType<HostQuery>().cast<HostQuery>().single;
+      final sentUnit = engine.sentOfType<UnitQuery>().cast<UnitQuery>().single;
+      final sentRedaction = engine
+          .sentOfType<RedactLines>()
+          .cast<RedactLines>()
+          .single;
+      final sentTls = engine
+          .sentOfType<CheckTlsEndpoints>()
+          .cast<CheckTlsEndpoints>()
+          .single;
+
+      engine
+        ..emit(
+          RequestRejected(
+            'HostQuery',
+            'no fleet server srv-1',
+            requestId: sentHost.queryId,
+          ),
+        )
+        ..emit(
+          RequestRejected(
+            'UnitQuery',
+            'no fleet server srv-1',
+            requestId: sentUnit.requestId,
+          ),
+        )
+        ..emit(
+          RequestRejected(
+            'RedactLines',
+            'engine error',
+            requestId: sentRedaction.requestId,
+          ),
+        )
+        ..emit(
+          RequestRejected(
+            'CheckTlsEndpoints',
+            'engine error',
+            requestId: sentTls.requestId,
+          ),
+        );
+
+      expect(
+        ((await host).payload as HostQueryFailed).failure,
+        HostQueryFailure.noLink,
+      );
+      expect(
+        ((await unit).payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+      expect(await redaction, isNull);
+      expect(await tls, isNull);
     });
   });
 }

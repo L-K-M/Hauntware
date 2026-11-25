@@ -6,7 +6,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
-import 'containers_panel.dart' show DockerNotice, containerStateText;
+import 'container_badges.dart' show containerStateText;
+import 'docker_notice.dart';
 
 /// DKE-06's security review and DKE-07's log rotation lint: on request,
 /// each container's configuration read on [serverId] and what it puts at

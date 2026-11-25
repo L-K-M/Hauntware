@@ -13,4 +13,5 @@ export 'gauge.dart' show Gauge;
 export 'series_ring.dart';
 export 'sparkline.dart' show Sparkline;
 export 'time_series.dart' hide timeSeriesRuns;
-export 'time_series_chart.dart' show TimeSeriesChart, chartGapText;
+export 'time_series_chart.dart' show TimeSeriesChart;
+export 'time_series_painter.dart' show chartGapText;

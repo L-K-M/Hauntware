@@ -138,16 +138,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'forward-${_count++}'",
     r"'$OpenPortForward'",
   },
-  // The rejected requests' class names, which RequestRejected carries;
+  // The rejected request's class name, which RequestRejected carries;
   // never shown.
   'lib/controllers/engine_reads.dart': {r"'${request.runtimeType}'"},
-  'lib/controllers/admin_controller.dart': {
-    r"'$ReadUserCrontabs'",
-    r"'$ReadSmart'",
-    r"'$ReadRestarts'",
-    r"'$ReadFirewall'",
-    r"'$ReadSshdPosture'",
-  },
   // The Apps sub-tab's Docker list values (state, network mode, port
   // type, bound addresses), the loopback address and scheme a forward
   // opens at, and host:port notation, none of them prose (DKE-08).
@@ -441,7 +434,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'volumes-${_count++}'",
     r"'networks-${_count++}'",
     r"'events-${_count++}'",
-    r"'stack-file-${_count++}'",
+    r"'one-shot-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
     // The not-saved diagnostic of a purge, which no surface starts; a
@@ -464,6 +457,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'log-${_count++}'",
     r"'$OpenLogStream'",
   },
+  'lib/controllers/host_reads.dart': {
+    // The read ids HostReads mints for its EngineReads, matched in their
+    // answers.
+    r"'host-${_nextHostQuery++}'",
+    r"'unit-${_nextUnitQuery++}'",
+    r"'redact-${_nextRedaction++}'",
+    r"'tls-${_nextTlsCheck++}'",
+  },
   'lib/controllers/monitoring_controller.dart': {
     // Assert messages; programmer diagnostics, never rendered.
     r"'$stream carries no metrics'",
@@ -471,20 +472,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
-    // The rejected requests' class names, which RequestRejected carries.
-    r"'$HostQuery'",
-    r"'$UnitQuery'",
-    r"'$RedactLines'",
-    r"'$CheckTlsEndpoints'",
-    // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
-    r"'host-${_nextHostQuery++}'",
-    // A TLS check's id, which its TlsEndpointsChecked answers by (CRT-01).
-    r"'tls-${_nextTlsCheck++}'",
-    // A unit read's request id, never shown.
-    r"'unit-${_nextUnitQuery++}'",
-    // An export redaction's id, which its RedactedLines answers by
-    // (LOG-10).
-    r"'redact-${_nextRedaction++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {
@@ -602,21 +589,22 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'index'",
     "'a column spans time'",
   },
-  'lib/ui/charts/time_series_chart.dart': {
-    "'one label per lane'",
+  'lib/ui/charts/time_series_chart.dart': {"'one label per lane'"},
+  'lib/ui/charts/time_series_painter.dart': {
+    // Painter assert messages; programmer diagnostics, never rendered.
     "'the window spans time'",
     "'the scale needs a positive top'",
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
   'lib/ui/attention.dart': {r"'$error'"},
-  'lib/ui/docker/container_details.dart': {
+  // The separator between a network's aliases, machine data.
+  'lib/ui/docker/container_details.dart': {"', '"},
+  'lib/ui/docker/container_details_parts.dart': {
     // A mount's type as the Engine API names it, matched, never shown;
-    // the empty type a mount without one reads as; the separator between
-    // a network's aliases, machine data.
+    // the empty type a mount without one reads as.
     "'volume'",
     "''",
-    "', '",
   },
   // The ps column title of resident memory, matched, never shown.
   'lib/ui/docker/container_processes.dart': {"'RSS'"},
@@ -729,15 +717,23 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'none'",
     "''",
   },
-  'lib/ui/docker/containers_panel.dart': {
+  'lib/ui/docker/container_columns.dart': {
+    // Empty cells: a heading's text and a figure's absent value.
+    "''",
+  },
+  'lib/ui/docker/container_selection.dart': {
+    // A heading's empty cell text and the selection column's table id
+    // (CTR-07), a key.
+    "''",
+    "'select'",
+  },
+  'lib/ui/docker/containers_list.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
-    // text; a heading's row key; empty cells and no ports.
-    r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
+    // text; a heading's row key.
+    r"'${DockerWatchList.containers.name}.row.${containerRowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
-    // The selection column's table id (CTR-07), a key.
-    "'select'",
     "''",
   },
   'lib/ui/docker/containers_view.dart': {
@@ -789,30 +785,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'stacks.row.${project.name}'",
     r"'stacks.unlisted.${widget.serverId}'",
   },
-  'lib/ui/docker/volumes_panel.dart': {
+  'lib/ui/docker/docker_list_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
     // text.
-    r"'${DockerWatchList.volumes.name}.row.${_rowKey(entry)}'",
+    r"'${widget.tableId}.row.${widget.rowKey(entry)}'",
     r"'\n'",
   },
-  'lib/ui/docker/networks_panel.dart': {
-    // The key tests find a phone row by, in the table rows' form, and the
-    // line break between its cells in its screen-reader label, each ARB
-    // text.
-    r"'${DockerWatchList.networks.name}.row.${_rowKey(entry)}'",
-    r"'\n'",
-  },
-  'lib/ui/docker/networks_view.dart': {
+  'lib/ui/docker/docker_resource_view.dart': {
     // The line break between the fields the search reads.
     r"'\n'",
   },
   'lib/ui/docker/volumes_view.dart': {
-    // The mount type of a named volume, matched, never shown; the line
-    // break between the fields the search reads; the name pattern Docker
-    // accepts (VOL-02).
+    // The mount type of a named volume, matched, never shown; the name
+    // pattern Docker accepts (VOL-02).
     "'volume'",
-    r"'\n'",
     "r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+\$'",
   },
   // The line break between the endpoints the user lists (CRT-01).
@@ -888,12 +875,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "', '",
   },
   'lib/ui/interfaces.dart': {"'lo'"},
-  'lib/ui/logs/logs_panel.dart': {
-    // The empty server pattern, which reads the whole journal again.
-    "''",
+  'lib/ui/logs/log_pickers.dart': {
     // The folder LOG-08 browses, a path on the server handed to the
     // siblings (X-10), never shown.
     "'/var/log'",
+  },
+  'lib/ui/logs/logs_panel.dart': {
+    // The empty server pattern, which reads the whole journal again.
+    "''",
   },
   'lib/ui/logs/log_query.dart': {
     // PCRE2's inline flags that pin journalctl's case rule (LOG-06):
@@ -996,6 +985,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\u2026'",
     r"'[\n\v\f\r\x85\u2028\u2029]'",
   },
+  'lib/ui/logs/log_text_layout.dart': {
+    // Glyph probes that measure the line height (the space above), the
+    // advance and the ellipsis, never shown.
+    "' '",
+    "'W'",
+    r"'\u2026'",
+  },
   'lib/ui/logs/log_view.dart': {
     // A FocusNode debug label.
     "'LogView'",
@@ -1005,10 +1001,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "' '",
     r"'[\u2028\u2029]'",
-    // Glyph probes that measure the line height (the space above), the
-    // advance and the ellipsis, never shown.
-    "'W'",
-    r"'\u2026'",
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {

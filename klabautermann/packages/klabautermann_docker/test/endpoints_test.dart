@@ -19,6 +19,18 @@ DockerClient clientFor(FakeDaemon daemon, ApiVersion version) => DockerClient(
   apiVersion: version,
 );
 
+/// The request [spec] names, exactly as the engine's planners see it.
+void expectSpec(
+  DockerRequestSpec spec,
+  String method,
+  String path,
+  Map<String, String> query,
+) {
+  expect(spec.method, method);
+  expect(spec.path, path);
+  expect(spec.query, query);
+}
+
 void main() {
   group('container endpoints', () {
     test('listContainers versions the path and parses the list', () async {
@@ -69,6 +81,15 @@ void main() {
       await started;
       expect(daemon.text, startsWith('POST /v1.44/containers/abc123/start'));
 
+      final stopped = client.stopContainer(
+        'abc123',
+        t: const Duration(seconds: 7),
+      );
+      await daemon.gotBytes(daemon.received.length + 1);
+      daemon.feed(wireResponse('204 No Content'));
+      await stopped;
+      expect(daemon.text, contains('POST /v1.44/containers/abc123/stop?t=7'));
+
       final removed = client.removeContainer(
         'abc123',
         volumes: true,
@@ -83,6 +104,85 @@ void main() {
       );
     });
 
+    test('the request specs name every mutation option', () {
+      expectSpec(
+        startContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/start',
+        {},
+      );
+      expectSpec(
+        stopContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/stop',
+        {},
+      );
+      expectSpec(
+        stopContainerRequest('abc123', t: const Duration(seconds: 9)),
+        'POST',
+        '/containers/abc123/stop',
+        {'t': '9'},
+      );
+      expectSpec(
+        restartContainerRequest('abc123', t: const Duration(seconds: 3)),
+        'POST',
+        '/containers/abc123/restart',
+        {'t': '3'},
+      );
+      expectSpec(
+        pauseContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/pause',
+        {},
+      );
+      expectSpec(
+        unpauseContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/unpause',
+        {},
+      );
+      expectSpec(
+        killContainerRequest('abc123'),
+        'POST',
+        '/containers/abc123/kill',
+        {},
+      );
+      expectSpec(
+        killContainerRequest('abc123', signal: 'TERM'),
+        'POST',
+        '/containers/abc123/kill',
+        {'signal': 'TERM'},
+      );
+      // The plans omit link; the client sends it, defaulting to 0.
+      expectSpec(
+        removeContainerRequest('abc123'),
+        'DELETE',
+        '/containers/abc123',
+        {'v': '0', 'force': '0'},
+      );
+      expectSpec(
+        removeContainerRequest(
+          'abc123',
+          volumes: true,
+          force: true,
+          link: true,
+        ),
+        'DELETE',
+        '/containers/abc123',
+        {'v': '1', 'force': '1', 'link': '1'},
+      );
+      expectSpec(removeImageRequest('app:1'), 'DELETE', '/images/app%3A1', {
+        'force': '0',
+        'noprune': '0',
+      });
+      expectSpec(
+        removeImageRequest('app:1', force: true, noprune: true),
+        'DELETE',
+        '/images/app%3A1',
+        {'force': '1', 'noprune': '1'},
+      );
+    });
+
     test('killContainer sends an enum signal', () async {
       final daemon = FakeDaemon();
       final client = clientFor(daemon, const ApiVersion(1, 44));
@@ -93,6 +193,19 @@ void main() {
       expect(
         daemon.text,
         contains('POST /v1.44/containers/abc123/kill?signal=SIGTERM'),
+      );
+    });
+
+    test('removeImage sends force and noprune', () async {
+      final daemon = FakeDaemon();
+      final client = clientFor(daemon, const ApiVersion(1, 44));
+      final sent = client.removeImage('app:1', force: true, noprune: true);
+      await daemon.gotBytes(1);
+      daemon.feed(wireResponse('204 No Content'));
+      await sent;
+      expect(
+        daemon.text,
+        contains('DELETE /v1.44/images/app%3A1?force=1&noprune=1'),
       );
     });
   });
@@ -198,33 +311,6 @@ void main() {
         'distribution inspect has no Descriptor',
       ]);
     });
-
-    test('pullImage streams parsed progress values', () async {
-      final daemon = FakeDaemon();
-      final client = clientFor(daemon, const ApiVersion(1, 44));
-      final collected = client
-          .pullImage('alpine', tag: '3.21')
-          .map((r) => r.value)
-          .toList();
-      await daemon.gotBytes(1);
-      final body = fixtureBytes('pull-progress-1.44.json');
-      daemon.feed(
-        wireResponse(
-          '200 OK',
-          headers: {'Content-Length': '${body.length}'},
-          body: body,
-        ),
-      );
-      final progress = await collected;
-      expect(
-        daemon.text,
-        startsWith('POST /v1.44/images/create?fromImage=alpine&tag=3.21'),
-      );
-      expect(progress, hasLength(4));
-      expect(progress[1].status, 'Downloading');
-      expect(progress[1].progressDetail!.ratio, closeTo(0.00399, 0.001));
-      expect(progress[3].status, startsWith('Digest:'));
-    });
   });
 
   group('network, volume and engine endpoints', () {
@@ -299,33 +385,6 @@ void main() {
         type: SystemDfType.buildCache,
       );
       expect(text, startsWith('GET /v1.53/system/df?type=build-cache '));
-    });
-  });
-
-  group('events endpoint', () {
-    test('streams parsed events and resumes with since', () async {
-      final daemon = FakeDaemon();
-      final client = clientFor(daemon, const ApiVersion(1, 52));
-      final collected = client
-          .events(since: const LogTimestamp(1780000000, 0))
-          .map((r) => r.value)
-          .toList();
-      await daemon.gotBytes(1);
-      final body = fixtureBytes('events-1.52.ndjson');
-      daemon.feed(
-        wireResponse(
-          '200 OK',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': '${body.length}',
-          },
-          body: body,
-        ),
-      );
-      final events = await collected;
-      expect(daemon.text, startsWith('GET /v1.52/events?since=1780000000'));
-      expect(events, hasLength(7));
-      expect(events.first.action, 'create');
     });
   });
 

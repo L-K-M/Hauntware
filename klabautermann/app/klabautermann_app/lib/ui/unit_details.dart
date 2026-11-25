@@ -9,6 +9,7 @@ import 'package:planchette_editor/planchette_editor.dart'
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'edit/editor_display_scope.dart';
+import 'latest_read.dart';
 import 'time_display.dart';
 import 'timed_reveal.dart';
 
@@ -55,11 +56,10 @@ class UnitResourcesView extends StatefulWidget {
 }
 
 class _UnitResourcesViewState extends State<UnitResourcesView> {
-  /// The engine's latest answer; null while it is read.
-  UnitPayload? _answer;
-
-  /// Counts reads, so an answer a newer read replaced is dropped.
-  int _reads = 0;
+  late final LatestRead<UnitPayload> _latest = LatestRead(
+    setState: setState,
+    mounted: () => mounted,
+  );
 
   @override
   void initState() {
@@ -79,13 +79,14 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
   }
 
   Future<void> _read() async {
-    final read = ++_reads;
-    final result = await widget.monitoring.queryUnit(
-      widget.serverId,
-      UnitResourcesQuery(widget.unit, scope: widget.scope),
+    await _latest.run(
+      () => widget.monitoring.hostReads
+          .queryUnit(
+            widget.serverId,
+            UnitResourcesQuery(widget.unit, scope: widget.scope),
+          )
+          .then((result) => result.payload),
     );
-    if (!mounted || read != _reads) return;
-    setState(() => _answer = result.payload);
   }
 
   @override
@@ -113,7 +114,7 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
       runSpacing: 4,
       children: [
         ...widget.leading,
-        ...switch (_answer) {
+        ...switch (_latest.value) {
           null => const <Widget>[],
           UnitResourcesPayload(:final resources) => [
             for (final (label, value) in _rows(context, l10n, resources))
@@ -284,7 +285,7 @@ class _UnitFileViewState extends State<UnitFileView> {
   }
 
   Future<void> _read() async {
-    final result = await widget.monitoring.queryUnit(
+    final result = await widget.monitoring.hostReads.queryUnit(
       widget.serverId,
       UnitFileQuery(widget.unit, scope: widget.scope),
     );

@@ -182,7 +182,7 @@ class _SocketsViewState extends State<SocketsView> {
 
   Future<void> _read() async {
     final read = ++_reads;
-    final result = await widget.monitoring.queryUnit(
+    final result = await widget.monitoring.hostReads.queryUnit(
       widget.serverId,
       const SocketsQuery(),
     );

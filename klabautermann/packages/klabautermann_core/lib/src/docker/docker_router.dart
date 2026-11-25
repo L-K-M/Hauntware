@@ -45,7 +45,6 @@
 library;
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
@@ -70,7 +69,12 @@ import 'docker_watch.dart';
 import 'dropbear.dart';
 import 'image_updates.dart';
 import 'inspect_masking.dart';
+import 'retry.dart';
 import 'stack_sources.dart';
+
+part 'docker_endpoint.dart';
+part 'docker_log_streams.dart';
+part 'docker_queries.dart';
 
 /// The most queries one server holds while its endpoint resolves [E]: a
 /// Docker view asks a few at once, and more means the app is stuck.
@@ -109,10 +113,12 @@ final class DockerEndpointUnavailable implements Exception {
 /// hold both slots could leave every such read waiting on another.
 const _relayPoolConnections = 1;
 
-/// The first wait before a failed endpoint is looked for again while a
-/// watch holds, doubling up to the cap [E].
-const _retryBase = Duration(seconds: 5);
-const _retryCap = Duration(minutes: 2);
+/// How a failed endpoint is looked for again while a watch holds: it
+/// waits 5 s, 10 s, ... 2 min [E].
+const _endpointRetryBackoff = Backoff(
+  base: Duration(seconds: 5),
+  cap: Duration(minutes: 2),
+);
 
 /// Owned by the engine isolate, which hands it the Docker queries,
 /// watches, container log streams and endpoint choices ([setEndpoint])
@@ -140,7 +146,7 @@ final class DockerRouter {
        _elapsed = elapsed ?? monotonicClock() {
     // A slot another consumer gave back may let a waiting log stream run.
     _quotas.onFreed((serverId) {
-      if (_sessions[serverId] case final session?) _serveLogs(session);
+      if (_sessions[serverId] case final session?) _serveLogs(this, session);
     });
   }
 
@@ -268,11 +274,8 @@ final class DockerRouter {
     _pump(session);
     final endpoint = await ready.future;
 
-    session.idle?.cancel();
-    session.idle = null;
-    endpoint.inFlight++;
     try {
-      return await body(endpoint);
+      return await _counted(session, endpoint, () => body(endpoint));
     } on DockerException catch (e) {
       if ((e is DockerTransportException || e is DockerProtocolException) &&
           identical(session.endpoint, endpoint)) {
@@ -280,6 +283,22 @@ final class DockerRouter {
         _pump(session);
       }
       rethrow;
+    }
+  }
+
+  /// Runs [body] as one read of [endpoint]: a relay's idle close waits
+  /// for it, and once it ends the endpoint is looked at again. The count
+  /// goes back even when [body] throws.
+  Future<T> _counted<T>(
+    _Session session,
+    _Endpoint endpoint,
+    Future<T> Function() body,
+  ) async {
+    session.idle?.cancel();
+    session.idle = null;
+    endpoint.inFlight++;
+    try {
+      return await body();
     } finally {
       endpoint.inFlight--;
       if (identical(session.endpoint, endpoint)) _idleCheck(session, endpoint);
@@ -380,43 +399,7 @@ final class DockerRouter {
   /// own beside the log router's host streams. The log router
   /// refuses a reused id first. A new stream looks for a failed endpoint
   /// again, as a watch does.
-  String? openLogs(OpenLogStream request) {
-    final OpenLogStream(:streamId, :spec) = request;
-    final serverId = spec.serverId;
-    if (!_fleet.contains(serverId)) return 'no fleet server $serverId';
-    if ((_sessions[serverId]?.logs.length ?? 0) >= kLogStreamsPerServerMax) {
-      return '$serverId holds $kLogStreamsPerServerMax container log streams';
-    }
-    if (!ContainerLogReader.accepts(spec)) {
-      _emit(
-        LogStreamState(
-          streamId,
-          const LogStreamEnded(LogStreamEndReason.invalid),
-        ),
-      );
-      return null;
-    }
-
-    final session = _session(serverId);
-    late final _LogStream stream;
-    stream = _LogStream(
-      spec,
-      ContainerLogReader(
-        streamId: streamId,
-        spec: spec,
-        emit: _emit,
-        onEnded: () => _logEnded(session, streamId, stream),
-        track: _track,
-        elapsed: _elapsed,
-        startTimer: _startTimer,
-      ),
-    );
-    session.logs[streamId] = stream;
-    _logOwners[streamId] = session;
-    session.failed = false;
-    _pump(session);
-    return null;
-  }
+  String? openLogs(OpenLogStream request) => _openLogs(this, request);
 
   /// [CloseStream] for a container log stream: ends it as closed. Does
   /// nothing when no container log stream is open as [streamId].
@@ -592,11 +575,11 @@ final class DockerRouter {
             : DockerQueryFailure.profileUnknown,
       );
       _state(session, DockerEndpointPhase.waiting);
-      _serveLogs(session);
+      _serveLogs(this, session);
       return;
     }
 
-    _serveLogs(session);
+    _serveLogs(this, session);
     if (session.endpoint case final endpoint?) {
       if (session.watcher case final watcher?) {
         watcher.attach(
@@ -741,9 +724,9 @@ final class DockerRouter {
       return;
     }
 
-    final delay = _retryBase * math.pow(2, math.min(session.retries, 5));
+    final delay = _endpointRetryBackoff.delay(session.retries);
     session.retries++;
-    session.retry = _startTimer(delay < _retryCap ? delay : _retryCap, () {
+    session.retry = _startTimer(delay, () {
       session.retry = null;
       if (!identical(_sessions[session.serverId], session) ||
           !session.failed ||
@@ -867,48 +850,6 @@ final class DockerRouter {
     }
   }
 
-  /// An HTTP pool over [route], each connection made by [open]. Streamlocal
-  /// costs no session and gets 03 §5.2's 16 connections. On a relay, the
-  /// sudo relay included, each connection is a session channel (M9): the
-  /// pool holds [_relayPoolConnections], each taking a short-action slot
-  /// of [quota] while open, so the idle close gives it back.
-  static DockerHttpClient _pool(
-    ChannelQuota quota,
-    SshLink link,
-    DockerRoute route,
-    Future<ByteDuplex> Function(DockerRoute route) open,
-  ) => route.rank == DockerRank.streamlocal
-      ? DockerHttpClient(
-          () => open(route),
-          maxConnections: defaultMaxConnections,
-        )
-      : DockerHttpClient(
-          () => _relayConnection(quota, link, route, open),
-          maxConnections: _relayPoolConnections,
-        );
-
-  /// A relay connection by [open] once a short-action slot of [quota] is
-  /// free; the slot goes back when it closes.
-  static Future<ByteDuplex> _relayConnection(
-    ChannelQuota quota,
-    SshLink link,
-    DockerRoute route,
-    Future<ByteDuplex> Function(DockerRoute route) open,
-  ) async {
-    await quota.acquire(
-      ChannelShare.shortAction,
-      learnedSessionLimit: () => link.seen.learnedSessionLimit,
-    );
-    final ByteDuplex duplex;
-    try {
-      duplex = await open(route);
-    } on Object {
-      quota.give(ChannelShare.shortAction);
-      rethrow;
-    }
-    return _SlotDuplex(duplex, () => quota.give(ChannelShare.shortAction));
-  }
-
   /// Runs [query] over [endpoint] and answers it. A connection that
   /// drops, or answers no HTTP, drops the endpoint, which resolves again;
   /// a query that fails because its endpoint was let go meanwhile is
@@ -918,15 +859,11 @@ final class DockerRouter {
     _Endpoint endpoint,
     DockerQuery query,
   ) async {
-    session.idle?.cancel();
-    session.idle = null;
-    endpoint.inFlight++;
-    final _Read result;
-    try {
-      result = await _read(endpoint, query.query);
-    } finally {
-      endpoint.inFlight--;
-    }
+    final result = await _counted(
+      session,
+      endpoint,
+      () => _read(this, endpoint, query.query),
+    );
     final (:payload, :warnings, :routeDropped) = result;
 
     final current = identical(session.endpoint, endpoint);
@@ -948,218 +885,6 @@ final class DockerRouter {
     if (routeDropped) {
       _drop(session);
       _pump(session);
-      return;
-    }
-    _idleCheck(session, endpoint);
-  }
-
-  Future<_Read> _read(_Endpoint endpoint, DockerQuerySpec spec) async {
-    final client = endpoint.client;
-    _Read read(DockerPayload payload, List<String> warnings) =>
-        (payload: payload, warnings: warnings, routeDropped: false);
-
-    try {
-      switch (spec) {
-        case DockerEngineQuery():
-          final info = await client.engineInfo();
-          return read(
-            DockerEnginePayload(info.value, endpoint.version),
-            info.warnings,
-          );
-        case DockerContainerQuery(:final containerId):
-          final inspect = await client.inspectContainer(containerId);
-          return read(
-            DockerContainerPayload(maskContainerInspect(inspect.value)),
-            inspect.warnings,
-          );
-        case DockerContainerTopQuery(:final containerId):
-          final top = await _containerTop(client, containerId);
-          return read(maskContainerTop(top.value), top.warnings);
-        case DockerImageHistoryQuery(:final image):
-          final history = await client.imageHistory(image);
-          return read(
-            DockerImageHistoryPayload(maskImageHistory(history.value)),
-            history.warnings,
-          );
-        case DockerImageUpdatesQuery(:final refresh, :final runner):
-          return read(
-            await checkImageUpdates(
-              client: client,
-              run: endpoint.hostRun,
-              cache: endpoint.imageUpdates,
-              now: _now(),
-              refresh: refresh,
-              runner: runner,
-            ),
-            const [],
-          );
-        case DockerComposeQuery():
-          return read(switch (await endpoint.stacks.detectCli()) {
-            final cli? => DockerComposePayload(cli),
-            null => const DockerQueryFailed(
-              DockerQueryFailure.connectionFailed,
-              detail: 'the compose CLI check failed',
-            ),
-          }, const []);
-        case DockerSystemDfQuery():
-          // Bounded by the client's request timeout, as every buffered
-          // read is: on a relay it holds the one pooled connection.
-          final df = await client.systemDf();
-          return read(DockerSystemDfPayload(df.value), df.warnings);
-        case DockerReviewQuery():
-          final (payload, warnings) = await _review(client);
-          return read(payload, warnings);
-        case DockerStackFileQuery(:final project, :final path):
-          return read(
-            await endpoint.stacks.readFile(client, project, path),
-            const [],
-          );
-        case DockerStackProfilesQuery(:final project):
-          return read(
-            await endpoint.stacks.profiles(client, project),
-            const [],
-          );
-        case DockerStackScanQuery(:final directories):
-          return read(await endpoint.stacks.scan(directories), const []);
-      }
-    } on DockerException catch (e) {
-      final (:failure, :dropped) = dockerReadFailure(e);
-      return (
-        payload: failure,
-        warnings: const <String>[],
-        routeDropped: dropped,
-      );
-    } on Object catch (e) {
-      // Nothing else is meant to leave a read, but what it parses comes
-      // from the host and its registries. [_run] is not awaited, so an
-      // error here would be unhandled in the engine isolate and end it
-      // for every server. Only the type is named: the message could
-      // repeat host output that was never masked.
-      return (
-        payload: DockerQueryFailed(
-          DockerQueryFailure.connectionFailed,
-          detail: 'the read ended with an unexpected error (${e.runtimeType})',
-        ),
-        warnings: const <String>[],
-        routeDropped: false,
-      );
-    }
-  }
-
-  /// DKE-06 and DKE-07 over every container, up to [kDockerReviewMax],
-  /// one inspect at a time: on a relay each holds the one pooled
-  /// connection. A container removed before its inspect is left out; one
-  /// whose inspect the daemon refuses is counted.
-  Future<(DockerReviewPayload, List<String>)> _review(
-    DockerClient client,
-  ) async {
-    final info = await client.engineInfo();
-    final list = await client.listContainers();
-    final userMapped =
-        info.value.rootless ||
-        info.value.securityOptions.any(
-          (option) => option.replaceAll(' ', '').startsWith('name=userns'),
-        );
-    final warnings = [...info.warnings, ...list.warnings];
-    final reviews = <ContainerReview>[];
-    var unreadable = 0;
-    for (final summary in list.value.take(kDockerReviewMax)) {
-      final DockerParseResult<ContainerInspect> inspect;
-      try {
-        inspect = await client.inspectContainer(summary.id);
-      } on DockerNotFoundException {
-        continue;
-      } on DockerApiException {
-        // The daemon refused this one container (a 500 for one stuck in
-        // its runtime); the rest still read. A transport failure ends
-        // the review as any read's does.
-        unreadable++;
-        continue;
-      }
-      warnings.addAll(inspect.warnings);
-      reviews.add(
-        ContainerReview(
-          containerId: summary.id,
-          name: summary.name ?? inspect.value.name ?? summary.id,
-          state: summary.state,
-          project: ComposeLabels.fromContainerLabels(summary.labels)?.project,
-          findings: reviewContainer(
-            summary,
-            inspect.value,
-            userMapped: userMapped,
-          ),
-        ),
-      );
-    }
-    return (
-      DockerReviewPayload(
-        reviews,
-        omitted: (list.value.length - kDockerReviewMax).clamp(
-          0,
-          list.value.length,
-        ),
-        unreadable: unreadable,
-        tools: [
-          for (final summary in list.value)
-            if (hostToolOf(summary) case final tool?)
-              HostToolContainer(
-                tool: tool,
-                containerId: summary.id,
-                name: summary.name ?? summary.id,
-                state: summary.state,
-                ports: [
-                  for (final port in summary.ports)
-                    if (port.publicPort != null) port.label,
-                ],
-              ),
-        ],
-      ),
-      warnings,
-    );
-  }
-
-  /// [containerId]'s processes with CTR-10's columns, or with the
-  /// daemon's default `ps -ef` where `ps` rejects those columns, as a
-  /// minimal `ps` (BusyBox's) or a Windows daemon, which takes no
-  /// arguments, does. Either answers 500, so any 500 costs one more
-  /// request; the container's own state (404, 409) needs no retry.
-  static Future<DockerParseResult<ContainerTop>> _containerTop(
-    DockerClient client,
-    String containerId,
-  ) async {
-    try {
-      return await client.containerTop(
-        containerId,
-        psArgs: kContainerTopPsArgs,
-      );
-    } on DockerServerException {
-      return client.containerTop(containerId);
-    }
-  }
-
-  /// Whether [spec] names what it reads in a form the engine takes.
-  static bool _valid(DockerQuerySpec spec) => switch (spec) {
-    DockerContainerQuery(:final containerId) => containerId.isNotEmpty,
-    DockerContainerTopQuery(:final containerId) => containerId.isNotEmpty,
-    DockerImageHistoryQuery(:final image) => image.isNotEmpty,
-    DockerStackFileQuery(:final project, :final path) =>
-      composeNamePattern.hasMatch(project) && _absolute(path),
-    DockerStackProfilesQuery(:final project) => composeNamePattern.hasMatch(
-      project,
-    ),
-    DockerStackScanQuery(:final directories) =>
-      directories.isNotEmpty &&
-          directories.length <= kStackScanDirectoriesMax &&
-          directories.every(_absolute),
-    _ => true,
-  };
-
-  static bool _absolute(String path) {
-    try {
-      validateAbsolutePath(path);
-      return true;
-    } on ArgumentError {
-      return false;
     }
   }
 
@@ -1240,7 +965,7 @@ final class DockerRouter {
       session.endpoint = null;
       _track(endpoint.closeConnections());
     }
-    _pauseLogs(session);
+    _pauseLogs(this, session);
   }
 
   void _end(_Session session) {
@@ -1257,81 +982,6 @@ final class DockerRouter {
   void _track(Future<void> closing) {
     _closing.add(closing);
     unawaited(closing.whenComplete(() => _closing.remove(closing)));
-  }
-
-  // -- container logs -------------------------------------------------
-
-  /// Runs [session]'s waiting log streams over its ready endpoint, in the
-  /// order they opened, or tells each why it waits. On a relay each takes
-  /// a slot of its share from the quota the log router's reads take
-  /// from (M9); streamlocal costs no session.
-  void _serveLogs(_Session session) {
-    final endpoint = session.endpoint;
-    for (final stream in session.logs.values.toList()) {
-      if (stream.running) continue;
-      if (endpoint == null) {
-        _logStatus(stream, const LogStreamWaiting(LogStreamWaitReason.link));
-        continue;
-      }
-      if (endpoint.route.rank != DockerRank.streamlocal) {
-        if (!session.quota.take(
-          stream.share,
-          learnedSessionLimit: session.link?.seen.learnedSessionLimit,
-        )) {
-          _logStatus(
-            stream,
-            const LogStreamWaiting(LogStreamWaitReason.channel),
-          );
-          continue;
-        }
-        stream.slot = stream.share;
-      }
-      stream.running = true;
-      _logStatus(
-        stream,
-        LogStreamRunning(continuity: stream.reader.run(endpoint)),
-      );
-    }
-  }
-
-  /// Stops [session]'s running follows, which resume over the next
-  /// endpoint; a window ends as failed, as one on a lost link does.
-  void _pauseLogs(_Session session) {
-    for (final stream in session.logs.values.toList()) {
-      if (!stream.running) continue;
-      if (!stream.spec.follow) {
-        stream.reader.end(const LogStreamEnded(LogStreamEndReason.failed));
-      } else if (stream.reader.pause()) {
-        _release(session, stream);
-      }
-    }
-  }
-
-  void _endLogs(_Session session, LogStreamEnded status) {
-    for (final stream in session.logs.values.toList()) {
-      stream.reader.end(status);
-    }
-  }
-
-  /// Forgets [stream], which sent its end, and runs what its slot lets.
-  void _logEnded(_Session session, String streamId, _LogStream stream) {
-    session.logs.remove(streamId);
-    _logOwners.remove(streamId);
-    _release(session, stream);
-    if (identical(_sessions[session.serverId], session)) _serveLogs(session);
-  }
-
-  void _release(_Session session, _LogStream stream) {
-    stream.running = false;
-    if (stream.slot case final share?) session.quota.give(share);
-    stream.slot = null;
-  }
-
-  /// Sends [status] for [stream] unless it was the last one sent.
-  void _logStatus(_LogStream stream, LogStreamStatus status) {
-    if (stream.status == status) return;
-    stream.status = status;
-    _emit(LogStreamState(stream.reader.streamId, status));
   }
 
   // -- events ---------------------------------------------------------
@@ -1487,191 +1137,4 @@ final class _Session {
   /// relay connections and running log streams hold, and the stack
   /// checks' exec channels on every rank.
   final ChannelQuota quota;
-}
-
-/// One container log stream as the session runs it.
-final class _LogStream {
-  _LogStream(this.spec, this.reader);
-
-  final LogStreamSpec spec;
-  final ContainerLogReader reader;
-  bool running = false;
-
-  /// The relay slot it holds while running; null on streamlocal.
-  ChannelShare? slot;
-
-  /// The last status the router sent; null before any.
-  LogStreamStatus? status;
-
-  ChannelShare get share =>
-      spec.follow ? ChannelShare.follower : ChannelShare.shortAction;
-}
-
-/// A negotiated route, with the HTTP pool over it.
-final class _Endpoint implements ContainerLogTarget {
-  _Endpoint(
-    this._openPool,
-    this._openDuplex,
-    this._pool, {
-    required this.route,
-    required this.version,
-    required this.api,
-  });
-
-  final DockerHttpClient Function() _openPool;
-  final DuplexOpener _openDuplex;
-  DockerHttpClient? _pool;
-  final DockerEndpointRoute route;
-
-  /// The `/version` the engine answered while negotiating, for DKE-01.
-  final DockerServerVersion version;
-
-  /// The negotiated version every path uses.
-  final ApiVersion api;
-  int inFlight = 0;
-
-  /// The stack checks over the link this endpoint was found on.
-  late final StackSources stacks;
-
-  /// Runs a short command over that link, as the stack checks do.
-  late final StackCommandRunner hostRun;
-
-  /// The server's update checks, kept by the router across endpoints.
-  late final ImageUpdateCache imageUpdates;
-
-  /// The client at [api], over a pool opened again after an idle close.
-  DockerClient get client =>
-      DockerClient(_pool ??= _openPool(), apiVersion: api);
-
-  @override
-  bool get podman => route.runtime == EngineRuntime.podman;
-
-  /// Bounded by the head timeout only, as every stream is (03 §5.5).
-  @override
-  DockerClient openStream() => DockerClient(
-    DockerHttpClient(_openDuplex, maxConnections: 1),
-    apiVersion: api,
-  );
-
-  /// Closes the pooled connections; the endpoint stays usable.
-  Future<void> closeConnections() async {
-    final pool = _pool;
-    _pool = null;
-    await pool?.close();
-  }
-}
-
-/// [_Endpoint] as a watcher reads over it: its pooled reads count as
-/// queries for the relays' idle close.
-final class _WatchTarget implements DockerWatchTarget {
-  _WatchTarget(this._router, this._session, this._endpoint);
-
-  final DockerRouter _router;
-  final _Session _session;
-  final _Endpoint _endpoint;
-
-  @override
-  DockerRank get rank => _endpoint.route.rank;
-
-  @override
-  String get socketPath => _endpoint.route.socketPath;
-
-  @override
-  Future<T> use<T>(Future<T> Function(DockerClient client) read) async {
-    _session.idle?.cancel();
-    _session.idle = null;
-    _endpoint.inFlight++;
-    try {
-      return await read(_endpoint.client);
-    } finally {
-      _endpoint.inFlight--;
-      if (identical(_session.endpoint, _endpoint)) {
-        _router._idleCheck(_session, _endpoint);
-      }
-    }
-  }
-
-  @override
-  bool get lowSession => DockerRouter._lowSession(_session);
-
-  @override
-  DockerStreamLease? openEvents() {
-    if (rank == DockerRank.streamlocal) {
-      return DockerStreamLease(_endpoint.openStream());
-    }
-    final quota = _session.quota;
-    if (lowSession || !quota.take(ChannelShare.follower)) return null;
-    return DockerStreamLease(
-      _endpoint.openStream(),
-      release: () => quota.give(ChannelShare.follower),
-    );
-  }
-
-  @override
-  StackSources get stacks => _endpoint.stacks;
-}
-
-/// A relay connection holding a short-action slot, which goes back once
-/// it closes from either side (M9).
-final class _SlotDuplex implements ByteDuplex {
-  _SlotDuplex(this._duplex, this._release) {
-    unawaited(
-      _duplex.done.then<void>((_) => _free(), onError: (Object _) => _free()),
-    );
-  }
-
-  final ByteDuplex _duplex;
-  void Function()? _release;
-
-  @override
-  Stream<List<int>> get stream => _duplex.stream;
-
-  @override
-  StreamSink<List<int>> get sink => _duplex.sink;
-
-  @override
-  Future<void> get done => _duplex.done;
-
-  @override
-  Future<void> closeWrite() => _duplex.closeWrite();
-
-  @override
-  Future<void> close() {
-    _free();
-    return _duplex.close();
-  }
-
-  void _free() {
-    final release = _release;
-    _release = null;
-    release?.call();
-  }
-}
-
-/// What a query read, and whether its connection dropped, so the
-/// session resolves the endpoint again.
-typedef _Read = ({
-  DockerPayload payload,
-  List<String> warnings,
-  bool routeDropped,
-});
-
-/// What [DockerRouter._connect] found.
-sealed class _Outcome {
-  const _Outcome();
-}
-
-final class _Ready extends _Outcome {
-  const _Ready(this.endpoint);
-
-  final _Endpoint endpoint;
-}
-
-/// A failure, with the route it was found on when there was one.
-final class _Failed extends _Outcome {
-  const _Failed(this.failure, {this.route, this.noRouteReason});
-
-  final DockerEndpointFailure failure;
-  final DockerEndpointRoute? route;
-  final DockerNoRouteReason? noRouteReason;
 }

@@ -290,7 +290,7 @@ Host alias-two
     expect(preview.rows[1].importByDefault, isFalse);
   });
 
-  test('badges every row when the config uses Match blocks', () async {
+  test('a Match block that does not apply badges no row', () async {
     final preview = await _load('''
 Match host *.internal
   Port 2222
@@ -301,9 +301,11 @@ Host web
 Host nas
 ''');
 
+    // The shared resolver evaluates `Match host` against the name before
+    // any HostName, so neither row is decided by an unread criterion.
     expect(preview.rows, hasLength(2));
     for (final row in preview.rows) {
-      expect(row.limitations, contains(SshConfigImportLimitation.matchBlock));
+      expect(row.limitations, isEmpty);
     }
   });
 
@@ -672,7 +674,7 @@ Host clean
   );
 
   test(
-    'Include inside a Match block is not resolved and badges everything',
+    'an Include inside a non-matching Match block leaves the row settled',
     () async {
       final source = _FakeSource(
         files: {
@@ -692,12 +694,53 @@ Host web
       ).loadPreview(configPath: _configPath);
       expect(preview.rows, hasLength(1));
       expect(preview.rows.single.host.alias, 'web');
-      expect(
-        preview.rows.single.limitations,
-        contains(SshConfigImportLimitation.matchBlock),
-      );
+      // `Match host *.internal` does not hold for `web`, so ssh never
+      // reaches the Include there and the resolver settles the row.
+      expect(preview.rows.single.limitations, isEmpty);
     },
   );
+
+  test('a known Match criterion sets the row and drops the badge', () async {
+    final preview = await _load('''
+Host web
+  HostName %h.example.com
+
+Match host web.example.com
+  Port 2222
+''');
+
+    final row = preview.rows.single;
+    expect(row.host.hostName, 'web.example.com');
+    expect(row.port, 2222);
+    expect(row.limitations, isEmpty);
+  });
+
+  test('an approximate row keeps the defaults and Match badges', () async {
+    final preview = await _load('''
+Host *
+  User deploy
+
+Match exec "true"
+  Port 2222
+
+Host web
+  HostName web.example.com
+''');
+
+    // ssh's own result for `web` depends on the `exec`, so the row keeps
+    // the block-local reading and both badges that say so.
+    expect(preview.rows, hasLength(1));
+    final row = preview.rows.single;
+    expect(
+      row.limitations,
+      containsAll([
+        SshConfigImportLimitation.wildcardDefaults,
+        SshConfigImportLimitation.matchBlock,
+      ]),
+    );
+    expect(row.username, '');
+    expect(row.port, 22);
+  });
 
   test('an absolute include resolves without a home directory', () async {
     final source = _FakeSource(
@@ -998,12 +1041,21 @@ Host clean
         'clean',
         'extra',
       ]);
-      for (final row in preview.rows) {
+      // The enclosing host stays best-effort (its own Include is lost) and
+      // `clean` never saw the included file. Only `extra`, whose alias the
+      // resolver settled inside that file, inherits the default ssh gives
+      // it; the jump badge reports that Poltergeist cannot preserve it.
+      for (final index in [0, 1]) {
         expect(
-          row.limitations,
+          preview.rows[index].limitations,
           isNot(contains(SshConfigImportLimitation.proxyJump)),
+          reason: preview.rows[index].host.alias,
         );
       }
+      expect(
+        preview.rows[2].limitations,
+        contains(SshConfigImportLimitation.proxyJump),
+      );
       // The enclosing host still wears the hostInclude badge for the lost
       // directive.
       expect(
@@ -1155,7 +1207,7 @@ Host alpha beta *.corp !gamma
     }
   });
 
-  test('Host * connection defaults badge every row', () async {
+  test('Host * connection defaults reach a settled row', () async {
     final preview = await _load('''
 Host *
   User deploy
@@ -1166,19 +1218,19 @@ Host web
   HostName web.example.com
 ''');
 
-    // The pinned importer drops the wildcard block, so none of these
-    // defaults reach the row — ssh would connect as deploy@…:2222 with
-    // that key; the badge keeps the preview honest (D22).
+    // The resolver reads the wildcard block as ssh does, so the defaults
+    // reach the row and no "dropped defaults" badge is owed.
     expect(preview.rows, hasLength(1));
     expect(
       preview.rows.single.limitations,
-      contains(SshConfigImportLimitation.wildcardDefaults),
+      isNot(contains(SshConfigImportLimitation.wildcardDefaults)),
     );
-    expect(preview.rows.single.username, '');
-    expect(preview.rows.single.host.identityFile, isNull);
+    expect(preview.rows.single.username, 'deploy');
+    expect(preview.rows.single.port, 2222);
+    expect(preview.rows.single.host.identityFile, '~/.ssh/id_ed25519');
   });
 
-  test('top-level connection defaults badge every row', () async {
+  test('top-level connection defaults reach a settled row', () async {
     final preview = await _load('''
 User deploy
 Port 2222
@@ -1187,13 +1239,15 @@ Host web
   HostName web.example.com
 ''');
 
-    // Options before the first block apply to every connection in ssh;
-    // the pinned importer drops them, so the badge must carry the loss.
+    // Options before the first block apply to every connection in ssh, and
+    // the resolver carries them onto the row.
     expect(preview.rows, hasLength(1));
     expect(
       preview.rows.single.limitations,
-      contains(SshConfigImportLimitation.wildcardDefaults),
+      isNot(contains(SshConfigImportLimitation.wildcardDefaults)),
     );
+    expect(preview.rows.single.username, 'deploy');
+    expect(preview.rows.single.port, 2222);
   });
 
   test('host-block defaults never badge; the pin applies them', () async {

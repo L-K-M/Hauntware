@@ -13,121 +13,36 @@ import 'disk_usage_reads.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
 import 'history_reads.dart';
+import 'host_reads.dart';
 import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
+import 'monitoring/background_pause.dart';
+import 'monitoring/freshness_clock.dart';
+import 'monitoring/pending_refresh.dart';
+import 'monitoring/server_readings.dart';
 import 'package_reads.dart';
 import 'port_forwards.dart';
 import 'stack_folders.dart';
 import 'timer_detail_reads.dart';
 import 'tls_endpoints.dart';
 
+export 'monitoring/background_pause.dart' show BackgroundPause;
+export 'monitoring/freshness_clock.dart' show kFreshnessTick;
+export 'monitoring/pending_refresh.dart' show kRefreshWait;
+export 'monitoring/server_readings.dart'
+    show
+        MetricSeries,
+        SamplingStatus,
+        chartGapReasonOf,
+        kSessionRingCapacity,
+        sampleAge;
+
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
 /// to another server and back keeps one long-lived connection (03 §5.12)
 /// instead of a new login each time.
 const Duration kLinkLeaveGrace = Duration(seconds: 30);
-
-/// The readings a session ring keeps per series (OV-03): ten minutes at
-/// the Desktop `core` cadence of 2 s, 25 at the `overview` cadence of 5 s
-/// (03 §6.4).
-const int kSessionRingCapacity = 300;
-
-/// How often [MonitoringController.clock] ticks: 03 §9.5 item 4 words
-/// freshness in seconds ("updated 4 s ago").
-const Duration kFreshnessTick = Duration(seconds: 1);
-
-/// The longest a refresh waits for its readings (PLT-02) [E]: a slow
-/// sampler's reply on a slow link comes well within it, and a hung `df`
-/// does not keep the pull indicator spinning. The panel's freshness line
-/// keeps telling a reading's age after it.
-const Duration kRefreshWait = Duration(seconds: 10);
-
-/// The streams whose readings feed [MetricSeries] rings.
-const Set<SampleStream> _ringStreams = {
-  SampleStream.overview,
-  SampleStream.core,
-};
-
-/// One chart series a session ring keeps (OV-03), read from an `overview`
-/// or `core` reading.
-enum MetricSeries {
-  /// CPU busy in percent ([CpuPercentages.busy]).
-  cpuBusy,
-
-  /// Used memory in bytes ([MemoryUsage.usedBytes]).
-  memoryUsed,
-
-  /// Used swap in bytes ([MemoryUsage.swapUsedBytes]).
-  swapUsed,
-
-  /// The one-minute load average ([LoadAvg.load1]).
-  load1;
-
-  /// This series' value in [result], or null when the reading has none:
-  /// an unknown value is a gap in the ring, never zero (03 §10.4).
-  double? readFrom(SampleResult result) {
-    final (cpu, memory, load) = switch (result) {
-      OverviewResult(:final cpu, :final memory, :final load) ||
-      CoreResult(:final cpu, :final memory, :final load) => (cpu, memory, load),
-      _ => (null, null, null),
-    };
-    return switch (this) {
-      cpuBusy => cpu?.busy,
-      memoryUsed => memory?.usedBytes?.toDouble(),
-      swapUsed => memory?.swapUsedBytes?.toDouble(),
-      load1 => load?.load1,
-    };
-  }
-}
-
-/// How old a reading taken [at] is by [now] (03 §9.5 item 4), or null
-/// without one. The engine stamps [Sample.at] with this device's clock, so
-/// only a clock set back since makes the age negative; that reads as zero.
-Duration? sampleAge(DateTime? at, DateTime now) {
-  if (at == null) return null;
-  final age = now.difference(at);
-  return age.isNegative ? Duration.zero : age;
-}
-
-/// Why a session history has no data, from a [Gap]'s cause (03 §9.5
-/// item 5).
-ChartGapReason chartGapReasonOf(GapCause cause) => switch (cause) {
-  GapCause.background => ChartGapReason.background,
-  GapCause.disconnected => ChartGapReason.disconnected,
-  GapCause.readingLost => ChartGapReason.readingFailed,
-};
-
-/// A phone's time in the background (03 §9.5 item 6): from [start] to
-/// [end] by this device's clock, which paused sampling [serverIds], the
-/// servers the engine was sampling, or said it paused, whose screen was
-/// open at the return.
-@immutable
-final class BackgroundPause {
-  BackgroundPause({
-    required this.start,
-    required this.end,
-    required Set<String> serverIds,
-  }) : serverIds = Set.unmodifiable(serverIds);
-
-  final DateTime start, end;
-  final Set<String> serverIds;
-}
-
-/// What the engine last said sampling a server is doing ([state]), and
-/// the phase before it ([previous]; null for the first this engine run).
-/// The protocol has the engine send a [SamplingState] at each phase
-/// change, so the pair tells a link lost while sampling, whose loss
-/// `state.since` dates, from one already down when a view or the return
-/// from the background subscribed the server again, whose phase began
-/// only then (03 §9.5 item 4).
-@immutable
-final class SamplingStatus {
-  const SamplingStatus(this.state, {this.previous});
-
-  final SamplingState state;
-  final SamplingPhase? previous;
-}
 
 /// The monitoring concern (03 §10.1): what the engine should keep linked
 /// and sample for what the user can see, and what comes back.
@@ -164,11 +79,25 @@ final class MonitoringController extends ChangeNotifier {
     TlsEndpoints? tlsEndpoints,
     AttentionAcks? attentionAcks,
     ContainerColumnChoice? containerColumns,
-  }) : _clock = _FreshnessClock(now),
+  }) : _clock = FreshnessClock(now),
        stackFolders = stackFolders ?? StackFolders(),
        tlsEndpoints = tlsEndpoints ?? TlsEndpoints(),
        attentionAcks = attentionAcks ?? AttentionAcks(),
        containerColumns = containerColumns ?? ContainerColumnChoice() {
+    hostReads = HostReads(_engine, _onEngineDone);
+    _backgroundPause = BackgroundPauseNotifier(
+      () => _clock.value,
+      () => {
+        // A server the fleet no longer lists has no phase: its readings
+        // were purged, and its SamplingStates are dropped.
+        for (final MapEntry(key: id, value: readings) in _readings.entries)
+          if (readings.sampling.value?.state.phase == SamplingPhase.sampling)
+            id,
+      },
+      (serverId) => _openViews.containsKey(serverId),
+    );
+    // Subscribed once hostReads and _backgroundPause exist: the event and
+    // done handlers read both.
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
@@ -236,6 +165,10 @@ final class MonitoringController extends ChangeNotifier {
   /// [logs].
   late final TimerDetailReads timerDetails;
 
+  /// The one-shot host, unit, redaction and certificate reads, a concern
+  /// of its own beside [logs].
+  late final HostReads hostReads;
+
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
   /// of its own for this engine run, listening beside [logs].
@@ -247,27 +180,13 @@ final class MonitoringController extends ChangeNotifier {
 
   final EngineClient _engine;
   final Duration _linkGrace;
-  final _FreshnessClock _clock;
+  final FreshnessClock _clock;
   late final StreamSubscription<EngineEvent> _events;
 
-  final Map<String, _ServerReadings> _readings = {};
-
-  /// The host queries waiting for their answers, by query id.
-  final Map<String, (String, Completer<HostResult>)> _hostQueries = {};
-  int _nextHostQuery = 0;
-
-  /// Unit reads waiting on the engine, by request id.
-  final Map<String, (String, Completer<UnitQueryResult>)> _unitQueries = {};
-  int _nextUnitQuery = 0;
-
-  /// The [redactLines] requests waiting for the engine, by request id.
-  final Map<String, Completer<String?>> _redactions = {};
-  final Map<String, Completer<List<TlsEndpointCheck>?>> _tlsChecks = {};
-  var _nextTlsCheck = 0;
-  int _nextRedaction = 0;
+  final Map<String, ServerReadings> _readings = {};
 
   /// The refreshes waiting for their readings.
-  final Set<_PendingRefresh> _refreshes = {};
+  final Set<PendingRefresh> _refreshes = {};
 
   /// The fleet's ids from the last [CatalogReplaced] this controller saw.
   /// The engine's startup fleet goes to the fleet controller, its client's
@@ -297,12 +216,9 @@ final class MonitoringController extends ChangeNotifier {
   Map<String, CadenceProfile> _caps = const {};
   bool _engineStopped = false;
 
-  /// When the app last went to the background, and the servers the
-  /// engine was sampling then or said it paused since; the return words
-  /// [backgroundPause] from them.
-  DateTime? _backgroundSince;
-  Set<String> _pausedServers = {};
-  final ValueNotifier<BackgroundPause?> _backgroundPause = ValueNotifier(null);
+  /// The phone's last background pause, fed the activity and sampling
+  /// phases this controller sees.
+  late final BackgroundPauseNotifier _backgroundPause;
 
   final ValueNotifier<Map<String, ConnectRejectedReason>> _connectRejections =
       ValueNotifier(const {});
@@ -349,7 +265,7 @@ final class MonitoringController extends ChangeNotifier {
     SampleStream stream,
     MetricSeries series,
   ) {
-    assert(_ringStreams.contains(stream), '$stream carries no metrics');
+    assert(ringStreams.contains(stream), '$stream carries no metrics');
     return _server(serverId).rings(stream)[series]!;
   }
 
@@ -372,7 +288,7 @@ final class MonitoringController extends ChangeNotifier {
   /// the background.
   ValueListenable<BackgroundPause?> get backgroundPause => _backgroundPause;
 
-  void dismissBackgroundPause() => _backgroundPause.value = null;
+  void dismissBackgroundPause() => _backgroundPause.dismiss();
 
   /// Why the engine could not connect each server whose last [Connect] it
   /// rejected with [ConnectRejected] (D61): it has no config to dial with
@@ -457,48 +373,6 @@ final class MonitoringController extends ChangeNotifier {
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
   }
 
-  /// Reads [query] on [serverId]: the files under `/var/log` or the
-  /// journal's boots (LOG-08, LOG-09). A stopped engine answers no link.
-  Future<HostResult> queryHost(String serverId, HostQuerySpec query) {
-    final queryId = 'host-${_nextHostQuery++}';
-    if (_engineStopped) return Future.value(_noHostLink(serverId, queryId));
-    final answer = Completer<HostResult>();
-    _hostQueries[queryId] = (serverId, answer);
-    _send(HostQuery(serverId: serverId, queryId: queryId, query: query));
-    return answer.future;
-  }
-
-  /// [lines] joined by newlines, through the engine's secret redactor
-  /// (LOG-10, 03 §8.9), which the app cannot import; null when the engine
-  /// has stopped, so nothing is exported unredacted by accident.
-  Future<String?> redactLines(List<String> lines) {
-    if (_engineStopped) return Future.value();
-    final requestId = 'redact-${_nextRedaction++}';
-    final answer = Completer<String?>();
-    _redactions[requestId] = answer;
-    _send(RedactLines(requestId, lines));
-    return answer.future;
-  }
-
-  /// Checks [endpoints]' certificates from this device through the engine
-  /// (CRT-01), which owns the sockets; null when the engine has stopped.
-  Future<List<TlsEndpointCheck>?> checkTlsEndpoints(
-    List<TlsEndpoint> endpoints,
-  ) {
-    if (_engineStopped) return Future.value();
-    final requestId = 'tls-${_nextTlsCheck++}';
-    final answer = Completer<List<TlsEndpointCheck>?>();
-    _tlsChecks[requestId] = answer;
-    _send(CheckTlsEndpoints(requestId, endpoints));
-    return answer.future;
-  }
-
-  static HostResult _noHostLink(String serverId, String queryId) => HostResult(
-    serverId: serverId,
-    queryId: queryId,
-    payload: const HostQueryFailed(HostQueryFailure.noLink),
-  );
-
   /// Asks the engine to read the streams of [serverId]'s subscription
   /// [subscriptionId] at once (PLT-02's pull to refresh). Completes once
   /// each has a newer sample, failed readings included, once the server
@@ -518,7 +392,7 @@ final class MonitoringController extends ChangeNotifier {
         readings.sampling.value?.state.phase != SamplingPhase.sampling) {
       return Future.value();
     }
-    final refresh = _PendingRefresh(
+    final refresh = PendingRefresh(
       serverId,
       readings,
       streams,
@@ -535,7 +409,7 @@ final class MonitoringController extends ChangeNotifier {
   /// The ring streams some subscription of [serverId] names.
   Set<SampleStream> _ringStreamsNamed(String serverId) => {
     for (final MapEntry(key: (id, _), value: streams) in _subscribed.entries)
-      if (id == serverId) ...streams.where(_ringStreams.contains),
+      if (id == serverId) ...streams.where(ringStreams.contains),
   };
 
   /// Marks where a ring stream of [serverId] went unsampled, given the
@@ -566,25 +440,6 @@ final class MonitoringController extends ChangeNotifier {
   /// returned [LogRead] reports its records and state; the caller closes
   /// it once it no longer shows it.
   LogRead openLogRead(LogStreamSpec spec) => LogRead(logs, spec);
-
-  /// Reads [query] on [serverId]: a unit's file, its resources or the
-  /// sockets (03 §7.5, SVC-07, SVC-08, SVC-10). A stopped engine answers
-  /// no link.
-  Future<UnitQueryResult> queryUnit(String serverId, UnitQuerySpec query) {
-    final requestId = 'unit-${_nextUnitQuery++}';
-    if (_engineStopped) return Future.value(_noUnitLink(serverId, requestId));
-    final answer = Completer<UnitQueryResult>();
-    _unitQueries[requestId] = (serverId, answer);
-    _send(UnitQuery(serverId: serverId, requestId: requestId, query: query));
-    return answer.future;
-  }
-
-  static UnitQueryResult _noUnitLink(String serverId, String requestId) =>
-      UnitQueryResult(
-        serverId: serverId,
-        requestId: requestId,
-        payload: const UnitQueryFailed(UnitQueryFailure.noLink),
-      );
 
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
@@ -633,7 +488,7 @@ final class MonitoringController extends ChangeNotifier {
 
     _openViews.remove(serverId);
     _noteVisible();
-    _forgetPause(serverId);
+    _backgroundPause.forget(serverId);
     _forgetRejection(serverId);
     // A stopped engine (or a disposed controller) holds no link, nor does
     // the engine hold one for a server the fleet no longer lists, so no
@@ -680,49 +535,9 @@ final class MonitoringController extends ChangeNotifier {
   void setAppActivity(AppActivity activity) {
     if (activity == _activity) return;
     _activity = activity;
-    _notePause(activity);
+    _backgroundPause.noteActivity(activity);
     _noteVisible();
     _send(SetAppActivity(activity));
-  }
-
-  /// Keeps when the background began and, on return, the pause it was
-  /// for the open servers the engine had sampling. Only the engine's
-  /// phase says a server was read: a subscription alone samples nothing
-  /// while the link is down.
-  void _notePause(AppActivity activity) {
-    final now = _clock.value;
-    switch (activity) {
-      case AppActivity.background:
-        _backgroundSince = now;
-        // A server the fleet no longer lists has no phase: its readings
-        // were purged, and its SamplingStates are dropped.
-        _pausedServers = {
-          for (final MapEntry(key: id, value: readings) in _readings.entries)
-            if (readings.sampling.value?.state.phase == SamplingPhase.sampling)
-              id,
-        };
-        _backgroundPause.value = null;
-      case AppActivity.foreground:
-        final since = _backgroundSince;
-        _backgroundSince = null;
-        final shown = _pausedServers.where(_openViews.containsKey).toSet();
-        if (since == null || shown.isEmpty) return;
-        _backgroundPause.value = BackgroundPause(
-          start: since,
-          end: now,
-          serverIds: shown,
-        );
-    }
-  }
-
-  /// The return banner tells of the screen open at the return only.
-  void _forgetPause(String serverId) {
-    final pause = _backgroundPause.value;
-    if (pause == null || !pause.serverIds.contains(serverId)) return;
-    final rest = pause.serverIds.difference({serverId});
-    _backgroundPause.value = rest.isEmpty
-        ? null
-        : BackgroundPause(start: pause.start, end: pause.end, serverIds: rest);
   }
 
   /// Sends [Connect] for [serverId], whose earlier rejection the answer
@@ -753,12 +568,8 @@ final class MonitoringController extends ChangeNotifier {
 
   void _onEngineEvent(EngineEvent event) {
     switch (event) {
-      case HostResult(:final queryId):
-        _hostQueries.remove(queryId)?.$2.complete(event);
-      case RedactedLines(:final requestId, :final text):
-        _redactions.remove(requestId)?.complete(text);
-      case TlsEndpointsChecked(:final requestId, :final checks):
-        _tlsChecks.remove(requestId)?.complete(checks);
+      // The host, unit, redaction and TLS reads are matched inside
+      // their own EngineReads, a rejection of theirs included.
       case Sample(:final serverId):
         // One still in flight when its server left the fleet would bring
         // back what the purge dropped.
@@ -814,42 +625,13 @@ final class MonitoringController extends ChangeNotifier {
         readings
           ..sampling.value = status
           ..phaseChanged(status);
-        if (_backgroundSince != null &&
-            event.phase == SamplingPhase.pausedInBackground) {
-          _pausedServers.add(serverId);
-        }
+        _backgroundPause.notePhase(serverId, event.phase);
       case Gap(:final serverId):
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).gap(event);
-      case UnitQueryResult(:final requestId):
-        _unitQueries.remove(requestId)?.$2.complete(event);
-      case RequestRejected(:final requestName, :final requestId?):
-        _rejected(requestName, requestId);
       case EngineEvent():
         break;
-    }
-  }
-
-  /// The engine refused the request [requestName] with [requestId], for a
-  /// server that left its fleet say, so no answer follows: the read
-  /// waiting on it settles as one without a link would, rather than
-  /// staying pending.
-  /// Each id is checked against its own request's name, since the four
-  /// reads count their ids apart.
-  void _rejected(String requestName, String requestId) {
-    if (requestName == '$HostQuery') {
-      if (_hostQueries.remove(requestId) case (final serverId, final answer)) {
-        answer.complete(_noHostLink(serverId, requestId));
-      }
-    } else if (requestName == '$UnitQuery') {
-      if (_unitQueries.remove(requestId) case (final serverId, final answer)) {
-        answer.complete(_noUnitLink(serverId, requestId));
-      }
-    } else if (requestName == '$RedactLines') {
-      _redactions.remove(requestId)?.complete(null);
-    } else if (requestName == '$CheckTlsEndpoints') {
-      _tlsChecks.remove(requestId)?.complete(null);
     }
   }
 
@@ -896,33 +678,19 @@ final class MonitoringController extends ChangeNotifier {
   }
 
   void _onEngineDone() {
+    if (_engineStopped) return;
     _engineStopped = true;
-    for (final MapEntry(key: queryId, value: (serverId, answer))
-        in _hostQueries.entries) {
-      answer.complete(_noHostLink(serverId, queryId));
-    }
-    _hostQueries.clear();
-    for (final MapEntry(key: requestId, value: (serverId, answer))
-        in _unitQueries.entries) {
-      answer.complete(_noUnitLink(serverId, requestId));
-    }
-    _unitQueries.clear();
-    for (final answer in _redactions.values) {
-      answer.complete(null);
-    }
-    _redactions.clear();
-    for (final answer in _tlsChecks.values) {
-      answer.complete(null);
-    }
-    _tlsChecks.clear();
+    // HostReads answers each read's no-link or null value, as the loops
+    // here did; a helper that already stopped does nothing again.
+    hostReads.dispose();
     for (final timer in _leaving.values) {
       timer.cancel();
     }
     _leaving.clear();
   }
 
-  _ServerReadings _server(String serverId) =>
-      _readings.putIfAbsent(serverId, _ServerReadings.new);
+  ServerReadings _server(String serverId) =>
+      _readings.putIfAbsent(serverId, ServerReadings.new);
 
   @override
   void dispose() {
@@ -952,286 +720,5 @@ final class MonitoringController extends ChangeNotifier {
     _disposed = true;
     _visibleServers.dispose();
     super.dispose();
-  }
-}
-
-/// A [MonitoringController.refresh] waiting for a newer sample of each of
-/// its streams, while the server samples, for at most [kRefreshWait].
-final class _PendingRefresh {
-  _PendingRefresh(
-    this.serverId,
-    this._readings,
-    Set<SampleStream> streams,
-    this._onDone,
-  ) : _before = {
-        for (final stream in streams) stream: _readings.box(stream).value?.seq,
-      } {
-    for (final stream in _before.keys) {
-      _readings.box(stream).addListener(_check);
-    }
-    _readings.sampling.addListener(_check);
-    _timer = Timer(kRefreshWait, finish);
-  }
-
-  final String serverId;
-  final _ServerReadings _readings;
-
-  /// Each stream's latest seq when the refresh went out.
-  final Map<SampleStream, int?> _before;
-  final void Function(_PendingRefresh refresh) _onDone;
-  final Completer<void> _done = Completer();
-  late final Timer _timer;
-
-  Future<void> get done => _done.future;
-
-  void _check() {
-    final sampling =
-        _readings.sampling.value?.state.phase == SamplingPhase.sampling;
-    final read = _before.entries.every((entry) {
-      final seq = _readings.box(entry.key).value?.seq;
-      return seq != null && seq > (entry.value ?? -1);
-    });
-    if (!sampling || read) finish();
-  }
-
-  /// Stops waiting; once only.
-  void finish() {
-    if (_done.isCompleted) return;
-    _timer.cancel();
-    for (final stream in _before.keys) {
-      _readings.box(stream).removeListener(_check);
-    }
-    _readings.sampling.removeListener(_check);
-    _onDone(this);
-    _done.complete();
-  }
-}
-
-/// What opened a history gap: a [SamplingState] phase, or a [Gap] or
-/// failed reading, which never relabels an open one.
-enum _HistoryGapSource { phase, reading }
-
-/// [MonitoringController.clock]: one timer for every age on screen.
-final class _FreshnessClock extends ChangeNotifier
-    implements ValueListenable<DateTime> {
-  _FreshnessClock(this._now);
-
-  final DateTime Function() _now;
-  Timer? _timer;
-
-  @override
-  DateTime get value => _now();
-
-  @override
-  void addListener(VoidCallback listener) {
-    super.addListener(listener);
-    _timer ??= Timer.periodic(kFreshnessTick, (_) {
-      notifyListeners();
-      // A listener removed during the notification still counted then.
-      if (!hasListeners) _stop();
-    });
-  }
-
-  @override
-  void removeListener(VoidCallback listener) {
-    super.removeListener(listener);
-    if (!hasListeners) _stop();
-  }
-
-  void _stop() {
-    _timer?.cancel();
-    _timer = null;
-  }
-
-  @override
-  void dispose() {
-    _stop();
-    super.dispose();
-  }
-}
-
-/// One server's readings: its seq floor, latest sample and latest reading
-/// per stream, rings and probe profile.
-final class _ServerReadings {
-  /// The highest [Sample.seq] kept: the engine counts one sequence per
-  /// server across its streams (D44).
-  int? _lastSeq;
-
-  final Map<SampleStream, ValueNotifier<Sample?>> _boxes = {};
-  final Map<SampleStream, ValueNotifier<Sample?>> _lastReadings = {};
-  final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
-  final ValueNotifier<HostProfile?> profile = ValueNotifier(null);
-  final ValueNotifier<ServerClock?> clock = ValueNotifier(null);
-
-  /// Ring streams no subscription names, and those named again since,
-  /// whose next reading follows a hole.
-  final Set<SampleStream> _unnamed = {};
-  final Set<SampleStream> _afterHole = {};
-
-  /// The engine's latest [SamplingState] for the server, with the phase
-  /// before it.
-  final ValueNotifier<SamplingStatus?> sampling = ValueNotifier(null);
-
-  /// The `core` stream's series on a time axis, made on first use: rows
-  /// read every fleet server's boxes, and only open servers sample `core`.
-  Map<MetricSeries, TimeSeriesRing>? _history;
-  Map<MetricSeries, TimeSeriesRing> get history => _history ??= {
-    for (final series in MetricSeries.values)
-      series: TimeSeriesRing(capacity: kSessionRingCapacity, lanes: 1),
-  };
-  Iterable<TimeSeriesRing> get _historyRings => _history?.values ?? const [];
-
-  /// Opens a gap at [at] in every history ring that has a reading, as
-  /// the engine gives a stream without one no gap. From the phase, a
-  /// background pause or a lost link outranks a lost reading (03 §10.1),
-  /// and a change between them starts a band of its own; a [Gap] or a
-  /// failed reading opens one only where none is open, since the open
-  /// one already says why readings stopped.
-  void _openHistoryGap(
-    DateTime at,
-    ChartGapReason reason,
-    _HistoryGapSource source,
-  ) {
-    if (_unnamed.contains(SampleStream.core)) return;
-    for (final ring in _historyRings) {
-      final last = ring.gaps.lastOrNull;
-      final open = last != null && last.end == null;
-      if (ring.length == 0) continue;
-      if (open && source == _HistoryGapSource.reading) continue;
-      ring.openGap(at, reason);
-    }
-  }
-
-  /// The background pause, and a link lost while sampling, stop readings
-  /// as the phase changes; a return with the link down ends the
-  /// background's gap, as the app is in the foreground from then on.
-  void phaseChanged(SamplingStatus status) {
-    final reason = switch (status.state.phase) {
-      SamplingPhase.pausedInBackground => ChartGapReason.background,
-      SamplingPhase.waitingForLink
-          when status.previous == SamplingPhase.sampling ||
-              status.previous == SamplingPhase.pausedInBackground =>
-        ChartGapReason.disconnected,
-      _ => null,
-    };
-    if (reason == null) return;
-    _openHistoryGap(status.state.since, reason, _HistoryGapSource.phase);
-  }
-
-  /// [gap] precedes the readings that resume its streams: none joins the
-  /// reading before it.
-  void gap(Gap gap) {
-    for (final stream in gap.streams.where(_ringStreams.contains)) {
-      _afterHole.add(stream);
-    }
-    if (gap.streams.contains(SampleStream.core)) {
-      _openHistoryGap(
-        gap.from,
-        chartGapReasonOf(gap.cause),
-        _HistoryGapSource.reading,
-      );
-    }
-  }
-
-  void unnamed(SampleStream stream, DateTime now) {
-    _unnamed.add(stream);
-    if (stream != SampleStream.core) return;
-    for (final ring in _historyRings) {
-      if (ring.length > 0) ring.add(now, const [null]);
-    }
-  }
-
-  void named(SampleStream stream) {
-    if (_unnamed.remove(stream)) _afterHole.add(stream);
-  }
-
-  ValueNotifier<Sample?> box(SampleStream stream) =>
-      _boxes.putIfAbsent(stream, () => ValueNotifier<Sample?>(null));
-
-  ValueNotifier<Sample?> lastReading(SampleStream stream) =>
-      _lastReadings.putIfAbsent(stream, () => ValueNotifier<Sample?>(null));
-
-  /// Every series of [stream] at once, so they stay aligned sample for
-  /// sample.
-  Map<MetricSeries, SeriesRing> rings(SampleStream stream) =>
-      _rings.putIfAbsent(
-        stream,
-        () => {
-          for (final series in MetricSeries.values)
-            series: SeriesRing(kSessionRingCapacity),
-        },
-      );
-
-  /// Keeps [sample] unless its seq is not above the floor.
-  void accept(Sample sample) {
-    final last = _lastSeq;
-    if (last != null && sample.seq <= last) return;
-    _lastSeq = sample.seq;
-
-    // Rings first: a surface that hears the box may read them too.
-    if (_ringStreams.contains(sample.stream)) {
-      // Marked as the next reading arrives rather than when the stream is
-      // named again: a reading still in flight then belongs before it.
-      final hole = _afterHole.remove(sample.stream);
-      for (final MapEntry(key: series, value: ring) in rings(
-        sample.stream,
-      ).entries) {
-        if (hole && ring.length > 0) ring.add(null);
-        ring.add(series.readFrom(sample.result));
-      }
-    }
-    if (sample.stream == SampleStream.core) _record(sample);
-    if (sample.result is! CollectorUnavailable) {
-      lastReading(sample.stream).value = sample;
-    }
-    box(sample.stream).value = sample;
-  }
-
-  /// Adds [sample] to the history rings; a failed reading opens a gap.
-  void _record(Sample sample) {
-    if (sample.result is CollectorUnavailable) {
-      _openHistoryGap(
-        sample.at,
-        ChartGapReason.readingFailed,
-        _HistoryGapSource.reading,
-      );
-      return;
-    }
-    for (final MapEntry(key: series, value: ring) in history.entries) {
-      ring.add(sample.at, [series.readFrom(sample.result)]);
-    }
-  }
-
-  /// Drops every reading, ring, profile and clock, keeping each box for
-  /// the views that hold it. The seq floor stays: the engine's count for
-  /// the server goes on (D44).
-  void clear() {
-    for (final box in [..._boxes.values, ..._lastReadings.values]) {
-      box.value = null;
-    }
-    for (final ring in _rings.values.expand((rings) => rings.values)) {
-      ring.clear();
-    }
-    for (final ring in _historyRings) {
-      ring.clear();
-    }
-    _afterHole.clear();
-    profile.value = null;
-    clock.value = null;
-  }
-
-  void dispose() {
-    sampling.dispose();
-    for (final ring in _historyRings) {
-      ring.dispose();
-    }
-    for (final box in [..._boxes.values, ..._lastReadings.values]) {
-      box.dispose();
-    }
-    for (final ring in _rings.values.expand((rings) => rings.values)) {
-      ring.dispose();
-    }
-    profile.dispose();
-    clock.dispose();
   }
 }

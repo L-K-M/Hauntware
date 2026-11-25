@@ -5,7 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
-import 'logs/logs_panel.dart' show serverTimeText;
+import 'logs/log_pickers.dart' show serverTimeText;
 import 'panel_kit.dart' show PanelSection;
 import 'system_view.dart' show uptimeText;
 
@@ -82,7 +82,10 @@ class _BootsSectionState extends State<BootsSection> {
     if (!_reading) setState(() => _reading = true);
     final serverId = widget.serverId;
     Future<HostPayload?> query(HostQuerySpec spec) async {
-      final result = await widget.monitoring.queryHost(serverId, spec);
+      final result = await widget.monitoring.hostReads.queryHost(
+        serverId,
+        spec,
+      );
       return mounted && ticket == _ticket ? result.payload : null;
     }
 

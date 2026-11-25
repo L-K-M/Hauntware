@@ -119,8 +119,7 @@ final class EngineStart {
 /// queue, a [PlanAction] previews or holds a plan and a [RunAction] runs
 /// the held one over the link generation it was planned on (03 §8.5),
 /// [Shutdown] ends every log stream and exits, and the only 03 §10.1 row
-/// still unanswered is [HandleAlert] (v1.x): it gets [RequestRejected],
-/// 'not implemented yet (M1a scaffold)'.
+/// still unanswered is [HandleAlert] (v1.x): it gets [RequestRejected].
 ///
 /// With probes on, the fleet's confirmed endpoints are probed once the
 /// app has the fleet ([Hello]'s answer), and each answer goes out as a

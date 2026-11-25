@@ -1,5 +1,7 @@
 // PLT-06 (03 §10.6): the lists' single keys, the keyboard map, the tab
 // commands and Esc going back.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -203,16 +205,20 @@ void main() {
       final navigator = await pumpHome(tester);
       final context = navigator.context;
 
-      showDialog<void>(context: context, builder: (_) => const Text('open'));
+      unawaited(
+        showDialog<void>(context: context, builder: (_) => const Text('open')),
+      );
       await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.text('open'), findsNothing);
 
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Text('held'),
+      unawaited(
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Text('held'),
+        ),
       );
       await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);

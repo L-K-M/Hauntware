@@ -5,6 +5,7 @@
 // runner's API steps and re-validation read the engine's answers.
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/danger.dart';
@@ -218,6 +219,41 @@ OperationPlan _planned(PlanAttempt attempt) {
 
 ApiStep _step(OperationPlan plan, [int index = 0]) =>
     plan.steps[index] as ApiStep;
+
+/// A stable digest of what the preview shows for [plan]: its kind,
+/// target, tier, runner, impact, ownership, protection, warnings, every
+/// step's exact request bytes and its re-validation checks. ARC-09 moves
+/// the request construction into klabautermann_docker; this records the
+/// bytes the plans send today so the move cannot change a confirmed
+/// action.
+String _fingerprint(OperationPlan plan) {
+  final lines = <String>[
+    'kind=${plan.kind.name}',
+    'target=${plan.targetName}',
+    'tier=${plan.tier.name}',
+    'level=${plan.requiredLevel.name}',
+    'runner=${plan.runner.identity}|${plan.runner.engine}'
+        '|${plan.runner.credentials.name}',
+    'writes=${plan.hostWrites.map((w) => w.name).join(',')}',
+    'impact=${plan.impact?.kind.name}|${plan.impact?.count}',
+    'owner=${plan.ownership?.manager}',
+    'protected=${plan.protected?.name}',
+    'warnings=${(plan.warnings.map((w) => w.name).toList()..sort()).join(',')}',
+    for (final step in plan.steps)
+      if (step is ApiStep)
+        'api=${step.method}|${step.path}'
+            '|${step.query.entries.map((e) => '${e.key}=${e.value}').join('&')}'
+            '|${step.json == null ? '-' : jsonEncode(step.json)}'
+      else
+        'step=${step.runtimeType}|${step.display}',
+    for (final check in plan.revalidate)
+      'check=${switch (check) {
+        DockerTargetUnchanged(:final kind, :final target, :final id) => '$kind|$target|$id',
+        _ => check.toString(),
+      }}',
+  ];
+  return sha256.convert(utf8.encode(lines.join('\n'))).toString();
+}
 
 void main() {
   group('containers (CTR-02, CTR-06)', () {
@@ -1752,6 +1788,275 @@ void main() {
         await revalidateDockerTarget(client, check),
         RevalidationFailure.targetChanged,
       );
+    });
+  });
+
+  group('request fingerprints (ARC-09)', () {
+    // Golden digests of [_fingerprint], captured on the current planners.
+    // ARC-09 rebuilds the same steps from klabautermann_docker's request
+    // specs; if any byte here changes, a confirmed action would change.
+    const golden = <String, String>{
+      'single.start':
+          '9e1efaf6aeaa13eddeeb6e54705b99e6e18f0ede250103ed6af7a1bd77d58fa4',
+      'single.stop':
+          'ee5cc9b04c262f7e5eb09bfec301b8186a15b0c44115d73f6339ee16edb6c923',
+      'single.restart':
+          '29e540d7f290a6e1950f9909b2b9336d828b8803143b5dcf3287400e03dad469',
+      'single.pause':
+          'be57ce79a3e3d2b3145cbb5277dd91b5167e409094f62d3ece1b8739b20285a4',
+      'single.unpause':
+          'e94705758f70dc966a593280310e75821ec727830fbe2c9601b0d9514b5bcc23',
+      'single.kill':
+          '8448159261a0d673270ae2fe5ad88df6a50f1a78131f33ac3d253391151e5add',
+      'single.kill.sigterm':
+          '6e50baeef8f3bcf1dcaf1c892747898e316bdfd2951e7791b4301ca9181442ae',
+      'remove.plain':
+          '1b7c8fd1201671274d404e4b685fb920b190417b819d9f5d250dc062efe136fa',
+      'remove.volumes.force':
+          'c21eb4858a6ff64d831f4838a682430766da23dd98b54f709dda5ba3786f5e6f',
+      'version.1.44':
+          '1a74cdfbdd28531eaf0ff1ab6339ee539c3d547b5b334b0ebf6aa8d275fd5b05',
+      'bulk.stop':
+          '6c98976027ca4fb7a82a9fd05dca4275a88ef084a6d7f322be0b215803770b56',
+      'bulk.remove':
+          '24141f67a8c2a24b2f6c48ce785781676367ed32293e493b225ffe86599e47b2',
+      'stack.start':
+          '98f7a75765895a0261694f354672b5bdce9fee6949803c3b62682e4309fdb254',
+      'stack.stop':
+          'f96bc9f5e2b9db02a7d412edbcc8dd6b8fccca5a14614e7e2f0dbb02c86986f3',
+      'stack.restart':
+          '2096d55d4f7d1c0d84da7b7c82990303ef66ce24353e8c2d16c3e73f1114f527',
+      'image.plain':
+          'b8cb9b23d22843f2053a6834ba3f8a267360526f2f94fa6da3e2fa353254d2d9',
+      'image.force':
+          'e478f8b97cac198d05b1ae28990793ab40552bcf734a7d4c769934e7e47c1e6a',
+    };
+
+    late _Engine engine;
+    setUp(() => engine = _Engine()..containers.add(_container('web-1')));
+
+    String webId() => '${engine.containers.single['Id']}';
+
+    Future<OperationPlan> planFor(ActionIntent intent) async =>
+        _planned(await _plan(intent, engine));
+
+    void expectRequest(
+      OperationPlan plan,
+      String label,
+      String method,
+      String path, [
+      Map<String, String> query = const {},
+    ]) {
+      final step = _step(plan);
+      expect(step.method, method, reason: label);
+      expect(step.path, path, reason: label);
+      expect(step.query, query, reason: label);
+      expect(
+        step.display,
+        query.isEmpty
+            ? '$method $path'
+            : '$method $path?${Uri(queryParameters: query).query}',
+        reason: label,
+      );
+      expect(_fingerprint(plan), golden[label], reason: label);
+    }
+
+    test('the six state-change verbs send the same bytes as today', () async {
+      for (final entry in {
+        ContainerVerb.start: 'start',
+        ContainerVerb.stop: 'stop',
+        ContainerVerb.restart: 'restart',
+        ContainerVerb.pause: 'pause',
+        ContainerVerb.unpause: 'unpause',
+        ContainerVerb.kill: 'kill',
+      }.entries) {
+        final plan = await planFor(
+          ContainerAction(_server, containerId: 'web-1', verb: entry.key),
+        );
+        expectRequest(
+          plan,
+          'single.${entry.value}',
+          'POST',
+          '/v1.52/containers/${webId()}/${entry.value}',
+        );
+      }
+    });
+
+    test('a kill names the signal without the SIG prefix', () async {
+      final plan = await planFor(
+        ContainerAction(
+          _server,
+          containerId: 'web-1',
+          verb: ContainerVerb.kill,
+          signal: KillSignal.sigterm,
+        ),
+      );
+      expectRequest(
+        plan,
+        'single.kill.sigterm',
+        'POST',
+        '/v1.52/containers/${webId()}/kill',
+        {'signal': 'TERM'},
+      );
+    });
+
+    test('removing sends v and force only, never link', () async {
+      final plain = await planFor(
+        RemoveContainer(_server, containerId: 'web-1'),
+      );
+      expectRequest(
+        plain,
+        'remove.plain',
+        'DELETE',
+        '/v1.52/containers/${webId()}',
+        {'v': '0', 'force': '0'},
+      );
+
+      final hard = await planFor(
+        RemoveContainer(
+          _server,
+          containerId: 'web-1',
+          volumes: true,
+          force: true,
+        ),
+      );
+      expectRequest(
+        hard,
+        'remove.volumes.force',
+        'DELETE',
+        '/v1.52/containers/${webId()}',
+        {'v': '1', 'force': '1'},
+      );
+    });
+
+    test('the negotiated API version prefixes every path', () async {
+      final old = _Engine(api: '1.44')..containers.add(_container('web-1'));
+      final id = '${old.containers.single['Id']}';
+      final plan = _planned(
+        await _plan(
+          ContainerAction(
+            _server,
+            containerId: 'web-1',
+            verb: ContainerVerb.stop,
+          ),
+          old,
+        ),
+      );
+      expectRequest(plan, 'version.1.44', 'POST', '/v1.44/containers/$id/stop');
+    });
+
+    test('a bulk action repeats one identical request per target', () async {
+      engine.containers.addAll([
+        _container('api-1'),
+        _container('db-1', state: 'exited'),
+      ]);
+      final web = '${engine.containers[0]['Id']}';
+      final apiId = '${engine.containers[1]['Id']}';
+      final dbId = '${engine.containers[2]['Id']}';
+
+      final stop = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: [web, apiId],
+            verb: ContainerBulkVerb.stop,
+          ),
+          engine,
+        ),
+      );
+      expect(
+        [for (final s in stop.steps) (s as ApiStep).path],
+        ['/v1.52/containers/$web/stop', '/v1.52/containers/$apiId/stop'],
+        reason: 'bulk.stop',
+      );
+      expect(_fingerprint(stop), golden['bulk.stop'], reason: 'bulk.stop');
+
+      final remove = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: [dbId],
+            verb: ContainerBulkVerb.remove,
+          ),
+          engine,
+        ),
+      );
+      expectRequest(
+        remove,
+        'bulk.remove',
+        'DELETE',
+        '/v1.52/containers/$dbId',
+        {'v': '0', 'force': '0'},
+      );
+    });
+
+    test('a stack action builds one request per service container', () async {
+      final shop = _Engine()
+        ..containers.addAll([
+          _container('shop-web-1', labels: _compose('shop', 'web')),
+          _container(
+            'shop-db-1',
+            labels: _compose('shop', 'db'),
+            state: 'exited',
+          ),
+        ]);
+      final web = '${shop.containers[0]['Id']}';
+      final db = '${shop.containers[1]['Id']}';
+
+      Future<void> check(
+        StackVerb verb,
+        String label,
+        List<String> paths,
+      ) async {
+        final plan = _planned(
+          await _plan(StackAction(_server, project: 'shop', verb: verb), shop),
+        );
+        expect(
+          [for (final s in plan.steps) (s as ApiStep).path],
+          paths,
+          reason: label,
+        );
+        expect(_fingerprint(plan), golden[label], reason: label);
+      }
+
+      await check(StackVerb.start, 'stack.start', [
+        '/v1.52/containers/$db/start',
+        '/v1.52/containers/$web/start',
+      ]);
+      await check(StackVerb.stop, 'stack.stop', [
+        '/v1.52/containers/$web/stop',
+        '/v1.52/containers/$db/stop',
+      ]);
+      await check(StackVerb.restart, 'stack.restart', [
+        '/v1.52/containers/$db/restart',
+        '/v1.52/containers/$web/restart',
+      ]);
+    });
+
+    test('an image removal always sends noprune=0', () async {
+      final images = _Engine()
+        ..images.add({
+          'Id': 'sha256:${_id('feed')}',
+          'RepoTags': ['app:1'],
+        });
+      final plain = _planned(
+        await _plan(const RemoveImage(_server, image: 'app:1'), images),
+      );
+      expectRequest(plain, 'image.plain', 'DELETE', '/v1.52/images/app%3A1', {
+        'force': '0',
+        'noprune': '0',
+      });
+
+      final forced = _planned(
+        await _plan(
+          const RemoveImage(_server, image: 'app:1', force: true),
+          images,
+        ),
+      );
+      expectRequest(forced, 'image.force', 'DELETE', '/v1.52/images/app%3A1', {
+        'force': '1',
+        'noprune': '0',
+      });
     });
   });
 }

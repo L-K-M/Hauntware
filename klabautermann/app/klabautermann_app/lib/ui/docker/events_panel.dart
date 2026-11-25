@@ -5,8 +5,9 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../panel_kit.dart' show HeadedPanelBody;
 import '../time_display.dart';
-import 'containers_panel.dart' show DockerNotice;
+import 'docker_notice.dart';
 import 'containers_view.dart' show searchTerms;
 
 /// The event types the timeline filters by, each named as the engine
@@ -49,10 +50,6 @@ List<DockerTimelineEntry> timelineRows(
     })
       entry,
 ];
-
-/// The share of its height the header takes before it scrolls, so large
-/// text never pushes the list out of sight.
-const double _headerShare = 0.4;
 
 /// The Events sub-tab (03 §7.12 DKE-03): the engine's container, image,
 /// volume and network events while the app follows them, newest first,
@@ -207,41 +204,28 @@ class _EventsPanelState extends State<EventsPanel> {
     );
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: LayoutBuilder(
-        builder: (context, constraints) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: constraints.maxHeight * _headerShare,
+      child: HeadedPanelBody(
+        header: header,
+        body: entries != null && rows.isEmpty
+            ? Text(
+                entries.isEmpty
+                    ? l10n.dockerEventsNone
+                    : l10n.dockerEventsNoMatch,
+              )
+            : ListView.separated(
+                itemCount: rows.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, i) => switch (rows[i]) {
+                  final DockerTimelineEvent event => _EventRow(
+                    event: event,
+                    format: format,
+                  ),
+                  final DockerTimelineGap gap => _GapRow(
+                    gap: gap,
+                    format: format,
+                  ),
+                },
               ),
-              child: SingleChildScrollView(child: header),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: entries != null && rows.isEmpty
-                  ? Text(
-                      entries.isEmpty
-                          ? l10n.dockerEventsNone
-                          : l10n.dockerEventsNoMatch,
-                    )
-                  : ListView.separated(
-                      itemCount: rows.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, i) => switch (rows[i]) {
-                        final DockerTimelineEvent event => _EventRow(
-                          event: event,
-                          format: format,
-                        ),
-                        final DockerTimelineGap gap => _GapRow(
-                          gap: gap,
-                          format: format,
-                        ),
-                      },
-                    ),
-            ),
-          ],
-        ),
       ),
     );
   }

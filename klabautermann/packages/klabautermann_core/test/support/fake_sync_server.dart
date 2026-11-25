@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:klabautermann_core/src/catalog/engine_sync.dart';
 import 'package:klabautermann_core/src/catalog/keystore_channel.dart';
 import 'package:klabautermann_core/src/catalog/sync_credentials.dart';
 import 'package:seance_core/catalog.dart' show RecordCrypto;
@@ -216,6 +215,10 @@ final class _FakeTransport implements SyncTransport {
   @override
   Future<LoginResponse> register(RegisterRequest request) =>
       throw UnsupportedError('Klabautermann never registers');
+
+  @override
+  Future<void> deleteAccount() =>
+      throw UnsupportedError('Klabautermann never deletes an account');
 
   @override
   Future<PreloginResponse> prelogin(String username) async {

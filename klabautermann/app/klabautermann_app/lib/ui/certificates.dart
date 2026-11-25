@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/monitoring_controller.dart';
 import '../controllers/tls_endpoints.dart';
 import '../l10n/app_localizations.dart';
+import 'latest_read.dart';
 import 'time_display.dart';
 import 'panel_kit.dart' show PanelNotice, PanelSection;
 
@@ -37,12 +38,10 @@ class CertificatesSection extends StatefulWidget {
 
 class _CertificatesSectionState extends State<CertificatesSection> {
   /// The newest check's answers, by endpoint; null until one answers.
-  Map<TlsEndpoint, TlsEndpointCheck>? _checks;
-  bool _checking = false;
-  bool _notSaved = false;
+  late final LatestRead<Map<TlsEndpoint, TlsEndpointCheck>> _latest =
+      LatestRead(setState: setState, mounted: () => mounted);
 
-  /// Bumped per check, so only the newest answer lands.
-  int _ticket = 0;
+  bool _notSaved = false;
 
   TlsEndpoints get _endpoints => widget.monitoring.tlsEndpoints;
 
@@ -59,25 +58,29 @@ class _CertificatesSectionState extends State<CertificatesSection> {
         oldWidget.monitoring == widget.monitoring) {
       return;
     }
-    _checks = null;
+    _latest.reset();
     _notSaved = false;
     unawaited(_check());
   }
 
   Future<void> _check() async {
-    final ticket = ++_ticket;
     final endpoints = _endpoints.endpointsFor(widget.serverId);
     if (endpoints.isEmpty) {
-      if (mounted) setState(() => _checking = false);
+      // No endpoint to check: leave no reading state behind, and an
+      // edit that emptied the list drops the answers it supersedes.
+      if (mounted && _latest.reading) setState(_latest.reset);
       return;
     }
-    if (mounted) setState(() => _checking = true);
-    final checks = await widget.monitoring.checkTlsEndpoints(endpoints);
-    if (!mounted || ticket != _ticket) return;
-    setState(() {
-      _checking = false;
-      _checks = {for (final check in checks ?? const []) check.endpoint: check};
-    });
+    await _latest.run(
+      () => widget.monitoring.hostReads
+          .checkTlsEndpoints(endpoints)
+          .then(
+            (checks) => {
+              for (final check in checks ?? const <TlsEndpointCheck>[])
+                check.endpoint: check,
+            },
+          ),
+    );
   }
 
   Future<void> _edit() async {
@@ -104,7 +107,7 @@ class _CertificatesSectionState extends State<CertificatesSection> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final endpoints = _endpoints.endpointsFor(widget.serverId);
-    final checks = _checks;
+    final checks = _latest.value;
 
     return PanelSection(
       title: l10n.systemCertificatesTitle,
@@ -119,7 +122,7 @@ class _CertificatesSectionState extends State<CertificatesSection> {
           _EndpointLine(
             endpoint: endpoint,
             check: checks?[endpoint],
-            checking: _checking,
+            checking: _latest.reading,
             now: widget.now().toUtc(),
             serverId: widget.serverId,
           ),
@@ -129,7 +132,7 @@ class _CertificatesSectionState extends State<CertificatesSection> {
           children: [
             if (endpoints.isNotEmpty)
               OutlinedButton(
-                onPressed: _checking ? null : () => unawaited(_check()),
+                onPressed: _latest.reading ? null : () => unawaited(_check()),
                 child: Text(l10n.systemCertificatesCheck),
               ),
             OutlinedButton(

@@ -23,15 +23,9 @@ const Duration eventGapThreshold = Duration(seconds: 60);
 /// What to refresh after one event (03 §7.12 DKE-02).
 @immutable
 final class EventRefreshPlan {
-  const EventRefreshPlan({
-    required this.lists,
-    this.fullRelist = false,
-    this.reason,
-  });
+  const EventRefreshPlan({required this.lists});
 
   final Set<DockerList> lists;
-  final bool fullRelist;
-  final String? reason;
 
   bool get isEmpty => lists.isEmpty;
 }
@@ -46,24 +40,8 @@ Set<DockerList> listsForEvent(DockerEvent event) => switch (event.type) {
   _ => const <DockerList>{},
 };
 
-/// Pure event-refresh decision (03 §7.12 DKE-02): a targeted list for a
-/// normal event, or every list after a gap over [gap]. [previousEventAt]
-/// is the timestamp of the last event seen before this one; null means no
-/// gap is known, so the targeted path is used.
-EventRefreshPlan planEventRefresh({
-  required DockerEvent event,
-  required DateTime now,
-  DateTime? previousEventAt,
-  Duration gap = eventGapThreshold,
-}) {
-  if (previousEventAt != null && now.difference(previousEventAt) > gap) {
-    return EventRefreshPlan(
-      lists: DockerList.all,
-      fullRelist: true,
-      reason:
-          'event gap of ${now.difference(previousEventAt).inSeconds}s '
-          'exceeds ${gap.inSeconds}s',
-    );
-  }
-  return EventRefreshPlan(lists: listsForEvent(event));
-}
+/// The event-refresh decision (03 §7.12 DKE-02): the targeted lists one
+/// event invalidates. A reconnect gap is not decided here; the watcher
+/// owns that (`_lostAt`) and re-lists past its threshold itself.
+EventRefreshPlan planEventRefresh({required DockerEvent event}) =>
+    EventRefreshPlan(lists: listsForEvent(event));

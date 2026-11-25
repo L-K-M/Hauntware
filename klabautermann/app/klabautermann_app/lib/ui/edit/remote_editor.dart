@@ -23,7 +23,7 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show OperationsScope;
 import '../actions/action_preview.dart' show planRefusedText, startAction;
 import '../admin_mode_chip.dart' show TurnOnAdminModeButton;
-import '../docker/containers_panel.dart' show DockerNotice;
+import '../docker/docker_notice.dart';
 import 'editor_display_scope.dart';
 
 /// Below this width the editor takes the whole screen, as on phones
