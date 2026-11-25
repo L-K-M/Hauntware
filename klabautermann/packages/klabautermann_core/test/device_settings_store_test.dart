@@ -25,8 +25,53 @@ const _monitorSetKey = 'klabautermann.monitorSet';
 const _containerColumnsKey = 'klabautermann.docker.containerColumns';
 const _safetyKey = 'klabautermann.safety';
 const _attentionKey = 'klabautermann.attention.acknowledged';
+const _shellSidebarKey = 'klabautermann.shell.sidebar';
+const _shellInspectorKey = 'klabautermann.shell.inspector';
 const _shellSidebarWidthKey = 'klabautermann.shell.sidebarWidth';
 const _shellInspectorWidthKey = 'klabautermann.shell.inspectorWidth';
+const _pinnedServicesKey = 'klabautermann.overview.pinnedServices';
+const _overviewCardsKey = 'klabautermann.overview.cards';
+const _fleetDensityKey = 'klabautermann.fleet.density';
+const _stackFoldersKey = 'klabautermann.docker.stackFolders';
+const _tlsEndpointsKey = 'klabautermann.certificates.endpoints';
+const _logTextSizeKey = 'klabautermann.logs.textSize';
+const _logWrapKey = 'klabautermann.logs.wrap';
+const _serverTimesKey = 'klabautermann.display.serverTimes';
+const _editorFontFamilyKey = 'klabautermann.editor.fontFamily';
+const _editorLigaturesKey = 'klabautermann.editor.ligatures';
+const _editorTextSizeKey = 'klabautermann.editor.textSize';
+
+/// One row of the settings-file format contract: the exact key and JSON
+/// encoding a setter writes, and the exact values read for a missing and a
+/// wrong-typed setting.
+final class _SettingContract {
+  const _SettingContract({
+    required this.name,
+    required this.key,
+    required this.write,
+    required this.encoded,
+    required this.read,
+    required this.written,
+    required this.missing,
+    required this.wrongType,
+    required this.wrongExpected,
+    this.invalidReadings = const [],
+  });
+
+  final String name;
+  final String key;
+  final Future<void> Function(DeviceSettingsStore store) write;
+  final Object? encoded;
+  final Object? Function(DeviceSettingsStore store) read;
+  final Object? written;
+  final Object? missing;
+  final Object? wrongType;
+  final Object? wrongExpected;
+
+  /// Correctly typed but invalid values, or out-of-range ones, each with
+  /// the value it must read as.
+  final List<(Object?, Object?)> invalidReadings;
+}
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -66,6 +111,501 @@ void main() {
       file.writeAsStringSync(jsonEncode(json));
 
   group('DeviceSettingsStore', () {
+    group('JSON format contract', () {
+      const endpointOverride = DockerEndpointOverride(
+        DockerEndpointCustom('/srv/engine.sock'),
+        endpoint: 'db-1:2222',
+        program: '/snap/bin/docker',
+      );
+      final safety = <String, Object?>{
+        'globalReadOnly': false,
+        'servers': {
+          'srv-a': {'management': true},
+        },
+      };
+      final attention = <String, Object?>{
+        'srv-a': {
+          'failedUnit:nginx.service': {'at': '2026-10-26T12:00:00.000Z'},
+        },
+      };
+      final contracts = [
+        _SettingContract(
+          name: 'appearance',
+          key: _appearanceKey,
+          write: (store) => store.setAppearance(_darkAppearance),
+          encoded: _darkAppearance,
+          read: (store) => store.appearance,
+          written: _darkAppearance,
+          missing: null,
+          wrongType: 'dark',
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'first-run card dismissal',
+          key: _firstRunCardKey,
+          write: (store) => store.dismissFirstRunCard(),
+          encoded: true,
+          read: (store) => store.firstRunCardDismissed,
+          written: true,
+          missing: false,
+          wrongType: 'true',
+          wrongExpected: false,
+        ),
+        _SettingContract(
+          name: 'threshold-band announcements',
+          key: _announceBandsKey,
+          write: (store) => store.setAnnounceThresholdBands(false),
+          encoded: false,
+          read: (store) => store.announceThresholdBands,
+          written: false,
+          missing: true,
+          wrongType: 'false',
+          wrongExpected: true,
+        ),
+        _SettingContract(
+          name: 'alert notifications',
+          key: _alertNotificationsKey,
+          write: (store) => store.setAlertNotifications(true),
+          encoded: true,
+          read: (store) => store.alertNotifications,
+          written: true,
+          missing: false,
+          wrongType: 'true',
+          wrongExpected: false,
+        ),
+        _SettingContract(
+          name: 'sync secrets',
+          key: _syncSecretsKey,
+          write: (store) => store.setSyncSecrets(true),
+          encoded: true,
+          read: (store) => store.syncSecrets,
+          written: true,
+          missing: false,
+          wrongType: 'true',
+          wrongExpected: false,
+        ),
+        _SettingContract(
+          name: 'update check',
+          key: _updateCheckKey,
+          write: (store) => store.setCheckForUpdates(false),
+          encoded: false,
+          read: (store) => store.checkForUpdates,
+          written: false,
+          missing: true,
+          wrongType: 'no',
+          wrongExpected: true,
+        ),
+        _SettingContract(
+          name: 'sampling cadence',
+          key: _cadenceKey,
+          write: (store) => store.setCadence('cellularSaver'),
+          encoded: 'cellularSaver',
+          read: (store) => store.cadence,
+          written: 'cellularSaver',
+          missing: null,
+          wrongType: 3,
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'pinned services',
+          key: _pinnedServicesKey,
+          write: (store) => store.setPinnedServices('srv-1', [
+            'system/nginx.service',
+            'user/sync.service',
+          ]),
+          encoded: {
+            'srv-1': ['system/nginx.service', 'user/sync.service'],
+          },
+          read: (store) => store.pinnedServices,
+          written: {
+            'srv-1': ['system/nginx.service', 'user/sync.service'],
+          },
+          missing: <String, List<String>>{},
+          wrongType: 'not-a-map',
+          wrongExpected: <String, List<String>>{},
+        ),
+        _SettingContract(
+          name: 'Overview cards',
+          key: _overviewCardsKey,
+          write: (store) => store.setOverviewCards(['memory', 'cpu'], ['swap']),
+          encoded: {
+            'order': ['memory', 'cpu'],
+            'hidden': ['swap'],
+          },
+          read: (store) => store.overviewCards,
+          written: isA<({List<String> order, List<String> hidden})>()
+              .having((cards) => cards.order, 'order', ['memory', 'cpu'])
+              .having((cards) => cards.hidden, 'hidden', ['swap']),
+          missing: null,
+          wrongType: 'not-a-map',
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'fleet density',
+          key: _fleetDensityKey,
+          write: (store) => store.setFleetDensity('grid'),
+          encoded: 'grid',
+          read: (store) => store.fleetDensity,
+          written: 'grid',
+          missing: null,
+          wrongType: true,
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'shell sidebar visibility',
+          key: _shellSidebarKey,
+          write: (store) => store.setShellSidebarShown(false),
+          encoded: false,
+          read: (store) => store.shellSidebarShown,
+          written: false,
+          missing: true,
+          wrongType: 'hidden',
+          wrongExpected: true,
+        ),
+        _SettingContract(
+          name: 'shell inspector visibility',
+          key: _shellInspectorKey,
+          write: (store) => store.setShellInspectorShown(false),
+          encoded: false,
+          read: (store) => store.shellInspectorShown,
+          written: false,
+          missing: true,
+          wrongType: 'hidden',
+          wrongExpected: true,
+        ),
+        _SettingContract(
+          name: 'shell sidebar width',
+          key: _shellSidebarWidthKey,
+          write: (store) => store.setShellSidebarWidth(320.0),
+          encoded: 320.0,
+          read: (store) => store.shellSidebarWidth,
+          written: 320.0,
+          missing: null,
+          wrongType: 'wide',
+          wrongExpected: null,
+          invalidReadings: [(0, null), (-40, null)],
+        ),
+        _SettingContract(
+          name: 'shell inspector width',
+          key: _shellInspectorWidthKey,
+          write: (store) => store.setShellInspectorWidth(412.5),
+          encoded: 412.5,
+          read: (store) => store.shellInspectorWidth,
+          written: 412.5,
+          missing: null,
+          wrongType: 'wide',
+          wrongExpected: null,
+          invalidReadings: [(0, null), (-40, null)],
+        ),
+        _SettingContract(
+          name: 'cadence caps',
+          key: _cadenceCapsKey,
+          write: (store) => store.setCadenceCap('srv-1', 'cellularSaver'),
+          encoded: {'srv-1': 'cellularSaver'},
+          read: (store) => store.cadenceCaps,
+          written: {'srv-1': 'cellularSaver'},
+          missing: <String, String>{},
+          wrongType: 'not-a-map',
+          wrongExpected: <String, String>{},
+        ),
+        _SettingContract(
+          name: 'app lock',
+          key: _appLockKey,
+          write: (store) => store.setAppLock(true),
+          encoded: true,
+          read: (store) => store.appLock,
+          written: true,
+          missing: false,
+          wrongType: 'off',
+          wrongExpected: true,
+        ),
+        _SettingContract(
+          name: 'log text size',
+          key: _logTextSizeKey,
+          write: (store) => store.setLogDisplay(16, true),
+          encoded: 16,
+          read: (store) => store.logTextSize,
+          written: 16,
+          missing: null,
+          wrongType: 12.5,
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'log wrapping',
+          key: _logWrapKey,
+          write: (store) => store.setLogDisplay(16, true),
+          encoded: true,
+          read: (store) => store.logWrap,
+          written: true,
+          missing: false,
+          wrongType: 'yes',
+          wrongExpected: false,
+        ),
+        _SettingContract(
+          name: 'server times',
+          key: _serverTimesKey,
+          write: (store) => store.setServerTimes(true),
+          encoded: true,
+          read: (store) => store.serverTimes,
+          written: true,
+          missing: false,
+          wrongType: 'yes',
+          wrongExpected: false,
+        ),
+        _SettingContract(
+          name: 'editor font family',
+          key: _editorFontFamilyKey,
+          write: (store) => store.setEditorDisplay('Iosevka', false, 15),
+          encoded: 'Iosevka',
+          read: (store) => store.editorFontFamily,
+          written: 'Iosevka',
+          missing: null,
+          wrongType: 7,
+          wrongExpected: null,
+          invalidReadings: [('  ', null)],
+        ),
+        _SettingContract(
+          name: 'editor ligatures',
+          key: _editorLigaturesKey,
+          write: (store) => store.setEditorDisplay('Iosevka', false, 15),
+          encoded: false,
+          read: (store) => store.editorLigatures,
+          written: false,
+          missing: true,
+          wrongType: 'false',
+          wrongExpected: true,
+        ),
+        _SettingContract(
+          name: 'editor text size',
+          key: _editorTextSizeKey,
+          write: (store) => store.setEditorDisplay('Iosevka', false, 15),
+          encoded: 15,
+          read: (store) => store.editorTextSize,
+          written: 15,
+          missing: null,
+          wrongType: 12.5,
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'device name',
+          key: _deviceNameKey,
+          write: (store) => store.setDeviceName('Laptop'),
+          encoded: 'Laptop',
+          read: (store) => store.deviceName,
+          written: 'Laptop',
+          missing: null,
+          wrongType: 3,
+          wrongExpected: null,
+          invalidReadings: [('  ', null)],
+        ),
+        _SettingContract(
+          name: 'root-equivalence notice dismissal',
+          key: _rootNoticeKey,
+          write: (store) => store.dismissRootEquivalenceNotice(),
+          encoded: true,
+          read: (store) => store.rootEquivalenceNoticeDismissed,
+          written: true,
+          missing: false,
+          wrongType: 'true',
+          wrongExpected: false,
+        ),
+        _SettingContract(
+          name: 'pinned servers',
+          key: _pinnedServersKey,
+          write: (store) => store.setPinnedServerIds({'srv-b', 'srv-a'}),
+          encoded: ['srv-a', 'srv-b'],
+          read: (store) => store.pinnedServerIds,
+          written: {'srv-a', 'srv-b'},
+          missing: <String>{},
+          wrongType: 'srv-a',
+          wrongExpected: <String>{},
+        ),
+        _SettingContract(
+          name: 'remembered admin mode',
+          key: _adminMemoryKey,
+          write: (store) => store.setAdminMemory({'srv-b', 'srv-a'}),
+          encoded: ['srv-a', 'srv-b'],
+          read: (store) => store.adminMemory,
+          written: {'srv-a', 'srv-b'},
+          missing: <String>{},
+          wrongType: true,
+          wrongExpected: <String>{},
+        ),
+        _SettingContract(
+          name: 'monitor set',
+          key: _monitorSetKey,
+          write: (store) => store.setMonitorSet({'srv-b', 'srv-a'}),
+          encoded: ['srv-a', 'srv-b'],
+          read: (store) => store.monitorSet,
+          written: {'srv-a', 'srv-b'},
+          missing: null,
+          wrongType: 'srv-a',
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'container columns',
+          key: _containerColumnsKey,
+          write: (store) => store.setContainerColumns(['memory', 'state']),
+          encoded: ['memory', 'state'],
+          read: (store) => store.containerColumns,
+          written: ['memory', 'state'],
+          missing: null,
+          wrongType: 'memory',
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'thresholds',
+          key: _thresholdsKey,
+          write: (store) => store.setThresholds({
+            'cpu': [60, 75, 95],
+          }),
+          encoded: {
+            'cpu': [60.0, 75.0, 95.0],
+          },
+          read: (store) => store.thresholds,
+          written: {
+            'cpu': [60.0, 75.0, 95.0],
+          },
+          missing: <String, List<double>>{},
+          wrongType: 3,
+          wrongExpected: <String, List<double>>{},
+        ),
+        _SettingContract(
+          name: 'Docker endpoint overrides',
+          key: _overridesKey,
+          write: (store) =>
+              store.setDockerEndpointOverride('srv-1', endpointOverride),
+          encoded: {
+            'srv-1': {
+              'choice': 'custom',
+              'socketPath': '/srv/engine.sock',
+              'program': '/snap/bin/docker',
+              'endpoint': 'db-1:2222',
+            },
+          },
+          read: (store) => store.dockerEndpointOverrides,
+          written: {'srv-1': endpointOverride},
+          missing: <String, DockerEndpointOverride>{},
+          wrongType: ['srv-1'],
+          wrongExpected: <String, DockerEndpointOverride>{},
+        ),
+        _SettingContract(
+          name: 'stack folders',
+          key: _stackFoldersKey,
+          write: (store) =>
+              store.setStackFolders('srv-1', ['/opt/stacks', '/srv/apps']),
+          encoded: {
+            'srv-1': ['/opt/stacks', '/srv/apps'],
+          },
+          read: (store) => store.stackFolders,
+          written: {
+            'srv-1': ['/opt/stacks', '/srv/apps'],
+          },
+          missing: <String, List<String>>{},
+          wrongType: 'not-a-map',
+          wrongExpected: <String, List<String>>{},
+        ),
+        _SettingContract(
+          name: 'TLS endpoints',
+          key: _tlsEndpointsKey,
+          write: (store) => store.setTlsEndpoints('srv-1', const [
+            TlsEndpoint('example.com', 443),
+            TlsEndpoint('2001:db8::1', 8443),
+          ]),
+          encoded: {
+            'srv-1': ['example.com:443', '[2001:db8::1]:8443'],
+          },
+          read: (store) => store.tlsEndpoints,
+          written: {
+            'srv-1': const [
+              TlsEndpoint('example.com', 443),
+              TlsEndpoint('2001:db8::1', 8443),
+            ],
+          },
+          missing: <String, List<TlsEndpoint>>{},
+          wrongType: 'not-a-map',
+          wrongExpected: <String, List<TlsEndpoint>>{},
+        ),
+        _SettingContract(
+          name: 'safety preferences',
+          key: _safetyKey,
+          write: (store) => store.setSafety(safety),
+          encoded: safety,
+          read: (store) => store.safety,
+          written: safety,
+          missing: null,
+          wrongType: 'on',
+          wrongExpected: null,
+        ),
+        _SettingContract(
+          name: 'acknowledged problems',
+          key: _attentionKey,
+          write: (store) => store.setAttention(attention),
+          encoded: attention,
+          read: (store) => store.attention,
+          written: attention,
+          missing: null,
+          wrongType: ['srv-a'],
+          wrongExpected: null,
+        ),
+      ];
+
+      for (final contract in contracts) {
+        test('${contract.name}: exact key, encoding and fallbacks', () async {
+          writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+          final store = await DeviceSettingsStore.open(file);
+          expect(
+            contract.read(store),
+            contract.missing,
+            reason: 'missing setting fallback',
+          );
+
+          await contract.write(store);
+          expect(
+            jsonEncode(document()[contract.key]),
+            jsonEncode(contract.encoded),
+            reason: 'stored JSON encoding',
+          );
+          expect(
+            contract.read(store),
+            contract.written,
+            reason: 'written value in memory',
+          );
+          expect(
+            contract.read(await DeviceSettingsStore.open(file)),
+            contract.written,
+            reason: 'written value after a reload',
+          );
+
+          writeDocument({
+            _versionKey: 1,
+            _deviceIdKey: 'device-a',
+            contract.key: contract.wrongType,
+          });
+          final wrongTyped = await DeviceSettingsStore.open(file);
+          expect(
+            contract.read(wrongTyped),
+            contract.wrongExpected,
+            reason: 'wrong-typed setting fallback',
+          );
+
+          for (final (value, expected) in contract.invalidReadings) {
+            writeDocument({
+              _versionKey: 1,
+              _deviceIdKey: 'device-a',
+              contract.key: value,
+            });
+            final invalid = await DeviceSettingsStore.open(file);
+            expect(
+              contract.read(invalid),
+              expected,
+              reason: 'invalid setting fallback',
+            );
+          }
+        });
+      }
+    });
+
     test('a first launch mints a UUID v4 device id and saves it', () async {
       final store = await DeviceSettingsStore.open(file);
 
