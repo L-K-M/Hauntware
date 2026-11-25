@@ -125,8 +125,9 @@ const _prefix = 'volumes.row.';
 List<String> _order(WidgetTester tester) {
   final rows = [
     for (final element in find.byType(Semantics).evaluate())
-      if (element.widget.key case ValueKey<String>(:final value)
-          when value.startsWith(_prefix))
+      if (element.widget.key case ValueKey<String>(
+        :final value,
+      ) when value.startsWith(_prefix))
         (
           name: value.substring(_prefix.length),
           top: tester.getTopLeft(find.byWidget(element.widget)).dy,

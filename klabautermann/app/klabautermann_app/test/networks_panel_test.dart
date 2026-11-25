@@ -116,8 +116,9 @@ const _prefix = 'networks.row.';
 List<String> _order(WidgetTester tester) {
   final rows = [
     for (final element in find.byType(Semantics).evaluate())
-      if (element.widget.key case ValueKey<String>(:final value)
-          when value.startsWith(_prefix))
+      if (element.widget.key case ValueKey<String>(
+        :final value,
+      ) when value.startsWith(_prefix))
         (
           id: value.substring(_prefix.length),
           top: tester.getTopLeft(find.byWidget(element.widget)).dy,
