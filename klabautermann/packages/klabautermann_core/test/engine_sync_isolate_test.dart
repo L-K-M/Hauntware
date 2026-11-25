@@ -175,6 +175,44 @@ void main() {
     expect(end.detail, 'no vault key');
   });
 
+  test('ENG-3: a recovery request while a sync operation holds the vault '
+      'does not hold the request queue', () async {
+    final server = await FakeSyncServer.create();
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+
+    client.send(
+      const EnrollSync(
+        baseUrl: 'https://sync.example.com',
+        username: fakeSyncUser,
+        password: fakeSyncPassword,
+        encryptionPassphrase: fakeSyncPassword,
+      ),
+    );
+
+    // The enrollment's login runs inside the vault's exclusive queue and
+    // asks the app's keystore for the account key. Leave it unanswered, so
+    // the vault stays held as a slow round's network phase would.
+    while (await events.moveNext()) {
+      if (events.current is KeystoreRequest) break;
+    }
+    expect(events.current, isA<KeystoreRequest>());
+
+    client
+      ..send(const RecoveryStatusRequest(requestId: 'recovery-1'))
+      ..send(const RedactLines('redact-1', ['plain line']));
+    RedactedLines? redacted;
+    while (redacted == null) {
+      final arrived = await events.moveNext().timeout(
+        const Duration(seconds: 5),
+      );
+      expect(arrived, isTrue, reason: 'the engine stopped');
+      if (events.current case final RedactedLines answer) redacted = answer;
+    }
+    expect(redacted.requestId, 'redact-1');
+  });
+
   test('an enrollment lists the synced servers before it answers, and a '
       'later round succeeds', () async {
     final server = await FakeSyncServer.create();
