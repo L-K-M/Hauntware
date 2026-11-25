@@ -361,9 +361,9 @@ void main() {
     }
   });
 
-  test('images list flags a dangling image created for the query', () async {
+  test('the images watch flags a dangling image created for it', () async {
     // Another suite may have pruned the global seed. Own the image this
-    // query asserts on instead of depending on test discovery order.
+    // watch asserts on instead of depending on test discovery order.
     final danglingId = (await dind([
       'commit',
       '--change',
@@ -373,9 +373,16 @@ void main() {
     addTearDown(() => dind(['image', 'rm', danglingId]));
     final engine = await start('docker images');
 
-    final payload = await query(engine, const DockerImagesQuery());
+    engine.send(
+      const DockerWatch(
+        serverId: dockerServer,
+        watchId: 'images',
+        lists: {DockerWatchList.images},
+      ),
+    );
+    final changed = await listChanged(engine, DockerWatchList.images);
 
-    final images = (payload as DockerImagesPayload).images;
+    final images = (changed.payload as DockerImagesPayload).images;
     final seeded = images.singleWhere((i) => i.repoTags.contains(_image));
     expect(seeded.isDangling, isFalse);
     // The in-use count arrives with API 1.51, below the dind engine's.
@@ -394,9 +401,16 @@ void main() {
     // which it used none has no CPU % (cpuPercentDelta).
     const busy = 'klab-e2e-stats';
     await runContainer(busy, _tickerScript);
-    final listed = await query(engine, const DockerContainersQuery());
+    engine.send(
+      const DockerWatch(
+        serverId: dockerServer,
+        watchId: 'names',
+        lists: {DockerWatchList.containers},
+      ),
+    );
+    final listed = await listChanged(engine, DockerWatchList.containers);
     final byName = {
-      for (final c in (listed as DockerContainersPayload).containers)
+      for (final c in (listed.payload as DockerContainersPayload).containers)
         c.name: c.id,
     };
     final busyId = byName[busy]!;

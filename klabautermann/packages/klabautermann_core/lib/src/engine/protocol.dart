@@ -232,9 +232,9 @@ import '../operations/plan_types.dart';
 /// `save`, which keeps a login password in the vault.
 ///
 /// Container shells then joined v3 the same way (03 §7.13 CTX-07):
-/// [OpenTerminal], [TerminalInput], [TerminalResize], [TerminalEndInput]
-/// and [CloseTerminal] run one, answered by [TerminalOpened],
-/// [TerminalBytes] and [TerminalClosed]. One-off commands joined next
+/// [OpenTerminal], [TerminalInput], [TerminalResize] and [CloseTerminal]
+/// run one, answered by [TerminalOpened], [TerminalBytes] and
+/// [TerminalClosed]. One-off commands joined next
 /// (CTX-08): [ContainerExec] is planned as an action, and
 /// [ActionFinished] gained the [ExecOutput] it captured.
 ///
@@ -367,7 +367,13 @@ import '../operations/plan_types.dart';
 /// request's own id where it carries one, so the app settles the one
 /// read or open that was refused, and [EngineFault] reports an error the
 /// engine caught at its last-resort boundary.
-const int kEngineProtocolVersion = 3;
+///
+/// Version 4 drops the requests no client sends: `DockerContainersQuery`
+/// and `DockerImagesQuery`, whose lists the app reads through a watch
+/// instead, and `TerminalEndInput`, which nothing sends now that a shell
+/// closes with `CloseTerminal` (03 §10.1). The list payloads a watch
+/// delivers stay.
+const int kEngineProtocolVersion = 4;
 
 /// The most container shells one server holds open at once [E]: each on a
 /// relay holds a session channel (03 §5.2).
@@ -1222,14 +1228,6 @@ final class TerminalResize extends EngineRequest {
   final String terminalId;
   final int columns;
   final int rows;
-}
-
-/// Ends [terminalId]'s input: stdin EOF as a half-close (03 §5.7), while
-/// its output keeps coming until the shell exits.
-final class TerminalEndInput extends EngineRequest {
-  const TerminalEndInput(this.terminalId);
-
-  final String terminalId;
 }
 
 /// Closes [terminalId]'s shell; [TerminalClosed] follows with
@@ -5048,12 +5046,6 @@ final class DockerEngineQuery extends DockerQuerySpec {
   const DockerEngineQuery();
 }
 
-/// Every container, stopped ones too (CTR-01). Answered by
-/// [DockerContainersPayload].
-final class DockerContainersQuery extends DockerQuerySpec {
-  const DockerContainersQuery();
-}
-
 /// One container's inspect (CTR-03, CTR-04). Answered by
 /// [DockerContainerPayload].
 final class DockerContainerQuery extends DockerQuerySpec {
@@ -5072,11 +5064,6 @@ final class DockerContainerTopQuery extends DockerQuerySpec {
 
   /// The container's id or name.
   final String containerId;
-}
-
-/// The image list (IMG-01). Answered by [DockerImagesPayload].
-final class DockerImagesQuery extends DockerQuerySpec {
-  const DockerImagesQuery();
 }
 
 /// One image's layers (IMG-04). Answered by [DockerImageHistoryPayload].

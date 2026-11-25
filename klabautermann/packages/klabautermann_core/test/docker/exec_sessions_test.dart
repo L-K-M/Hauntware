@@ -488,18 +488,6 @@ void main() {
     expect(closed('plain'), isNull);
   });
 
-  test('ending input half-closes it while output keeps coming', () async {
-    sessions.open(_open(), _policy);
-    await settle();
-    sessions.endInput('t-1');
-    await settle();
-    daemon.shells['e1']!.server.sink.add(utf8.encode('bye'));
-    await settle();
-
-    expect(utf8.decode(output('t-1')), 'bye');
-    expect(closed('t-1'), isNull);
-  });
-
   group('a one-off command (CTX-08)', () {
     Future<({int? exitCode, ExecOutput output})> run(
       void Function(StreamSink<List<int>> stream) write, {

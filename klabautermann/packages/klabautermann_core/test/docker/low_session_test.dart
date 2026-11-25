@@ -403,10 +403,10 @@ void main() {
         const DockerQuery(
           serverId: _srv,
           queryId: 'q',
-          query: DockerImagesQuery(),
+          query: DockerImageHistoryQuery('alpine'),
         ),
       );
-      h.daemon.routes['/v1.52/images/json'] = '[]';
+      h.daemon.routes['/v1.52/images/alpine/history'] = '[]';
       h.probed();
       await h.settle();
       expect(h.events.whereType<DockerResult>().last.queryId, 'q');

@@ -966,12 +966,6 @@ final class DockerRouter {
             DockerEnginePayload(info.value, endpoint.version),
             info.warnings,
           );
-        case DockerContainersQuery():
-          final list = await client.listContainers();
-          return read(
-            DockerContainersPayload(withoutCommands(list.value)),
-            list.warnings,
-          );
         case DockerContainerQuery(:final containerId):
           final inspect = await client.inspectContainer(containerId);
           return read(
@@ -981,9 +975,6 @@ final class DockerRouter {
         case DockerContainerTopQuery(:final containerId):
           final top = await _containerTop(client, containerId);
           return read(maskContainerTop(top.value), top.warnings);
-        case DockerImagesQuery():
-          final images = await client.listImages();
-          return read(DockerImagesPayload(images.value), images.warnings);
         case DockerImageHistoryQuery(:final image):
           final history = await client.imageHistory(image);
           return read(

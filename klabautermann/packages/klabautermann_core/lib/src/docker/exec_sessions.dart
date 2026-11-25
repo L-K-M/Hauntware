@@ -233,7 +233,7 @@ final class ExecSessions {
     final terminal = _terminals[request.terminalId];
     // An ended shell stays listed while its exit code is read, with its
     // connection already closed.
-    if (terminal == null || terminal.ended || terminal.inputEnded) return;
+    if (terminal == null || terminal.ended) return;
     final duplex = terminal.duplex;
     if (duplex != null) {
       duplex.sink.add(request.bytes);
@@ -257,15 +257,6 @@ final class ExecSessions {
       columns: request.columns,
     );
     if (terminal.execId != null) _sendSize(terminal);
-  }
-
-  /// Half-closes [terminalId]'s input (03 §5.7).
-  void endInput(String terminalId) {
-    final terminal = _terminals[terminalId];
-    if (terminal == null || terminal.inputEnded) return;
-    terminal.inputEnded = true;
-    final duplex = terminal.duplex;
-    if (duplex != null) unawaited(_quietly(duplex.closeWrite()));
   }
 
   /// Closes [terminalId]'s shell.
@@ -358,7 +349,6 @@ final class ExecSessions {
         response.body.sink.add(bytes);
       }
       terminal.pendingInput.clear();
-      if (terminal.inputEnded) unawaited(_quietly(response.body.closeWrite()));
       // A resize while the exec started; the create took the size
       // before. Below API 1.42 it took none, and the PTY has the daemon's
       // default until this first resize, as the Docker CLI sends one.
@@ -570,7 +560,6 @@ final class _Terminal {
       pendingInput.fold(0, (sum, bytes) => sum + bytes.length);
   Duration? lastSent;
   Timer? flushTimer;
-  bool inputEnded = false;
   bool ended = false;
   Future<void>? ending;
 }

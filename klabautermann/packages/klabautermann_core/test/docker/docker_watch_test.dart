@@ -223,6 +223,55 @@ void main() {
       );
     });
 
+    test('the container list drops each command line; images keep their '
+        'masked labels', () async {
+      final h = _Harness();
+      h.daemon
+        ..routes[_containersPath] = jsonEncode([
+          {
+            'Id': 'abc',
+            'Names': ['/db'],
+            'Command': 'mysqld --password=hunter2',
+            'State': 'running',
+            'Status': 'Up 2 hours (healthy)',
+            'Labels': {'secret_token': 't'},
+          },
+        ])
+        ..routes['/v1.52/images/json'] = jsonEncode([
+          {
+            'Id': 'sha256:1',
+            'RepoTags': ['mysql:8'],
+            'Labels': {'password': 'p'},
+          },
+        ]);
+
+      final sent = await h.start({
+        DockerWatchList.containers,
+        DockerWatchList.images,
+      });
+
+      final containers =
+          (sent.singleWhere((e) => e.list == DockerWatchList.containers).payload
+                  as DockerContainersPayload)
+              .containers;
+      expect(containers.single.name, 'db');
+      expect(containers.single.command, isNull);
+      expect(containers.single.health, HealthStatus.healthy);
+      expect(
+        containers.single.labels['secret_token']!.display,
+        MaskedValue.maskToken,
+      );
+      expect(h.requests(_containersPath).single, contains('all=1'));
+
+      final image =
+          (sent.singleWhere((e) => e.list == DockerWatchList.images).payload
+                  as DockerImagesPayload)
+              .images
+              .single;
+      expect(image.repoTags, ['mysql:8']);
+      expect(image.labels['password']!.display, MaskedValue.maskToken);
+    });
+
     test('a burst for one container reads it alone once, 250 ms after the '
         'first event, and merges it in', () async {
       final h = _Harness();

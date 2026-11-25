@@ -231,11 +231,6 @@ void main() {
         ),
         const RedactLines('r-1', ['a', 'b']),
         const CheckTlsEndpoints('t-1', [TlsEndpoint('example.com', 443)]),
-        const DockerQuery(
-          serverId: 'srv-1',
-          queryId: 'q-1',
-          query: DockerContainersQuery(),
-        ),
         const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
         const JobHistoryQuery(
           serverId: 'srv-1',
@@ -375,7 +370,6 @@ void main() {
         ),
         TerminalInput('t-1', Uint8List.fromList(const [0x6c, 0x73])),
         const TerminalResize('t-1', columns: 80, rows: 24),
-        const TerminalEndInput('t-1'),
         const CloseTerminal('t-1'),
       ];
 
