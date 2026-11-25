@@ -291,6 +291,10 @@ void main() {
       expect(() => validateComposeServiceName('web.replica'), returnsNormally);
       expect(() => validateAbsolutePath('relative'), throwsArgumentError);
       expect(() => validateSocketPath('/run/docker.sock'), returnsNormally);
+      expect(
+        () => validateComposeServiceName('bad service'),
+        throwsArgumentError,
+      );
     });
 
     test('docker pull names the endpoint and never takes an option as the '
