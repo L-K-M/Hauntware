@@ -26,7 +26,11 @@ import 'ssh_algorithms.dart';
 const _cleanupActionTimeout = Duration(seconds: 5);
 const _sshAuthenticationTimeout = Duration(minutes: 5);
 const _defaultSshKeepAliveInterval = Duration(seconds: 10);
-const _maxJumpHosts = 16;
+
+/// The most jump hosts a `ProxyJump` route may hold beyond its final host:
+/// the connector refuses a longer route as invalid, so an import never
+/// builds one it could not dial.
+const int maxJumpHosts = 16;
 
 /// The OS error codes of a connect that timed out: ETIMEDOUT as Linux (110)
 /// and macOS or iOS (60) number it, and Windows' WSAETIMEDOUT (10060).
@@ -1245,10 +1249,10 @@ Future<List<ResolvedSshHost>> _resolveSshRoute({
         kind: SshConnectFailureKind.routeInvalid,
       );
     }
-    if (route.length > _maxJumpHosts) {
-      final cause = StateError('ProxyJump route exceeds $_maxJumpHosts hops');
+    if (route.length > maxJumpHosts) {
+      final cause = StateError('ProxyJump route exceeds $maxJumpHosts hops');
       throw SshConnectException(
-        'The jump-host route exceeds $_maxJumpHosts hops.',
+        'The jump-host route exceeds $maxJumpHosts hops.',
         cause,
         log ?? SshConnectionLog(),
         kind: SshConnectFailureKind.routeInvalid,

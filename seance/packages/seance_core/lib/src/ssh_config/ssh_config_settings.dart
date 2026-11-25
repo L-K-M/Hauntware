@@ -48,9 +48,11 @@ const Set<String> _canonicalizationValues = {
 /// one makes the whole list match nothing.
 const int _maximumSubpatternLength = 1023;
 
-/// U+FFFD, which the app's UTF-8 decoding of the config puts in place of
-/// bytes that are not UTF-8.
-const String _replacement = '\u{FFFD}';
+/// U+FFFD, which an app's UTF-8 decoding of a config puts in place of
+/// bytes that are not UTF-8. ssh dials and signs in with the bytes
+/// themselves, which the decode has lost, so a name holding one cannot be
+/// matched against what ssh would do.
+const String utf8ReplacementCharacter = '\u{FFFD}';
 
 /// A UTF-8 byte-order mark. Dart's decoder drops one at the start of the
 /// file, so the app puts it back for the engine to see.
@@ -382,7 +384,7 @@ final class SshConfigSettings {
     if (!_isValidHostName(name) || !_isPlainDestination(name)) {
       return const UnresolvedSshSettings(UnresolvedReason.rejectedName);
     }
-    if (name.contains(_replacement)) {
+    if (name.contains(utf8ReplacementCharacter)) {
       return const UnresolvedSshSettings(UnresolvedReason.undecodedName);
     }
 
@@ -399,7 +401,7 @@ final class SshConfigSettings {
       return const UnresolvedSshSettings(UnresolvedReason.hostNameToken);
     }
     // The name holds none, so the `HostName` does.
-    if (host.contains(_replacement)) {
+    if (host.contains(utf8ReplacementCharacter)) {
       return const UnresolvedSshSettings(UnresolvedReason.undecodedValue);
     }
 
@@ -881,8 +883,8 @@ final class _Reading {
     if (key != null && !isImportedIdentityFile(key)) {
       return const UnresolvedSshSettings(UnresolvedReason.identityFileToken);
     }
-    if ((user?.contains(_replacement) ?? false) ||
-        (key?.contains(_replacement) ?? false)) {
+    if ((user?.contains(utf8ReplacementCharacter) ?? false) ||
+        (key?.contains(utf8ReplacementCharacter) ?? false)) {
       return const UnresolvedSshSettings(UnresolvedReason.undecodedValue);
     }
 
@@ -1146,7 +1148,7 @@ String? _expandHostName(String value, String name) {
 /// whose form depends on the device's interfaces, one Dart does not parse
 /// though the system resolver may (`10.1`), or a host holding U+FFFD.
 String? sshCanonicalHost(String host) {
-  if (host.contains(_replacement)) return null;
+  if (host.contains(utf8ReplacementCharacter)) return null;
   if (!_isAddress(host)) return _asciiLower(host);
   if (host.contains('%')) return null;
 
@@ -1241,7 +1243,9 @@ bool _matchPattern(String text, String pattern) {
 final class _Glob {
   _Glob(this.pattern) : _bytes = _utf8Bytes(pattern) {
     _pieces = _bytes.contains('?') ? null : _bytes.split('*');
-    undecided = pattern.contains(_replacement) && (_pieces?.length ?? 2) > 1;
+    undecided =
+        pattern.contains(utf8ReplacementCharacter) &&
+        (_pieces?.length ?? 2) > 1;
   }
 
   /// The pattern as written.
