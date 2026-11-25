@@ -270,11 +270,8 @@ final class DockerRouter {
     _pump(session);
     final endpoint = await ready.future;
 
-    session.idle?.cancel();
-    session.idle = null;
-    endpoint.inFlight++;
     try {
-      return await body(endpoint);
+      return await _counted(session, endpoint, () => body(endpoint));
     } on DockerException catch (e) {
       if ((e is DockerTransportException || e is DockerProtocolException) &&
           identical(session.endpoint, endpoint)) {
@@ -282,6 +279,22 @@ final class DockerRouter {
         _pump(session);
       }
       rethrow;
+    }
+  }
+
+  /// Runs [body] as one read of [endpoint]: a relay's idle close waits
+  /// for it, and once it ends the endpoint is looked at again. The count
+  /// goes back even when [body] throws.
+  Future<T> _counted<T>(
+    _Session session,
+    _Endpoint endpoint,
+    Future<T> Function() body,
+  ) async {
+    session.idle?.cancel();
+    session.idle = null;
+    endpoint.inFlight++;
+    try {
+      return await body();
     } finally {
       endpoint.inFlight--;
       if (identical(session.endpoint, endpoint)) _idleCheck(session, endpoint);
@@ -920,15 +933,11 @@ final class DockerRouter {
     _Endpoint endpoint,
     DockerQuery query,
   ) async {
-    session.idle?.cancel();
-    session.idle = null;
-    endpoint.inFlight++;
-    final _Read result;
-    try {
-      result = await _read(endpoint, query.query);
-    } finally {
-      endpoint.inFlight--;
-    }
+    final result = await _counted(
+      session,
+      endpoint,
+      () => _read(endpoint, query.query),
+    );
     final (:payload, :warnings, :routeDropped) = result;
 
     final current = identical(session.endpoint, endpoint);
@@ -1588,19 +1597,8 @@ final class _WatchTarget implements DockerWatchTarget {
   String get socketPath => _endpoint.route.socketPath;
 
   @override
-  Future<T> use<T>(Future<T> Function(DockerClient client) read) async {
-    _session.idle?.cancel();
-    _session.idle = null;
-    _endpoint.inFlight++;
-    try {
-      return await read(_endpoint.client);
-    } finally {
-      _endpoint.inFlight--;
-      if (identical(_session.endpoint, _endpoint)) {
-        _router._idleCheck(_session, _endpoint);
-      }
-    }
-  }
+  Future<T> use<T>(Future<T> Function(DockerClient client) read) =>
+      _router._counted(_session, _endpoint, () => read(_endpoint.client));
 
   @override
   bool get lowSession => DockerRouter._lowSession(_session);
