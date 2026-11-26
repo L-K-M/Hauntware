@@ -1,6 +1,6 @@
 # ghost_fonts
 
-The 23 monospace families every Ghost app bundles, available offline.
+The 27 monospace families every Ghost app bundles, available offline.
 `BundledMonoFont` names them; `ghostMonoFontFamilies` is the stack code text
 falls back through. Apps register each family as
 `packages/ghost_fonts/<family>` from their font manifest; tests call
@@ -27,13 +27,18 @@ falls back through. Apps register each family as
 | Nordwand Mono | regular, bold, italic, bold italic | `liga` (`->` and `=>` only) |
 | Ioskeley Mono Term | regular, bold, italic, bold italic | `calt` |
 | 3270 | regular | none |
+| Hack | regular, bold, italic, bold italic | none |
+| IBM Plex Mono | regular, bold, italic, bold italic | none |
+| JuliaMono | regular, bold, italic, bold italic | `calt` |
+| Ubuntu Mono | regular, bold, italic, bold italic | none |
 
 The engine synthesizes styles absent upstream. Google Sans Code uses its
 unmodified variable faces, with `MONO` at its default of 1. Nordwand Mono
 covers Latin and Cyrillic only, so box drawing in a terminal comes from the
 next family in the stack. 3270 is upstream's “IBM 3270” under a shorter name;
-the file is unchanged. All fonts together occupy about 23 MB before application
-compression, about 18 MB more than the original four.
+the file is unchanged. All fonts together occupy about 38 MiB before
+application compression. JuliaMono keeps its full Unicode coverage, including
+technical and mathematical symbols.
 
 `showMonoFontPicker` shares searchable, font-rendered rows and a larger preview
 with code, ambiguous glyphs and emphasis. Desktop uses two panes; narrow screens
@@ -51,17 +56,19 @@ change plain-letter outlines while preserving their cell advances.
 
 ## Licences
 
-The fonts are under the SIL Open Font License 1.1. 3270's release ships a BSD
-3-Clause licence instead, though its name table cites the OFL; its Debian logo
-glyph is CC BY-SA 3.0 or LGPL 3+. The package code is public domain
-(Unlicense). `LICENSE` holds every text in the chunk format Flutter's build
+Most fonts use the SIL Open Font License 1.1. Hack uses the MIT and
+Bitstream Vera licenses. Ubuntu Mono uses the Ubuntu Font Licence 1.0.
+3270's release ships a BSD 3-Clause licence, though its name table cites
+the OFL. Its Debian logo glyph is CC BY-SA 3.0 or LGPL 3+. The package code
+is public domain (Unlicense). `LICENSE` holds every text in the chunk format Flutter's build
 copies into each app's NOTICES, and a test checks there is one per family.
 The suite licence gate (`tool/license_gate`) covers Séance's component only,
 so it does not see these files.
 
 Cascadia Code reserves “Cascadia Code”; Intel One Mono reserves “Intel”;
-Monaspace reserves “Monaspace” and its five subfamily names. Their shipped files
-are unmodified. The other additional families declare no reserved names.
+Monaspace reserves “Monaspace” and its five subfamily names. IBM Plex Mono
+reserves “Plex” and JuliaMono reserves “JuliaMono”. Their shipped files are
+unmodified.
 Commit Mono, Departure Mono and Nordwand Mono's **font** licenses are OFL,
 regardless of the licenses used for code in their repositories. Ioskeley Mono
 Term's chunk also carries Iosevka's copyright. Codelia is commercial and is
@@ -98,6 +105,10 @@ shipped-file SHA-256 are pinned in [`tool/font_releases.json`](tool/font_release
 | Departure Mono | [rektdeckard/departure-mono v1.500](https://github.com/rektdeckard/departure-mono/releases/tag/v1.500) |
 | Nordwand Mono | [tywr/Nordwand-Mono 1.3.1](https://github.com/tywr/Nordwand-Mono/releases/tag/1.3.1) |
 | 3270 | [rbanffy/3270font v3.0.1](https://github.com/rbanffy/3270font/releases/tag/v3.0.1), standard-width TTF |
+| Hack | [source-foundry/Hack v3.003](https://github.com/source-foundry/Hack/releases/tag/v3.003) |
+| IBM Plex Mono | [IBM/plex 2.5.0](https://github.com/IBM/plex/releases/tag/%40ibm%2Fplex-mono%402.5.0), complete static TTFs |
+| JuliaMono | [cormullion/juliamono v0.63.2](https://github.com/cormullion/juliamono/releases/tag/v0.63.2) |
+| Ubuntu Mono | [Canonical Ubuntu Font Family 0.83](https://assets.ubuntu.com/v1/0cef8205-ubuntu-font-family-0.83.zip) |
 
 Google Sans Code's asset filenames omit brackets for Flutter's asset loader;
 the bytes and internal family names are unchanged. Commit Mono's license chunk

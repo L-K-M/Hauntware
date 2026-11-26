@@ -44,7 +44,11 @@ enum BundledMonoFont {
   ioskeleyMonoTerm('Ioskeley Mono Term'),
 
   /// The IBM 3270 terminal's face. Upstream names it 'IBM 3270'.
-  font3270('3270');
+  font3270('3270'),
+  hack('Hack'),
+  ibmPlexMono('IBM Plex Mono'),
+  juliaMono('JuliaMono'),
+  ubuntuMono('Ubuntu Mono');
 
   const BundledMonoFont(this.displayName);
 
@@ -56,7 +60,12 @@ enum BundledMonoFont {
 
   /// Whether the shipped face has programming ligatures to preview.
   bool get hasProgrammingLigatures => switch (this) {
-    googleSansCode || departureMono || font3270 => false,
+    googleSansCode ||
+    departureMono ||
+    font3270 ||
+    hack ||
+    ibmPlexMono ||
+    ubuntuMono => false,
     _ => true,
   };
 

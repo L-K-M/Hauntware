@@ -525,5 +525,147 @@
         ]
       }
     ]
+  },
+  {
+    "url": "https://github.com/source-foundry/Hack/releases/download/v3.003/Hack-v3.003-ttf.zip",
+    "sha256": "0c2604631b1f055041c68a0e09ae4801acab6c5072ba2db6a822f53c3f8290ac",
+    "license": {
+      "source": "https://raw.githubusercontent.com/source-foundry/Hack/v3.003/LICENSE.md",
+      "sha256": "1f61bb7c790c59b4b0ecdf304628b94e42ae4c8020094a8c3da73381ab212623"
+    },
+    "families": [
+      {
+        "name": "Hack",
+        "files": [
+          {
+            "member": "ttf/Hack-Regular.ttf",
+            "path": "fonts/Hack/Hack-Regular.ttf",
+            "sha256": "15f55cc0c85a2988d2b4b3a8cdb5d77fdfbaf319e1bb5309d725db9818fb7125"
+          },
+          {
+            "member": "ttf/Hack-Bold.ttf",
+            "path": "fonts/Hack/Hack-Bold.ttf",
+            "sha256": "5bbf531eff7f8a0c2559c9a0656718e2828a012a9b1f60b5f54006d59a4de8d4"
+          },
+          {
+            "member": "ttf/Hack-Italic.ttf",
+            "path": "fonts/Hack/Hack-Italic.ttf",
+            "sha256": "096fb67a2b85f3c866e9cb3e965b27c2c10b977315f4d3d7f095674be35091c1"
+          },
+          {
+            "member": "ttf/Hack-BoldItalic.ttf",
+            "path": "fonts/Hack/Hack-BoldItalic.ttf",
+            "sha256": "64f74a079700b7dfe128551a1e28875d5ba980971e55f5e0f0596e37bdc6a6bc"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/IBM/plex/releases/download/%40ibm/plex-mono%402.5.0/ibm-plex-mono.zip",
+    "sha256": "6d23f01257663d8cc49a0d64c22ced630b79e0e2a0ac08a0da86e9a38bbc481c",
+    "license": {
+      "source": "ibm-plex-mono/fonts/complete/ttf/license.txt",
+      "sha256": "91c25c350d3cac39da2736d74f7ba37ef648f5237a4e330a240615bc8d8c4360"
+    },
+    "families": [
+      {
+        "name": "IBM Plex Mono",
+        "files": [
+          {
+            "member": "ibm-plex-mono/fonts/complete/ttf/IBMPlexMono-Regular.ttf",
+            "path": "fonts/IBMPlexMono/IBMPlexMono-Regular.ttf",
+            "sha256": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43"
+          },
+          {
+            "member": "ibm-plex-mono/fonts/complete/ttf/IBMPlexMono-Bold.ttf",
+            "path": "fonts/IBMPlexMono/IBMPlexMono-Bold.ttf",
+            "sha256": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb"
+          },
+          {
+            "member": "ibm-plex-mono/fonts/complete/ttf/IBMPlexMono-Italic.ttf",
+            "path": "fonts/IBMPlexMono/IBMPlexMono-Italic.ttf",
+            "sha256": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b"
+          },
+          {
+            "member": "ibm-plex-mono/fonts/complete/ttf/IBMPlexMono-BoldItalic.ttf",
+            "path": "fonts/IBMPlexMono/IBMPlexMono-BoldItalic.ttf",
+            "sha256": "c8b00068fd2fd69bbcf62059148623f09d19e9ada8bf9e8caf1aedd01347046a"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/cormullion/juliamono/releases/download/v0.63.2/JuliaMono-ttf.zip",
+    "sha256": "bc7140ccf1cbd84ee66a4c00a41628ee0a531a241e521773bad25a10c5066795",
+    "license": {
+      "source": "LICENSE",
+      "sha256": "bae3beff9e15f1a680c2764c4bbdb25b995b9bf539aeaf8467482a495c75ad0c"
+    },
+    "families": [
+      {
+        "name": "JuliaMono",
+        "files": [
+          {
+            "member": "JuliaMono-Regular.ttf",
+            "path": "fonts/JuliaMono/JuliaMono-Regular.ttf",
+            "sha256": "40a07da0d1601215eb6b89312eb44128a3e2f36675d3e1f518264bd391fc7023"
+          },
+          {
+            "member": "JuliaMono-Bold.ttf",
+            "path": "fonts/JuliaMono/JuliaMono-Bold.ttf",
+            "sha256": "a886d817cbd02fb7b646c3eb722de572bf6819ad223d66d64dbef33207964fea"
+          },
+          {
+            "member": "JuliaMono-RegularItalic.ttf",
+            "path": "fonts/JuliaMono/JuliaMono-RegularItalic.ttf",
+            "sha256": "35260252fa576b3e2ae6cda538475e6fa78a053eade7784518b53f0a5dbaa526"
+          },
+          {
+            "member": "JuliaMono-BoldItalic.ttf",
+            "path": "fonts/JuliaMono/JuliaMono-BoldItalic.ttf",
+            "sha256": "a3f09c2216eeca9d35f967fe9b096419a2f0a5da6d38280e934a708f84064cf3"
+          }
+        ],
+        "copyright": "Copyright 2020 - 2026 The JuliaMono Project Authors (https://github.com/cormullion/juliamono)"
+      }
+    ]
+  },
+  {
+    "url": "https://assets.ubuntu.com/v1/0cef8205-ubuntu-font-family-0.83.zip",
+    "sha256": "61a2b342526fd552f19fef438bb9211a8212de19ad96e32a1209c039f1d68ecf",
+    "license": {
+      "source": "ubuntu-font-family-0.83/LICENCE.txt",
+      "sha256": "2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002"
+    },
+    "families": [
+      {
+        "name": "Ubuntu Mono",
+        "files": [
+          {
+            "member": "ubuntu-font-family-0.83/UbuntuMono-R.ttf",
+            "path": "fonts/UbuntuMono/UbuntuMono-R.ttf",
+            "sha256": "b35dd9d2131d5d83a9b87fe9ad22c6288fa3d17688d43302c14da29812417d63"
+          },
+          {
+            "member": "ubuntu-font-family-0.83/UbuntuMono-B.ttf",
+            "path": "fonts/UbuntuMono/UbuntuMono-B.ttf",
+            "sha256": "11f15c3a6bbd998a8695fdefb3475931c3789aa035d7546f2efe78e83b352f6b"
+          },
+          {
+            "member": "ubuntu-font-family-0.83/UbuntuMono-RI.ttf",
+            "path": "fonts/UbuntuMono/UbuntuMono-RI.ttf",
+            "sha256": "960b2bc286c2ff7d49073303858c65e1fc9013c17a971b61123b02c39454ef75"
+          },
+          {
+            "member": "ubuntu-font-family-0.83/UbuntuMono-BI.ttf",
+            "path": "fonts/UbuntuMono/UbuntuMono-BI.ttf",
+            "sha256": "bd255784bb87b5c41513a12a86f0f9cf061bce4e8256d3bfe7234611002e8f48"
+          }
+        ],
+        "copyright": "Copyright 2010,2011 Canonical Ltd."
+      }
+    ]
   }
 ]
