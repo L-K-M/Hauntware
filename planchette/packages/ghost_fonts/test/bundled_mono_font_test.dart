@@ -151,9 +151,9 @@ void main() {
   test(
     'release provenance covers the declared additional files unchanged',
     () async {
-      final sources = jsonDecode(
-        File('tool/font_releases.json').readAsStringSync(),
-      ) as List;
+      final sources =
+          jsonDecode(File('tool/font_releases.json').readAsStringSync())
+              as List;
       final manifest =
           jsonDecode(await rootBundle.loadString('FontManifest.json')) as List;
       final declared = {
