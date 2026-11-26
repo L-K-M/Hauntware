@@ -90,9 +90,11 @@ bundle third-party code that keeps its own licenses:
 
 - Every client bundles the Flutter engine and Dart runtime, its pub packages
   (among them Séance's vendored xterm and flutter_pty and Poltergeist's
-  vendored pdfium_dart, all under the MIT License) and 23 monospace fonts,
-  under the SIL Open Font License 1.1 except 3270 (BSD-3-Clause, with a
-  Debian logo glyph under CC BY-SA 3.0 or LGPL-3.0-or-later).
+  vendored pdfium_dart, all under the MIT License) and 27 monospace fonts.
+  Most fonts use the SIL Open Font License 1.1. Hack uses the MIT and
+  Bitstream Vera licenses. Ubuntu Mono uses the Ubuntu Font Licence 1.0.
+  3270 uses BSD-3-Clause, with a Debian logo glyph under CC BY-SA 3.0 or
+  LGPL-3.0-or-later.
 - Poltergeist also bundles the PDFium library and the code compiled into it
   (FreeType, libjpeg-turbo, OpenJPEG, Little CMS, libpng, zlib, ICU and
   others).

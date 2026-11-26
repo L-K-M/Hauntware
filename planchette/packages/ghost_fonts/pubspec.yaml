@@ -224,3 +224,43 @@ flutter:
     - family: "3270"
       fonts:
         - asset: "fonts/3270/3270-Regular.ttf"
+    - family: Hack
+      fonts:
+        - asset: "fonts/Hack/Hack-Regular.ttf"
+        - asset: "fonts/Hack/Hack-Bold.ttf"
+          weight: 700
+        - asset: "fonts/Hack/Hack-Italic.ttf"
+          style: italic
+        - asset: "fonts/Hack/Hack-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: IBM Plex Mono
+      fonts:
+        - asset: "fonts/IBMPlexMono/IBMPlexMono-Regular.ttf"
+        - asset: "fonts/IBMPlexMono/IBMPlexMono-Bold.ttf"
+          weight: 700
+        - asset: "fonts/IBMPlexMono/IBMPlexMono-Italic.ttf"
+          style: italic
+        - asset: "fonts/IBMPlexMono/IBMPlexMono-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: JuliaMono
+      fonts:
+        - asset: "fonts/JuliaMono/JuliaMono-Regular.ttf"
+        - asset: "fonts/JuliaMono/JuliaMono-Bold.ttf"
+          weight: 700
+        - asset: "fonts/JuliaMono/JuliaMono-RegularItalic.ttf"
+          style: italic
+        - asset: "fonts/JuliaMono/JuliaMono-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: Ubuntu Mono
+      fonts:
+        - asset: "fonts/UbuntuMono/UbuntuMono-R.ttf"
+        - asset: "fonts/UbuntuMono/UbuntuMono-B.ttf"
+          weight: 700
+        - asset: "fonts/UbuntuMono/UbuntuMono-RI.ttf"
+          style: italic
+        - asset: "fonts/UbuntuMono/UbuntuMono-BI.ttf"
+          weight: 700
+          style: italic

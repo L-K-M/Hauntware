@@ -67,6 +67,10 @@ const _advanceEm = {
   BundledMonoFont.nordwandMono: 600 / 1000,
   BundledMonoFont.ioskeleyMonoTerm: 600 / 1000,
   BundledMonoFont.font3270: 1080 / 2000,
+  BundledMonoFont.hack: 1233 / 2048,
+  BundledMonoFont.ibmPlexMono: 600 / 1000,
+  BundledMonoFont.juliaMono: 1200 / 2000,
+  BundledMonoFont.ubuntuMono: 500 / 1000,
 };
 
 void main() {
@@ -193,9 +197,7 @@ void main() {
 
   test("LICENSE carries each font's licence into the app NOTICES", () {
     // Flutter's build splits a package LICENSE on lines of 80 hyphens; each
-    // chunk opens with the names it covers and a blank line. The fonts are
-    // OFL, which requires its text to travel with them, and the suite's
-    // licence gate does not look here, so this is the check.
+    // chunk opens with the names it covers and a blank line.
     final chunks = File('LICENSE').readAsStringSync().split('\n${'-' * 80}\n');
     final byName = {
       for (final chunk in chunks)
@@ -203,9 +205,19 @@ void main() {
     };
     expect(byName['ghost_fonts'], contains('unlicense.org'));
     for (final font in BundledMonoFont.values) {
+      final license = switch (font) {
+        BundledMonoFont.hack => allOf(
+          contains('MIT License'),
+          contains('BITSTREAM VERA LICENSE'),
+        ),
+        BundledMonoFont.ubuntuMono => contains(
+          'UBUNTU FONT LICENCE Version 1.0',
+        ),
+        _ => contains('SIL Open Font License'),
+      };
       expect(
         byName[font.displayName],
-        allOf(contains('Copyright'), contains('SIL Open Font License')),
+        allOf(contains('Copyright'), license),
         reason: font.displayName,
       );
     }
