@@ -196,7 +196,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Host-neutral Dart tests run on Linux and Windows for PRs. Keep
+        # the macOS leg on main and manual runs for cross-platform coverage.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     defaults:
       run:
         shell: bash
@@ -375,7 +377,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # These package suites are host-neutral; native macOS client and
+        # fixture jobs still run on PRs. Main retains the full OS matrix.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     defaults:
       run:
         working-directory: poltergeist
